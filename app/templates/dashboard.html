@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dashboard — Ascent</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#1c1c1e;--surface:#2c2c2e;--surface2:#3a3a3c;--border:#3a3a3c;--border2:#48484a;--text:#f2f2f7;--muted:#8e8e93;--accent:#f97316;--accent-blue:#3b82f6;--green:#30d158}
+html,body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif;font-size:14px}
+a{color:var(--accent);text-decoration:none}
+nav{display:flex;align-items:center;gap:1rem;padding:.6rem 1.25rem;background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:99}
+.brand{font-size:1rem;font-weight:700;color:var(--accent)}
+.brand:hover{text-decoration:none}
+nav a{color:var(--muted);font-size:.85rem}
+nav a:hover{color:var(--text);text-decoration:none}
+.spacer{flex:1}
+.strava-btn{display:flex;align-items:center;gap:.35rem;background:#fc4c02;color:#fff;padding:.3rem .75rem;border-radius:6px;font-size:.8rem;font-weight:600}
+.strava-btn:hover{background:#e04402;text-decoration:none}
+.container{max-width:1200px;margin:0 auto;padding:1.5rem}
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:.75rem;margin-bottom:1.5rem}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.1rem}
+.card-label{font-size:.7rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:.3rem}
+.card-val{font-size:1.7rem;font-weight:700}
+.card-sub{font-size:.75rem;color:var(--muted);margin-top:.2rem}
+.section{margin-bottom:1.5rem}
+.section-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem}
+.section-head h2{font-size:.95rem;font-weight:600}
+.chart-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.1rem}
+.chart-wrap{position:relative;height:200px}
+.alert{padding:.75rem 1rem;border-radius:8px;margin-bottom:1rem;font-size:.875rem;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);color:#fca5a5}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);padding:.55rem .75rem;border-bottom:1px solid var(--border)}
+td{padding:.55rem .75rem;border-bottom:1px solid var(--border);font-size:.85rem}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:rgba(255,255,255,.03)}
+.type-badge{display:inline-block;padding:.15rem .55rem;border-radius:999px;font-size:.68rem;font-weight:600;text-transform:uppercase}
+.t-run{background:rgba(48,209,88,.15);color:var(--green)}
+.t-ride{background:rgba(249,115,22,.15);color:var(--accent)}
+.t-swim{background:rgba(10,132,255,.15);color:var(--accent-blue)}
+.t-other{background:rgba(142,142,147,.15);color:var(--muted)}
+.btn{display:inline-flex;align-items:center;gap:.3rem;padding:.4rem .85rem;border-radius:6px;font-size:.85rem;font-weight:500;cursor:pointer;border:none}
+.btn-ghost{background:transparent;border:1px solid var(--border2);color:var(--text)}
+.btn-ghost:hover{border-color:var(--accent);color:var(--accent);text-decoration:none}
+</style>
+</head>
+<body>
+<nav>
+  <a href="/" class="brand">⛰ Ascent</a>
+  <a href="/activities">Activities</a>
+  <div class="spacer"></div>
+  <a href="/strava/sync" class="strava-btn">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169"/></svg>
+    Strava
+  </a>
+</nav>
+
+<div class="container">
+  {% if not db_ok %}
+  <div class="alert"><strong>Database not connected.</strong> {{ db_error }}<br>Set <code>ASCENT_DB_PATH</code> in your <code>.env</code> file.</div>
+  {% endif %}
+
+  <div class="stat-grid">
+    <div class="card"><div class="card-label">Activities</div><div class="card-val">{{ stats.get("total_activities",0)|int }}</div></div>
+    <div class="card"><div class="card-label">Distance</div><div class="card-val">{{ stats.get("total_distance_mi",0) }}</div><div class="card-sub">miles · {{ stats.get("total_distance_km",0) }} km</div></div>
+    <div class="card"><div class="card-label">Total Time</div><div class="card-val" style="font-size:1.3rem">{{ stats.get("total_active_hms","—") }}</div></div>
+    <div class="card"><div class="card-label">Climbing</div><div class="card-val">{{ "{:,}".format(stats.get("total_climb_ft",0)|int) }}</div><div class="card-sub">feet · {{ "{:,}".format(stats.get("total_climb_m",0)|int) }} m</div></div>
+    <div class="card"><div class="card-label">Calories</div><div class="card-val">{{ "{:,}".format(stats.get("total_calories",0)|int) }}</div></div>
+    <div class="card"><div class="card-label">Avg Heart Rate</div><div class="card-val">{{ stats.get("avg_heartrate",0)|int }}</div><div class="card-sub">bpm</div></div>
+    <div class="card"><div class="card-label">Longest</div><div class="card-val">{{ stats.get("longest_mi",0) }}</div><div class="card-sub">miles</div></div>
+    <div class="card"><div class="card-label">Best Climb</div><div class="card-val">{{ "{:,}".format(stats.get("most_climb_ft",0)|int) }}</div><div class="card-sub">ft in one activity</div></div>
+  </div>
+
+  <div class="section">
+    <div class="section-head">
+      <h2>Monthly Distance &amp; Climb</h2>
+      <select id="yearSel" style="background:var(--surface2);border:1px solid var(--border2);color:var(--text);border-radius:6px;padding:.3rem .6rem;font-size:.8rem">
+        <option value="">All years</option>
+        {% for y in years %}<option value="{{ y }}">{{ y }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="chart-card"><div class="chart-wrap"><canvas id="monthlyChart"></canvas></div></div>
+  </div>
+
+  <div class="section">
+    <div class="section-head">
+      <h2>Recent Activities</h2>
+      <a href="/activities" class="btn btn-ghost">View all →</a>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <table>
+        <thead><tr>
+          <th>Date</th><th>Name</th><th>Type</th><th>Distance</th><th>Time</th><th>Climb</th><th>Avg HR</th>
+        </tr></thead>
+        <tbody id="recentTbody"><tr><td colspan="7" style="text-align:center;color:var(--muted);padding:1.5rem">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+const monthlyRaw = {{ monthly | tojson }};
+let chart = null;
+
+function buildChart(data) {
+  const ctx = document.getElementById('monthlyChart').getContext('2d');
+  if (chart) chart.destroy();
+  chart = new Chart(ctx, {
+    type:'bar',
+    data:{
+      labels: data.map(d=>d.month),
+      datasets:[
+        {label:'Distance (mi)',data:data.map(d=>d.dist_mi),backgroundColor:'rgba(249,115,22,.75)',borderRadius:3,yAxisID:'y'},
+        {label:'Climb (k ft)',data:data.map(d=>(d.climb_ft/1000).toFixed(1)),type:'line',borderColor:'#3b82f6',backgroundColor:'rgba(59,130,246,.1)',borderWidth:2,pointRadius:2,tension:.3,fill:true,yAxisID:'y2'},
+      ]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{labels:{color:'#94a3b8',font:{size:11}}}},
+      scales:{
+        x:{ticks:{color:'#64748b',maxRotation:45},grid:{color:'#2a2d3a'}},
+        y:{ticks:{color:'#94a3b8'},grid:{color:'#2a2d3a'},title:{display:true,text:'Miles',color:'#64748b',font:{size:11}}},
+        y2:{position:'right',ticks:{color:'#94a3b8'},grid:{drawOnChartArea:false},title:{display:true,text:'k ft',color:'#64748b',font:{size:11}}},
+      }
+    }
+  });
+}
+buildChart(monthlyRaw);
+
+document.getElementById('yearSel').addEventListener('change', async e => {
+  const y = e.target.value;
+  const r = await fetch(y ? `/api/stats/monthly?year=${y}` : '/api/stats/monthly');
+  buildChart(await r.json());
+});
+
+function typeBadge(t) {
+  if (!t) return '<span class="type-badge t-other">—</span>';
+  const l = t.toLowerCase();
+  if (l.includes('run')) return `<span class="type-badge t-run">${t}</span>`;
+  if (l.includes('ride')||l.includes('cycl')) return `<span class="type-badge t-ride">${t}</span>`;
+  if (l.includes('swim')) return `<span class="type-badge t-swim">${t}</span>`;
+  return `<span class="type-badge t-other">${t}</span>`;
+}
+function fmtDate(ts) {
+  if (!ts) return '—';
+  return new Date(ts*1000).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+}
+function fmtHMS(s){if(!s)return'—';const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),ss=Math.floor(s%60);return h?`${h}:${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}`:`${m}:${String(ss).padStart(2,'0')}`}
+
+(async()=>{
+  const r=await fetch('/api/stats/recent?limit=15');
+  if(!r.ok){document.getElementById('recentTbody').innerHTML='<tr><td colspan="7" style="text-align:center;color:var(--muted)">Could not load</td></tr>';return;}
+  const acts=await r.json();
+  document.getElementById('recentTbody').innerHTML=acts.map(a=>`
+    <tr onclick="window.location='/activities/${a.id}'" style="cursor:pointer">
+      <td style="color:var(--muted)">${fmtDate(a.start_time)}</td>
+      <td><a href="/activities/${a.id}">${a.name||'(unnamed)'}</a></td>
+      <td>${typeBadge(a.activity_type)}</td>
+      <td>${(a.distance_mi||0).toFixed(2)} mi</td>
+      <td>${fmtHMS(a.active_time)}</td>
+      <td>${a.total_climb_ft?Math.round(a.total_climb_ft)+' ft':'—'}</td>
+      <td>${a.avg_heartrate?Math.round(a.avg_heartrate)+' bpm':'—'}</td>
+    </tr>`).join('');
+})();
+</script>
+</body>
+</html>

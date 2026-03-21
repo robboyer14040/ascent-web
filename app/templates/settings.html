@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Settings — Ascent</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif;font-size:14px;background:#1c1c1e;color:#f2f2f7;min-height:100vh}
+nav{display:flex;align-items:center;gap:1rem;padding:.65rem 1.25rem;background:#2c2c2e;border-bottom:1px solid #3a3a3c}
+.brand{font-size:1rem;font-weight:700;color:#f97316;text-decoration:none}
+nav a{color:#8e8e93;font-size:.85rem;text-decoration:none}
+nav a:hover{color:#f2f2f7}
+.spacer{flex:1}
+.container{max-width:640px;margin:2rem auto;padding:0 1.25rem}
+.card{background:#2c2c2e;border:1px solid #3a3a3c;border-radius:12px;padding:1.5rem;margin-bottom:1rem}
+h1{font-size:1.15rem;font-weight:600;margin-bottom:.25rem}
+h2{font-size:.95rem;font-weight:600;margin-bottom:.5rem}
+p{color:#8e8e93;font-size:.875rem;line-height:1.6;margin-bottom:1rem}
+label{display:block;font-size:.85rem;color:#8e8e93;margin-bottom:.35rem}
+input[type=text]{
+  width:100%;background:#1c1c1e;border:1px solid #3a3a3c;border-radius:8px;
+  padding:.55rem .8rem;color:#f2f2f7;font-size:.9rem;outline:none;
+}
+input[type=text]:focus{border-color:#f97316}
+.btn{display:inline-flex;align-items:center;gap:.5rem;padding:.55rem 1.1rem;border-radius:8px;font-size:.9rem;font-weight:600;cursor:pointer;border:none;text-decoration:none;transition:background .15s}
+.btn-primary{background:#f97316;color:#fff}.btn-primary:hover{background:#ea6c0a}
+.btn-danger{background:#ef4444;color:#fff}.btn-danger:hover{background:#dc2626}
+.btn-ghost{background:#3a3a3c;color:#f2f2f7}.btn-ghost:hover{background:#48484a}
+.btn:disabled{opacity:.45;cursor:default}
+.btn-row{display:flex;gap:.75rem;align-items:center;margin-top:1rem}
+.current-db{font-family:"SF Mono","Fira Code",monospace;font-size:.8rem;color:#f97316;background:#1c1c1e;border:1px solid #3a3a3c;border-radius:6px;padding:.4rem .7rem;word-break:break-all}
+.result{margin-top:.75rem;padding:.65rem .9rem;border-radius:8px;font-size:.875rem;display:none}
+.result-ok{background:rgba(48,209,88,.12);border:1px solid rgba(48,209,88,.3);color:#30d158}
+.result-err{background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);color:#ef4444}
+.divider{border:none;border-top:1px solid #3a3a3c;margin:1.25rem 0}
+</style>
+</head>
+<body>
+<nav>
+  <a href="/" class="brand">⛰ Ascent</a>
+  <a href="/activities">Activities</a>
+  <a href="/strava/sync">Strava Sync</a>
+  <div class="spacer"></div>
+  <a href="/settings" style="color:#f2f2f7">Settings</a>
+</nav>
+
+<div class="container">
+
+  <div class="card">
+    <h1>Database</h1>
+    <p>The current database file in use:</p>
+    <div class="current-db">{{ db_path }}</div>
+    <p style="margin-top:.75rem">Activities: <strong>{{ activity_count }}</strong></p>
+  </div>
+
+  <div class="card">
+    <h2>Create New Database</h2>
+    <p>Creates a fresh empty Ascent database at the path you specify. The app will switch to using the new file immediately. Use Strava Sync to populate it with your activities.</p>
+
+    <label for="newDbPath">Full path for new database file</label>
+    <input type="text" id="newDbPath"
+           placeholder="/Users/rob/Desktop/ascent_new.ascentdb"
+           value="/Users/{{ username }}/Desktop/ascent_new.ascentdb">
+
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="createDb()">Create New Database</button>
+    </div>
+    <div class="result" id="createResult"></div>
+  </div>
+
+  <div class="card">
+    <h2>Switch Database</h2>
+    <p>Point the app at an existing Ascent database file.</p>
+
+    <label for="switchDbPath">Path to existing .ascentdb file</label>
+    <input type="text" id="switchDbPath"
+           placeholder="/Users/rob/Desktop/existing.ascentdb">
+
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="switchDb()">Switch to This Database</button>
+    </div>
+    <div class="result" id="switchResult"></div>
+  </div>
+
+</div>
+
+<script>
+async function createDb() {
+  const path = document.getElementById('newDbPath').value.trim();
+  if (!path) return;
+  const btn = event.target;
+  btn.disabled = true;
+  btn.textContent = 'Creating…';
+  const res = document.getElementById('createResult');
+  try {
+    const r = await fetch('/api/db/create', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({path}),
+    });
+    const d = await r.json();
+    res.style.display = 'block';
+    if (r.ok) {
+      res.className = 'result result-ok';
+      res.textContent = `✓ Created and switched to: ${d.path}`;
+      setTimeout(() => window.location.reload(), 1500);
+    } else {
+      res.className = 'result result-err';
+      res.textContent = `✗ ${d.detail || d.error || 'Unknown error'}`;
+    }
+  } catch(e) {
+    res.style.display = 'block';
+    res.className = 'result result-err';
+    res.textContent = `✗ ${e.message}`;
+  }
+  btn.disabled = false;
+  btn.textContent = 'Create New Database';
+}
+
+async function switchDb() {
+  const path = document.getElementById('switchDbPath').value.trim();
+  if (!path) return;
+  const btn = event.target;
+  btn.disabled = true;
+  const res = document.getElementById('switchResult');
+  try {
+    const r = await fetch('/api/db/switch', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({path}),
+    });
+    const d = await r.json();
+    res.style.display = 'block';
+    if (r.ok) {
+      res.className = 'result result-ok';
+      res.textContent = `✓ Switched to: ${d.path} (${d.activity_count} activities)`;
+      setTimeout(() => window.location.href = '/activities', 1500);
+    } else {
+      res.className = 'result result-err';
+      res.textContent = `✗ ${d.detail || d.error || 'Unknown error'}`;
+    }
+  } catch(e) {
+    res.style.display = 'block';
+    res.className = 'result result-err';
+    res.textContent = `✗ ${e.message}`;
+  }
+  btn.disabled = false;
+  btn.textContent = 'Switch to This Database';
+}
+</script>
+</body>
+</html>

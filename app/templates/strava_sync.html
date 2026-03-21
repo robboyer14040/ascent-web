@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Strava Sync — Ascent</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif;font-size:14px;background:#1c1c1e;color:#f2f2f7;min-height:100vh}
+nav{display:flex;align-items:center;gap:1rem;padding:.65rem 1.25rem;background:#2c2c2e;border-bottom:1px solid #3a3a3c}
+.brand{font-size:1rem;font-weight:700;color:#f97316;text-decoration:none}
+nav a{color:#8e8e93;font-size:.85rem;text-decoration:none}
+nav a:hover{color:#f2f2f7}
+.spacer{flex:1}
+.container{max-width:720px;margin:2rem auto;padding:0 1.25rem}
+.card{background:#2c2c2e;border:1px solid #3a3a3c;border-radius:12px;padding:1.5rem;margin-bottom:1rem}
+h1{font-size:1.15rem;font-weight:600;margin-bottom:.5rem}
+p{color:#8e8e93;font-size:.9rem;line-height:1.6;margin-bottom:1rem}
+.status-row{display:flex;align-items:center;gap:.75rem;padding:.75rem 1rem;background:#3a3a3c;border-radius:8px;margin-bottom:1.25rem}
+.dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.dot-green{background:#30d158}.dot-grey{background:#8e8e93}.dot-orange{background:#f97316}
+.athlete{font-weight:600}
+.btn{display:inline-flex;align-items:center;gap:.5rem;padding:.55rem 1.1rem;border-radius:8px;font-size:.9rem;font-weight:600;cursor:pointer;border:none;text-decoration:none;transition:background .15s}
+.btn-strava{background:#fc4c02;color:#fff}.btn-strava:hover{background:#e04402}
+.btn-secondary{background:#3a3a3c;color:#f2f2f7}.btn-secondary:hover{background:#48484a}
+.btn-ghost{background:transparent;border:1px solid #48484a;color:#f2f2f7}.btn-ghost:hover{border-color:#f97316;color:#f97316}
+.btn:disabled{opacity:.45;cursor:default;pointer-events:none}
+.btn-row{display:flex;gap:.75rem;flex-wrap:wrap;align-items:center}
+
+/* sync options */
+.sync-opts{display:flex;gap:.75rem;margin-bottom:1.25rem}
+.opt{flex:1;background:#3a3a3c;border:2px solid transparent;border-radius:10px;padding:1rem;cursor:pointer;transition:border-color .15s}
+.opt.selected{border-color:#f97316}
+.opt h3{font-size:.9rem;font-weight:600;margin-bottom:.25rem}
+.opt p{font-size:.8rem;margin-bottom:0;color:#8e8e93}
+
+/* progress */
+#progress-section{display:none}
+.prog-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem}
+.prog-header h2{font-size:.95rem;font-weight:600}
+.prog-counts{font-size:.85rem;color:#8e8e93}
+.prog-bar-wrap{background:#3a3a3c;border-radius:999px;height:6px;margin-bottom:1rem;overflow:hidden}
+.prog-bar{height:100%;background:#f97316;border-radius:999px;width:0%;transition:width .3s}
+#log{
+  background:#111;border:1px solid #3a3a3c;border-radius:8px;
+  padding:.75rem;height:280px;overflow-y:auto;font-family:"SF Mono","Fira Code",monospace;font-size:11.5px;line-height:1.6;
+}
+#log::-webkit-scrollbar{width:5px}
+#log::-webkit-scrollbar-thumb{background:#3a3a3c;border-radius:3px}
+.log-ok{color:#30d158}.log-err{color:#ef4444}.log-info{color:#8e8e93}.log-done{color:#f97316;font-weight:600}
+
+/* db stats */
+.stat-row{display:flex;gap:1rem;margin-bottom:1.25rem}
+.stat{background:#3a3a3c;border-radius:8px;padding:.75rem 1rem;flex:1;text-align:center}
+.stat-val{font-size:1.4rem;font-weight:700;color:#f2f2f7}
+.stat-lbl{font-size:.75rem;color:#8e8e93;text-transform:uppercase;letter-spacing:.05em;margin-top:.15rem}
+</style>
+</head>
+<body>
+<nav>
+  <a href="/" class="brand">⛰ Ascent</a>
+  <a href="/activities">Activities</a>
+  <a href="/">Dashboard</a>
+  <div class="spacer"></div>
+  <a href="/strava/disconnect" class="btn btn-ghost" style="font-size:.8rem;padding:.3rem .7rem" onclick="return confirm('Disconnect Strava?')">Disconnect</a>
+</nav>
+
+<div class="container">
+
+  <div class="card">
+    <h1>Strava Sync</h1>
+
+    {% if authorized %}
+    <div class="status-row">
+      <div class="dot dot-green"></div>
+      <span>Connected{% if athlete %} as <span class="athlete">{{ athlete.get("firstname","") }} {{ athlete.get("lastname","") }}</span>{% endif %}</span>
+    </div>
+
+    <div class="stat-row">
+      <div class="stat"><div class="stat-val">{{ db_count }}</div><div class="stat-lbl">In Database</div></div>
+      <div class="stat" id="newCount"><div class="stat-val">—</div><div class="stat-lbl">New on Strava</div></div>
+    </div>
+
+    <div class="sync-opts">
+      <div class="opt selected" id="opt-new" onclick="selectMode('new')">
+        <h3>Sync New Activities</h3>
+        <p>Only fetch activities added since your last sync. Fast.</p>
+      </div>
+      <div class="opt" id="opt-all" onclick="selectMode('all')">
+        <h3>⚠️ Full Sync</h3>
+        <p>Re-fetches ALL activities. May hit Strava rate limits. Only use to rebuild from scratch.</p>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-strava" id="syncBtn" onclick="startSync()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169"/></svg>
+        Start Sync
+      </button>
+      <button class="btn btn-ghost" onclick="window.location='/activities'">View Activities</button>
+    </div>
+
+    {% else %}
+    <div class="status-row">
+      <div class="dot dot-grey"></div>
+      <span>Not connected to Strava</span>
+    </div>
+    <p>Connect your Strava account to import activities directly into your Ascent database.</p>
+    <a href="/strava/connect" class="btn btn-strava">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169"/></svg>
+      Connect Strava
+    </a>
+    {% endif %}
+  </div>
+
+  <div class="card" id="progress-section">
+    <div class="prog-header">
+      <h2 id="prog-title">Syncing…</h2>
+      <span class="prog-counts" id="prog-counts"></span>
+    </div>
+    <div class="prog-bar-wrap"><div class="prog-bar" id="prog-bar"></div></div>
+    <div id="log"></div>
+    <div style="margin-top:.75rem;display:flex;gap:.75rem">
+      <button class="btn btn-ghost" id="viewBtn" style="display:none" onclick="window.location='/activities'">View Activities →</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+let syncMode = 'new';
+let syncing  = false;
+let imported = 0;
+let skipped  = 0;
+
+function selectMode(m) {
+  syncMode = m;
+  document.getElementById('opt-new').classList.toggle('selected', m === 'new');
+  document.getElementById('opt-all').classList.toggle('selected', m === 'all');
+}
+
+function log(msg, cls) {
+  const el = document.getElementById('log');
+  const line = document.createElement('div');
+  line.className = cls || 'log-info';
+  line.textContent = msg;
+  el.appendChild(line);
+  el.scrollTop = el.scrollHeight;
+}
+
+function updateCounts(i, s) {
+  imported = i; skipped = s;
+  document.getElementById('prog-counts').textContent = `${i} imported, ${s} skipped`;
+}
+
+function startSync() {
+  if (syncing) return;
+  if (syncMode === 'all') {
+    if (!confirm('Full Sync will fetch ALL activities from Strava and may hit API rate limits. Use "Sync New Activities" for routine syncing.\n\nContinue with Full Sync?')) return;
+  }
+  syncing = true;
+  imported = 0; skipped = 0;
+
+  document.getElementById('syncBtn').disabled = true;
+  document.getElementById('progress-section').style.display = 'block';
+  document.getElementById('log').innerHTML = '';
+  document.getElementById('prog-bar').style.width = '0%';
+  document.getElementById('prog-title').textContent = 'Syncing…';
+  document.getElementById('viewBtn').style.display = 'none';
+
+  const es = new EventSource(`/strava/run-sync?mode=${syncMode}`);
+  let barPct = 0;
+
+  es.onmessage = e => {
+    const ev = JSON.parse(e.data);
+    if (ev.type === 'start') {
+      log(ev.msg, 'log-info');
+    } else if (ev.type === 'progress') {
+      log(ev.msg, 'log-info');
+      updateCounts(ev.imported || 0, ev.skipped || 0);
+      barPct = Math.min(barPct + 2, 90);
+      document.getElementById('prog-bar').style.width = barPct + '%';
+    } else if (ev.type === 'imported') {
+      log(ev.msg, 'log-ok');
+      updateCounts(ev.imported, ev.skipped);
+      barPct = Math.min(barPct + 1, 95);
+      document.getElementById('prog-bar').style.width = barPct + '%';
+    } else if (ev.type === 'error') {
+      log(ev.msg, 'log-err');
+    } else if (ev.type === 'done') {
+      log('', '');
+      log(ev.msg, 'log-done');
+      document.getElementById('prog-bar').style.width = '100%';
+      document.getElementById('prog-title').textContent = 'Sync complete';
+      updateCounts(ev.imported, ev.skipped);
+      document.getElementById('viewBtn').style.display = '';
+      document.getElementById('syncBtn').disabled = false;
+      syncing = false;
+      es.close();
+    }
+  };
+  es.onerror = () => {
+    if (!syncing) return;
+    log('Connection error — sync may have been interrupted', 'log-err');
+    syncing = false;
+    document.getElementById('syncBtn').disabled = false;
+    es.close();
+  };
+}
+
+// Pre-check how many new activities are on Strava
+(async () => {
+  try {
+    const r = await fetch('/strava/api/activities?per_page=1&page=1');
+    if (r.ok) {
+      // Just show a rough indicator
+      document.querySelector('#newCount .stat-val').textContent = '?';
+    }
+  } catch(e) {}
+})();
+</script>
+</body>
+</html>

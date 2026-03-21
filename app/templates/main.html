@@ -1,0 +1,1803 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ascent</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#1c1c1e;--surface:#2c2c2e;--surface2:#3a3a3c;
+  --border:#3a3a3c;--border2:#48484a;
+  --text:#f2f2f7;--muted:#8e8e93;--muted2:#636366;
+  --accent:#f97316;--accent-blue:#0a84ff;--accent-green:#30d158;
+  --row-hover:rgba(255,255,255,.05);--row-sel:rgba(249,115,22,.18);
+  --row-sel-border:rgba(249,115,22,.6);
+}
+html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif;font-size:13px;background:var(--bg);color:var(--text)}
+a{color:var(--accent);text-decoration:none}
+button{cursor:pointer;border:none;background:none;color:inherit;font:inherit}
+input,select{font:inherit}
+
+/* toolbar */
+#toolbar{
+  height:44px;background:var(--surface);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;padding:0 12px;gap:8px;flex-shrink:0;user-select:none;
+}
+.tb-title{font-size:13px;font-weight:600;color:var(--text)}
+.tb-search{
+  display:flex;align-items:center;gap:6px;
+  background:var(--surface2);border:1px solid var(--border2);border-radius:7px;
+  padding:4px 10px;width:260px;
+}
+.tb-search input{background:none;border:none;outline:none;color:var(--text);font-size:12px;width:100%}
+.tb-search input::placeholder{color:var(--muted2)}
+.tb-icon{color:var(--muted);font-size:15px;flex-shrink:0}
+.tb-btn{padding:4px 10px;border-radius:6px;font-size:12px;font-weight:500;background:var(--surface2);border:1px solid var(--border2);color:var(--text);display:flex;align-items:center;gap:5px;}
+.tb-btn:hover{background:var(--border2)}
+.tb-btn.strava{background:rgba(252,76,2,.2);border-color:rgba(252,76,2,.5);color:#fc4c02}
+.tb-btn.strava:hover{background:rgba(252,76,2,.35)}
+.tb-count{font-size:11px;color:var(--muted);padding:0 6px;white-space:nowrap}
+
+/* root */
+#root{display:flex;height:calc(100vh - 44px);overflow:hidden}
+
+/* sidebar */
+#sidebar{width:640px;min-width:380px;max-width:55vw;display:flex;flex-direction:column;border-right:1px solid var(--border);flex-shrink:0;overflow:hidden;position:relative;padding-bottom:44px}
+#filter-bar{display:flex;gap:6px;padding:8px 10px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0;align-items:center;}
+#filter-bar select{background:var(--surface2);border:1px solid var(--border2);color:var(--text);border-radius:6px;padding:4px 8px;font-size:12px;}
+
+/* column headers */
+#col-head{
+  display:grid;grid-template-columns:var(--cols);
+  background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0;padding:0 8px;
+}
+.ch{
+  padding:6px 4px;font-size:11px;font-weight:600;color:var(--muted);
+  text-transform:uppercase;letter-spacing:.04em;cursor:pointer;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  display:flex;align-items:center;gap:2px;user-select:none;
+}
+.ch:hover{color:var(--text)}
+.ch.sorted{color:var(--accent)}
+.sort-arr{color:var(--accent);font-size:11px}
+
+/* list — virtual scroll container */
+#act-list{flex:1;overflow-y:auto;overflow-x:hidden;position:relative;padding-bottom:264px}
+#act-list::-webkit-scrollbar{width:6px}
+#act-list::-webkit-scrollbar-track{background:transparent}
+#act-list::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+#list-spacer{width:1px} /* height set by JS for virtual scroll */
+#list-rows{position:absolute;top:0;left:0;right:0;}
+
+.act-row{
+  display:grid;grid-template-columns:var(--cols);
+  padding:0 8px;border-bottom:1px solid rgba(255,255,255,.04);
+  cursor:pointer;align-items:center;height:34px;
+}
+.act-row:hover{background:var(--row-hover)}
+.act-row.selected{background:var(--row-sel);border-left:3px solid var(--row-sel-border)}
+.ac{padding:2px 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12px}
+.ac-date{color:var(--muted);font-size:11.5px}
+.ac-name{font-weight:500}
+.ac-num{color:var(--text);text-align:right;font-variant-numeric:tabular-nums}
+.ac-strava{color:#fc4c02;font-size:10px;margin-left:3px}
+.no-acts{padding:2rem;text-align:center;color:var(--muted)}
+
+/* resize */
+#resize-handle{width:4px;background:transparent;cursor:col-resize;flex-shrink:0;transition:background .15s;}
+#resize-handle:hover,#resize-handle.dragging{background:var(--accent)}
+
+/* right panel */
+#detail{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+#map-wrap{flex:none;height:45%;position:relative;background:#111;min-height:60px}
+#map{width:100%;height:100%}
+.map-placeholder{display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-size:13px;}
+.drag-handle{
+  flex:none;height:5px;background:transparent;cursor:row-resize;
+  position:relative;z-index:10;flex-shrink:0;
+  border-top:1px solid var(--border);border-bottom:1px solid var(--border);
+}
+.drag-handle:hover,.drag-handle.dragging{background:#f97316;opacity:.7}
+.drag-handle::after{
+  content:'';position:absolute;left:50%;top:50%;
+  transform:translate(-50%,-50%);
+  width:30px;height:2px;border-radius:1px;
+  background:var(--muted2);pointer-events:none;
+}
+.map-badge{position:absolute;bottom:8px;left:8px;z-index:500;background:rgba(0,0,0,.7);color:#fff;border-radius:5px;padding:3px 8px;font-size:11px;backdrop-filter:blur(4px);}
+.map-style-btn{background:rgba(0,0,0,.6);color:#ccc;border:1px solid rgba(255,255,255,.15);border-radius:4px;padding:2px 7px;font-size:11px;cursor:pointer;backdrop-filter:blur(4px);transition:all .15s}
+.map-style-btn:hover{background:rgba(0,0,0,.8);color:#fff}
+.map-style-btn.active{background:#f97316;color:#fff;border-color:#f97316}
+
+#chart-wrap{flex:none;height:22%;border-top:1px solid var(--border);background:var(--bg);position:relative;overflow:hidden;min-height:40px}
+#elevChart{width:100%!important;height:100%!important}
+.chart-label{display:none}
+
+#info-panel{flex:1;border-top:none;display:flex;overflow:hidden;min-height:60px}
+#info-left{flex:1;padding:12px 14px 60px 14px;overflow-y:auto;min-width:0;scrollbar-width:thin;scrollbar-color:var(--border2) transparent}
+#info-left::-webkit-scrollbar{width:5px}
+#info-left::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+#info-right{width:220px;flex-shrink:0;border-left:1px solid var(--border);overflow:hidden;background:#000;}
+#info-photo{width:100%;height:100%;object-fit:cover;display:none}
+.photo-placeholder{display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted2);font-size:12px;}
+
+.act-title-bar{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px}
+.act-title{font-size:15px;font-weight:600;line-height:1.3}
+.act-title-links{display:flex;gap:6px;flex-shrink:0;margin-left:8px;margin-top:2px}
+.act-title-links a{font-size:11px;color:var(--muted);border:1px solid var(--border2);border-radius:4px;padding:2px 7px}
+.act-title-links a:hover{color:var(--text);border-color:var(--text)}
+.act-title-links a.strava{color:#fc4c02;border-color:rgba(252,76,2,.4)}
+
+.stats-row{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+.stat-chip{background:var(--surface2);border:1px solid var(--border2);border-radius:7px;padding:5px 10px;display:flex;flex-direction:column;align-items:center;min-width:70px;}
+.sc-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:1px}
+.sc-val{font-size:14px;font-weight:600;font-variant-numeric:tabular-nums}
+
+.meta-row{display:flex;gap:12px;margin-bottom:8px;flex-wrap:wrap}
+.meta-field{display:flex;flex-direction:column;gap:1px;min-width:100px}
+.mf-label{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+.mf-val{font-size:12px;color:var(--text)}
+
+.act-notes{font-size:12.5px;color:var(--text);line-height:1.55;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:10px;}
+
+#no-selection{display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-size:13px;flex-direction:column;gap:8px;}
+.placeholder-icon{font-size:40px;opacity:.25}
+
+/* ── Transport bar ───────────────────────────────────────────────────────── */
+#transport-bar{
+  display:none;flex-shrink:0;
+  background:#1a1a1c;border-top:1px solid var(--border);
+  padding:6px 12px;gap:10px;align-items:center;
+}
+.tb-transport{display:flex;align-items:center;gap:4px}
+.t-btn{background:#2c2c2e;border:none;color:#f2f2f7;border-radius:6px;
+  width:30px;height:30px;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .15s}
+.t-btn:hover{background:#48484a}
+.t-btn.active{background:#f97316;color:#fff}
+#t-time{font-family:"SF Mono","Fira Code",monospace;font-size:15px;font-weight:600;
+  color:#f97316;letter-spacing:.05em;min-width:68px;text-align:center}
+#t-speed{background:#2c2c2e;border:none;color:#f2f2f7;border-radius:6px;
+  padding:3px 8px;font-size:12px;cursor:pointer}
+#t-scrub{flex:1;accent-color:#f97316;cursor:pointer;height:4px;min-width:60px}
+
+/* Live stats strip */
+#anim-stats{display:flex;gap:14px;align-items:center;margin-left:8px}
+.anim-stat{display:flex;flex-direction:column;align-items:center;min-width:44px}
+.anim-stat-val{font-size:13px;font-weight:700;color:#f2f2f7;line-height:1.1}
+.anim-stat-lbl{font-size:9px;text-transform:uppercase;letter-spacing:.06em;color:#636366}
+
+/* Anim dot on elevation chart */
+#elev-anim-dot{position:absolute;width:10px;height:10px;border-radius:50%;
+  background: radial-gradient(circle at 35% 35%, #ffe066, #f59e0b 55%, #b45309);
+  box-shadow: 0 1px 3px rgba(0,0,0,.6), inset 0 -1px 2px rgba(0,0,0,.2);
+  pointer-events:none;transform:translate(-50%,-50%);display:none;z-index:10}
+
+/* ── Splits pane ─────────────────────────────────────────────────────────── */
+#splits-pane{position:absolute;bottom:44px;left:0;right:0;height:220px;
+  display:flex;flex-direction:column;border-top:2px solid var(--border);
+  background:var(--bg);overflow:hidden;z-index:50}
+#splits-pane.collapsed{height:28px!important}
+#splits-titlebar{display:flex;align-items:center;gap:6px;padding:0 8px;
+  height:28px;flex-shrink:0;background:var(--surface);border-bottom:1px solid var(--border)}
+#splits-title{font-size:11px;font-weight:600;text-transform:uppercase;
+  letter-spacing:.06em;color:var(--muted);flex:1}
+.sp-tb-btn{background:none;border:none;color:var(--muted);cursor:pointer;
+  padding:2px 5px;border-radius:4px;font-size:13px;line-height:1}
+.sp-tb-btn:hover{background:var(--surface2);color:var(--text)}
+#splits-settings{display:none;flex-shrink:0;padding:4px 10px;
+  background:var(--surface);border-bottom:1px solid var(--border);
+  gap:8px;flex-wrap:wrap;align-items:center}
+#splits-settings.open{display:flex}
+.ss-group{display:flex;flex-direction:column;gap:3px}
+.ss-label{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+.ss-radios{display:flex;flex-wrap:wrap;gap:4px}
+.ss-radio{display:flex;align-items:center;gap:3px;font-size:11px;color:var(--text);
+  cursor:pointer;padding:1px 5px;border-radius:4px;border:1px solid var(--border2)}
+.ss-radio:hover{background:var(--surface2)}
+.ss-radio input{accent-color:#f97316;cursor:pointer}
+#splits-canvas-wrap{flex:1;position:relative;overflow:hidden;min-height:60px}
+#splits-canvas{display:block;width:100%;height:100%}
+</style>
+</head>
+<body>
+
+<div id="toolbar">
+  <span class="tb-title">⛰ Ascent</span>
+  <div style="flex:1"></div>
+  <div class="tb-search">
+    <span class="tb-icon">⌕</span>
+    <input type="text" id="searchInput" placeholder="Search activities…">
+  </div>
+  <span class="tb-count" id="actCount"></span>
+  <div style="display:flex;gap:6px">
+    <button class="tb-btn" onclick="window.location='/'">📊 Dashboard</button>
+    <button class="tb-btn" onclick="window.location='/settings'" style="background:#3a3a3c">⚙</button>
+    <button class="tb-btn strava" onclick="window.location='/strava/sync'">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169"/></svg>
+      Strava Sync
+    </button>
+  </div>
+</div>
+
+<div id="root">
+  <div id="sidebar">
+    <div id="filter-bar">
+      <select id="typeFilter"><option value="">All types</option></select>
+      <select id="yearFilter"><option value="">All years</option></select>
+    </div>
+
+    <div id="col-head" style="--cols:168px 1fr 62px 76px 58px 58px 52px">
+      <div class="ch sorted" data-col="start_time">Date/Time <span class="sort-arr">↓</span></div>
+      <div class="ch" data-col="name">Title</div>
+      <div class="ch" data-col="distance_m" style="justify-content:flex-end">Dist</div>
+      <div class="ch" data-col="active_time" style="justify-content:flex-end">Active</div>
+      <div class="ch" data-col="total_climb_m" style="justify-content:flex-end">Climb</div>
+      <div class="ch" data-col="avg_speed_mps" style="justify-content:flex-end">MvSpd</div>
+      <div class="ch" data-col="avg_heartrate" style="justify-content:flex-end">HR</div>
+    </div>
+
+    <div id="act-list">
+      <div id="list-spacer"></div>
+      <div id="list-rows"></div>
+    </div>
+
+    <div id="splits-drag"></div>
+
+    <div id="splits-pane" class="collapsed">
+      <div id="splits-titlebar">
+        <span id="splits-title">Splits</span>
+        <button class="sp-tb-btn" onclick="toggleSplitsSettings()" title="Settings">⚙</button>
+        <button class="sp-tb-btn" onclick="toggleSplitsPane()" id="splits-collapse-btn" title="Collapse/Expand">▲</button>
+      </div>
+      <div id="splits-settings">
+        <div class="ss-group">
+          <div class="ss-label">Metric</div>
+          <div class="ss-radios" id="sp-metric-radios">
+            <label class="ss-radio"><input type="radio" name="sp-metric" value="speed" checked> Speed</label>
+            <label class="ss-radio"><input type="radio" name="sp-metric" value="power"> Power</label>
+            <label class="ss-radio"><input type="radio" name="sp-metric" value="hr"> Heart Rate</label>
+            <label class="ss-radio"><input type="radio" name="sp-metric" value="climb"> Climb</label>
+            <label class="ss-radio"><input type="radio" name="sp-metric" value="pace"> Pace</label>
+            <label class="ss-radio"><input type="radio" name="sp-metric" value="cadence"> Cadence</label>
+          </div>
+        </div>
+        <div class="ss-group">
+          <div class="ss-label">Aggregation</div>
+          <div class="ss-radios" id="sp-agg-radios">
+            <label class="ss-radio"><input type="radio" name="sp-agg" value="avg" checked> Average</label>
+            <label class="ss-radio"><input type="radio" name="sp-agg" value="max"> Maximum</label>
+          </div>
+        </div>
+        <div class="ss-group">
+          <div class="ss-label">Split Length</div>
+          <div class="ss-radios" id="sp-len-radios">
+            <label class="ss-radio"><input type="radio" name="sp-len" value="0.25"> ¼ mi</label>
+            <label class="ss-radio"><input type="radio" name="sp-len" value="0.5"> ½ mi</label>
+            <label class="ss-radio"><input type="radio" name="sp-len" value="1" checked> 1 mi</label>
+            <label class="ss-radio"><input type="radio" name="sp-len" value="2"> 2 mi</label>
+            <label class="ss-radio"><input type="radio" name="sp-len" value="5"> 5 mi</label>
+            <label class="ss-radio"><input type="radio" name="sp-len" value="10"> 10 mi</label>
+            <label class="ss-radio"><input type="radio" name="sp-len" value="km1"> 1 km</label>
+          </div>
+        </div>
+      </div>
+      <div id="splits-canvas-wrap">
+        <canvas id="splits-canvas"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div id="resize-handle"></div>
+
+  <div id="detail">
+    <div id="map-wrap">
+      <div id="map">
+        <div class="map-placeholder" id="mapPlaceholder">Select an activity to view its map</div>
+      </div>
+      <div class="map-badge" id="mapBadge" style="display:none"></div>
+      <div id="map-style-bar" style="position:absolute;top:8px;right:8px;z-index:500;display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end">
+        <button class="map-style-btn active" data-style="osm"         onclick="setMapStyle('osm')">Street</button>
+        <button class="map-style-btn"        data-style="topo"        onclick="setMapStyle('topo')">Topo</button>
+        <button class="map-style-btn"        data-style="carto-dark"  onclick="setMapStyle('carto-dark')">Dark</button>
+        <button class="map-style-btn"        data-style="carto-light" onclick="setMapStyle('carto-light')">Light</button>
+        <button class="map-style-btn"        data-style="esri-sat"    onclick="setMapStyle('esri-sat')">Satellite</button>
+      </div>
+    </div>
+    <div class="drag-handle" id="drag-map-chart" title="Drag to resize"></div>
+    <div id="chart-wrap">
+      <canvas id="elevChart"></canvas>
+      <div id="elev-anim-dot"></div>
+    </div>
+    <div class="drag-handle" id="drag-chart-info" title="Drag to resize"></div>
+    <div id="info-panel">
+      <div id="info-left">
+        <div id="no-selection"><span class="placeholder-icon">🏔</span><span>Select an activity</span></div>
+        <div id="act-detail" style="display:none"></div>
+      </div>
+      <div id="info-right">
+        <div id="photo-panel" style="width:100%;height:100%;position:relative;background:#111;display:flex;align-items:center;justify-content:center;cursor:pointer" onclick="photoClick()">
+          <div id="photo-placeholder" style="color:#636366;font-size:12px">No photo</div>
+          <img id="photo-img" alt="" style="display:none;width:100%;height:100%;object-fit:cover">
+          <div id="photo-nav" style="display:none;position:absolute;top:0;left:0;right:0;align-items:center;justify-content:space-between;padding:4px 6px;background:rgba(0,0,0,.55)">
+            <button onclick="event.stopPropagation();photoNav(-1)" style="background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:14px">‹</button>
+            <span id="photo-count" style="color:#fff;font-size:11px"></span>
+            <button onclick="event.stopPropagation();photoNav(1)" style="background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:14px">›</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Lightbox -->
+      <div id="lightbox" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:9999;align-items:center;justify-content:center;flex-direction:column" onclick="closeLightbox()">
+        <img id="lb-img" alt="" style="max-width:90vw;max-height:85vh;object-fit:contain;border-radius:6px">
+        <div style="display:flex;align-items:center;gap:1rem;margin-top:12px">
+          <button onclick="event.stopPropagation();photoNav(-1,true)" style="background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:6px;padding:6px 18px;cursor:pointer;font-size:18px">‹</button>
+          <span id="lb-count" style="color:#aaa;font-size:13px"></span>
+          <button onclick="event.stopPropagation();photoNav(1,true)" style="background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:6px;padding:6px 18px;cursor:pointer;font-size:18px">›</button>
+        </div>
+        <div style="color:#666;font-size:11px;margin-top:6px">Press Esc or click to close · ← → to navigate</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+// ── STATE ────────────────────────────────────────────────────────────────────
+let elevRenderVersion = 0; // incremented each selectActivity call to cancel stale renders
+
+const state = {
+  all: [],          // full loaded list (all activities from server)
+  filtered: [],     // after search/type/year filter applied client-side
+  sortBy:  'start_time',
+  sortDir: 'desc',
+  search:  '',
+  actType: '',
+  year:    '',
+  selectedId: null,
+};
+
+const COLS = '168px 1fr 62px 76px 58px 58px 52px';
+const ROW_H = 34;
+
+// ── HELPERS ───────────────────────────────────────────────────────────────────
+function escHtml(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function fmtDate(ts) {
+  if (!ts) return '—';
+  return new Date(ts*1000).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'});
+}
+function fmtHMS(s) {
+  if (!s) return '—';
+  const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),ss=Math.floor(s%60);
+  return h?`${h}:${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}`:`${m}:${String(ss).padStart(2,'0')}`;
+}
+function fmtN(n,d=1){return (n&&Number(n)!==0)?Number(n).toFixed(d):'—'}
+
+// ── VIRTUAL SCROLL ────────────────────────────────────────────────────────────
+let vsScrollHandler = null;
+
+function renderVirtualList() {
+  const container = document.getElementById('act-list');
+  const spacer    = document.getElementById('list-spacer');
+  const rows      = document.getElementById('list-rows');
+  const acts      = state.filtered;
+
+  spacer.style.height = (acts.length * ROW_H) + 'px';
+
+  function paint() {
+    const scrollTop = container.scrollTop;
+    const viewH     = container.clientHeight;
+    const startIdx  = Math.max(0, Math.floor(scrollTop / ROW_H) - 5);
+    const endIdx    = Math.min(acts.length, Math.ceil((scrollTop + viewH) / ROW_H) + 5);
+
+    rows.style.transform = `translateY(${startIdx * ROW_H}px)`;
+
+    let html = '';
+    for (let i = startIdx; i < endIdx; i++) {
+      const a   = acts[i];
+      const sel = a.id === state.selectedId ? ' selected' : '';
+      html += `<div class="act-row${sel}" data-id="${a.id}" style="--cols:${COLS}" onclick="selectActivity(${a.id})">
+        <div class="ac ac-date">${fmtDate(a.start_time)}</div>
+        <div class="ac ac-name">${escHtml(a.name)}${a.strava_activity_id?'<span class="ac-strava">↗</span>':''}</div>
+        <div class="ac ac-num">${fmtN(a.distance_mi,2)}</div>
+        <div class="ac ac-num">${fmtHMS(a.active_time)}</div>
+        <div class="ac ac-num">${a.total_climb_ft?Math.round(a.total_climb_ft):'—'}</div>
+        <div class="ac ac-num">${fmtN(a.avg_speed_mph,1)}</div>
+        <div class="ac ac-num">${a.avg_heartrate?Math.round(a.avg_heartrate):'—'}</div>
+      </div>`;
+    }
+    rows.innerHTML = html;
+  }
+
+  // remove old scroll listener
+  if (vsScrollHandler) container.removeEventListener('scroll', vsScrollHandler);
+  vsScrollHandler = paint;
+  container.addEventListener('scroll', paint, {passive:true});
+  paint();
+
+  document.getElementById('actCount').textContent =
+    acts.length === state.all.length ? `${acts.length} activities` : `${acts.length} of ${state.all.length}`;
+}
+
+// ── SORT & FILTER ─────────────────────────────────────────────────────────────
+const SORT_KEY = {
+  start_time:    a => a.start_time || 0,
+  name:          a => (a.name||'').toLowerCase(),
+  distance_m:    a => a.distance_mi || 0,
+  active_time:   a => a.active_time || 0,
+  total_climb_m: a => a.total_climb_ft || 0,
+  avg_speed_mps: a => a.avg_speed_mph || 0,
+  avg_heartrate: a => a.avg_heartrate || 0,
+  calories:      a => a.calories || 0,
+};
+
+function applyFilterAndSort() {
+  let list = state.all.slice();
+
+  // filter
+  const q = state.search.toLowerCase();
+  if (q)           list = list.filter(a => (a.name||'').toLowerCase().includes(q) || (a.notes||'').toLowerCase().includes(q));
+  if (state.actType) list = list.filter(a => a.activity_type === state.actType);
+  if (state.year)    list = list.filter(a => a.start_time && new Date(a.start_time*1000).getFullYear() === Number(state.year));
+
+  // sort
+  const keyFn = SORT_KEY[state.sortBy] || SORT_KEY.start_time;
+  const dir    = state.sortDir === 'desc' ? -1 : 1;
+  list.sort((a,b) => {
+    const ka = keyFn(a), kb = keyFn(b);
+    return ka < kb ? -dir : ka > kb ? dir : 0;
+  });
+
+  state.filtered = list;
+  renderVirtualList();
+}
+
+function updateSortHeaders() {
+  document.querySelectorAll('.ch[data-col]').forEach(el => {
+    const col = el.dataset.col;
+    const isSorted = col === state.sortBy;
+    el.classList.toggle('sorted', isSorted);
+    // rebuild content: text + arrow
+    const label = el.textContent.replace(/[↑↓]/g,'').trim();
+    el.innerHTML = isSorted
+      ? `${label} <span class="sort-arr">${state.sortDir==='desc'?'↓':'↑'}</span>`
+      : label;
+  });
+}
+
+// ── LOAD ALL ACTIVITIES ───────────────────────────────────────────────────────
+async function loadAll() {
+  const r = await fetch('/activities/list?limit=2000&offset=0&sort_by=start_time&sort_dir=desc');
+  const d = await r.json();
+  state.all = d.activities;
+  applyFilterAndSort();
+  if (state.filtered.length) selectActivity(state.filtered[0].id);
+}
+
+// ── MAP ───────────────────────────────────────────────────────────────────────
+let leafMap=null, trackLayer=null, startMark=null, endMark=null, tileLayer=null;
+
+const MAP_STYLES = {
+  'osm':        { label: 'Street',    url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',                                          attr: '© OpenStreetMap' },
+  'cycle':      { label: 'Cycling',   url: 'https://tile.waymarkedtrails.org/cycling/{z}/{x}/{y}.png',                                attr: '© OpenStreetMap, © Waymarked Trails' },
+  'topo':       { label: 'Topo',      url: 'https://tile.opentopomap.org/{z}/{x}/{y}.png',                                            attr: '© OpenStreetMap, © OpenTopoMap' },
+  'carto-dark': { label: 'Dark',      url: 'https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',                               attr: '© OpenStreetMap, © CARTO' },
+  'carto-light':{ label: 'Light',     url: 'https://basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',                              attr: '© OpenStreetMap, © CARTO' },
+  'esri-sat':   { label: 'Satellite', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', attr: '© Esri' },
+};
+
+const DEFAULT_STYLE = localStorage.getItem('ascent-map-style') || 'osm';
+
+function initMap() {
+  leafMap = L.map('map',{zoomControl:true,attributionControl:false});
+  setMapStyle(DEFAULT_STYLE, false);
+}
+
+function setMapStyle(styleKey, save=true) {
+  const style = MAP_STYLES[styleKey] || MAP_STYLES['osm'];
+  if (tileLayer) leafMap.removeLayer(tileLayer);
+  tileLayer = L.tileLayer(style.url, { maxZoom: 19, attribution: style.attr });
+  tileLayer.addTo(leafMap);
+  if (save) localStorage.setItem('ascent-map-style', styleKey);
+  // Update selector UI
+  document.querySelectorAll('.map-style-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.style === styleKey);
+  });
+}
+function clearMap() {
+  [trackLayer,startMark,endMark].forEach(l=>{ if(l) leafMap.removeLayer(l); });
+  trackLayer=startMark=endMark=null;
+}
+function drawTrack(geojson) {
+  clearMap();
+  const coords = geojson?.geometry?.coordinates;
+  if (!coords||coords.length<2) return;
+  const valid = coords.filter(c=>Math.abs(c[1])<90&&Math.abs(c[0])<180&&!(c[0]===0&&c[1]===0));
+  if (valid.length<2) return;
+  const ll = valid.map(c=>[c[1],c[0]]);
+  trackLayer = L.polyline(ll,{color:'#ef4444',weight:3,opacity:.9,smoothFactor:1.5}).addTo(leafMap);
+
+  // Green start flag SVG
+  const startIcon = L.divIcon({
+    html: `<svg width="15" height="20" viewBox="0 0 20 26" xmlns="http://www.w3.org/2000/svg" style="filter:drop-shadow(0 1px 3px rgba(0,0,0,.9))">
+      <line x1="2" y1="0" x2="2" y2="26" stroke="white" stroke-width="2"/>
+      <polygon points="2,2 19,7 2,12" fill="#22c55e" stroke="#15803d" stroke-width="1"/>
+    </svg>`,
+    className: '', iconSize: [15,20], iconAnchor: [2, 20]
+  });
+  const endIcon = L.divIcon({
+    html: `<svg width="17" height="20" viewBox="0 0 22 26" xmlns="http://www.w3.org/2000/svg" style="filter:drop-shadow(0 1px 3px rgba(0,0,0,.9))">
+      <line x1="2" y1="0" x2="2" y2="26" stroke="white" stroke-width="2"/>
+      <rect x="2" y="2" width="20" height="12" fill="white" stroke="#333" stroke-width="0.5"/>
+      <rect x="2"  y="2"  width="5" height="4" fill="black"/>
+      <rect x="12" y="2"  width="5" height="4" fill="black"/>
+      <rect x="7"  y="6"  width="5" height="4" fill="black"/>
+      <rect x="17" y="6"  width="5" height="4" fill="black"/>
+      <rect x="2"  y="10" width="5" height="4" fill="black"/>
+      <rect x="12" y="10" width="5" height="4" fill="black"/>
+    </svg>`,
+    className: '', iconSize: [17,20], iconAnchor: [2, 20]
+  });
+
+  // Same-point: start and end within ~300m of each other
+  const dLat = Math.abs(ll[0][0] - ll[ll.length-1][0]);
+  const dLon = Math.abs(ll[0][1] - ll[ll.length-1][1]);
+  const samePoint = dLat < 0.003 && dLon < 0.003;
+
+  if (samePoint) {
+    // Center both flags on the midpoint between start and end
+    // Offset them horizontally: start to the left (west), end to the right (east)
+    const midLat = (ll[0][0] + ll[ll.length-1][0]) / 2;
+    const midLon = (ll[0][1] + ll[ll.length-1][1]) / 2;
+    const offset = 0.0006;  // ~55m separation
+    startMark = L.marker([midLat, midLon - offset], {icon: startIcon, zIndexOffset: 200}).addTo(leafMap);
+    endMark   = L.marker([midLat, midLon + offset], {icon: endIcon,   zIndexOffset: 200}).addTo(leafMap);
+  } else {
+    startMark = L.marker(ll[0],           {icon: startIcon, zIndexOffset: 200}).addTo(leafMap);
+    endMark   = L.marker(ll[ll.length-1], {icon: endIcon,   zIndexOffset: 200}).addTo(leafMap);
+  }
+  leafMap.fitBounds(trackLayer.getBounds(),{padding:[20,20]});
+  document.getElementById('mapPlaceholder').style.display='none';
+}
+
+// ── ELEVATION CHART ───────────────────────────────────────────────────────────
+// Draw a simple estimated profile from summary stats (min/max elevation + climb)
+async function drawElevationFromSummary(act, version) {
+  const ctx = document.getElementById('elevChart');
+  if (elevChart){elevChart.destroy();elevChart=null;}
+
+  // Wait until canvas has non-zero dimensions
+  for (let i = 0; i < 20; i++) {
+    if (ctx.offsetHeight > 0 && ctx.offsetWidth > 0) break;
+    await new Promise(r => setTimeout(r, 25));
+  }
+  if (version !== undefined && version !== elevRenderVersion) return; // stale
+
+  const maxAlt = act.max_altitude_ft || act.src_max_elevation;
+  const minAlt = act.min_altitude_ft || act.src_min_elevation;
+  const climb  = act.total_climb_ft  || 0;
+  const dist   = act.distance_mi     || 1;
+
+  if (!maxAlt && !minAlt && !climb) return; // nothing to show
+
+  // Synthesize a rough 20-point profile: up then down
+  const pts = 20;
+  const labels = [], vals = [];
+  const base = minAlt || Math.max(0, (maxAlt||0) - climb);
+  const peak = maxAlt || (base + climb);
+  for (let i = 0; i < pts; i++) {
+    const t = i / (pts - 1);
+    // bell-ish curve peaking around 40% of distance
+    const shape = Math.sin(t * Math.PI * 0.9);
+    labels.push((t * dist).toFixed(1));
+    vals.push(Math.round(base + (peak - base) * shape));
+  }
+
+  elevChart = new Chart(ctx, {
+    type:'line',
+    data:{labels,datasets:[{data:vals,fill:true,borderColor:'#64748b',backgroundColor:'rgba(100,116,139,.3)',borderWidth:1.5,pointRadius:0,tension:.4,borderDash:[4,3]}]},
+    options:{
+      responsive:true,maintainAspectRatio:false,animation:false,
+      plugins:{
+        legend:{display:false},
+        tooltip:{callbacks:{label:c=>`~${Math.round(c.raw)} ft (estimated)`},titleFont:{size:11},bodyFont:{size:11}},
+      },
+      scales:{
+        x:{
+          type:'linear', display:true,
+          ticks:{color:'#64748b',font:{size:9},maxTicksLimit:8,callback:v=>`${v.toFixed(0)}mi`},
+          grid:{color:'rgba(255,255,255,.04)'},
+        },
+        y:{ticks:{color:'#64748b',font:{size:10},maxTicksLimit:4,callback:v=>`${Math.round(v)}ft`},grid:{color:'rgba(255,255,255,.06)'}},
+      }
+    }
+  });
+
+  // Show "estimated" label
+  const label = document.querySelector('.chart-label');
+  if (label) label.textContent = 'Elevation (estimated)';
+}
+
+// ── ELEVATION CHART ───────────────────────────────────────────────────────────
+let elevChart=null;
+async function drawElevation(data, version) {
+  const label = document.querySelector('.chart-label');
+  if (label) label.textContent = 'Elevation';
+  const ctx = document.getElementById('elevChart');
+  if (elevChart) { elevChart.destroy(); elevChart = null; }
+
+  // Wait until canvas has non-zero dimensions (up to 500ms)
+  for (let i = 0; i < 20; i++) {
+    if (ctx.offsetHeight > 0 && ctx.offsetWidth > 0) break;
+    await new Promise(r => setTimeout(r, 25));
+  }
+  if (version !== undefined && version !== elevRenderVersion) return; // stale
+
+  const { dist_m, alt_ft } = data;
+  if (!alt_ft || alt_ft.every(v => v === 0)) return;
+
+  // Sample to ~600 points for performance, use {x, y} format for linear scale
+  const total = alt_ft.length;
+  const step  = Math.max(1, Math.floor(total / 600));
+  const points = [];
+  for (let i = 0; i < total; i += step) {
+    const x = dist_m[i] / 1609.344;  // metres → miles
+    points.push({ x, y: Math.round(alt_ft[i]) });
+  }
+  if (!points.length) return;
+
+  const totalMi = points[points.length - 1].x;
+  const xLabel = 'mi';
+
+  elevChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      datasets: [{
+        data: points,
+        fill: true,
+        borderColor: '#3b82f6',
+        backgroundColor: 'rgba(59,130,246,.45)',
+        borderWidth: 1.5,
+        pointRadius: 0,
+        tension: 0.4,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      layout: { padding: { bottom: 2 } },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            title: items => `${Number(items[0].parsed.x).toFixed(1)} ${xLabel}`,
+            label: c => `${c.parsed.y} ft`,
+          },
+          titleFont: { size: 11 },
+          bodyFont:  { size: 11 },
+        },
+      },
+      scales: {
+        x: {
+          type: 'linear',
+          display: true,
+          min: 0,
+          max: totalMi,
+          ticks: {
+            color: '#64748b',
+            font: { size: 9 },
+            maxTicksLimit: 10,
+            callback: v => `${Math.round(v)}${xLabel}`,
+          },
+          grid: { color: 'rgba(255,255,255,.04)' },
+          border: { color: 'rgba(255,255,255,.08)' },
+        },
+        y: {
+          ticks: {
+            color: '#64748b',
+            font: { size: 10 },
+            maxTicksLimit: 4,
+            callback: v => `${Math.round(v)}ft`,
+          },
+          grid: { color: 'rgba(255,255,255,.06)' },
+        },
+      },
+    },
+  });
+}
+
+// ── ACTIVITY DETAIL ───────────────────────────────────────────────────────────
+async function selectActivity(id) {
+  let elevChartDrawn = false;
+  const myVersion = ++elevRenderVersion;
+  state.selectedId = id;
+  animReset();
+  splitsState.pts = null; splitsState.geo = null; splitsState.selected = new Set(); clearSplitHighlights(); renderSplits();  // stop any running animation
+  renderVirtualList(); // re-render to update highlight without scroll reset
+
+  document.getElementById('no-selection').style.display='none';
+  const det=document.getElementById('act-detail');
+  det.style.display='block';
+  det.innerHTML='<div style="color:var(--muted);padding:.5rem">Loading…</div>';
+  document.getElementById('mapPlaceholder').style.display='flex';
+  clearMap();
+
+  const act = await fetch(`/activities/${id}/json`).then(r=>r.json());
+
+  // Only fetch points if they exist in the DB
+  // Always fetch geo+charts — don't rely on points_saved flag (can be 0 even when points exist)
+  const [gR, cR] = await Promise.all([
+    fetch(`/api/activities/${id}/geojson`),
+    fetch(`/api/activities/${id}/charts`),
+  ]);
+  const geo    = gR.ok ? await gR.json() : null;
+  const charts = cR.ok ? await cR.json() : null;
+
+  det.innerHTML = buildDetailHTML(act);
+  loadPhotos(id); // async
+  loadWeatherLocation(id); // async
+
+  // Map
+  const coords = geo?.geometry?.coordinates;
+  if (coords && coords.length > 1) {
+    drawTrack(geo);
+  } else {
+    const type = (act.activity_type || '').toLowerCase();
+    const isIndoor = type.includes('zwift') || type.includes('virtual') || type.includes('indoor');
+
+    if (isIndoor) {
+      document.getElementById('mapPlaceholder').innerHTML = '🖥 Virtual / indoor activity';
+      document.getElementById('mapPlaceholder').style.display = 'flex';
+    } else if (act.strava_activity_id) {
+      // Has Strava ID but no local points — fetch them automatically
+      document.getElementById('mapPlaceholder').innerHTML =
+        '<span style="color:var(--muted)">⬇ Fetching GPS from Strava…</span>';
+      document.getElementById('mapPlaceholder').style.display = 'flex';
+
+      try {
+        const fr = await fetch(`/api/activities/${id}/fetch-points`, { method: 'POST' });
+        if (fr.ok) {
+          const fd = await fr.json();
+          // Re-fetch geo and charts now that points are stored
+          const [gR2, cR2] = await Promise.all([
+            fetch(`/api/activities/${id}/geojson`),
+            fetch(`/api/activities/${id}/charts`),
+          ]);
+          const geo2    = gR2.ok ? await gR2.json() : null;
+          const charts2 = cR2.ok ? await cR2.json() : null;
+
+          // Hide placeholder, invalidate map size
+          document.getElementById('mapPlaceholder').style.display = 'none';
+          if (leafMap) leafMap.invalidateSize();
+
+          // Replace canvas to clear any stale Chart.js state
+          if (elevChart) { elevChart.destroy(); elevChart = null; }
+          const chartWrap = document.getElementById('chart-wrap');
+          const oldCanvas = document.getElementById('elevChart');
+          const newCanvas = document.createElement('canvas');
+          newCanvas.id = 'elevChart';
+          chartWrap.replaceChild(newCanvas, oldCanvas);
+          const cl = document.querySelector('.chart-label');
+          if (cl) cl.textContent = 'Elevation';
+
+          // Wait two frames: one for DOM update, one for layout
+          await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+          if (geo2?.geometry?.coordinates?.length > 1) {
+            drawTrack(geo2);
+          } else {
+            document.getElementById('mapPlaceholder').innerHTML = '📍 No GPS data available';
+            document.getElementById('mapPlaceholder').style.display = 'flex';
+          }
+
+          // Draw elevation using the fresh canvas
+          if (charts2?.alt_ft?.some(v => v > 0)) {
+            await drawElevation(charts2, myVersion);
+            animInit(charts2, geo2);  // init animation
+            splitsState.pts = charts2; splitsState.geo = geo2; renderSplits();
+          } else {
+            await drawElevationFromSummary(act, myVersion);
+          }
+          elevChartDrawn = true;
+          loadWeatherLocation(id);
+        } else {
+          document.getElementById('mapPlaceholder').innerHTML = '📍 Could not fetch GPS from Strava';
+          document.getElementById('mapPlaceholder').style.display = 'flex';
+        }
+      } catch(e) {
+        document.getElementById('mapPlaceholder').innerHTML = '📍 GPS fetch failed';
+        document.getElementById('mapPlaceholder').style.display = 'flex';
+      }
+    } else {
+      document.getElementById('mapPlaceholder').innerHTML = '📍 No GPS data for this activity';
+      document.getElementById('mapPlaceholder').style.display = 'flex';
+    }
+  }
+
+  // Elevation chart — skip if already drawn inside the Strava fetch block
+  if (!elevChartDrawn) {
+    const hasAlt = charts && charts.alt_ft && charts.alt_ft.some(v => v > 0);
+    if (hasAlt) {
+      await drawElevation(charts, myVersion);
+      animInit(charts, geo);  // init animation with real point data
+  splitsState.pts = charts; splitsState.geo = geo; renderSplits();
+    } else {
+      await drawElevationFromSummary(act, myVersion);
+    }
+  }
+
+  const badge=document.getElementById('mapBadge');
+  if (geo?.geometry?.coordinates?.length>1) {
+    badge.textContent=`${act.distance_mi} mi · ${Math.round(act.total_climb_ft||0)} ft climb`;
+    badge.style.display='block';
+  } else { badge.style.display='none'; }
+}
+
+function buildDetailHTML(a) {
+  const strava = a.strava_activity_id
+    ? `<a href="https://www.strava.com/activities/${a.strava_activity_id}" target="_blank" class="strava">View on Strava ↗</a>`
+    : '';
+  const chips = [
+    ['Distance',  a.distance_mi   ? a.distance_mi+' mi'             : null],
+    ['Active',    a.active_time   ? fmtHMS(a.active_time)            : null],
+    ['Duration',  a.duration      ? fmtHMS(a.duration)               : null],
+    ['Climb',     a.total_climb_ft? Math.round(a.total_climb_ft)+' ft': null],
+    ['Descent',   a.total_descent_ft ? Math.round(a.total_descent_ft)+' ft': null],
+    ['Avg Speed', a.avg_speed_mph ? a.avg_speed_mph+' mph'           : null],
+    ['Avg Pace',  a.avg_pace||null],
+    ['Avg HR',    a.avg_heartrate ? Math.round(a.avg_heartrate)+' bpm': null],
+    ['Max HR',    a.max_heartrate ? Math.round(a.max_heartrate)+' bpm': null],
+    ['Cadence',   a.avg_cadence   ? Math.round(a.avg_cadence)+' rpm' : null],
+    ['Power',     a.avg_power     ? Math.round(a.avg_power)+' W'     : null],
+    ['Calories',  a.calories      ? Math.round(a.calories)+''        : null],
+    ['Suffer',    a.suffer_score  ? Math.round(a.suffer_score)+''     : null],
+  ].filter(([,v])=>v);
+
+  const meta = [
+    ['Effort',   a.effort],
+    ['Keyword 1',a.keyword1],['Keyword 2',a.keyword2],['Notes tag',a.custom],
+  ].filter(([,v])=>v&&v!=='null'&&v!=='0');
+
+  return `
+    <div class="act-title-bar">
+      <div class="act-title">${escHtml(a.name||'(unnamed)')}</div>
+      <div class="act-title-links"><a href="/activities/${a.id}">Detail</a>${strava}</div>
+    </div>
+    <div style="font-size:11.5px;color:var(--muted);margin-bottom:10px">${fmtDate(a.start_time)}</div>
+    <div class="stats-row">${chips.map(([l,v])=>`<div class="stat-chip"><div class="sc-label">${l}</div><div class="sc-val">${v}</div></div>`).join('')}</div>
+    ${a.notes?`<div class="act-notes">${escHtml(a.notes)}</div>`:''}
+    <div id="wx-panel" style="display:none;font-size:12.5px;color:var(--text);line-height:1.6;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:10px;"></div>
+    <div class="meta-row" style="margin-top:4px">
+      ${a.activity_type?`<div class="meta-field"><div class="mf-label">Type</div><div class="mf-val">${escHtml(a.activity_type)}</div></div>`:''}
+      ${a.equipment?`<div class="meta-field"><div class="mf-label">Equipment</div><div class="mf-val">${escHtml(a.equipment)}</div></div>`:''}
+      ${meta.map(([l,v])=>`<div class="meta-field"><div class="mf-label">${l}</div><div class="mf-val">${escHtml(String(v))}</div></div>`).join('')}
+    </div>
+  `;
+}
+
+// ── FILTER CONTROLS ───────────────────────────────────────────────────────────
+async function loadFilterOptions() {
+  const d = await fetch('/activities/filter-options').then(r=>r.json());
+  const tEl=document.getElementById('typeFilter');
+  d.types.forEach(t=>{ const o=document.createElement('option');o.value=t;o.textContent=t;tEl.appendChild(o); });
+  const yEl=document.getElementById('yearFilter');
+  d.years.forEach(y=>{ const o=document.createElement('option');o.value=y;o.textContent=y;yEl.appendChild(o); });
+}
+
+document.getElementById('typeFilter').addEventListener('change',e=>{ state.actType=e.target.value; applyFilterAndSort(); });
+document.getElementById('yearFilter').addEventListener('change',e=>{ state.year=e.target.value;    applyFilterAndSort(); });
+
+let searchTimer=null;
+document.getElementById('searchInput').addEventListener('input',e=>{
+  clearTimeout(searchTimer);
+  searchTimer=setTimeout(()=>{ state.search=e.target.value; applyFilterAndSort(); },250);
+});
+
+// ── COLUMN SORT ───────────────────────────────────────────────────────────────
+document.querySelectorAll('.ch[data-col]').forEach(el=>{
+  el.addEventListener('click',()=>{
+    const col=el.dataset.col;
+    state.sortDir = (state.sortBy===col && state.sortDir==='desc') ? 'asc' : 'desc';
+    state.sortBy  = col;
+    updateSortHeaders();
+    applyFilterAndSort();
+  });
+});
+
+// ── RESIZE HANDLE ─────────────────────────────────────────────────────────────
+const sidebar=document.getElementById('sidebar');
+const handle=document.getElementById('resize-handle');
+let resizing=false,rsX=0,rsW=0;
+handle.addEventListener('mousedown',e=>{ resizing=true;rsX=e.clientX;rsW=sidebar.offsetWidth;handle.classList.add('dragging');document.body.style.cssText='cursor:col-resize;user-select:none'; });
+window.addEventListener('mousemove',e=>{ if(!resizing)return; sidebar.style.width=Math.max(380,Math.min(window.innerWidth*.65,rsW+e.clientX-rsX))+'px'; if(leafMap)leafMap.invalidateSize(); });
+window.addEventListener('mouseup',()=>{ if(!resizing)return; resizing=false;handle.classList.remove('dragging');document.body.style.cssText=''; });
+
+// ── KEYBOARD NAV ──────────────────────────────────────────────────────────────
+document.addEventListener('keydown',e=>{
+  if(!state.filtered.length||e.target.tagName==='INPUT') return;
+  const idx=state.filtered.findIndex(a=>a.id===state.selectedId);
+  if (e.key==='ArrowDown'&&idx<state.filtered.length-1){ e.preventDefault(); selectActivity(state.filtered[idx+1].id); scrollToSelected(); }
+  if (e.key==='ArrowUp'  &&idx>0)                      { e.preventDefault(); selectActivity(state.filtered[idx-1].id); scrollToSelected(); }
+});
+function scrollToSelected(){
+  const idx=state.filtered.findIndex(a=>a.id===state.selectedId);
+  if(idx<0)return;
+  const container=document.getElementById('act-list');
+  const top=idx*ROW_H, bot=top+ROW_H;
+  if(top<container.scrollTop) container.scrollTop=top-ROW_H;
+  else if(bot>container.scrollTop+container.clientHeight) container.scrollTop=bot-container.clientHeight+ROW_H;
+}
+
+// ── PHOTOS ───────────────────────────────────────────────────────────────────
+const photoState = { photos: [], idx: 0, activityId: null };
+
+async function loadPhotos(activityId) {
+  photoState.activityId = activityId;
+  photoState.photos = [];
+  photoState.idx = 0;
+  showPhoto(null); // reset
+
+  try {
+    const r = await fetch(`/activities/${activityId}/photos`);
+    if (!r.ok) return;
+    const d = await r.json();
+    if (!d.photos || !d.photos.length) return;
+    photoState.photos = d.photos.map(f => d.base_url + f);
+    showPhoto(0);
+  } catch(e) {}
+}
+
+function showPhoto(idx) {
+  const img     = document.getElementById('photo-img');
+  const ph      = document.getElementById('photo-placeholder');
+  const nav     = document.getElementById('photo-nav');
+  const count   = document.getElementById('photo-count');
+
+  if (idx === null || !photoState.photos.length) {
+    img.style.display   = 'none';
+    ph.style.display    = '';
+    nav.style.display   = 'none';
+    return;
+  }
+
+  photoState.idx = idx;
+  img.src = photoState.photos[idx];
+  img.style.display = 'block';
+  ph.style.display  = 'none';
+
+  if (photoState.photos.length > 1) {
+    nav.style.display = 'flex';
+    count.textContent = `${idx + 1} / ${photoState.photos.length}`;
+  } else {
+    nav.style.display = 'none';
+  }
+}
+
+function photoNav(delta, lightbox = false) {
+  if (!photoState.photos.length) return;
+  const n = photoState.photos.length;
+  const next = (photoState.idx + delta + n) % n;
+  showPhoto(next);
+  if (lightbox) {
+    document.getElementById('lb-img').src   = photoState.photos[next];
+    document.getElementById('lb-count').textContent = `${next + 1} / ${n}`;
+  }
+}
+
+function photoClick() {
+  if (!photoState.photos.length) return;
+  const lb = document.getElementById('lightbox');
+  const lbImg = document.getElementById('lb-img');
+  const lbCount = document.getElementById('lb-count');
+  lbImg.src = photoState.photos[photoState.idx];
+  lbCount.textContent = photoState.photos.length > 1
+    ? `${photoState.idx + 1} / ${photoState.photos.length}` : '';
+  lb.style.display = 'flex';
+}
+
+function closeLightbox() {
+  document.getElementById('lightbox').style.display = 'none';
+}
+
+// Keyboard: Esc closes lightbox, ←→ navigate photos
+document.addEventListener('keydown', e => {
+  const lb = document.getElementById('lightbox');
+  if (lb.style.display === 'flex') {
+    if (e.key === 'Escape')     { closeLightbox(); return; }
+    if (e.key === 'ArrowLeft')  { photoNav(-1, true); return; }
+    if (e.key === 'ArrowRight') { photoNav(1, true);  return; }
+  }
+  // Panel arrow keys (when not in lightbox, not typing)
+  if (e.target.tagName === 'INPUT') return;
+  if (photoState.photos.length > 1) {
+    if (e.key === '[') { photoNav(-1); return; }
+    if (e.key === ']') { photoNav(1);  return; }
+  }
+});
+
+// Set active button on load
+document.addEventListener('DOMContentLoaded', () => {
+  const saved = localStorage.getItem('ascent-map-style') || 'osm';
+  document.querySelectorAll('.map-style-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.style === saved);
+  });
+});
+
+// ── WEATHER & LOCATION ───────────────────────────────────────────────────────
+async function loadWeatherLocation(activityId) {
+  const panel = document.getElementById('wx-panel');
+  if (!panel) return;
+  panel.innerHTML = '<span style="color:var(--muted);font-size:11px">Fetching weather…</span>';
+  panel.style.display = 'block';
+  panel.style.display = 'flex';
+  panel.style.flexDirection = 'column';
+
+  try {
+    const r = await fetch(`/api/activities/${activityId}/weather-location`);
+    if (!r.ok) { panel.style.display = 'none'; return; }
+    const d = await r.json();
+
+    let html = '';
+    if (d.weather?.description) {
+      const w = d.weather;
+      let wstr = `<strong>Weather</strong><br>${w.description}`;
+      const details = [];
+      if (w.avg_temp_f  != null) details.push(`${Math.round(w.avg_temp_f)}°F`);
+      if (w.avg_wind_kph != null) details.push(`Wind ${Math.round(w.avg_wind_kph)} km/h`);
+      if (w.avg_humidity != null) details.push(`${Math.round(w.avg_humidity)}% humidity`);
+      if (w.precip_mm > 0)        details.push(`${w.precip_mm}mm precip`);
+      if (details.length) wstr += `<br><span style="color:var(--muted);font-size:11px">${details.join(' · ')}</span>`;
+      html += `<div style="margin-bottom:8px">${wstr}</div>`;
+    }
+    if (d.locations) {
+      html += `<div><strong>Locations</strong><br>${d.locations}</div>`;
+    }
+    if (html) {
+      panel.innerHTML = html;
+      panel.style.display = 'block';
+    } else {
+      panel.style.display = 'none';
+    }
+  } catch(e) {
+    panel.style.display = 'none';
+  }
+}
+
+// ── ANIMATION ENGINE ─────────────────────────────────────────────────────────
+const anim = {
+  pts:       null,   // full point array from /charts endpoint: {time,alt_ft,hr,speed,power,dist_m}
+  latLon:    null,   // parallel array of [lat,lon] from geojson
+  idx:       0,      // current point index
+  speed:     1,      // playback speed multiplier (negative = reverse)
+  playing:   false,
+  rafId:     null,
+  lastTs:    null,
+  secPerPt:  1,      // real seconds per point (wall_clock_delta step)
+  mapDot:    null,   // Leaflet circle marker
+};
+
+function animInit(chartsData, geojson) {
+  // Build parallel arrays from chart data and geojson coordinates
+  if (!chartsData || !chartsData.time || !chartsData.time.length) return;
+
+  anim.pts = chartsData;
+
+  // Build lat/lon array aligned to chart points by sampling geojson coords
+  const coords = geojson?.geometry?.coordinates || [];
+  const n = chartsData.time.length;
+  anim.latLon = [];
+  for (let i = 0; i < n; i++) {
+    const ci = Math.round(i / (n-1) * (coords.length-1));
+    const c  = coords[ci] || coords[0] || [0,0];
+    anim.latLon.push([c[1], c[0]]);  // [lat, lon]
+  }
+
+  // Estimate seconds per point
+  const times = chartsData.time;
+  if (times.length > 1) {
+    anim.secPerPt = Math.max(1, (times[times.length-1] - times[0]) / (times.length-1));
+  }
+
+  anim.idx = 0;
+  anim.playing = false;
+  anim.speed = 1;
+
+  // Show transport bar
+  document.getElementById('transport-bar').style.display = 'flex';
+  document.getElementById('t-scrub').value = 0;
+  document.getElementById('t-speed').value = '1';
+  // Default state: stopped
+  const tStop = document.getElementById('t-stop');
+  if (tStop) tStop.classList.add('active');
+
+  // Create animated map dot (keep start/end flags visible during animation)
+  if (anim.mapDot) { leafMap.removeLayer(anim.mapDot); anim.mapDot = null; }
+  if (anim.latLon[0]) {
+    anim.mapDot = L.marker(anim.latLon[0], {
+      icon: L.divIcon({
+        html: `<div style="
+          width:10px;height:10px;border-radius:50%;
+          background: radial-gradient(circle at 35% 35%, #ffe066, #f59e0b 55%, #b45309);
+          box-shadow: 0 1px 3px rgba(0,0,0,.6), inset 0 -1px 2px rgba(0,0,0,.2);
+        "></div>`,
+        iconSize: [10,10], iconAnchor: [5,5], className: ''
+      }),
+      zIndexOffset: 1000
+    }).addTo(leafMap);
+  }
+
+  animUpdateUI(0);
+}
+
+function animPlay() {
+  if (!anim.pts) return;
+  if (anim.speed < 0) anim.speed = 1;  // reset to forward if was reversing
+  anim.playing = true;
+  anim.lastTs = null;
+  document.getElementById('t-play').classList.add('active');
+  document.getElementById('t-stop').classList.remove('active');
+  anim.rafId = requestAnimationFrame(animFrame);
+}
+
+function animStop() {
+  anim.playing = false;
+  if (anim.rafId) { cancelAnimationFrame(anim.rafId); anim.rafId = null; }
+  const tPlay = document.getElementById('t-play');
+  const tRev  = document.getElementById('t-rev');
+  const tStop = document.getElementById('t-stop');
+  if (tPlay) tPlay.classList.remove('active');
+  if (tRev)  tRev.classList.remove('active');
+  if (tStop) tStop.classList.add('active');
+}
+
+function animSetSpeed(mult) {
+  anim.speed = mult;
+  anim.playing = true;
+  anim.lastTs = null;
+  document.getElementById('t-play').classList.toggle('active', mult > 0);
+  document.getElementById('t-rev').classList.toggle('active', mult < 0);
+  document.getElementById('t-stop').classList.remove('active');
+  if (!anim.rafId) anim.rafId = requestAnimationFrame(animFrame);
+}
+
+function animSetSpeedVal(v) {
+  anim.speed = Math.sign(anim.speed || 1) * parseFloat(v);
+}
+
+function animJump(frac) {
+  if (!anim.pts) return;
+  const n = anim.pts.time.length;
+  anim.idx = Math.round(frac * (n - 1));
+  animUpdateUI(anim.idx);
+}
+
+function animScrub(val) {
+  if (!anim.pts) return;
+  const n = anim.pts.time.length;
+  anim.idx = Math.round((val / 1000) * (n - 1));
+  animUpdateUI(anim.idx);
+}
+
+function animFrame(ts) {
+  anim.rafId = null;
+  if (!anim.playing || !anim.pts) return;
+  const n = anim.pts.time.length;
+  const now = ts || performance.now();
+
+  if (anim.lastTs !== null) {
+    const dtReal = (now - anim.lastTs) / 1000;  // real seconds since last frame (~0.016s at 60fps)
+    // At 1× speed: complete the activity in ~60 seconds of real time
+    // ptsPerSec = n / 60 * speed
+    const ptsPerSec = (n / 60.0) * Math.abs(anim.speed);
+    const steps = dtReal * ptsPerSec * Math.sign(anim.speed);
+    anim.idx = anim.idx + steps;
+  }
+  anim.lastTs = now;
+
+  const idxInt = Math.floor(anim.idx);
+  if (idxInt >= n - 1) { anim.idx = n - 1; animUpdateUI(n - 1); animStop(); return; }
+  if (idxInt < 0)      { anim.idx = 0;     animUpdateUI(0);     animStop(); return; }
+
+  animUpdateUI(idxInt);
+  anim.rafId = requestAnimationFrame(animFrame);
+}
+
+function animUpdateUI(i) {
+  if (!anim.pts) return;
+  const pts = anim.pts;
+  const n   = pts.time.length;
+  i = Math.max(0, Math.min(n-1, i));
+
+  // Time display — i is already clamped integer index
+  const secs = pts.time[Math.max(0, Math.min(pts.time.length-1, i))] || 0;
+  const h = Math.floor(secs / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  const s = Math.floor(secs % 60);
+  document.getElementById('t-time').textContent =
+    `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+
+  // Scrubber
+  document.getElementById('t-scrub').value = Math.round((i / (n-1)) * 1000);
+
+  // Stats
+  const hr  = pts.hr?.[i];
+  const spd = pts.speed?.[i];
+  const pwr = pts.power?.[i];
+  const alt = pts.alt_ft?.[i];
+  const dst = pts.dist_m?.[i];
+
+  document.getElementById('as-hr').textContent  = hr  > 0 ? Math.round(hr)  : '—';
+  document.getElementById('as-spd').textContent = spd > 0 ? spd.toFixed(1)  : '—';
+  document.getElementById('as-pwr').textContent = pwr > 0 ? Math.round(pwr) : '—';
+  document.getElementById('as-alt').textContent = alt > 0 ? Math.round(alt) : '—';
+  document.getElementById('as-dst').textContent = dst > 0 ? (dst/1609.344).toFixed(1) : '—';
+
+  // Map dot
+  if (anim.mapDot && anim.latLon?.[i]) {
+    anim.mapDot.setLatLng(anim.latLon[i]);
+  }
+
+  // Elevation chart dot
+  const dot = document.getElementById('elev-anim-dot');
+  if (dot && elevChart && pts.dist_m?.[i] !== undefined) {
+    const chartArea = elevChart.chartArea;
+    if (chartArea) {
+      const xScale = elevChart.scales.x;
+      const yScale = elevChart.scales.y;
+      const xMi = pts.dist_m[i] / 1609.344;
+      const px  = xScale.getPixelForValue(xMi);
+      const py  = yScale.getPixelForValue(Math.round(alt || 0));
+      dot.style.display = 'block';
+      dot.style.left    = px + 'px';
+      dot.style.top     = py + 'px';
+    }
+  }
+}
+
+function animReset() {
+  anim.playing = false;
+  if (anim.rafId) { cancelAnimationFrame(anim.rafId); anim.rafId = null; }
+  if (anim.mapDot && leafMap) { leafMap.removeLayer(anim.mapDot); anim.mapDot = null; }
+  const dot = document.getElementById('elev-anim-dot');
+  if (dot) dot.style.display = 'none';
+  const bar = document.getElementById('transport-bar');
+  if (bar) bar.style.display = 'none';
+  // Reset button states
+  ['t-play','t-rev','t-fwd','t-rew'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('active');
+  });
+  const tStop = document.getElementById('t-stop');
+  if (tStop) tStop.classList.remove('active');
+  anim.pts = null;
+  anim.latLon = null;
+  anim.idx = 0;
+}
+
+// Keyboard shortcuts: space = play/pause, left/right = step
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+  if (document.getElementById('lightbox').style.display === 'flex') return;
+  if (!anim.pts) return;
+  if (e.key === ' ')          { e.preventDefault(); anim.playing ? animStop() : animPlay(); }
+  if (e.key === 'ArrowRight') { animJump((anim.idx + 10) / anim.pts.time.length); }
+  if (e.key === 'ArrowLeft')  { animJump((anim.idx - 10) / anim.pts.time.length); }
+});
+
+
+// ── SPLITS PANE ───────────────────────────────────────────────────────────────
+const splitsState = {
+  pts:      null,
+  geo:      null,
+  splits:   [],
+  selected: new Set(),
+  dragging: false,
+  dragStart: null,
+  mapHighlight: null,
+};
+
+const METRIC_LABELS = {
+  speed:'Speed', power:'Power', hr:'Heart Rate',
+  climb:'Climb', pace:'Pace', cadence:'Cadence'
+};
+const METRIC_UNITS = {
+  speed:'mph', power:'watts', hr:'bpm',
+  climb:'ft', pace:'min/mi', cadence:'rpm'
+};
+
+function splitsMetric() { return document.querySelector('input[name="sp-metric"]:checked')?.value || 'speed'; }
+function splitsAgg()    { return document.querySelector('input[name="sp-agg"]:checked')?.value || 'avg'; }
+function splitsLenMi()  {
+  const v = document.querySelector('input[name="sp-len"]:checked')?.value || '1';
+  return v === 'km1' ? 0.621371 : parseFloat(v);
+}
+
+function toggleSplitsSettings() {
+  document.getElementById('splits-settings').classList.toggle('open');
+  // Clear explicit height so renderSplits recalculates from pane dimensions
+  const wrap = document.getElementById('splits-canvas-wrap');
+  if (wrap) wrap.style.height = '';
+  // Two rAF frames: first lets DOM reflow, second reads correct sizes
+  requestAnimationFrame(() => requestAnimationFrame(renderSplits));
+}
+
+function toggleSplitsPane() {
+  const pane = document.getElementById('splits-pane');
+  const btn  = document.getElementById('splits-collapse-btn');
+  const list = document.getElementById('act-list');
+  const collapsed = pane.classList.toggle('collapsed');
+  btn.textContent = collapsed ? '▲' : '▼';
+  list.style.paddingBottom = collapsed ? '72px' : (pane.offsetHeight + 44) + 'px';
+  if (!collapsed) requestAnimationFrame(renderSplits);
+}
+
+function computeSplits(pts, lenMi, metric, agg) {
+  if (!pts?.dist_m?.length) return [];
+  const n    = pts.dist_m.length;
+  const lenM = lenMi * 1609.344;
+  const splits = [];
+  let si = 0, startDist = pts.dist_m[0];
+
+  const getArr = m => ({ speed: pts.speed, power: pts.power, hr: pts.hr,
+    cadence: pts.cadence, climb: pts.alt_ft, pace: pts.speed })[m] || pts.speed;
+  const arr = getArr(metric);
+
+  for (let i = 1; i < n; i++) {
+    if ((pts.dist_m[i] - startDist) >= lenM || i === n - 1) {
+      const slice = arr.slice(si, i + 1).filter(v => v > 0);
+      let value = 0;
+      if (slice.length) {
+        value = agg === 'max' ? Math.max(...slice) : slice.reduce((a,b)=>a+b,0)/slice.length;
+      }
+      if (metric === 'climb') {
+        const alt = pts.alt_ft.slice(si, i+1);
+        value = 0;
+        for (let j = 1; j < alt.length; j++) if (alt[j] > alt[j-1]) value += alt[j]-alt[j-1];
+      }
+      if (metric === 'pace' && value > 0) value = 60 / value;
+
+      splits.push({
+        startIdx: si, endIdx: i,
+        startDist: startDist, endDist: pts.dist_m[i],
+        startMi: startDist / 1609.344,
+        endMi:   pts.dist_m[i] / 1609.344,
+        value: Math.round(value * 10) / 10,
+      });
+      si = i;
+      startDist = pts.dist_m[i];
+    }
+  }
+  return splits;
+}
+
+function renderSplits() {
+  const pane = document.getElementById('splits-pane');
+  if (!pane || pane.classList.contains('collapsed')) return;
+
+  const canvas = document.getElementById('splits-canvas');
+  if (!canvas) return;
+
+  const wrap = document.getElementById('splits-canvas-wrap');
+  const wRect = wrap.getBoundingClientRect();
+  if (wRect.width < 10) { requestAnimationFrame(renderSplits); return; }
+
+  const W = wRect.width;
+  // Use getBoundingClientRect height; fallback to pane height minus titlebar/settings
+  let H = wRect.height;
+  if (H < 40) {
+    const pane = document.getElementById('splits-pane');
+    const tb   = document.getElementById('splits-titlebar');
+    const ss   = document.getElementById('splits-settings');
+    H = pane.getBoundingClientRect().height
+        - tb.getBoundingClientRect().height
+        - (ss.classList.contains('open') ? ss.getBoundingClientRect().height : 0);
+  }
+  H = Math.max(60, H);
+  canvas.width  = W * devicePixelRatio;
+  canvas.height = H * devicePixelRatio;
+  canvas.style.width  = W + 'px';
+  canvas.style.height = H + 'px';
+  wrap.style.height   = H + 'px';
+
+  const ctx = canvas.getContext('2d');
+  ctx.scale(devicePixelRatio, devicePixelRatio);
+
+  const metric = splitsMetric();
+  const agg    = splitsAgg();
+  const lenMi  = splitsLenMi();
+  const splits = computeSplits(splitsState.pts, lenMi, metric, agg);
+  splitsState.splits = splits;
+
+  // Layout margins
+  const PAD_L = 44, PAD_R = 12, PAD_T = 18, PAD_B = 22;
+  const chartW = W - PAD_L - PAD_R;
+  const chartH = H - PAD_T - PAD_B;
+
+  const bg      = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim() || '#1c1c1e';
+  const surface = getComputedStyle(document.documentElement).getPropertyValue('--surface').trim() || '#2c2c2e';
+  const muted   = '#636366';
+  const text    = '#ebebf0';
+  const accent  = '#3b82f6';
+  const green   = '#4ade80';
+
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+
+  if (!splits.length) {
+    ctx.fillStyle = muted;
+    ctx.font = '12px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Select an activity', W/2, H/2);
+    return;
+  }
+
+  const maxVal  = Math.max(...splits.map(s => s.value), 0.001);
+  const totalMi = splits[splits.length-1].endMi;
+
+  // Nice y-axis ticks
+  function niceMax(v) {
+    const exp  = Math.floor(Math.log10(v));
+    const frac = v / Math.pow(10, exp);
+    const nice = frac < 1.5 ? 1.5 : frac < 3 ? 3 : frac < 7 ? 5 : 10;
+    return nice * Math.pow(10, exp);
+  }
+  const yMax    = niceMax(maxVal);
+  const yTicks  = 5;
+  const yStep   = yMax / yTicks;
+
+  // Grid + y-axis
+  ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+  ctx.lineWidth   = 1;
+  ctx.font        = '9px -apple-system, sans-serif';
+  ctx.fillStyle   = muted;
+  ctx.textAlign   = 'right';
+  for (let i = 0; i <= yTicks; i++) {
+    const val = i * yStep;
+    const y   = PAD_T + chartH - (val / yMax) * chartH;
+    ctx.beginPath();
+    ctx.moveTo(PAD_L, y);
+    ctx.lineTo(PAD_L + chartW, y);
+    ctx.stroke();
+    ctx.fillText(Math.round(val), PAD_L - 4, y + 3);
+  }
+
+  // Bars
+  const barGap  = 1;
+  const barW    = Math.max(2, (chartW / splits.length) - barGap);
+  splits.forEach((sp, i) => {
+    const x    = PAD_L + (sp.startMi / totalMi) * chartW;
+    const barH = (sp.value / yMax) * chartH;
+    const y    = PAD_T + chartH - barH;
+    ctx.fillStyle = splitsState.selected.has(i) ? green : accent;
+    ctx.fillRect(x + barGap/2, y, barW, barH);
+  });
+
+  // X-axis — distance ticks
+  ctx.fillStyle  = muted;
+  ctx.textAlign  = 'center';
+  ctx.font       = '9px -apple-system, sans-serif';
+  // Choose tick interval
+  const tickIntervals = [1, 2, 5, 10, 20, 25, 50];
+  const targetTicks   = Math.floor(chartW / 50);
+  const rawInterval   = totalMi / targetTicks;
+  const xInterval     = tickIntervals.find(t => t >= rawInterval) || 50;
+  for (let mi = 0; mi <= totalMi; mi += xInterval) {
+    const x = PAD_L + (mi / totalMi) * chartW;
+    ctx.beginPath();
+    ctx.strokeStyle = muted;
+    ctx.lineWidth = 1;
+    ctx.moveTo(x, PAD_T + chartH);
+    ctx.lineTo(x, PAD_T + chartH + 4);
+    ctx.stroke();
+    ctx.fillText(mi, x, PAD_T + chartH + 13);
+  }
+
+  // X-axis line
+  ctx.strokeStyle = muted;
+  ctx.lineWidth   = 1;
+  ctx.beginPath();
+  ctx.moveTo(PAD_L, PAD_T + chartH);
+  ctx.lineTo(PAD_L + chartW, PAD_T + chartH);
+  ctx.stroke();
+
+  // Y-axis label (rotated, left side)
+  ctx.save();
+  ctx.translate(10, PAD_T + chartH / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.fillStyle  = muted;
+  ctx.textAlign  = 'center';
+  ctx.font       = '9px -apple-system, sans-serif';
+  ctx.fillText(METRIC_UNITS[metric] || '', 0, 0);
+  ctx.restore();
+
+  // Metric label top-right
+  ctx.fillStyle  = muted;
+  ctx.textAlign  = 'right';
+  ctx.font       = '10px -apple-system, sans-serif';
+  ctx.fillText((agg === 'max' ? 'Maximum ' : 'Average ') + METRIC_LABELS[metric], W - PAD_R, PAD_T - 4);
+
+  // X-axis unit label bottom-right
+  ctx.textAlign = 'right';
+  ctx.font      = '9px -apple-system, sans-serif';
+  ctx.fillText('mi', W - PAD_R, H - 2);
+}
+
+function toggleSplitSelect(idx, additive) {
+  if (!additive) splitsState.selected.clear();
+  if (splitsState.selected.has(idx)) splitsState.selected.delete(idx);
+  else splitsState.selected.add(idx);
+  renderSplits();
+  applySplitHighlights();
+}
+
+function extendSplitDrag(idx) {
+  const lo = Math.min(splitsState.dragStart, idx);
+  const hi = Math.max(splitsState.dragStart, idx);
+  splitsState.selected.clear();
+  for (let i = lo; i <= hi; i++) splitsState.selected.add(i);
+  renderSplits();
+  applySplitHighlights();
+}
+
+function onSplitDragEnd() { splitsState.dragging = false; }
+
+function applySplitHighlights() {
+  highlightSplitsOnMap();
+  highlightSplitsOnChart();
+}
+
+function clearSplitHighlights() {
+  if (splitsState.mapHighlight && leafMap) {
+    leafMap.removeLayer(splitsState.mapHighlight);
+    splitsState.mapHighlight = null;
+  }
+  if (elevChart) {
+    elevChart.data.datasets = elevChart.data.datasets.filter(d => !d._splitHighlight);
+    elevChart.update('none');
+  }
+}
+
+function highlightSplitsOnMap() {
+  if (splitsState.mapHighlight && leafMap) { leafMap.removeLayer(splitsState.mapHighlight); splitsState.mapHighlight = null; }
+  if (!splitsState.selected.size || !splitsState.geo || !leafMap) return;
+  const coords = splitsState.geo?.geometry?.coordinates || [];
+  const pts    = splitsState.pts;
+  const splits = splitsState.splits;
+  if (!coords.length || !pts) return;
+  const n = pts.dist_m.length;
+  const allLL = [];
+  splitsState.selected.forEach(si => {
+    const sp = splits[si]; if (!sp) return;
+    const ci1 = Math.floor((sp.startIdx / (n-1)) * (coords.length-1));
+    const ci2 = Math.ceil( (sp.endIdx   / (n-1)) * (coords.length-1));
+    coords.slice(ci1, ci2+1).forEach(c => allLL.push([c[1], c[0]]));
+  });
+  if (allLL.length > 1) {
+    splitsState.mapHighlight = L.polyline(allLL, {color:'#4ade80', weight:5, opacity:.85}).addTo(leafMap);
+  }
+}
+
+function highlightSplitsOnChart() {
+  if (!elevChart) return;
+  elevChart.data.datasets = elevChart.data.datasets.filter(d => !d._splitHighlight);
+  if (!splitsState.selected.size || !splitsState.pts) { elevChart.update('none'); return; }
+  const pts = splitsState.pts;
+  splitsState.selected.forEach(si => {
+    const sp = splitsState.splits[si]; if (!sp) return;
+    const slice = pts.dist_m.slice(sp.startIdx, sp.endIdx+1).map((d,j) => ({
+      x: d/1609.344, y: Math.round(pts.alt_ft[sp.startIdx+j] || 0)
+    }));
+    elevChart.data.datasets.push({
+      _splitHighlight: true, data: slice,
+      borderColor: 'rgba(74,222,128,0)', backgroundColor: 'rgba(74,222,128,0.35)',
+      fill: true, pointRadius: 0, tension: 0, order: 0,
+    });
+  });
+  elevChart.update('none');
+}
+
+// Canvas mouse: click/drag to select splits
+(function() {
+  function setup() {
+    const canvas = document.getElementById('splits-canvas');
+    if (!canvas) return;
+    canvas.addEventListener('mousedown', e => {
+      const rect   = canvas.getBoundingClientRect();
+      const idx    = hitTestSplit(e.clientX - rect.left, e.clientY - rect.top);
+      if (idx < 0) return;
+      splitsState.dragging  = true;
+      splitsState.dragStart = idx;
+      toggleSplitSelect(idx, e.ctrlKey || e.metaKey);
+      document.addEventListener('mouseup', () => { splitsState.dragging = false; }, {once:true});
+    });
+    canvas.addEventListener('mousemove', e => {
+      if (!splitsState.dragging) return;
+      const rect = canvas.getBoundingClientRect();
+      const idx  = hitTestSplit(e.clientX - rect.left, e.clientY - rect.top);
+      if (idx >= 0) extendSplitDrag(idx);
+    });
+  }
+  // Setup after DOM ready
+  document.addEventListener('DOMContentLoaded', setup);
+  setTimeout(setup, 500);
+})();
+
+function hitTestSplit(px, py) {
+  const splits   = splitsState.splits;
+  if (!splits.length) return -1;
+  const wrap     = document.getElementById('splits-canvas-wrap');
+  const W        = wrap.getBoundingClientRect().width;
+  const PAD_L    = 44, PAD_R = 12, PAD_T = 18, PAD_B = 22;
+  const chartW   = W - PAD_L - PAD_R;
+  const totalMi  = splits[splits.length-1].endMi;
+  if (px < PAD_L || px > PAD_L + chartW) return -1;
+  const fracX    = (px - PAD_L) / chartW;
+  const clickMi  = fracX * totalMi;
+  return splits.findIndex((sp, i) => clickMi >= sp.startMi && clickMi < sp.endMi);
+}
+
+// Settings changes re-render
+document.addEventListener('change', e => {
+  if (['sp-metric','sp-agg','sp-len'].includes(e.target.name)) renderSplits();
+});
+
+// Titlebar drag to resize pane
+(function() {
+  const titlebar = document.getElementById('splits-titlebar');
+  const pane     = document.getElementById('splits-pane');
+  if (!titlebar || !pane) return;
+  let startY = 0, startH = 0;
+  titlebar.addEventListener('mousedown', e => {
+    if (e.target.tagName === 'BUTTON') return;
+    e.preventDefault();
+    if (pane.classList.contains('collapsed')) return;
+    startY = e.clientY; startH = pane.getBoundingClientRect().height;
+    const list = document.getElementById('act-list');
+    document.body.style.cssText = 'cursor:row-resize;user-select:none';
+    function onMove(e) {
+      const newH = Math.max(60, Math.min(500, startH - (e.clientY - startY)));
+      pane.style.height = newH + 'px';
+      list.style.paddingBottom = (newH + 44) + 'px';
+      requestAnimationFrame(renderSplits);
+    }
+    function onUp() {
+      document.body.style.cssText = '';
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+
+  // Also wire the drag handle above the pane
+  const dragHandle = document.getElementById('splits-drag');
+  if (dragHandle) {
+    dragHandle.addEventListener('mousedown', e => {
+      e.preventDefault();
+      startY = e.clientY;
+      startH = pane.getBoundingClientRect().height;
+      const list = document.getElementById('act-list');
+      dragHandle.classList.add('dragging');
+      document.body.style.cssText = 'cursor:row-resize;user-select:none';
+      function onMove(e) {
+        const newH = Math.max(60, Math.min(500, startH - (e.clientY - startY)));
+        if (newH <= 32) {
+          pane.classList.add('collapsed');
+          pane.style.height = '28px';
+        } else {
+          pane.classList.remove('collapsed');
+          pane.style.height = newH + 'px';
+        }
+        list.style.paddingBottom = (parseInt(pane.style.height) + 44) + 'px';
+        requestAnimationFrame(renderSplits);
+      }
+      function onUp() {
+        dragHandle.classList.remove('dragging');
+        document.body.style.cssText = '';
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+      }
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+  }
+})();
+
+
+// ── RESIZE HANDLES ───────────────────────────────────────────────────────────
+(function() {
+  function initDrag(handleId, topPaneId, bottomPaneId, onDone) {
+    const handle   = document.getElementById(handleId);
+    const topPane  = document.getElementById(topPaneId);
+    const detail   = document.getElementById('detail');
+    if (!handle || !topPane) return;
+
+    let startY = 0, startH = 0, totalH = 0;
+
+    handle.addEventListener('mousedown', e => {
+      e.preventDefault();
+      startY  = e.clientY;
+      startH  = topPane.getBoundingClientRect().height;
+      totalH  = detail.getBoundingClientRect().height;
+      handle.classList.add('dragging');
+      document.body.style.cursor = 'row-resize';
+      document.body.style.userSelect = 'none';
+
+      function onMove(e) {
+        const dy    = e.clientY - startY;
+        const newH  = Math.max(60, Math.min(totalH - 120, startH + dy));
+        topPane.style.height = newH + 'px';
+        if (onDone) onDone();
+      }
+
+      function onUp() {
+        handle.classList.remove('dragging');
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        if (onDone) onDone();
+      }
+
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+  }
+
+  // Map ↔ Elevation handle — invalidate map after resize
+  initDrag('drag-map-chart', 'map-wrap', 'chart-wrap', () => {
+    if (leafMap) leafMap.invalidateSize();
+  });
+
+  // Elevation ↔ Info handle
+  initDrag('drag-chart-info', 'chart-wrap', 'info-panel', () => {
+    if (elevChart) elevChart.resize();
+  });
+})();
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+(async()=>{
+  initMap();
+  await loadFilterOptions();
+  await loadAll();
+})();
+</script>
+
+
+<!-- Transport / Animation bar — inside page flow so it's visible -->
+<div id="transport-bar" style="display:none;flex-shrink:0;background:#1a1a1c;border-top:1px solid #3a3a3c;padding:6px 12px;gap:10px;align-items:center;position:fixed;bottom:0;left:0;right:0;z-index:1000;">
+  <div class="tb-transport">
+    <button class="t-btn" id="t-start" onclick="animJump(0)"       title="Go to start">⏮</button>
+    <button class="t-btn" id="t-rew"   onclick="animSetSpeed(-4)"  title="Reverse fast">⏪</button>
+    <button class="t-btn" id="t-rev"   onclick="animSetSpeed(-1)"  title="Reverse">◀</button>
+    <button class="t-btn" id="t-stop"  onclick="animStop()"        title="Stop">⏹</button>
+    <button class="t-btn" id="t-play"  onclick="animPlay()"        title="Play">▶</button>
+    <button class="t-btn" id="t-fwd"   onclick="animSetSpeed(2)"   title="Fast forward">⏩</button>
+    <button class="t-btn" id="t-end"   onclick="animJump(1)"       title="Go to end">⏭</button>
+  </div>
+  <span id="t-time">0:00:00</span>
+  <input type="range" id="t-scrub" min="0" max="1000" value="0"
+         oninput="animScrub(this.value)" onchange="animScrub(this.value)">
+  <select id="t-speed" onchange="animSetSpeedVal(this.value)" title="Playback speed">
+    <option value="0.25">¼×</option>
+    <option value="0.5">½×</option>
+    <option value="1" selected>1×</option>
+    <option value="2">2×</option>
+    <option value="4">4×</option>
+    <option value="8">8×</option>
+  </select>
+  <div id="anim-stats">
+    <div class="anim-stat"><div class="anim-stat-val" id="as-hr">—</div><div class="anim-stat-lbl">HR bpm</div></div>
+    <div class="anim-stat"><div class="anim-stat-val" id="as-spd">—</div><div class="anim-stat-lbl">mph</div></div>
+    <div class="anim-stat"><div class="anim-stat-val" id="as-pwr">—</div><div class="anim-stat-lbl">watts</div></div>
+    <div class="anim-stat"><div class="anim-stat-val" id="as-alt">—</div><div class="anim-stat-lbl">ft</div></div>
+    <div class="anim-stat"><div class="anim-stat-val" id="as-dst">—</div><div class="anim-stat-lbl">mi</div></div>
+  </div>
+</div>
+</body>
+</html>

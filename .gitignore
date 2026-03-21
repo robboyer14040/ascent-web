@@ -1,0 +1,9 @@
+venv/
+__pycache__/
+*.pyc
+.env
+strava_tokens.json
+*.ascentdb
+support/
+app/static/
+*.zip
