@@ -57,8 +57,5 @@ async def activity_detail(request: Request, activity_id: int):
             {"request": request, "message": f"Activity {activity_id} not found"},
             status_code=404,
         )
-    has_points = bool(activity.get("points_saved") and activity.get("points_count", 0) > 0)
-    return templates.TemplateResponse(
-        "activity_detail.html",
-        {"request": request, "activity": activity, "has_points": has_points},
-    )
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url=f"/activities?select={activity_id}", status_code=302)

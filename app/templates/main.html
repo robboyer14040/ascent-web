@@ -181,6 +181,20 @@ input,select{font:inherit}
 .anim-stat-lbl{font-size:9px;text-transform:uppercase;letter-spacing:.06em;color:#636366}
 
 /* Anim dot on elevation chart */
+#elev-hover-panel{
+  position:absolute;top:8px;left:50%;transform:translateX(-50%);
+  background:rgba(0,0,0,.18);
+  border:1px solid rgba(255,255,255,.1);border-radius:10px;
+  padding:7px 14px;pointer-events:none;display:none;z-index:15;
+  min-width:150px;white-space:nowrap;
+}
+#elev-hover-panel .eh-row{display:flex;justify-content:space-between;gap:18px;
+  font-size:11px;line-height:1.75;font-family:-apple-system,"SF Pro Text",sans-serif}
+#elev-hover-panel .eh-label{color:rgba(255,255,255,.45);letter-spacing:.01em}
+#elev-hover-panel .eh-val{font-weight:600;font-variant-numeric:tabular-nums;
+  text-shadow:0 0 8px currentColor}
+#elev-crosshair{position:absolute;top:0;bottom:0;width:1px;
+  background:rgba(255,255,255,.25);pointer-events:none;display:none;z-index:14}
 #elev-anim-dot{position:absolute;width:10px;height:10px;border-radius:50%;
   background: radial-gradient(circle at 35% 35%, #ffe066, #f59e0b 55%, #b45309);
   box-shadow: 0 1px 3px rgba(0,0,0,.6), inset 0 -1px 2px rgba(0,0,0,.2);
@@ -255,8 +269,8 @@ input,select{font:inherit}
     <div id="splits-pane" class="collapsed">
       <div id="splits-titlebar">
         <span id="splits-title">Splits</span>
-        <button class="sp-tb-btn" onclick="toggleSplitsSettings()" title="Settings">⚙</button>
-        <button class="sp-tb-btn" onclick="toggleSplitsPane()" id="splits-collapse-btn" title="Collapse/Expand">▲</button>
+        <button class="sp-tb-btn" onclick="toggleSplitsSettings()" title="Settings" style="font-size:16px;padding:2px 6px;line-height:1">⚙</button>
+        <button class="sp-tb-btn" onclick="toggleSplitsPane()" id="splits-collapse-btn" title="Collapse/Expand" style="font-size:16px;padding:2px 6px;line-height:1">▲</button>
       </div>
       <div id="splits-settings">
         <div class="ss-group">
@@ -314,8 +328,34 @@ input,select{font:inherit}
     </div>
     <div class="drag-handle" id="drag-map-chart" title="Drag to resize"></div>
     <div id="chart-wrap">
+      <div id="chart-titlebar" style="position:absolute;top:0;left:0;right:0;height:20px;z-index:5;display:flex;align-items:center;justify-content:flex-end;padding:0 6px;pointer-events:none">
+        <button class="sp-tb-btn" onclick="toggleChartSettings(event)" title="Chart overlays" style="pointer-events:all;font-size:16px;padding:2px 6px;line-height:1">⚙</button>
+      </div>
+      <div id="chart-settings" style="display:none;position:absolute;top:20px;right:4px;z-index:20;background:var(--surface);border:1px solid var(--border2);border-radius:8px;padding:8px 10px;box-shadow:0 4px 16px rgba(0,0,0,.5);min-width:200px">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:6px">Overlay 1</div>
+        <select id="overlay1-sel" style="width:100%;background:var(--surface2);border:1px solid var(--border2);color:var(--text);border-radius:5px;padding:3px 6px;font-size:12px;margin-bottom:8px" onchange="redrawElevWithOverlays()">
+          <option value="">None</option>
+          <option value="hr">Heart Rate</option>
+          <option value="speed">Speed</option>
+          <option value="power">Power</option>
+          <option value="cadence">Cadence</option>
+        </select>
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:6px">Overlay 2</div>
+        <select id="overlay2-sel" style="width:100%;background:var(--surface2);border:1px solid var(--border2);color:var(--text);border-radius:5px;padding:3px 6px;font-size:12px;margin-bottom:8px" onchange="redrawElevWithOverlays()">
+          <option value="">None</option>
+          <option value="hr">Heart Rate</option>
+          <option value="speed">Speed</option>
+          <option value="power">Power</option>
+          <option value="cadence">Cadence</option>
+        </select>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text);cursor:pointer">
+          <input type="checkbox" id="show-peaks" checked onchange="redrawElevWithOverlays()" style="accent-color:#f97316"> Show altitude peaks
+        </label>
+      </div>
       <canvas id="elevChart"></canvas>
       <div id="elev-anim-dot"></div>
+      <div id="elev-crosshair"></div>
+      <div id="elev-hover-panel"></div>
     </div>
     <div class="drag-handle" id="drag-chart-info" title="Drag to resize"></div>
     <div id="info-panel">
@@ -351,6 +391,7 @@ input,select{font:inherit}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
 <script>
 // ── STATE ────────────────────────────────────────────────────────────────────
 let elevRenderVersion = 0; // incremented each selectActivity call to cancel stale renders
@@ -641,6 +682,49 @@ async function drawElevationFromSummary(act, version) {
     vals.push(Math.round(base + (peak - base) * shape));
   }
 
+  // Custom peak marker plugin
+  const peakPlugin = {
+    id: 'peakMarkers',
+    afterDatasetsDraw(chart) {
+      if (!peakList.length) return;
+      const {ctx: cx, scales} = chart;
+      const xSc = scales.x;
+      const ySc = scales.yElev || scales.y;
+      if (!xSc || !ySc) return;
+      cx.save();
+      peakList.forEach(pk => {
+        const px = xSc.getPixelForValue(pk.x);
+        const py = ySc.getPixelForValue(pk.y);
+        const label = Math.round(pk.y) + ' ft';
+        // Stem line
+        cx.beginPath();
+        cx.moveTo(px, py);
+        cx.lineTo(px, py - 20);
+        cx.strokeStyle = 'rgba(255,255,255,.5)';
+        cx.lineWidth = 1;
+        cx.stroke();
+        // Dot at peak
+        cx.beginPath();
+        cx.arc(px, py, 3, 0, Math.PI*2);
+        cx.fillStyle = '#fff';
+        cx.fill();
+        // Label bubble
+        cx.font = 'bold 9px -apple-system,sans-serif';
+        const tw = cx.measureText(label).width;
+        const bx = px - tw/2 - 5, by = py - 38, bw = tw + 10, bh = 16;
+        cx.fillStyle = 'rgba(0,0,0,.7)';
+        cx.beginPath();
+        cx.roundRect(bx, by, bw, bh, 4);
+        cx.fill();
+        cx.fillStyle = '#f2f2f7';
+        cx.textAlign = 'center';
+        cx.textBaseline = 'middle';
+        cx.fillText(label, px, by + bh/2);
+      });
+      cx.restore();
+    }
+  };
+
   elevChart = new Chart(ctx, {
     type:'line',
     data:{labels,datasets:[{data:vals,fill:true,borderColor:'#64748b',backgroundColor:'rgba(100,116,139,.3)',borderWidth:1.5,pointRadius:0,tension:.4,borderDash:[4,3]}]},
@@ -667,7 +751,83 @@ async function drawElevationFromSummary(act, version) {
 }
 
 // ── ELEVATION CHART ───────────────────────────────────────────────────────────
+// Chart overlay state
+let elevChartData = null;  // store last chart data for re-render
+
+function toggleChartSettings(e) {
+  e.stopPropagation();
+  const s = document.getElementById('chart-settings');
+  s.style.display = s.style.display === 'none' ? 'block' : 'none';
+}
+document.addEventListener('click', e => {
+  if (!e.target.closest('#chart-wrap')) {
+    const s = document.getElementById('chart-settings');
+    if (s) s.style.display = 'none';
+  }
+});
+
+function loadChartPrefs() {
+  try {
+    const p = JSON.parse(localStorage.getItem('ascent-chart-overlays') || 'null');
+    if (!p) return;
+    const o1 = document.getElementById('overlay1-sel');
+    const o2 = document.getElementById('overlay2-sel');
+    const pk = document.getElementById('show-peaks');
+    if (o1 && p.o1 !== undefined) o1.value = p.o1;
+    if (o2 && p.o2 !== undefined) o2.value = p.o2;
+    if (pk && p.peaks !== undefined) pk.checked = p.peaks;
+  } catch(e) {}
+}
+function saveChartPrefs() {
+  localStorage.setItem('ascent-chart-overlays', JSON.stringify({
+    o1:    document.getElementById('overlay1-sel')?.value || '',
+    o2:    document.getElementById('overlay2-sel')?.value || '',
+    peaks: document.getElementById('show-peaks')?.checked ?? true,
+  }));
+}
+
+function redrawElevWithOverlays() {
+  saveChartPrefs();
+  if (elevChartData) drawElevation(elevChartData);
+}
+
+function findPeaks(points, n=3) {
+  if (points.length < 10) return [];
+  const totalDist = points[points.length-1].x - points[0].x;
+  // Minimum separation: 0.25 miles between peaks
+  const minSepX = 0.25;
+
+  // Find all local maxima (smoother window = 1% of points each side)
+  const w = Math.max(5, Math.floor(points.length * 0.02));
+  const candidates = [];
+  for (let i = w; i < points.length - w; i++) {
+    const y = points[i].y;
+    let isPeak = true;
+    for (let j = i - w; j <= i + w; j++) {
+      if (j !== i && points[j].y > y) { isPeak = false; break; }  // strict > allows plateau peaks
+    }
+    if (isPeak) candidates.push({idx: i, x: points[i].x, y});
+  }
+
+  // Sort by height descending, greedily pick top N with min separation
+  candidates.sort((a, b) => b.y - a.y);
+  const peaks = [];
+  for (const cand of candidates) {
+    if (peaks.every(p => Math.abs(p.x - cand.x) >= minSepX)) {
+      peaks.push(cand);
+      if (peaks.length >= n) break;
+    }
+  }
+  return peaks;
+}
+
 let elevChart=null;
+
+// Register annotation plugin if available
+if (typeof window !== 'undefined' && window.Chart && window.ChartAnnotation) {
+  Chart.register(window.ChartAnnotation);
+}
+
 async function drawElevation(data, version) {
   const label = document.querySelector('.chart-label');
   if (label) label.textContent = 'Elevation';
@@ -681,79 +841,330 @@ async function drawElevation(data, version) {
   }
   if (version !== undefined && version !== elevRenderVersion) return; // stale
 
-  const { dist_m, alt_ft } = data;
+  elevChartData = data;
+  const { dist_m, alt_ft, hr, speed, power, cadence } = data;
   if (!alt_ft || alt_ft.every(v => v === 0)) return;
 
-  // Sample to ~600 points for performance, use {x, y} format for linear scale
+  // Sample to ~600 points
   const total = alt_ft.length;
   const step  = Math.max(1, Math.floor(total / 600));
   const points = [];
   for (let i = 0; i < total; i += step) {
-    const x = dist_m[i] / 1609.344;  // metres → miles
+    const x = dist_m[i] / 1609.344;
     points.push({ x, y: Math.round(alt_ft[i]) });
   }
   if (!points.length) return;
-
   const totalMi = points[points.length - 1].x;
-  const xLabel = 'mi';
+
+  // Overlay settings
+  const o1key = document.getElementById('overlay1-sel')?.value || '';
+  const o2key = document.getElementById('overlay2-sel')?.value || '';
+  const showPeaks = document.getElementById('show-peaks')?.checked ?? true;
+
+  const overlayArrs   = { hr, speed, power, cadence };
+  const overlayUnits  = { hr: 'bpm', speed: 'mph', power: 'W', cadence: 'rpm' };
+  const overlayLabels = { hr: 'Heart Rate', speed: 'Speed', power: 'Power', cadence: 'Cadence' };
+  const overlayColors = { hr: '#ef4444', speed: '#22c55e', power: '#eab308', cadence: '#a855f7' };
+
+  function makeOverlayPoints(key) {
+    const arr = overlayArrs[key];
+    if (!arr) return [];
+    const pts = [];
+    for (let i = 0; i < total; i += step) {
+      const v = arr[i];
+      if (v != null) pts.push({ x: dist_m[i] / 1609.344, y: Math.round(v * 10) / 10 });
+    }
+    return pts;
+  }
+
+  const datasets = [
+    {
+      data: points, fill: true,
+      borderColor: '#3b82f6', backgroundColor: 'rgba(30,80,180,.55)',
+      borderWidth: 1.5, pointRadius: 0, tension: 0.3, order: 3,
+      yAxisID: 'yElev',
+    }
+  ];
+
+  const scales = {
+    x: {
+      type: 'linear', display: true, min: 0, max: totalMi,
+      ticks: { color: '#64748b', font: { size: 9 }, maxTicksLimit: 10, callback: v => `${Math.round(v)}mi` },
+      grid: { color: 'rgba(255,255,255,.04)' },
+    },
+    yElev: {
+      position: 'left', ticks: { color: '#64748b', font: { size: 9 }, maxTicksLimit: 5, callback: v => `${Math.round(v)}ft` },
+      grid: { color: 'rgba(255,255,255,.06)' },
+    },
+  };
+
+  if (o1key) {
+    const o1pts = makeOverlayPoints(o1key);
+    if (o1pts.length) {
+      const c1 = overlayColors[o1key] || '#22d3ee';
+      datasets.push({
+        data: o1pts, fill: false,
+        borderColor: c1, backgroundColor: 'transparent',
+        borderWidth: 1.5, pointRadius: 0, tension: 0.3, order: 2,
+        yAxisID: 'yLeft',
+      });
+      scales.yLeft = {
+        position: 'left', offset: true,
+        ticks: { color: c1, font: { size: 9 }, maxTicksLimit: 5, callback: v => `${v}` },
+        grid: { display: false },
+        title: { display: true, text: overlayUnits[o1key], color: c1, font: { size: 9 } },
+      };
+    }
+  }
+
+  if (o2key) {
+    const o2pts = makeOverlayPoints(o2key);
+    if (o2pts.length) {
+      const c2 = overlayColors[o2key] || '#f97316';
+      datasets.push({
+        data: o2pts, fill: false,
+        borderColor: c2, backgroundColor: 'transparent',
+        borderWidth: 1.5, pointRadius: 0, tension: 0.3, order: 1,
+        yAxisID: 'yRight',
+      });
+      scales.yRight = {
+        position: 'right',
+        ticks: { color: c2, font: { size: 9 }, maxTicksLimit: 5, callback: v => `${v}` },
+        grid: { display: false },
+        title: { display: true, text: overlayUnits[o2key], color: c2, font: { size: 9 } },
+      };
+    }
+  }
+
+  // Peak annotations — drawn via custom plugin
+  const peakList = showPeaks ? findPeaks(points, 3) : [];
+
+  // Custom peak marker plugin
+  const peakPlugin = {
+    id: 'peakMarkers',
+    afterDatasetsDraw(chart) {
+      if (!peakList.length) return;
+      const {ctx: cx, scales} = chart;
+      const xSc = scales.x;
+      const ySc = scales.yElev || scales.y;
+      if (!xSc || !ySc) return;
+      cx.save();
+      peakList.forEach(pk => {
+        const px = xSc.getPixelForValue(pk.x);
+        const py = ySc.getPixelForValue(pk.y);
+        const label = Math.round(pk.y) + ' ft';
+        // Stem line
+        cx.beginPath();
+        cx.moveTo(px, py);
+        cx.lineTo(px, py - 20);
+        cx.strokeStyle = 'rgba(255,255,255,.5)';
+        cx.lineWidth = 1;
+        cx.stroke();
+        // Dot at peak
+        cx.beginPath();
+        cx.arc(px, py, 3, 0, Math.PI*2);
+        cx.fillStyle = '#fff';
+        cx.fill();
+        // Label bubble
+        cx.font = 'bold 9px -apple-system,sans-serif';
+        const tw = cx.measureText(label).width;
+        const bx = px - tw/2 - 5, by = py - 38, bw = tw + 10, bh = 16;
+        cx.fillStyle = 'rgba(0,0,0,.7)';
+        cx.beginPath();
+        cx.roundRect(bx, by, bw, bh, 4);
+        cx.fill();
+        cx.fillStyle = '#f2f2f7';
+        cx.textAlign = 'center';
+        cx.textBaseline = 'middle';
+        cx.fillText(label, px, by + bh/2);
+      });
+      cx.restore();
+    }
+  };
 
   elevChart = new Chart(ctx, {
     type: 'line',
-    data: {
-      datasets: [{
-        data: points,
-        fill: true,
-        borderColor: '#3b82f6',
-        backgroundColor: 'rgba(59,130,246,.45)',
-        borderWidth: 1.5,
-        pointRadius: 0,
-        tension: 0.4,
-      }],
-    },
+    data: { datasets },
+    plugins: [peakPlugin],
     options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      animation: false,
-      layout: { padding: { bottom: 2 } },
+      responsive: true, maintainAspectRatio: false, animation: false,
+      layout: { padding: { top: peakList.length ? 42 : 4, bottom: 2, right: o2key ? 8 : 2 } },
       plugins: {
         legend: { display: false },
         tooltip: {
           callbacks: {
-            title: items => `${Number(items[0].parsed.x).toFixed(1)} ${xLabel}`,
-            label: c => `${c.parsed.y} ft`,
+            title: items => `${Number(items[0].parsed.x).toFixed(1)} mi`,
+            label: c => {
+              const ds = c.datasetIndex;
+              if (ds === 0) return `${c.parsed.y} ft`;
+              const key = ds === 1 ? o1key : o2key;
+              return `${c.parsed.y} ${overlayUnits[key]||''}`;
+            },
           },
-          titleFont: { size: 11 },
-          bodyFont:  { size: 11 },
+          titleFont: { size: 11 }, bodyFont: { size: 11 },
         },
       },
-      scales: {
-        x: {
-          type: 'linear',
-          display: true,
-          min: 0,
-          max: totalMi,
-          ticks: {
-            color: '#64748b',
-            font: { size: 9 },
-            maxTicksLimit: 10,
-            callback: v => `${Math.round(v)}${xLabel}`,
-          },
-          grid: { color: 'rgba(255,255,255,.04)' },
-          border: { color: 'rgba(255,255,255,.08)' },
-        },
-        y: {
-          ticks: {
-            color: '#64748b',
-            font: { size: 10 },
-            maxTicksLimit: 4,
-            callback: v => `${Math.round(v)}ft`,
-          },
-          grid: { color: 'rgba(255,255,255,.06)' },
-        },
-      },
+      scales,
     },
   });
 }
+
+// ── ELEVATION HOVER PANEL ────────────────────────────────────────────────────
+(function() {
+  const COLORS = { hr:'#ef4444', power:'#eab308', cadence:'#a855f7', speed:'#22c55e',
+                   altitude:'#60a5fa', distance:'#f2f2f7', gradient:'#fb923c' };
+
+  function lerp(arr, idx) {
+    // linear interpolation between floor/ceil indices
+    if (!arr || !arr.length) return null;
+    const lo = Math.floor(idx), hi = Math.ceil(idx);
+    if (lo === hi) return arr[lo];
+    if (hi >= arr.length) return arr[lo];
+    const t = idx - lo;
+    return arr[lo] * (1-t) + arr[hi] * t;
+  }
+
+  function calcGradient(data, idx) {
+    const n = data.alt_ft.length;
+    const w = Math.max(1, Math.floor(n / 200)); // window
+    const lo = Math.max(0, Math.floor(idx) - w);
+    const hi = Math.min(n-1, Math.floor(idx) + w);
+    const dAlt = (data.alt_ft[hi] - data.alt_ft[lo]) * 0.3048; // ft→m
+    const dDist = (data.dist_m[hi] - data.dist_m[lo]);           // already metres
+    if (dDist < 1) return 0;
+    return (dAlt / dDist) * 100;
+  }
+
+  function setupHover() {
+    const wrap = document.getElementById('chart-wrap');
+    const panel = document.getElementById('elev-hover-panel');
+    const cross = document.getElementById('elev-crosshair');
+    if (!wrap || !panel || !cross) return;
+
+    wrap.addEventListener('mousemove', e => {
+      if (!elevChart || !elevChartData) { panel.style.display='none'; cross.style.display='none'; return; }
+      const rect = wrap.getBoundingClientRect();
+      const px   = e.clientX - rect.left;
+      const ca   = elevChart.chartArea;
+      if (!ca || px < ca.left || px > ca.right) { panel.style.display='none'; cross.style.display='none'; return; }
+
+      const xScale = elevChart.scales.x;
+      const xMi    = xScale.getValueForPixel(px);
+
+      // Map xMi → data index
+      const data = elevChartData;
+      const n    = data.dist_m.length;
+      const xM   = xMi * 1609.344;
+      // Binary search for closest index
+      let lo=0, hi=n-1;
+      while (lo < hi-1) { const mid=Math.floor((lo+hi)/2); if (data.dist_m[mid] < xM) lo=mid; else hi=mid; }
+      const idx = lo + (xM - data.dist_m[lo]) / Math.max(1, data.dist_m[hi] - data.dist_m[lo]);
+
+      // Crosshair
+      cross.style.display = 'block';
+      cross.style.left    = px + 'px';
+      cross.style.top     = ca.top + 'px';
+      cross.style.height  = (ca.bottom - ca.top) + 'px';
+
+      // Move elevation dot to hover position
+      const yScale = elevChart.scales.yElev || elevChart.scales.y;
+      const altHover = lerp(data.alt_ft, idx);
+      const dot = document.getElementById('elev-anim-dot');
+      if (dot && yScale && altHover != null) {
+        const dotPy = yScale.getPixelForValue(Math.round(altHover));
+        dot.style.display = 'block';
+        dot.style.left    = px + 'px';
+        dot.style.top     = dotPy + 'px';
+      }
+
+      // Update scrub slider and timecode to match hover position
+      // idx is relative to elevChartData.dist_m — map it to anim.pts by fraction
+      const hoverFrac = Math.max(0, Math.min(1, idx / (data.dist_m.length - 1)));
+      const scrub = document.getElementById('t-scrub');
+      if (scrub) scrub.value = Math.round(hoverFrac * 1000);
+      // Timecode from anim.pts if available, else from elevChartData.time
+      const timeArr = (anim.pts && anim.pts.time) ? anim.pts.time : data.time;
+      if (timeArr && timeArr.length) {
+        const tIdx = Math.round(hoverFrac * (timeArr.length - 1));
+        const secs = timeArr[Math.max(0, Math.min(timeArr.length-1, tIdx))] || 0;
+        const h = Math.floor(secs/3600), m = Math.floor((secs%3600)/60), s = Math.floor(secs%60);
+        const ttime = document.getElementById('t-time');
+        if (ttime) ttime.textContent = `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+      }
+
+      // Move map dot to hover position
+      if (anim.latLon && anim.latLon.length > 0) {
+        const mapIdx = Math.max(0, Math.min(anim.latLon.length - 1, Math.round(idx * anim.latLon.length / data.dist_m.length)));
+        const ll = anim.latLon[mapIdx];
+        if (ll && leafMap) {
+          if (!anim.mapDot) {
+            anim.mapDot = L.marker(ll, {
+              icon: L.divIcon({
+                html: `<div style="width:10px;height:10px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#ffe066,#f59e0b 55%,#b45309);box-shadow:0 1px 3px rgba(0,0,0,.6)"></div>`,
+                iconSize:[10,10], iconAnchor:[5,5], className:''
+              }), zIndexOffset: 1000
+            }).addTo(leafMap);
+          } else {
+            anim.mapDot.setLatLng(ll);
+          }
+        }
+      }
+
+      // Values
+      const alt   = lerp(data.alt_ft,  idx);
+      const hr    = lerp(data.hr,      idx);
+      const pwr   = lerp(data.power,   idx);
+      const cad   = lerp(data.cadence, idx);
+      const spd   = lerp(data.speed,   idx);
+      const grad  = calcGradient(data, idx);
+      const dist  = lerp(data.dist_m,  idx);
+
+      const rows = [
+        { label:'Distance', val: dist != null ? (dist/1609.344).toFixed(2)+' mi' : '—', color: COLORS.distance },
+        { label:'Altitude', val: alt  != null ? Math.round(alt)+' ft'            : '—', color: COLORS.altitude },
+        { label:'Gradient', val: grad != null ? grad.toFixed(1)+'%'              : '—', color: COLORS.gradient },
+        { label:'Heart Rate',val:hr && hr>0   ? Math.round(hr)+' bpm'           : '—', color: COLORS.hr },
+        { label:'Power',    val: pwr != null  ? Math.round(pwr)+' W'            : '—', color: COLORS.power },
+        { label:'Cadence',  val: cad && cad>0 ? Math.round(cad)+' rpm'          : '—', color: COLORS.cadence },
+        { label:'Speed',    val: spd && spd>0 ? spd.toFixed(1)+' mph'           : '—', color: COLORS.speed },
+      ];
+
+      panel.innerHTML = rows.map(r =>
+        `<div class="eh-row">
+          <span class="eh-label">${r.label}</span>
+          <span class="eh-val" style="color:${r.color}">${r.val}</span>
+        </div>`
+      ).join('');
+
+      // Position panel: left or right of crosshair to avoid overflow
+      panel.style.display = 'block';
+      const pw = panel.offsetWidth;
+      const ww = rect.width;
+      if (px + pw/2 + 8 > ww) {
+        panel.style.left  = '';
+        panel.style.right = (ww - px + 8) + 'px';
+        panel.style.transform = 'none';
+      } else if (px - pw/2 < 8) {
+        panel.style.left  = (px + 8) + 'px';
+        panel.style.right = '';
+        panel.style.transform = 'none';
+      } else {
+        panel.style.left      = px + 'px';
+        panel.style.right     = '';
+        panel.style.transform = 'translateX(-50%)';
+      }
+    });
+
+    wrap.addEventListener('mouseleave', () => {
+      // Just hide the hover panel and crosshair — leave dots, scrub, and timecode where they are
+      panel.style.display = 'none';
+      cross.style.display = 'none';
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', setupHover);
+  setTimeout(setupHover, 800);
+})();
 
 // ── ACTIVITY DETAIL ───────────────────────────────────────────────────────────
 async function selectActivity(id) {
@@ -1292,7 +1703,7 @@ function animUpdateUI(i) {
     const chartArea = elevChart.chartArea;
     if (chartArea) {
       const xScale = elevChart.scales.x;
-      const yScale = elevChart.scales.y;
+      const yScale = elevChart.scales.yElev || elevChart.scales.y;
       const xMi = pts.dist_m[i] / 1609.344;
       const px  = xScale.getPixelForValue(xMi);
       const py  = yScale.getPixelForValue(Math.round(alt || 0));
@@ -1936,6 +2347,7 @@ document.addEventListener('click', e => {
   buildColHead();
   await loadFilterOptions();
   await loadAll();
+  loadChartPrefs();
   // Restore splits pane state
   loadSplitsPrefs();
   if (localStorage.getItem('ascent-splits-open') === '1') {
