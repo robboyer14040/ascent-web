@@ -44,7 +44,7 @@ input,select{font:inherit}
 #root{display:flex;height:calc(100vh - 44px);overflow:hidden}
 
 /* sidebar */
-#sidebar{width:640px;min-width:380px;max-width:55vw;display:flex;flex-direction:column;border-right:1px solid var(--border);flex-shrink:0;overflow:hidden;position:relative;padding-bottom:44px}
+#sidebar{width:640px;min-width:380px;max-width:55vw;display:flex;flex-direction:column;border-right:1px solid var(--border);flex-shrink:0;overflow:hidden;padding-bottom:44px}
 #filter-bar{display:flex;gap:6px;padding:8px 10px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0;align-items:center;}
 #filter-bar select{background:var(--surface2);border:1px solid var(--border2);color:var(--text);border-radius:6px;padding:4px 8px;font-size:12px;}
 
@@ -64,7 +64,7 @@ input,select{font:inherit}
 .sort-arr{color:var(--accent);font-size:11px}
 
 /* list — virtual scroll container */
-#act-list{flex:1;overflow-y:auto;overflow-x:hidden;position:relative;padding-bottom:264px}
+#act-list{flex:1;overflow-y:auto;overflow-x:hidden;position:relative;min-height:80px}
 #act-list::-webkit-scrollbar{width:6px}
 #act-list::-webkit-scrollbar-track{background:transparent}
 #act-list::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
@@ -175,10 +175,10 @@ input,select{font:inherit}
   pointer-events:none;transform:translate(-50%,-50%);display:none;z-index:10}
 
 /* ── Splits pane ─────────────────────────────────────────────────────────── */
-#splits-pane{position:absolute;bottom:44px;left:0;right:0;height:220px;
-  display:flex;flex-direction:column;border-top:2px solid var(--border);
-  background:var(--bg);overflow:hidden;z-index:50}
-#splits-pane.collapsed{height:28px!important}
+#splits-pane{flex:none;height:220px;
+  display:flex;flex-direction:column;border-top:1px solid var(--border);
+  background:var(--bg);overflow:hidden}
+#splits-pane.collapsed{height:28px!important;flex-shrink:0}
 #splits-titlebar{display:flex;align-items:center;gap:6px;padding:0 8px;
   height:28px;flex-shrink:0;background:var(--surface);border-bottom:1px solid var(--border)}
 #splits-title{font-size:11px;font-weight:600;text-transform:uppercase;
@@ -1329,10 +1329,8 @@ function toggleSplitsSettings() {
 function toggleSplitsPane() {
   const pane = document.getElementById('splits-pane');
   const btn  = document.getElementById('splits-collapse-btn');
-  const list = document.getElementById('act-list');
   const collapsed = pane.classList.toggle('collapsed');
   btn.textContent = collapsed ? '▲' : '▼';
-  list.style.paddingBottom = collapsed ? '72px' : (pane.offsetHeight + 44) + 'px';
   if (!collapsed) requestAnimationFrame(renderSplits);
 }
 
@@ -1645,6 +1643,16 @@ function hitTestSplit(px, py) {
 document.addEventListener('change', e => {
   if (['sp-metric','sp-agg','sp-len'].includes(e.target.name)) renderSplits();
 });
+
+// Re-render splits when sidebar is resized (horizontal drag)
+(function() {
+  const wrap = document.getElementById('splits-canvas-wrap');
+  if (!wrap || !window.ResizeObserver) return;
+  new ResizeObserver(() => {
+    const pane = document.getElementById('splits-pane');
+    if (pane && !pane.classList.contains('collapsed')) renderSplits();
+  }).observe(wrap);
+})();
 
 // Titlebar drag to resize pane
 (function() {

@@ -53,6 +53,10 @@ p{color:#8e8e93;font-size:.9rem;line-height:1.6;margin-bottom:1rem}
 .stat{background:#3a3a3c;border-radius:8px;padding:.75rem 1rem;flex:1;text-align:center}
 .stat-val{font-size:1.4rem;font-weight:700;color:#f2f2f7}
 .stat-lbl{font-size:.75rem;color:#8e8e93;text-transform:uppercase;letter-spacing:.05em;margin-top:.15rem}
+.months-btn{background:#2c2c2e;border:1px solid #48484a;color:#ebebf0;border-radius:6px;
+  padding:4px 10px;font-size:12px;cursor:pointer;transition:all .15s}
+.months-btn:hover{background:#48484a}
+.months-btn.active{background:#f97316;border-color:#f97316;color:#fff}
 </style>
 </head>
 <body>
@@ -88,6 +92,19 @@ p{color:#8e8e93;font-size:.9rem;line-height:1.6;margin-bottom:1rem}
       <div class="opt" id="opt-all" onclick="selectMode('all')">
         <h3>⚠️ Full Sync</h3>
         <p>Re-fetches ALL activities. May hit Strava rate limits. Only use to rebuild from scratch.</p>
+      </div>
+    </div>
+
+    <div id="lookback-row" style="margin:14px 0 6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span style="font-size:13px;color:#8e8e93">Fetch back:</span>
+      <div style="display:flex;gap:6px;flex-wrap:wrap" id="months-btns">
+        <button class="months-btn" data-months="1">1 month</button>
+        <button class="months-btn active" data-months="3">3 months</button>
+        <button class="months-btn" data-months="6">6 months</button>
+        <button class="months-btn" data-months="12">1 year</button>
+        <button class="months-btn" data-months="24">2 years</button>
+        <button class="months-btn" data-months="60">5 years</button>
+        <button class="months-btn" data-months="0">Auto</button>
       </div>
     </div>
 
@@ -128,6 +145,7 @@ p{color:#8e8e93;font-size:.9rem;line-height:1.6;margin-bottom:1rem}
 
 <script>
 let syncMode = 'new';
+let syncMonths = 3;
 let syncing  = false;
 let imported = 0;
 let skipped  = 0;
@@ -152,6 +170,14 @@ function updateCounts(i, s) {
   document.getElementById('prog-counts').textContent = `${i} imported, ${s} skipped`;
 }
 
+document.addEventListener('click', e => {
+  const btn = e.target.closest('.months-btn');
+  if (!btn) return;
+  document.querySelectorAll('.months-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  syncMonths = parseInt(btn.dataset.months);
+});
+
 function startSync() {
   if (syncing) return;
   if (syncMode === 'all') {
@@ -167,7 +193,7 @@ function startSync() {
   document.getElementById('prog-title').textContent = 'Syncing…';
   document.getElementById('viewBtn').style.display = 'none';
 
-  const es = new EventSource(`/strava/run-sync?mode=${syncMode}`);
+  const es = new EventSource(`/strava/run-sync?mode=${syncMode}&months=${syncMode === 'all' ? 0 : syncMonths}`);
   let barPct = 0;
 
   es.onmessage = e => {

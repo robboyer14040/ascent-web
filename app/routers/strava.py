@@ -150,6 +150,7 @@ async def fetch_gear_map(token: str) -> dict:
 async def run_sync(
     request: Request,
     mode:    str = Query("new"),   # "new" = since last activity, "all" = everything
+    months:  int = Query(0),        # 0 = auto (use last sync time), >0 = force lookback in months
 ):
     """
     Server-Sent Events endpoint. Streams progress as activities are imported.
@@ -162,13 +163,20 @@ async def run_sync(
         return StreamingResponse(no_auth(), media_type="text/event-stream")
 
     db = db_getter()
+    import time as _time
     after_ts = None
     if mode == "new":
-        last_ts = db.get_last_sync_time()
-        if last_ts:
-            # Subtract 2 days as safety buffer — Strava's `after` is exclusive
-            # and timezone differences can cause edge cases
-            after_ts = last_ts - (2 * 24 * 3600)
+        if months > 0:
+            # Explicit lookback period requested
+            after_ts = int(_time.time()) - (months * 30 * 24 * 3600)
+        else:
+            last_ts = db.get_last_sync_time()
+            if last_ts:
+                # Subtract 2 days as safety buffer
+                after_ts = last_ts - (2 * 24 * 3600)
+            else:
+                # No activities yet — default to last 3 months
+                after_ts = int(_time.time()) - (3 * 30 * 24 * 3600)
 
     from app.strava_importer import StravaImporter
     importer = StravaImporter(db.path)
