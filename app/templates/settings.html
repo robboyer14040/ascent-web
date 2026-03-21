@@ -1,7 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta charset="UTF-8">
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Settings — Ascent</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -70,14 +71,23 @@ input[type=text]:focus{border-color:#f97316}
 
   <div class="card">
     <h2>Switch Database</h2>
-    <p>Point the app at an existing Ascent database file.</p>
+    <p>Choose an existing Ascent database file to use.</p>
 
-    <label for="switchDbPath">Path to existing .ascentdb file</label>
-    <input type="text" id="switchDbPath"
-           placeholder="/Users/rob/Desktop/existing.ascentdb">
+    <input type="file" id="switchDbFile" accept=".ascentdb,.db"
+           style="display:none" onchange="onFileChosen(this)">
+
+    <div id="chosenPath" style="display:none;margin-bottom:1rem">
+      <label>Selected file:</label>
+      <div class="current-db" id="chosenPathText"></div>
+    </div>
 
     <div class="btn-row">
-      <button class="btn btn-ghost" onclick="switchDb()">Switch to This Database</button>
+      <button class="btn btn-ghost" onclick="document.getElementById('switchDbFile').click()">
+        📂 Choose File…
+      </button>
+      <button class="btn btn-primary" id="switchBtn" onclick="switchDb()" disabled>
+        Switch to This Database
+      </button>
     </div>
     <div class="result" id="switchResult"></div>
   </div>
@@ -117,17 +127,43 @@ async function createDb() {
   btn.textContent = 'Create New Database';
 }
 
+let chosenFilePath = null;
+
+function onFileChosen(input) {
+  const file = input.files[0];
+  if (!file) return;
+  // file.path is available in Electron; in browser we use the name only
+  // but we also send the full path via a hidden input trick
+  chosenFilePath = file.path || null;
+  document.getElementById('chosenPathText').textContent = file.path || file.name;
+  document.getElementById('chosenPath').style.display = 'block';
+  document.getElementById('switchBtn').disabled = false;
+}
+
 async function switchDb() {
-  const path = document.getElementById('switchDbPath').value.trim();
-  if (!path) return;
-  const btn = event.target;
-  btn.disabled = true;
   const res = document.getElementById('switchResult');
+  const btn = document.getElementById('switchBtn');
+
+  // Try file.path (works in some Chromium builds on macOS)
+  let filePath = chosenFilePath;
+
+  // Fallback: ask user to type/confirm the path
+  if (!filePath) {
+    filePath = prompt(
+      'Enter the full path to your .ascentdb file:',
+      '/Users/' + location.hostname + '/Desktop/All Activities.ascentdb'
+    );
+    if (!filePath) return;
+  }
+
+  btn.disabled = true;
+  res.style.display = 'none';
+
   try {
     const r = await fetch('/api/db/switch', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({path}),
+      body: JSON.stringify({path: filePath}),
     });
     const d = await r.json();
     res.style.display = 'block';
@@ -145,7 +181,6 @@ async function switchDb() {
     res.textContent = `✗ ${e.message}`;
   }
   btn.disabled = false;
-  btn.textContent = 'Switch to This Database';
 }
 </script>
 </body>

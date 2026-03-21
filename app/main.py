@@ -123,6 +123,17 @@ app.include_router(photos.router)
 app.include_router(settings.router)
 app.include_router(weather.router, prefix="/api")
 
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    from fastapi.responses import Response
+    svg = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <rect width="32" height="32" rx="7" fill="#1a2a3a"/>
+  <polygon points="16,5 30,27 2,27" fill="#4a9edd" opacity="0.9"/>
+  <polygon points="16,5 24,27 8,27" fill="#5ab4f5"/>
+  <polygon points="16,5 20,18 12,18" fill="#ffffff" opacity="0.85"/>
+</svg>"""
+    return Response(content=svg, media_type="image/svg+xml")
+
 
 # ── root: dashboard ───────────────────────────────────────────────────────────
 @app.get("/", response_class=HTMLResponse)

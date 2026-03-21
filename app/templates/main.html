@@ -143,6 +143,18 @@ input,select{font:inherit}
 .act-notes{font-size:12.5px;color:var(--text);line-height:1.55;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:10px;}
 
 #no-selection{display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-size:13px;flex-direction:column;gap:8px;}
+#col-picker{display:none;position:absolute;top:100%;left:0;right:0;z-index:200;
+  background:var(--surface);border:1px solid var(--border2);border-radius:8px;
+  box-shadow:0 8px 32px rgba(0,0,0,.5);padding:8px;max-height:320px;overflow-y:auto;margin:2px 4px}
+#col-picker.open{display:block}
+.cp-item{display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:5px;
+  cursor:pointer;font-size:12.5px;color:var(--text);user-select:none}
+.cp-item:hover{background:var(--surface2)}
+.cp-item input{accent-color:#f97316;cursor:pointer;width:13px;height:13px}
+#filter-bar{position:relative}
+.ch{cursor:default}
+.ch.dragging-col{opacity:.4;cursor:grabbing}
+.ch.drag-over{border-left:2px solid #f97316}
 .placeholder-icon{font-size:40px;opacity:.25}
 
 /* ── Transport bar ───────────────────────────────────────────────────────── */
@@ -226,17 +238,12 @@ input,select{font:inherit}
     <div id="filter-bar">
       <select id="typeFilter"><option value="">All types</option></select>
       <select id="yearFilter"><option value="">All years</option></select>
+      <div style="flex:1"></div>
+      <button class="tb-btn" id="col-gear-btn" onclick="toggleColPicker(event)" title="Choose columns" style="padding:3px 7px;font-size:13px">⚙</button>
+      <div id="col-picker"></div>
     </div>
 
-    <div id="col-head" style="--cols:168px 1fr 62px 76px 58px 58px 52px">
-      <div class="ch sorted" data-col="start_time">Date/Time <span class="sort-arr">↓</span></div>
-      <div class="ch" data-col="name">Title</div>
-      <div class="ch" data-col="distance_m" style="justify-content:flex-end">Dist</div>
-      <div class="ch" data-col="active_time" style="justify-content:flex-end">Active</div>
-      <div class="ch" data-col="total_climb_m" style="justify-content:flex-end">Climb</div>
-      <div class="ch" data-col="avg_speed_mps" style="justify-content:flex-end">MvSpd</div>
-      <div class="ch" data-col="avg_heartrate" style="justify-content:flex-end">HR</div>
-    </div>
+    <div id="col-head"></div>
 
     <div id="act-list">
       <div id="list-spacer"></div>
@@ -359,7 +366,47 @@ const state = {
   selectedId: null,
 };
 
-const COLS = '168px 1fr 62px 76px 58px 58px 52px';
+// ── COLUMN DEFINITIONS ────────────────────────────────────────────────────────
+const ALL_COLS = [
+  {id:'date',      label:'Date/Time',   sort:'start_time',   w:'168px', align:'left',  render: a => fmtDate(a.start_time)},
+  {id:'name',      label:'Title',       sort:'name',         w:'1fr',   align:'left',  render: a => escHtml(a.name) + (a.strava_activity_id?'<span class="ac-strava">↗</span>':'')},
+  {id:'dist',      label:'Dist',        sort:'distance_m',   w:'62px',  align:'right', render: a => fmtN(a.distance_mi,2)},
+  {id:'active',    label:'Active',      sort:'active_time',  w:'76px',  align:'right', render: a => fmtHMS(a.active_time)},
+  {id:'duration',  label:'Duration',    sort:'duration',     w:'76px',  align:'right', render: a => fmtHMS(a.duration)},
+  {id:'climb',     label:'Climb',       sort:'total_climb_m',w:'58px',  align:'right', render: a => a.total_climb_ft?Math.round(a.total_climb_ft):'—'},
+  {id:'mvspd',     label:'MvSpd',       sort:'avg_speed_mps',w:'58px',  align:'right', render: a => fmtN(a.avg_speed_mph,1)},
+  {id:'hr',        label:'HR',          sort:'avg_heartrate',w:'52px',  align:'right', render: a => a.avg_heartrate?Math.round(a.avg_heartrate):'—'},
+  {id:'maxhr',     label:'MaxHR',       sort:'',             w:'58px',  align:'right', render: a => a.max_heartrate?Math.round(a.max_heartrate):'—'},
+  {id:'power',     label:'Power',       sort:'',             w:'58px',  align:'right', render: a => a.avg_power?Math.round(a.avg_power)+' W':'—'},
+  {id:'cadence',   label:'Cadence',     sort:'',             w:'62px',  align:'right', render: a => a.avg_cadence?Math.round(a.avg_cadence)+' rpm':'—'},
+  {id:'calories',  label:'Cal',         sort:'calories',     w:'52px',  align:'right', render: a => a.calories?Math.round(a.calories):'—'},
+  {id:'suffer',    label:'Suffer',      sort:'',             w:'52px',  align:'right', render: a => a.suffer_score?Math.round(a.suffer_score):'—'},
+  {id:'pace',      label:'Pace',        sort:'',             w:'70px',  align:'right', render: a => a.avg_pace||'—'},
+];
+
+const DEFAULT_COL_IDS = ['date','name','dist','active','climb','mvspd','hr'];
+
+function loadColPrefs() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('ascent-cols') || 'null');
+    if (saved && Array.isArray(saved) && saved.length >= 2) return saved;
+  } catch(e) {}
+  return DEFAULT_COL_IDS;
+}
+function saveColPrefs(ids) { localStorage.setItem('ascent-cols', JSON.stringify(ids)); }
+
+let activeColIds = loadColPrefs();
+
+function getActiveCols() {
+  return activeColIds.map(id => ALL_COLS.find(c => c.id === id)).filter(Boolean);
+}
+
+function buildColsTemplate() {
+  return getActiveCols().map(c => c.w).join(' ');
+}
+
+const COLS = buildColsTemplate(); // kept for backward compat but dynamic now
+function currentCOLS() { return buildColsTemplate(); }
 const ROW_H = 34;
 
 // ── HELPERS ───────────────────────────────────────────────────────────────────
@@ -400,14 +447,10 @@ function renderVirtualList() {
     for (let i = startIdx; i < endIdx; i++) {
       const a   = acts[i];
       const sel = a.id === state.selectedId ? ' selected' : '';
-      html += `<div class="act-row${sel}" data-id="${a.id}" style="--cols:${COLS}" onclick="selectActivity(${a.id})">
-        <div class="ac ac-date">${fmtDate(a.start_time)}</div>
-        <div class="ac ac-name">${escHtml(a.name)}${a.strava_activity_id?'<span class="ac-strava">↗</span>':''}</div>
-        <div class="ac ac-num">${fmtN(a.distance_mi,2)}</div>
-        <div class="ac ac-num">${fmtHMS(a.active_time)}</div>
-        <div class="ac ac-num">${a.total_climb_ft?Math.round(a.total_climb_ft):'—'}</div>
-        <div class="ac ac-num">${fmtN(a.avg_speed_mph,1)}</div>
-        <div class="ac ac-num">${a.avg_heartrate?Math.round(a.avg_heartrate):'—'}</div>
+      const cols = getActiveCols();
+      const colsT = currentCOLS();
+      html += `<div class="act-row${sel}" data-id="${a.id}" style="--cols:${colsT}" onclick="selectActivity(${a.id})">
+        ${cols.map(col => `<div class="ac ${col.align==='right'?'ac-num':'ac-date'}" style="${col.id==='name'?'min-width:0':''}">${col.render(a)}</div>`).join('')}
       </div>`;
     }
     rows.innerHTML = html;
@@ -471,6 +514,7 @@ function updateSortHeaders() {
 
 // ── LOAD ALL ACTIVITIES ───────────────────────────────────────────────────────
 async function loadAll() {
+  buildColHead();
   const r = await fetch('/activities/list?limit=2000&offset=0&sort_by=start_time&sort_dir=desc');
   const d = await r.json();
   state.all = d.activities;
@@ -1331,6 +1375,7 @@ function toggleSplitsPane() {
   const btn  = document.getElementById('splits-collapse-btn');
   const collapsed = pane.classList.toggle('collapsed');
   btn.textContent = collapsed ? '▲' : '▼';
+  localStorage.setItem('ascent-splits-open', collapsed ? '0' : '1');
   if (!collapsed) requestAnimationFrame(renderSplits);
 }
 
@@ -1639,10 +1684,38 @@ function hitTestSplit(px, py) {
   return splits.findIndex((sp, i) => clickMi >= sp.startMi && clickMi < sp.endMi);
 }
 
-// Settings changes re-render
+// Save and restore splits settings
+function saveSplitsPrefs() {
+  localStorage.setItem('ascent-splits', JSON.stringify({
+    metric: splitsMetric(),
+    agg:    splitsAgg(),
+    len:    document.querySelector('input[name="sp-len"]:checked')?.value || '1',
+  }));
+}
+
+function loadSplitsPrefs() {
+  try {
+    const p = JSON.parse(localStorage.getItem('ascent-splits') || 'null');
+    if (!p) return;
+    const m = document.querySelector(`input[name="sp-metric"][value="${p.metric}"]`);
+    const a = document.querySelector(`input[name="sp-agg"][value="${p.agg}"]`);
+    const l = document.querySelector(`input[name="sp-len"][value="${p.len}"]`);
+    if (m) m.checked = true;
+    if (a) a.checked = true;
+    if (l) l.checked = true;
+  } catch(e) {}
+}
+
+// Settings changes re-render and save
 document.addEventListener('change', e => {
-  if (['sp-metric','sp-agg','sp-len'].includes(e.target.name)) renderSplits();
+  if (['sp-metric','sp-agg','sp-len'].includes(e.target.name)) {
+    saveSplitsPrefs();
+    renderSplits();
+  }
 });
+
+// Load prefs on startup
+document.addEventListener('DOMContentLoaded', loadSplitsPrefs);
 
 // Re-render splits when sidebar is resized (horizontal drag)
 (function() {
@@ -1768,11 +1841,111 @@ document.addEventListener('change', e => {
   });
 })();
 
+// ── COLUMN MANAGER ───────────────────────────────────────────────────────────
+function buildColHead() {
+  const head = document.getElementById('col-head');
+  const cols = getActiveCols();
+  head.style.setProperty('--cols', currentCOLS());
+  head.innerHTML = '';
+  cols.forEach((col, i) => {
+    const div = document.createElement('div');
+    div.className = 'ch' + (state.sortBy === col.sort ? ' sorted' : '');
+    div.dataset.col = col.sort || '';
+    div.dataset.colId = col.id;
+    div.style.justifyContent = col.align === 'right' ? 'flex-end' : '';
+    div.draggable = true;
+    div.innerHTML = col.label + (state.sortBy === col.sort ? ` <span class="sort-arr">${state.sortDir==='desc'?'↓':'↑'}</span>` : '');
+
+    // Sort on click (not drag)
+    div.addEventListener('click', () => {
+      if (!col.sort) return;
+      if (state.sortBy === col.sort) state.sortDir = state.sortDir==='desc'?'asc':'desc';
+      else { state.sortBy = col.sort; state.sortDir = 'desc'; }
+      loadAll();
+    });
+
+    // Drag to reorder
+    div.addEventListener('dragstart', e => {
+      e.dataTransfer.setData('text/plain', col.id);
+      setTimeout(() => div.classList.add('dragging-col'), 0);
+    });
+    div.addEventListener('dragend', () => div.classList.remove('dragging-col'));
+    div.addEventListener('dragover', e => { e.preventDefault(); div.classList.add('drag-over'); });
+    div.addEventListener('dragleave', () => div.classList.remove('drag-over'));
+    div.addEventListener('drop', e => {
+      e.preventDefault();
+      div.classList.remove('drag-over');
+      const fromId = e.dataTransfer.getData('text/plain');
+      const toId   = col.id;
+      if (fromId === toId) return;
+      const fromIdx = activeColIds.indexOf(fromId);
+      const toIdx   = activeColIds.indexOf(toId);
+      if (fromIdx < 0 || toIdx < 0) return;
+      activeColIds.splice(fromIdx, 1);
+      activeColIds.splice(toIdx, 0, fromId);
+      saveColPrefs(activeColIds);
+      buildColHead();
+      renderVirtualList();
+    });
+
+    head.appendChild(div);
+  });
+}
+
+function buildColPicker() {
+  const picker = document.getElementById('col-picker');
+  picker.innerHTML = '<div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:2px 8px 6px">Visible Columns</div>';
+  ALL_COLS.forEach(col => {
+    const checked = activeColIds.includes(col.id);
+    const item = document.createElement('label');
+    item.className = 'cp-item';
+    item.innerHTML = `<input type="checkbox" ${checked?'checked':''} data-col-id="${col.id}"> ${col.label}`;
+    item.querySelector('input').addEventListener('change', e => {
+      if (e.target.checked) {
+        if (!activeColIds.includes(col.id)) activeColIds.push(col.id);
+      } else {
+        if (activeColIds.length <= 2) { e.target.checked = true; return; } // keep at least 2
+        activeColIds = activeColIds.filter(id => id !== col.id);
+      }
+      saveColPrefs(activeColIds);
+      buildColHead();
+      renderVirtualList();
+    });
+    picker.appendChild(item);
+  });
+}
+
+function toggleColPicker(e) {
+  e.stopPropagation();
+  const picker = document.getElementById('col-picker');
+  const isOpen = picker.classList.contains('open');
+  if (!isOpen) buildColPicker();
+  picker.classList.toggle('open');
+}
+
+// Close picker on outside click
+document.addEventListener('click', e => {
+  if (!e.target.closest('#filter-bar')) {
+    document.getElementById('col-picker')?.classList.remove('open');
+  }
+});
+
 // ── INIT ──────────────────────────────────────────────────────────────────────
 (async()=>{
   initMap();
+  buildColHead();
   await loadFilterOptions();
   await loadAll();
+  // Restore splits pane state
+  loadSplitsPrefs();
+  if (localStorage.getItem('ascent-splits-open') === '1') {
+    const pane = document.getElementById('splits-pane');
+    const btn  = document.getElementById('splits-collapse-btn');
+    if (pane) { pane.classList.remove('collapsed'); btn.textContent = '▼'; }
+  }
+  // Auto-select activity from ?select= param
+  const sel = new URLSearchParams(location.search).get('select');
+  if (sel) selectActivity(parseInt(sel));
 })();
 </script>
 
