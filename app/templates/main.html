@@ -793,18 +793,18 @@ function redrawElevWithOverlays() {
 
 function findPeaks(points, n=3) {
   if (points.length < 10) return [];
-  const totalDist = points[points.length-1].x - points[0].x;
   // Minimum separation: 0.25 miles between peaks
   const minSepX = 0.25;
 
-  // Find all local maxima (smoother window = 1% of points each side)
+  // Find all local maxima (smoother window = 2% of points each side, clamped at edges)
   const w = Math.max(5, Math.floor(points.length * 0.02));
   const candidates = [];
-  for (let i = w; i < points.length - w; i++) {
+  for (let i = 1; i < points.length - 1; i++) {
     const y = points[i].y;
     let isPeak = true;
-    for (let j = i - w; j <= i + w; j++) {
-      if (j !== i && points[j].y > y) { isPeak = false; break; }  // strict > allows plateau peaks
+    const lo = Math.max(0, i - w), hi = Math.min(points.length - 1, i + w);
+    for (let j = lo; j <= hi; j++) {
+      if (j !== i && points[j].y > y) { isPeak = false; break; }
     }
     if (isPeak) candidates.push({idx: i, x: points[i].x, y});
   }
@@ -844,6 +844,12 @@ async function drawElevation(data, version) {
   elevChartData = data;
   const { dist_m, alt_ft, hr, speed, power, cadence } = data;
   if (!alt_ft || alt_ft.every(v => v === 0)) return;
+
+  // Full-resolution points for accurate peak detection (before downsampling)
+  const fullPoints = [];
+  for (let i = 0; i < dist_m.length; i++) {
+    fullPoints.push({ x: dist_m[i] / 1609.344, y: Math.round(alt_ft[i]) });
+  }
 
   // Sample to ~600 points
   const total = alt_ft.length;
@@ -937,7 +943,7 @@ async function drawElevation(data, version) {
   }
 
   // Peak annotations — drawn via custom plugin
-  const peakList = showPeaks ? findPeaks(points, 3) : [];
+  const peakList = showPeaks ? findPeaks(fullPoints, 3) : [];
 
   // Custom peak marker plugin
   const peakPlugin = {
