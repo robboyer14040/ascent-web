@@ -78,6 +78,19 @@ input,select{font:inherit}
 }
 .act-row:hover{background:var(--row-hover)}
 .act-row.selected{background:var(--row-sel);border-left:3px solid var(--row-sel-border)}
+.act-row.multi-sel{background:rgba(249,115,22,.10);border-left:3px solid rgba(249,115,22,.4)}
+.act-row.multi-sel.selected{background:var(--row-sel);border-left:3px solid var(--row-sel-border)}
+#delete-confirm-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:2000;align-items:center;justify-content:center}
+#delete-confirm-overlay.open{display:flex}
+#delete-confirm-box{background:var(--surface);border:1px solid var(--border2);border-radius:12px;padding:24px 28px;max-width:360px;width:90%;box-shadow:0 16px 48px rgba(0,0,0,.6)}
+#delete-confirm-box h3{font-size:15px;font-weight:600;margin-bottom:8px}
+#delete-confirm-box p{font-size:13px;color:var(--muted);margin-bottom:20px;line-height:1.5}
+.dcb-btns{display:flex;gap:8px;justify-content:flex-end}
+.dcb-btns button{padding:6px 16px;border-radius:7px;font-size:13px;font-weight:500;border:1px solid var(--border2)}
+.dcb-cancel{background:var(--surface2);color:var(--text)}
+.dcb-cancel:hover{background:var(--border2)}
+.dcb-delete{background:#dc2626;color:#fff;border-color:#dc2626}
+.dcb-delete:hover{background:#b91c1c;border-color:#b91c1c}
 .ac{padding:2px 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12px}
 .ac-date{color:var(--muted);font-size:11.5px}
 .ac-name{font-weight:500}
@@ -156,6 +169,159 @@ input,select{font:inherit}
 .ch.dragging-col{opacity:.4;cursor:grabbing}
 .ch.drag-over{border-left:2px solid #f97316}
 .placeholder-icon{font-size:40px;opacity:.25}
+
+/* ── AI Coach Panel ──────────────────────────────────────────────────────── */
+#coach-overlay{
+  display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:3000;
+  align-items:center;justify-content:center;backdrop-filter:blur(3px);
+}
+#coach-overlay.open{display:flex}
+#coach-panel{
+  background:var(--surface);border:1px solid var(--border2);border-radius:14px;
+  width:min(680px,94vw);height:min(700px,90vh);
+  display:flex;flex-direction:column;box-shadow:0 24px 64px rgba(0,0,0,.7);
+  overflow:hidden;
+}
+#coach-header{
+  display:flex;align-items:center;gap:8px;padding:14px 16px 12px;
+  border-bottom:1px solid var(--border);flex-shrink:0;
+  background:linear-gradient(135deg,rgba(249,115,22,.12),rgba(10,132,255,.08));
+}
+#coach-header-icon{font-size:20px}
+#coach-header-title{font-size:15px;font-weight:700;flex:1;color:var(--text)}
+#coach-goal-text{
+  font-size:11px;color:var(--muted);white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;max-width:340px;
+}
+#coach-change-goal-btn{
+  font-size:11px;color:var(--muted);border:1px solid var(--border2);
+  border-radius:5px;padding:3px 8px;background:var(--surface2);cursor:pointer;flex-shrink:0;
+}
+#coach-change-goal-btn:hover{color:var(--text);border-color:var(--text)}
+#coach-close-btn{font-size:20px;color:var(--muted);background:none;border:none;cursor:pointer;padding:0 2px;line-height:1}
+#coach-close-btn:hover{color:var(--text)}
+#coach-setup{
+  flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:32px 40px;gap:16px;text-align:center;
+}
+#coach-setup h2{font-size:18px;font-weight:700;color:var(--text)}
+#coach-setup p{font-size:13px;color:var(--muted);line-height:1.6;max-width:400px}
+#coach-goal-input{
+  width:100%;background:var(--surface2);border:1px solid var(--border2);
+  border-radius:9px;color:var(--text);font:inherit;font-size:13px;
+  padding:12px 14px;resize:vertical;min-height:100px;outline:none;transition:border-color .15s;
+}
+#coach-goal-input:focus{border-color:var(--accent)}
+#coach-goal-input::placeholder{color:var(--muted2)}
+#coach-set-goal-btn{
+  background:var(--accent);color:#fff;border:none;border-radius:8px;
+  padding:10px 28px;font-size:13px;font-weight:600;cursor:pointer;transition:opacity .15s;
+}
+#coach-set-goal-btn:hover{opacity:.85}
+#coach-set-goal-btn:disabled{opacity:.45;cursor:default}
+#coach-messages{
+  flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px;
+  scrollbar-width:thin;scrollbar-color:var(--border2) transparent;
+}
+#coach-messages::-webkit-scrollbar{width:5px}
+#coach-messages::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+.coach-msg{display:flex;gap:10px;max-width:100%}
+.coach-msg.user{flex-direction:row-reverse}
+.coach-bubble{
+  max-width:82%;padding:10px 13px;border-radius:12px;font-size:13px;
+  line-height:1.6;white-space:pre-wrap;word-break:break-word;
+}
+.coach-msg.assistant .coach-bubble{
+  background:var(--surface2);border:1px solid var(--border2);color:var(--text);border-bottom-left-radius:4px;
+}
+.coach-msg.user .coach-bubble{background:var(--accent);color:#fff;border-bottom-right-radius:4px;}
+.coach-avatar{
+  width:28px;height:28px;border-radius:50%;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;font-size:14px;
+  background:var(--surface2);border:1px solid var(--border2);align-self:flex-end;
+}
+.coach-msg.user .coach-avatar{background:var(--accent);border-color:var(--accent);color:#fff}
+.coach-ts{font-size:10px;color:var(--muted2);margin-top:3px;align-self:flex-end;flex-shrink:0}
+.coach-msg.user .coach-ts{text-align:right}
+.coach-typing .coach-bubble{background:var(--surface2);border:1px solid var(--border2);padding:12px 16px;}
+.coach-dots{display:flex;gap:5px;align-items:center}
+.coach-dots span{width:7px;height:7px;border-radius:50%;background:var(--muted);animation:coachDot 1.2s infinite ease-in-out;}
+.coach-dots span:nth-child(2){animation-delay:.2s}
+.coach-dots span:nth-child(3){animation-delay:.4s}
+@keyframes coachDot{0%,80%,100%{transform:scale(.7);opacity:.4}40%{transform:scale(1);opacity:1}}
+#coach-new-activity-banner{
+  display:none;flex-shrink:0;background:rgba(10,132,255,.12);
+  border-bottom:1px solid rgba(10,132,255,.25);
+  padding:7px 16px;font-size:12px;color:#5ab4f5;gap:8px;align-items:center;
+}
+#coach-new-activity-banner.visible{display:flex}
+#coach-input-bar{
+  display:flex;gap:8px;padding:12px 14px;border-top:1px solid var(--border);
+  flex-shrink:0;background:var(--surface);
+}
+#coach-input{
+  flex:1;background:var(--surface2);border:1px solid var(--border2);border-radius:9px;
+  color:var(--text);font:inherit;font-size:13px;padding:9px 13px;
+  outline:none;resize:none;max-height:120px;overflow-y:auto;
+  transition:border-color .15s;line-height:1.5;
+}
+#coach-input:focus{border-color:var(--accent)}
+#coach-input::placeholder{color:var(--muted2)}
+#coach-send-btn{
+  background:var(--accent);color:#fff;border:none;border-radius:8px;
+  padding:0 16px;font-size:18px;cursor:pointer;flex-shrink:0;
+  transition:opacity .15s;align-self:flex-end;height:38px;
+}
+#coach-send-btn:hover{opacity:.85}
+#coach-send-btn:disabled{opacity:.35;cursor:default}
+.coach-dot{
+  width:7px;height:7px;border-radius:50%;background:#0a84ff;
+  display:inline-block;margin-left:3px;vertical-align:middle;animation:coachDotPulse 2s infinite;
+}
+@keyframes coachDotPulse{0%,100%{opacity:1}50%{opacity:.35}}
+
+/* ── Coach usage widget ──────────────────────────────────────────────────── */
+#coach-usage-bar{
+  flex-shrink:0;border-top:1px solid var(--border);
+  background:var(--surface);
+}
+#coach-usage-toggle{
+  display:flex;align-items:center;gap:6px;padding:6px 14px;
+  cursor:pointer;width:100%;background:none;border:none;color:var(--muted);
+  font:inherit;font-size:11px;text-align:left;
+  transition:color .15s;
+}
+#coach-usage-toggle:hover{color:var(--text)}
+#coach-usage-toggle .u-caret{font-size:9px;margin-left:auto;transition:transform .2s}
+#coach-usage-toggle.open .u-caret{transform:rotate(180deg)}
+#coach-usage-detail{
+  display:none;padding:0 14px 12px;
+}
+#coach-usage-detail.open{display:block}
+.u-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.u-label{font-size:11px;color:var(--muted)}
+.u-val{font-size:11px;font-weight:600;color:var(--text);font-variant-numeric:tabular-nums}
+.u-bar-track{
+  height:6px;background:var(--surface2);border-radius:3px;
+  border:1px solid var(--border2);overflow:hidden;margin-bottom:8px;
+}
+.u-bar-fill{
+  height:100%;border-radius:3px;transition:width .4s ease;
+  background:linear-gradient(90deg,#30d158,#f97316);
+}
+.u-bar-fill.warn{background:linear-gradient(90deg,#f97316,#ff453a)}
+.u-monthly-chart{display:flex;align-items:flex-end;gap:3px;height:36px;margin-bottom:6px}
+.u-monthly-bar{
+  flex:1;border-radius:2px 2px 0 0;background:var(--accent);opacity:.7;
+  min-height:2px;transition:height .3s ease;position:relative;cursor:default;
+}
+.u-monthly-bar.current{opacity:1;background:#0a84ff}
+.u-monthly-bar:hover{opacity:1}
+.u-monthly-labels{display:flex;gap:3px;margin-bottom:8px}
+.u-monthly-label{flex:1;font-size:9px;color:var(--muted2);text-align:center;overflow:hidden}
+.u-link{font-size:10px;color:var(--accent-blue);text-decoration:none}
+.u-link:hover{text-decoration:underline}
+.u-divider{height:1px;background:var(--border);margin:6px 0}
 
 /* ── Transport bar ───────────────────────────────────────────────────────── */
 #transport-bar{
@@ -239,6 +405,7 @@ input,select{font:inherit}
   <span class="tb-count" id="actCount"></span>
   <div style="display:flex;gap:6px">
     <button class="tb-btn" onclick="window.location='/'">📊 Dashboard</button>
+    <button class="tb-btn" id="coach-open-btn" onclick="openCoach()" title="AI Coach">🧠 Coach<span id="coach-new-dot" class="coach-dot" style="display:none"></span></button>
     <button class="tb-btn" onclick="window.location='/settings'" style="background:#3a3a3c">⚙</button>
     <button class="tb-btn strava" onclick="window.location='/strava/sync'">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169"/></svg>
@@ -405,6 +572,7 @@ const state = {
   actType: '',
   year:    '',
   selectedId: null,
+  selectedIds: new Set(), // multi-select set
 };
 
 // ── COLUMN DEFINITIONS ────────────────────────────────────────────────────────
@@ -487,10 +655,12 @@ function renderVirtualList() {
     let html = '';
     for (let i = startIdx; i < endIdx; i++) {
       const a   = acts[i];
-      const sel = a.id === state.selectedId ? ' selected' : '';
+      const isSel     = a.id === state.selectedId;
+      const isMulti   = state.selectedIds.has(a.id);
+      const selClass  = isSel ? ' selected' : (isMulti ? ' multi-sel' : '');
       const cols = getActiveCols();
       const colsT = currentCOLS();
-      html += `<div class="act-row${sel}" data-id="${a.id}" style="--cols:${colsT}" onclick="selectActivity(${a.id})">
+      html += `<div class="act-row${selClass}" data-id="${a.id}" style="--cols:${colsT}" onclick="handleRowClick(event,${a.id})">
         ${cols.map(col => `<div class="ac ${col.align==='right'?'ac-num':'ac-date'}" style="${col.id==='name'?'min-width:0':''}">${col.render(a)}</div>`).join('')}
       </div>`;
     }
@@ -1173,6 +1343,57 @@ async function drawElevation(data, version) {
 })();
 
 // ── ACTIVITY DETAIL ───────────────────────────────────────────────────────────
+function handleRowClick(e, id) {
+  if (e.shiftKey && state.selectedId !== null) {
+    // Range select from last primary selection to this row
+    const fromIdx = state.filtered.findIndex(a => a.id === state.selectedId);
+    const toIdx   = state.filtered.findIndex(a => a.id === id);
+    if (fromIdx >= 0 && toIdx >= 0) {
+      const lo = Math.min(fromIdx, toIdx), hi = Math.max(fromIdx, toIdx);
+      state.selectedIds.clear();
+      for (let i = lo; i <= hi; i++) state.selectedIds.add(state.filtered[i].id);
+      renderVirtualList();
+      return;
+    }
+  }
+  // Normal click — clear multi-select and do single select
+  state.selectedIds.clear();
+  selectActivity(id);
+}
+
+function deleteSelected() {
+  const ids = state.selectedIds.size > 0
+    ? [...state.selectedIds]
+    : (state.selectedId !== null ? [state.selectedId] : []);
+  if (!ids.length) return;
+
+  const count = ids.length;
+  const noun  = count === 1 ? 'activity' : `${count} activities`;
+  document.getElementById('delete-confirm-msg').textContent =
+    `Permanently delete ${noun}? This cannot be undone.`;
+  document.getElementById('delete-confirm-overlay').classList.add('open');
+
+  document.getElementById('dcb-delete-btn').onclick = async () => {
+    document.getElementById('delete-confirm-overlay').classList.remove('open');
+    const r = await fetch('/api/activities', {
+      method: 'DELETE',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ids}),
+    });
+    if (!r.ok) { alert('Delete failed'); return; }
+    // Remove from state
+    state.all      = state.all.filter(a => !ids.includes(a.id));
+    state.selectedIds.clear();
+    if (ids.includes(state.selectedId)) {
+      state.selectedId = null;
+      document.getElementById('act-detail').style.display = 'none';
+      document.getElementById('no-selection').style.display = 'flex';
+      clearMap();
+    }
+    applyFilterAndSort();
+  };
+}
+
 async function selectActivity(id) {
   let elevChartDrawn = false;
   const myVersion = ++elevRenderVersion;
@@ -1380,10 +1601,19 @@ window.addEventListener('mouseup',()=>{ if(!resizing)return; resizing=false;hand
 
 // ── KEYBOARD NAV ──────────────────────────────────────────────────────────────
 document.addEventListener('keydown',e=>{
-  if(!state.filtered.length||e.target.tagName==='INPUT') return;
+  if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA') return;
+  if(document.getElementById('coach-overlay')?.classList.contains('open')) {
+    if(e.key==='Escape') closeCoach();
+    return;
+  }
+  if (e.key==='Delete'||e.key==='Backspace') {
+    if (state.selectedIds.size > 0 || state.selectedId !== null) { e.preventDefault(); deleteSelected(); }
+    return;
+  }
+  if(!state.filtered.length) return;
   const idx=state.filtered.findIndex(a=>a.id===state.selectedId);
-  if (e.key==='ArrowDown'&&idx<state.filtered.length-1){ e.preventDefault(); selectActivity(state.filtered[idx+1].id); scrollToSelected(); }
-  if (e.key==='ArrowUp'  &&idx>0)                      { e.preventDefault(); selectActivity(state.filtered[idx-1].id); scrollToSelected(); }
+  if (e.key==='ArrowDown'&&idx<state.filtered.length-1){ e.preventDefault(); state.selectedIds.clear(); selectActivity(state.filtered[idx+1].id); scrollToSelected(); }
+  if (e.key==='ArrowUp'  &&idx>0)                      { e.preventDefault(); state.selectedIds.clear(); selectActivity(state.filtered[idx-1].id); scrollToSelected(); }
 });
 function scrollToSelected(){
   const idx=state.filtered.findIndex(a=>a.id===state.selectedId);
@@ -1474,7 +1704,8 @@ document.addEventListener('keydown', e => {
     if (e.key === 'ArrowRight') { photoNav(1, true);  return; }
   }
   // Panel arrow keys (when not in lightbox, not typing)
-  if (e.target.tagName === 'INPUT') return;
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  if (document.getElementById('coach-overlay')?.classList.contains('open')) return;
   if (photoState.photos.length > 1) {
     if (e.key === '[') { photoNav(-1); return; }
     if (e.key === ']') { photoNav(1);  return; }
@@ -1742,7 +1973,8 @@ function animReset() {
 
 // Keyboard shortcuts: space = play/pause, left/right = step
 document.addEventListener('keydown', e => {
-  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
+  if (document.getElementById('coach-overlay')?.classList.contains('open')) return;
   if (document.getElementById('lightbox').style.display === 'flex') return;
   if (!anim.pts) return;
   if (e.key === ' ')          { e.preventDefault(); anim.playing ? animStop() : animPlay(); }
@@ -2347,6 +2579,369 @@ document.addEventListener('click', e => {
   }
 });
 
+// ── AI COACH ─────────────────────────────────────────────────────────────────
+
+const coach = {
+  hasGoal:      false,
+  goalId:       null,
+  goalText:     '',
+  hasNewActs:   false,
+  sending:      false,
+};
+
+function openCoach() {
+  document.getElementById('coach-overlay').classList.add('open');
+  coachLoadState();
+}
+
+function closeCoach() {
+  document.getElementById('coach-overlay').classList.remove('open');
+}
+
+function coachOverlayClick(e) {
+  if (e.target === document.getElementById('coach-overlay')) closeCoach();
+}
+
+async function coachLoadState() {
+  try {
+    const r = await fetch('/api/coach/state');
+    const d = await r.json();
+
+    coach.hasGoal    = d.has_goal;
+    coach.hasNewActs = d.has_new_activities;
+
+    // Update new-activity dot on toolbar button
+    document.getElementById('coach-new-dot').style.display =
+      (d.has_goal && d.has_new_activities) ? 'inline-block' : 'none';
+
+    if (!d.has_goal) {
+      coachShowSetup();
+    } else {
+      coach.goalId   = d.goal.id;
+      coach.goalText = d.goal.goal_text;
+      coachShowConversation();
+      await coachLoadMessages();
+      coachUpdateBanner();
+    }
+  } catch(e) {
+    console.error('Coach state error', e);
+  }
+}
+
+function coachShowSetup() {
+  document.getElementById('coach-setup').style.display          = 'flex';
+  document.getElementById('coach-conversation').style.display   = 'none';
+  document.getElementById('coach-change-goal-btn').style.display = 'none';
+  document.getElementById('coach-goal-text').textContent        = '';
+  document.getElementById('coach-goal-input').value             = '';
+  document.getElementById('coach-set-goal-btn').disabled        = false;
+  document.getElementById('coach-set-goal-btn').textContent     = 'Start Coaching →';
+  document.getElementById('coach-new-activity-banner').classList.remove('visible');
+}
+
+function coachShowConversation() {
+  document.getElementById('coach-setup').style.display            = 'none';
+  document.getElementById('coach-conversation').style.display     = 'flex';
+  document.getElementById('coach-conversation').style.flexDirection = 'column';
+  document.getElementById('coach-conversation').style.overflow    = 'hidden';
+  document.getElementById('coach-conversation').style.flex        = '1';
+  document.getElementById('coach-change-goal-btn').style.display  = 'inline-block';
+  // Truncate goal text for header display
+  const short = coach.goalText.length > 60
+    ? coach.goalText.slice(0, 57) + '…'
+    : coach.goalText;
+  document.getElementById('coach-goal-text').textContent = short;
+  // Load usage summary quietly
+  coachLoadUsage();
+}
+
+function coachUpdateBanner() {
+  const banner = document.getElementById('coach-new-activity-banner');
+  if (coach.hasNewActs) {
+    banner.classList.add('visible');
+  } else {
+    banner.classList.remove('visible');
+  }
+}
+
+async function coachLoadMessages() {
+  try {
+    const r = await fetch('/api/coach/messages');
+    const d = await r.json();
+    const container = document.getElementById('coach-messages');
+    container.innerHTML = '';
+    if (!d.messages || d.messages.length === 0) return;
+    d.messages.forEach(m => coachAppendMessage(m.role, m.content, m.created_at));
+    coachScrollBottom();
+  } catch(e) {
+    console.error('Coach messages error', e);
+  }
+}
+
+function coachAppendMessage(role, content, ts) {
+  if (role === 'system') return;
+  const container = document.getElementById('coach-messages');
+  const wrap = document.createElement('div');
+  wrap.className = `coach-msg ${role}`;
+
+  const time = ts ? new Date(ts * 1000).toLocaleTimeString('en-US',
+    {hour:'numeric', minute:'2-digit'}) : '';
+
+  const avatar = role === 'assistant' ? '🧠' : '👤';
+
+  wrap.innerHTML = `
+    <div class="coach-avatar">${avatar}</div>
+    <div style="display:flex;flex-direction:column;${role==='user'?'align-items:flex-end':''}">
+      <div class="coach-bubble">${escHtml(content)}</div>
+      ${time ? `<div class="coach-ts">${time}</div>` : ''}
+    </div>`;
+  container.appendChild(wrap);
+}
+
+function coachShowTyping() {
+  const container = document.getElementById('coach-messages');
+  const wrap = document.createElement('div');
+  wrap.className = 'coach-msg assistant coach-typing';
+  wrap.id = 'coach-typing-indicator';
+  wrap.innerHTML = `
+    <div class="coach-avatar">🧠</div>
+    <div class="coach-bubble">
+      <div class="coach-dots">
+        <span></span><span></span><span></span>
+      </div>
+    </div>`;
+  container.appendChild(wrap);
+  coachScrollBottom();
+}
+
+function coachRemoveTyping() {
+  document.getElementById('coach-typing-indicator')?.remove();
+}
+
+function coachScrollBottom() {
+  const c = document.getElementById('coach-messages');
+  c.scrollTop = c.scrollHeight;
+}
+
+async function coachSetGoal() {
+  const text = document.getElementById('coach-goal-input').value.trim();
+  if (!text) return;
+
+  const btn = document.getElementById('coach-set-goal-btn');
+  btn.disabled = true;
+  btn.textContent = 'Analysing your training…';
+
+  try {
+    const r = await fetch('/api/coach/goal', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({goal_text: text}),
+    });
+    if (!r.ok) {
+      const e = await r.json();
+      alert('Error: ' + (e.detail || 'Unknown error'));
+      btn.disabled = false;
+      btn.textContent = 'Start Coaching →';
+      return;
+    }
+    const d = await r.json();
+    coach.goalId   = d.goal_id;
+    coach.goalText = text;
+    coach.hasGoal  = true;
+    coach.hasNewActs = false;
+
+    coachShowConversation();
+    document.getElementById('coach-messages').innerHTML = '';
+    coachAppendMessage('assistant', d.initial_message, Math.floor(Date.now()/1000));
+    coachScrollBottom();
+  } catch(e) {
+    alert('Failed to set goal: ' + e.message);
+    btn.disabled = false;
+    btn.textContent = 'Start Coaching →';
+  }
+}
+
+async function coachSend() {
+  if (coach.sending) return;
+  const input = document.getElementById('coach-input');
+  const msg   = input.value.trim();
+  if (!msg) return;
+
+  coach.sending = true;
+  input.value   = '';
+  coachInputResize(input);
+  document.getElementById('coach-send-btn').disabled = true;
+
+  // Optimistically append user message
+  coachAppendMessage('user', msg, Math.floor(Date.now()/1000));
+  coachScrollBottom();
+
+  // Hide new-activity banner once user engages
+  document.getElementById('coach-new-activity-banner').classList.remove('visible');
+  document.getElementById('coach-new-dot').style.display = 'none';
+
+  coachShowTyping();
+
+  try {
+    const r = await fetch('/api/coach/chat', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({message: msg}),
+    });
+    coachRemoveTyping();
+    if (!r.ok) {
+      const e = await r.json();
+      coachAppendMessage('assistant',
+        '⚠️ Error: ' + (e.detail || 'Something went wrong. Please try again.'),
+        Math.floor(Date.now()/1000));
+    } else {
+      const d = await r.json();
+      coachAppendMessage('assistant', d.reply, Math.floor(Date.now()/1000));
+      coach.hasNewActs = false;
+    }
+    coachScrollBottom();
+  } catch(e) {
+    coachRemoveTyping();
+    coachAppendMessage('assistant',
+      '⚠️ Network error — please check your connection and try again.',
+      Math.floor(Date.now()/1000));
+    coachScrollBottom();
+  }
+
+  coach.sending = false;
+  document.getElementById('coach-send-btn').disabled = false;
+  input.focus();
+  // Refresh usage widget if it's open
+  if (document.getElementById('coach-usage-toggle').classList.contains('open')) {
+    coachLoadUsage();
+  } else {
+    // Quietly update the summary line without opening the panel
+    coachLoadUsage();
+  }
+}
+
+function coachInputKeydown(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    coachSend();
+  }
+}
+
+function coachInputResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+}
+
+// ── Usage widget ──────────────────────────────────────────────────────────────
+
+let coachUsageData = null;
+
+async function coachLoadUsage() {
+  try {
+    const r = await fetch('/api/coach/usage');
+    if (!r.ok) return;
+    coachUsageData = await r.json();
+    coachRenderUsage();
+  } catch(e) {
+    console.warn('Coach usage fetch failed', e);
+  }
+}
+
+function coachRenderUsage() {
+  const d = coachUsageData;
+  if (!d) return;
+
+  const fmt = (n) => n < 0.01 && n > 0 ? '<$0.01' : '$' + n.toFixed(4);
+  const fmtN = (n) => n >= 1000 ? (n/1000).toFixed(1) + 'k' : String(n);
+
+  // Summary line in toggle button
+  const mCost = d.this_month.cost_usd;
+  document.getElementById('coach-usage-summary').textContent =
+    `Coach usage: ${fmt(mCost)} this month · ${fmt(d.alltime.cost_usd)} all-time`;
+
+  // Detail rows
+  document.getElementById('u-month-cost').textContent     = fmt(mCost);
+  document.getElementById('u-month-queries').textContent  = d.this_month.queries;
+  document.getElementById('u-month-tokens').textContent   =
+    fmtN(d.this_month.input_tokens) + ' in / ' + fmtN(d.this_month.output_tokens) + ' out';
+  document.getElementById('u-alltime-cost').textContent    = fmt(d.alltime.cost_usd);
+  document.getElementById('u-alltime-queries').textContent = d.alltime.queries;
+
+  // Bar: show month spend relative to a $1 soft reference (since costs are tiny)
+  // Scale: full bar = $1.00; above that bar turns warning colour
+  const REF = 1.00;
+  const pct  = Math.min(100, (mCost / REF) * 100);
+  const fill = document.getElementById('u-bar-fill');
+  fill.style.width = pct + '%';
+  fill.classList.toggle('warn', mCost > REF * 0.8);
+
+  // Monthly bar chart
+  const chart  = document.getElementById('u-monthly-chart');
+  const labels = document.getElementById('u-monthly-labels');
+  chart.innerHTML  = '';
+  labels.innerHTML = '';
+
+  const breakdown = d.monthly_breakdown;
+  if (breakdown.length === 0) {
+    chart.innerHTML  = '<span style="font-size:11px;color:var(--muted2);align-self:center">No data yet</span>';
+    return;
+  }
+
+  // Fill missing months so we always show 6 bars
+  const allMonths = [];
+  const now = new Date();
+  for (let i = 5; i >= 0; i--) {
+    const d2 = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    allMonths.push(d2.getFullYear() + '-' + String(d2.getMonth()+1).padStart(2,'0'));
+  }
+
+  const dataMap = {};
+  breakdown.forEach(r => { dataMap[r.month] = r.cost_usd; });
+
+  const values  = allMonths.map(m => dataMap[m] || 0);
+  const maxVal  = Math.max(...values, 0.001);
+  const curMonth = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
+
+  allMonths.forEach((m, i) => {
+    const bar = document.createElement('div');
+    bar.className = 'u-monthly-bar' + (m === curMonth ? ' current' : '');
+    const h = Math.max(2, Math.round((values[i] / maxVal) * 36));
+    bar.style.height = h + 'px';
+    bar.title = m + ': ' + fmt(values[i]);
+    chart.appendChild(bar);
+
+    const lbl = document.createElement('div');
+    lbl.className = 'u-monthly-label';
+    lbl.textContent = m.slice(5); // "MM"
+    labels.appendChild(lbl);
+  });
+}
+
+function coachToggleUsage(btn) {
+  btn.classList.toggle('open');
+  document.getElementById('coach-usage-detail').classList.toggle('open');
+  // Load/refresh on first open
+  if (btn.classList.contains('open')) coachLoadUsage();
+}
+
+// Refresh usage after each send — called at end of coachSend()
+
+
+// Poll for new activities every 2 minutes while coach is open
+setInterval(async () => {
+  if (!document.getElementById('coach-overlay').classList.contains('open')) return;
+  if (!coach.hasGoal) return;
+  try {
+    const r = await fetch('/api/coach/state');
+    const d = await r.json();
+    if (d.has_new_activities && !coach.hasNewActs) {
+      coach.hasNewActs = true;
+      coachUpdateBanner();
+      document.getElementById('coach-new-dot').style.display = 'inline-block';
+    }
+  } catch(e) {}
+}, 120_000);
+
 // ── INIT ──────────────────────────────────────────────────────────────────────
 (async()=>{
   initMap();
@@ -2364,6 +2959,14 @@ document.addEventListener('click', e => {
   // Auto-select activity from ?select= param
   const sel = new URLSearchParams(location.search).get('select');
   if (sel) selectActivity(parseInt(sel));
+  // Check for new activities to show coach notification dot
+  try {
+    const cr = await fetch('/api/coach/state');
+    const cd = await cr.json();
+    if (cd.has_goal && cd.has_new_activities) {
+      document.getElementById('coach-new-dot').style.display = 'inline-block';
+    }
+  } catch(e) {}
 })();
 </script>
 
@@ -2398,5 +3001,100 @@ document.addEventListener('click', e => {
     <div class="anim-stat"><div class="anim-stat-val" id="as-dst">—</div><div class="anim-stat-lbl">mi</div></div>
   </div>
 </div>
+<!-- ── AI Coach Panel ─────────────────────────────────────────────────────── -->
+<div id="coach-overlay" onclick="coachOverlayClick(event)">
+  <div id="coach-panel">
+
+    <!-- Header -->
+    <div id="coach-header">
+      <span id="coach-header-icon">🧠</span>
+      <span id="coach-header-title">AI Coach</span>
+      <span id="coach-goal-text"></span>
+      <button id="coach-change-goal-btn" onclick="coachShowSetup()" style="display:none">Change Goal</button>
+      <button id="coach-close-btn" onclick="closeCoach()" title="Close">✕</button>
+    </div>
+
+    <!-- New-activity banner -->
+    <div id="coach-new-activity-banner">
+      <span>🚴</span>
+      <span>New activities logged since your last coaching session — your coach will notice!</span>
+    </div>
+
+    <!-- Goal setup screen (shown when no goal set) -->
+    <div id="coach-setup">
+      <h2>Set Your Training Goal</h2>
+      <p>Tell your AI coach what you're working toward. Be as specific as you like — event type, date, daily distances, terrain, anything that helps.</p>
+      <textarea id="coach-goal-input" placeholder="e.g. I'm training for a 3-week bike tour in Spain starting June 15. Average day is 62 miles and 6,000ft of climbing. I have about 10 weeks to prepare."></textarea>
+      <button id="coach-set-goal-btn" onclick="coachSetGoal()">Start Coaching →</button>
+    </div>
+
+    <!-- Conversation (shown when goal exists) -->
+    <div id="coach-conversation" style="display:none;flex:1;display:none;flex-direction:column;overflow:hidden">
+      <div id="coach-messages"></div>
+
+      <!-- Usage widget -->
+      <div id="coach-usage-bar">
+        <button id="coach-usage-toggle" onclick="coachToggleUsage(this)">
+          <span>💰</span>
+          <span id="coach-usage-summary">Loading usage…</span>
+          <span class="u-caret">▼</span>
+        </button>
+        <div id="coach-usage-detail">
+          <div class="u-row">
+            <span class="u-label">This month</span>
+            <span class="u-val" id="u-month-cost">—</span>
+          </div>
+          <div class="u-bar-track"><div class="u-bar-fill" id="u-bar-fill" style="width:0%"></div></div>
+          <div class="u-row">
+            <span class="u-label">Queries this month</span>
+            <span class="u-val" id="u-month-queries">—</span>
+          </div>
+          <div class="u-row">
+            <span class="u-label">Tokens this month</span>
+            <span class="u-val" id="u-month-tokens">—</span>
+          </div>
+          <div class="u-divider"></div>
+          <div class="u-row" style="margin-bottom:4px">
+            <span class="u-label">Monthly spend (last 6 months)</span>
+          </div>
+          <div class="u-monthly-chart" id="u-monthly-chart"></div>
+          <div class="u-monthly-labels" id="u-monthly-labels"></div>
+          <div class="u-divider"></div>
+          <div class="u-row">
+            <span class="u-label">All-time spend</span>
+            <span class="u-val" id="u-alltime-cost">—</span>
+          </div>
+          <div class="u-row">
+            <span class="u-label">All-time queries</span>
+            <span class="u-val" id="u-alltime-queries">—</span>
+          </div>
+          <div class="u-row" style="margin-top:4px">
+            <span class="u-label">Model: claude-haiku-4-5 · $0.25/$1.25 per M tokens</span>
+            <a class="u-link" href="https://console.anthropic.com/settings/billing" target="_blank">Top up ↗</a>
+          </div>
+        </div>
+      </div>
+
+      <div id="coach-input-bar">
+        <textarea id="coach-input" rows="1" placeholder="Ask your coach anything…" onkeydown="coachInputKeydown(event)" oninput="coachInputResize(this)"></textarea>
+        <button id="coach-send-btn" onclick="coachSend()" title="Send">↑</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Delete confirmation dialog -->
+<div id="delete-confirm-overlay">
+  <div id="delete-confirm-box">
+    <h3>Delete Activity</h3>
+    <p id="delete-confirm-msg"></p>
+    <div class="dcb-btns">
+      <button class="dcb-cancel" onclick="document.getElementById('delete-confirm-overlay').classList.remove('open')">Cancel</button>
+      <button class="dcb-delete" id="dcb-delete-btn">Delete</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
+

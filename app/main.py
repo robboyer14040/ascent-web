@@ -9,6 +9,7 @@ Usage:
     STRAVA_CLIENT_ID=174788
     STRAVA_CLIENT_SECRET=your_secret
     SECRET_KEY=random_hex_string
+    ANTHROPIC_API_KEY=sk-ant-...
 """
 
 import os
@@ -22,6 +23,7 @@ from dotenv import load_dotenv
 
 from app.db import AscentDB
 from app.routers import activities, api, strava, photos, settings, weather
+from app.routers import coach
 
 load_dotenv()
 
@@ -115,13 +117,15 @@ settings.db_getter   = get_db
 settings.db_setter   = set_db
 settings.templates   = templates
 weather.db_getter    = get_db
+coach.db_getter      = get_db
 
 app.include_router(activities.router)
-app.include_router(api.router,    prefix="/api")
-app.include_router(strava.router, prefix="/strava")
+app.include_router(api.router,     prefix="/api")
+app.include_router(strava.router,  prefix="/strava")
 app.include_router(photos.router)
 app.include_router(settings.router)
 app.include_router(weather.router, prefix="/api")
+app.include_router(coach.router,   prefix="/api")
 
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon():

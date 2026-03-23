@@ -41,6 +41,19 @@ async def activity_laps(activity_id: int):
     return db_getter().get_laps(activity_id)
 
 
+from typing import List
+from pydantic import BaseModel
+
+class DeleteActivitiesRequest(BaseModel):
+    ids: List[int]
+
+@router.delete("/activities")
+async def delete_activities(req: DeleteActivitiesRequest):
+    db = db_getter()
+    count = db.delete_activities(req.ids)
+    return {"deleted": count}
+
+
 @router.get("/schema")
 async def schema_info():
     db = db_getter()
@@ -119,3 +132,4 @@ async def fetch_points_from_strava(activity_id: int):
     count = db.store_points(activity_id, point_rows_raw)
 
     return {"status": "ok", "points_stored": count, "activity_id": activity_id}
+

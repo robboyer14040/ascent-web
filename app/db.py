@@ -303,6 +303,26 @@ class AscentDB:
         ).fetchone()
         return build_activity(row) if row else None
 
+    def delete_activities(self, ids: list[int]) -> int:
+        """Delete activities (and their points/laps via CASCADE) by id list."""
+        if not ids:
+            return 0
+        placeholders = ','.join('?' * len(ids))
+        con = sqlite3.connect(self.path, timeout=30)
+        try:
+            con.execute("PRAGMA foreign_keys=ON")
+            cur = con.execute(
+                f"DELETE FROM activities WHERE id IN ({placeholders})", ids
+            )
+            count = cur.rowcount
+            con.commit()
+            return count
+        except Exception as e:
+            con.rollback()
+            raise e
+        finally:
+            con.close()
+
     def count_activities(
         self, search: str = "", activity_type: str = "", year: Optional[int] = None
     ) -> int:
@@ -654,3 +674,4 @@ class AscentDB:
             {"cid": r[0], "name": r[1], "type": r[2]}
             for r in self._con.execute(f"PRAGMA table_info('{table}')").fetchall()
         ]
+
