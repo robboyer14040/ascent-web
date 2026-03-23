@@ -565,27 +565,53 @@ async def _call_claude(
             "I've just set my training goal. Please give me an initial assessment based on "
             "my recent training data and tell me what I should be focusing on right now."}]
 
-    try:
-        async with httpx.AsyncClient(timeout=60) as client:
-            resp = await client.post(
-                "https://api.anthropic.com/v1/messages",
-                headers={
-                    "x-api-key":         api_key,
-                    "anthropic-version": "2023-06-01",
-                    "content-type":      "application/json",
-                },
-                json={
-                    "model":      model if model in MODELS else DEFAULT_MODEL,
-                    "max_tokens": 2048,
-                    "system":     system_prompt,
-                    "messages":   messages,
-                },
-            )
-    except httpx.TimeoutException:
-        raise HTTPException(504, "Claude API timed out — please try again")
+    # Retry with exponential backoff on 529 (overloaded) and 529-adjacent errors
+    max_retries = 4
+    base_delay  = 2.0  # seconds
 
-    if resp.status_code != 200:
-        raise HTTPException(502, f"Claude API error {resp.status_code}: {resp.text[:200]}")
+    resp = None
+    last_error = None
+
+    for attempt in range(max_retries):
+        try:
+            async with httpx.AsyncClient(timeout=60) as client:
+                resp = await client.post(
+                    "https://api.anthropic.com/v1/messages",
+                    headers={
+                        "x-api-key":         api_key,
+                        "anthropic-version": "2023-06-01",
+                        "content-type":      "application/json",
+                    },
+                    json={
+                        "model":      model if model in MODELS else DEFAULT_MODEL,
+                        "max_tokens": 2048,
+                        "system":     system_prompt,
+                        "messages":   messages,
+                    },
+                )
+        except httpx.TimeoutException:
+            raise HTTPException(504, "Claude API timed out — please try again")
+
+        # Success
+        if resp.status_code == 200:
+            break
+
+        # Retryable: 529 overloaded or 529-style server errors
+        if resp.status_code in (529, 500, 502, 503) and attempt < max_retries - 1:
+            delay = base_delay * (2 ** attempt)  # 2s, 4s, 8s
+            await __import__("asyncio").sleep(delay)
+            continue
+
+        # Non-retryable error
+        last_error = resp
+        break
+
+    if resp is None or resp.status_code != 200:
+        status = resp.status_code if resp is not None else 0
+        body   = resp.text[:300] if resp is not None else "no response"
+        if status == 529:
+            raise HTTPException(503, "Claude is currently overloaded — please try again in a moment")
+        raise HTTPException(502, f"Claude API error {status}: {body}")
 
     data    = resp.json()
     content = data.get("content", [])
