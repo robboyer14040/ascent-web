@@ -297,9 +297,12 @@ class AscentDB:
         sort_by: str = "creation_time_s",
         sort_dir: str = "desc",
         year: Optional[int] = None,
+        user_id: Optional[int] = None,
+        include_shared: bool = False,
     ) -> list[dict]:
 
-        where, params = self._build_where(search, activity_type, year)
+        where, params = self._build_where(search, activity_type, year,
+                                          user_id=user_id, include_shared=include_shared)
         order = self._safe_order(sort_by, sort_dir)
 
         sql = f"""
@@ -339,37 +342,47 @@ class AscentDB:
             con.close()
 
     def count_activities(
-        self, search: str = "", activity_type: str = "", year: Optional[int] = None
+        self, search: str = "", activity_type: str = "", year: Optional[int] = None,
+        user_id: Optional[int] = None, include_shared: bool = False,
     ) -> int:
-        where, params = self._build_where(search, activity_type, year)
+        where, params = self._build_where(search, activity_type, year,
+                                          user_id=user_id, include_shared=include_shared)
         return self._con.execute(
             f"SELECT COUNT(*) FROM activities {where}", params
         ).fetchone()[0]
 
-    def get_activity_types(self) -> list[str]:
-        """
-        Activity types are stored in attributes_json as {"activity": "Ride"}.
-        Extract distinct values using JSON extraction.
-        """
+    def get_activity_types(self, user_id: Optional[int] = None,
+                            include_shared: bool = False) -> list[str]:
+        """Activity types stored in attributes_json as {"activity": "Ride"}."""
         try:
+            where, params = self._build_where("", "", None,
+                                               user_id=user_id, include_shared=include_shared)
+            user_clause = where + (" AND " if where else " WHERE ")
             rows = self._con.execute(
-                """SELECT DISTINCT json_extract(attributes_json, '$.activity') AS t
+                f"""SELECT DISTINCT json_extract(attributes_json, '$.activity') AS t
                    FROM activities
-                   WHERE t IS NOT NULL AND t != ''
-                   ORDER BY t"""
+                   {where}
+                   {"AND" if where else "WHERE"} t IS NOT NULL AND t != ''
+                   ORDER BY t""",
+                params
             ).fetchall()
             return [r[0] for r in rows if r[0]]
         except Exception:
             return []
 
-    def get_years(self) -> list[int]:
+    def get_years(self, user_id: Optional[int] = None,
+                  include_shared: bool = False) -> list[int]:
+        where, params = self._build_where("", "", None,
+                                          user_id=user_id, include_shared=include_shared)
         rows = self._con.execute(
-            """SELECT DISTINCT strftime('%Y', datetime(
+            f"""SELECT DISTINCT strftime('%Y', datetime(
                    COALESCE(creation_time_override_s, creation_time_s), 'unixepoch'
                )) AS y
                FROM activities
-               WHERE creation_time_s IS NOT NULL
-               ORDER BY y DESC"""
+               {where}
+               {"AND" if where else "WHERE"} creation_time_s IS NOT NULL
+               ORDER BY y DESC""",
+            params
         ).fetchall()
         return [int(r[0]) for r in rows if r[0]]
 
@@ -527,10 +540,13 @@ class AscentDB:
 
     # ── dashboard stats ───────────────────────────────────────────────────
 
-    def get_dashboard_stats(self) -> dict:
+    def get_dashboard_stats(self, user_id: Optional[int] = None,
+                             include_shared: bool = False) -> dict:
         # Aggregate from activities table + attributes_json
+        where, params = self._build_where("", "", None,
+                                          user_id=user_id, include_shared=include_shared)
         row = self._con.execute(
-            """SELECT
+            f"""SELECT
                 COUNT(*)                                                AS total,
                 SUM(distance_mi)                                        AS total_dist,
                 SUM(src_moving_time_s)                                  AS total_moving_s,
@@ -538,14 +554,16 @@ class AscentDB:
                 AVG(src_avg_heartrate)                                  AS avg_hr,
                 MAX(distance_mi)                                        AS longest_mi,
                 MAX(src_total_climb)                                    AS most_climb_ft
-               FROM activities"""
+               FROM activities {where}""",
+            params
         ).fetchone()
 
-        # Climb: also try summing from attributes_json for activities without src_total_climb
+        climb_where = (where + " AND " if where else " WHERE ")
         climb_row = self._con.execute(
-            """SELECT SUM(CAST(json_extract(attributes_json,'$.totalClimb') AS REAL)) AS c
+            f"""SELECT SUM(CAST(json_extract(attributes_json,'$.totalClimb') AS REAL)) AS c
                FROM activities
-               WHERE src_total_climb IS NULL OR src_total_climb = 0"""
+               {climb_where}src_total_climb IS NULL OR src_total_climb = 0""",
+            params
         ).fetchone()
 
         total_climb = (row["total_climb_ft"] or 0) + (climb_row["c"] or 0)
@@ -562,12 +580,14 @@ class AscentDB:
             "most_climb_ft":     round(row["most_climb_ft"] or 0),
         }
 
-    def get_monthly_totals(self, year: Optional[int] = None) -> list[dict]:
-        where = "WHERE creation_time_s IS NOT NULL"
-        params: list = []
-        if year:
-            where += " AND strftime('%Y', datetime(creation_time_s,'unixepoch')) = ?"
-            params.append(str(year))
+    def get_monthly_totals(self, year: Optional[int] = None,
+                           user_id: Optional[int] = None,
+                           include_shared: bool = False) -> list[dict]:
+        base_where, params = self._build_where("", "", year,
+                                                user_id=user_id, include_shared=include_shared)
+        where = base_where if base_where else "WHERE creation_time_s IS NOT NULL"
+        if base_where:
+            where += " AND creation_time_s IS NOT NULL"
 
         rows = self._con.execute(
             f"""SELECT
@@ -596,8 +616,21 @@ class AscentDB:
 
     # ── internal helpers ──────────────────────────────────────────────────
 
-    def _build_where(self, search: str, activity_type: str, year: Optional[int]):
+    def _build_where(self, search: str, activity_type: str, year: Optional[int],
+                     user_id: Optional[int] = None, include_shared: bool = False):
         where_parts, params = [], []
+
+        # User isolation: show own activities + optionally shared ones from others
+        if user_id is not None:
+            if include_shared:
+                where_parts.append(
+                    "(user_id = ? OR user_id IN "
+                    "(SELECT id FROM users WHERE share_activities = 1 AND id != ?))"
+                )
+                params += [user_id, user_id]
+            else:
+                where_parts.append("user_id = ?")
+                params.append(user_id)
 
         if search:
             where_parts.append(
@@ -857,4 +890,154 @@ class AscentDB:
         self._ensure_segments_table()
         self._con.execute("DELETE FROM segments WHERE id=?", (segment_id,))
         self._con.commit()
+
+
+
+    # ── Users ─────────────────────────────────────────────────────────────────
+
+    def _ensure_users_tables(self):
+        """Create users and invites tables if they don't exist."""
+        self._con.executescript("""
+            CREATE TABLE IF NOT EXISTS users (
+                id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+                email               TEXT UNIQUE NOT NULL,
+                username            TEXT NOT NULL,
+                password_hash       TEXT,
+                strava_athlete_id   TEXT UNIQUE,
+                strava_tokens_json  TEXT,
+                is_admin            INTEGER NOT NULL DEFAULT 0,
+                share_activities    INTEGER NOT NULL DEFAULT 0,
+                share_segments      INTEGER NOT NULL DEFAULT 0,
+                created_at          INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+                invited_by          INTEGER
+            );
+
+            CREATE TABLE IF NOT EXISTS invites (
+                id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+                token               TEXT UNIQUE NOT NULL,
+                email               TEXT,
+                invited_by_user_id  INTEGER,
+                created_at          INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+                used_at             INTEGER,
+                used_by_user_id     INTEGER
+            );
+        """)
+        self._con.commit()
+
+    def get_user(self, user_id: int) -> Optional[dict]:
+        self._ensure_users_tables()
+        row = self._con.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
+        return dict(row) if row else None
+
+    def get_user_by_email(self, email: str) -> Optional[dict]:
+        self._ensure_users_tables()
+        row = self._con.execute("SELECT * FROM users WHERE email=?", (email.lower(),)).fetchone()
+        return dict(row) if row else None
+
+    def get_user_by_strava_athlete_id(self, athlete_id: str) -> Optional[dict]:
+        self._ensure_users_tables()
+        row = self._con.execute(
+            "SELECT * FROM users WHERE strava_athlete_id=?", (str(athlete_id),)
+        ).fetchone()
+        return dict(row) if row else None
+
+    def create_user(self, email: str, username: str, password_hash: str = None,
+                    strava_athlete_id: str = None, invited_by: int = None,
+                    is_admin: bool = False) -> int:
+        self._ensure_users_tables()
+        import time
+        cur = self._con.execute("""
+            INSERT INTO users (email, username, password_hash, strava_athlete_id,
+                               invited_by, is_admin, created_at)
+            VALUES (?,?,?,?,?,?,?)
+        """, (email.lower(), username, password_hash, strava_athlete_id,
+              invited_by, 1 if is_admin else 0, int(time.time())))
+        self._con.commit()
+        return cur.lastrowid
+
+    def update_user_strava_tokens(self, user_id: int, tokens: dict):
+        import json as json_mod
+        self._ensure_users_tables()
+        athlete    = tokens.get("athlete", {})
+        athlete_id = str(athlete.get("id", "")) if athlete else None
+        self._con.execute("""
+            UPDATE users SET strava_tokens_json=?, strava_athlete_id=COALESCE(strava_athlete_id,?)
+            WHERE id=?
+        """, (json_mod.dumps(tokens), athlete_id, user_id))
+        self._con.commit()
+
+    def get_user_strava_tokens(self, user_id: int) -> dict:
+        import json as json_mod
+        self._ensure_users_tables()
+        row = self._con.execute(
+            "SELECT strava_tokens_json FROM users WHERE id=?", (user_id,)
+        ).fetchone()
+        if row and row[0]:
+            try: return json_mod.loads(row[0])
+            except Exception: pass
+        return {}
+
+    def update_user_settings(self, user_id: int, **kwargs):
+        """Update user settings fields. Allowed: share_activities, share_segments, username."""
+        allowed = {"share_activities", "share_segments", "username"}
+        fields  = {k: v for k, v in kwargs.items() if k in allowed}
+        if not fields: return
+        sets = ", ".join(f"{k}=?" for k in fields)
+        self._con.execute(f"UPDATE users SET {sets} WHERE id=?",
+                          list(fields.values()) + [user_id])
+        self._con.commit()
+
+    def list_users(self) -> list:
+        self._ensure_users_tables()
+        rows = self._con.execute(
+            "SELECT id, email, username, is_admin, share_activities, share_segments, "
+            "created_at, invited_by, strava_athlete_id FROM users ORDER BY created_at"
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    # ── Invites ───────────────────────────────────────────────────────────────
+
+    def create_invite(self, token: str, email: str = "", invited_by_user_id: int = None):
+        import time
+        self._ensure_users_tables()
+        self._con.execute("""
+            INSERT INTO invites (token, email, invited_by_user_id, created_at)
+            VALUES (?,?,?,?)
+        """, (token, email.lower(), invited_by_user_id, int(time.time())))
+        self._con.commit()
+
+    def get_invite(self, token: str) -> Optional[dict]:
+        self._ensure_users_tables()
+        row = self._con.execute("SELECT * FROM invites WHERE token=?", (token,)).fetchone()
+        return dict(row) if row else None
+
+    def mark_invite_used(self, token: str, used_by_user_id: int):
+        import time
+        self._con.execute("""
+            UPDATE invites SET used_at=?, used_by_user_id=? WHERE token=?
+        """, (int(time.time()), used_by_user_id, token))
+        self._con.commit()
+
+    def delete_invite(self, token: str):
+        self._con.execute("DELETE FROM invites WHERE token=?", (token,))
+        self._con.commit()
+
+    def list_invites(self) -> list:
+        self._ensure_users_tables()
+        rows = self._con.execute(
+            "SELECT * FROM invites ORDER BY created_at DESC"
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def ensure_seed_admin(self, email: str, username: str = "Admin") -> int:
+        """Create a seed admin user if no users exist yet. Returns user_id."""
+        self._ensure_users_tables()
+        count = self._con.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+        if count > 0:
+            user = self.get_user_by_email(email)
+            return user["id"] if user else 1
+        user_id = self.create_user(
+            email=email, username=username, is_admin=True
+        )
+        return user_id
 

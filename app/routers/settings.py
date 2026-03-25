@@ -1,6 +1,7 @@
 """routers/settings.py — Database management and API key settings."""
 
 import os
+from app.auth import get_session_user_id
 import getpass
 from pathlib import Path
 from typing import Callable, Optional
@@ -84,6 +85,10 @@ class ApiKeyRequest(BaseModel):
 
 @router.get("/settings", response_class=HTMLResponse)
 async def settings_page(request: Request):
+    uid = get_session_user_id(request)
+    if uid is None:
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse("/login?next=/settings", status_code=303)
     try:
         db = db_getter()
         db_path       = db.path
@@ -240,4 +245,5 @@ async def save_training_zones(req: dict):
                 "age": age, "weight_lb": weight_lb, "use_metric": bool(use_metric)}
     except Exception as e:
         raise HTTPException(500, str(e))
+
 

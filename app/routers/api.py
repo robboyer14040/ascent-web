@@ -1,8 +1,9 @@
 """routers/api.py — JSON API endpoints consumed by the frontend JS."""
 
 import os, json
+from app.auth import get_session_user_id
 from pathlib import Path
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Request, HTTPException, Query
 from fastapi.responses import FileResponse
 from typing import Callable, Optional
 
@@ -66,7 +67,7 @@ async def schema_info():
 
 
 @router.post("/activities/{activity_id}/fetch-points")
-async def fetch_points_from_strava(activity_id: int):
+async def fetch_points_from_strava(activity_id: int, request: Request):
     """
     Fetch GPS streams from Strava for an activity that has no local points,
     store them permanently in the points table, and return the point count.
@@ -85,27 +86,14 @@ async def fetch_points_from_strava(activity_id: int):
     if not strava_id:
         raise HTTPException(400, "Activity has no Strava ID — cannot fetch GPS points")
 
-    # Get fresh token
-    token_file = Path(os.environ.get("ASCENT_DB_PATH", "")).parent / "strava_tokens.json"
-    if not token_file.exists():
+    # Get fresh token (per-user if request available, else legacy file)
+    from app.routers.strava import load_tokens, tokens_are_fresh, refresh_tokens
+    uid    = get_session_user_id(request) if request else None
+    tokens = load_tokens(user_id=uid)
+    if not tokens.get("refresh_token"):
         raise HTTPException(401, "Not connected to Strava")
-
-    tokens = json.loads(token_file.read_text())
-    if tokens.get("expires_at", 0) <= time.time() + 60:
-        async with httpx.AsyncClient(timeout=20) as client:
-            r = await client.post("https://www.strava.com/oauth/token", data={
-                "client_id":     os.environ.get("STRAVA_CLIENT_ID", ""),
-                "client_secret": os.environ.get("STRAVA_CLIENT_SECRET", ""),
-                "grant_type":    "refresh_token",
-                "refresh_token": tokens["refresh_token"],
-            })
-            if r.status_code != 200:
-                raise HTTPException(401, "Strava token refresh failed")
-            data = r.json()
-            tokens.update({"access_token": data["access_token"],
-                           "refresh_token": data.get("refresh_token", tokens["refresh_token"]),
-                           "expires_at": data["expires_at"]})
-            token_file.write_text(json.dumps(tokens, indent=2))
+    if not tokens_are_fresh(tokens):
+        tokens = await refresh_tokens(tokens, user_id=uid)
 
     token = tokens["access_token"]
     stream_types = "latlng,heartrate,velocity_smooth,time,cadence,altitude,distance,watts,temp,moving"
@@ -143,7 +131,7 @@ class SegmentRequest(BaseModel):
 
 
 @router.post("/segment/compare")
-async def segment_compare(req: SegmentRequest):
+async def segment_compare(req: SegmentRequest, request: Request):
     """
     Find activities that pass through the same segment.
     The reference activity is ALWAYS included.
@@ -435,10 +423,11 @@ async def segment_compare(req: SegmentRequest):
                 from pathlib import Path
                 from app.strava_importer import build_points_rows
 
-                token_file = Path(os.environ.get("ASCENT_DB_PATH", "")).parent / "strava_tokens.json"
-                if not token_file.exists():
+                from app.routers.strava import load_tokens as _lt, tokens_are_fresh as _tf, refresh_tokens as _rt
+                _uid    = get_session_user_id(request)
+                tokens  = _lt(user_id=_uid)
+                if not tokens.get("refresh_token"):
                     continue
-                tokens = json.loads(token_file.read_text())
                 if tokens.get("expires_at", 0) <= time.time() + 60:
                     continue  # skip refresh during bulk scan for speed
                 token = tokens["access_token"]
@@ -677,7 +666,7 @@ async def segment_compare_saved(req: SegmentCompareByIdRequest):
 
 
 @router.post("/activities/backfill-bboxes")
-async def backfill_bboxes():
+async def backfill_bboxes(request: Request):
     """One-time: fetch Strava activity summaries to populate missing map bboxes.
     Call this once after deploying — subsequent Strava syncs store bbox automatically."""
     import os, json, time, httpx, logging
@@ -695,27 +684,14 @@ async def backfill_bboxes():
     if not no_bbox:
         return {"updated": 0, "remaining": 0, "message": "All activities already have bbox"}
 
-    token_file = Path(os.environ.get("ASCENT_DB_PATH", "")).parent / "strava_tokens.json"
-    if not token_file.exists():
+    token_file = None  # not used
+    from app.routers.strava import load_tokens as _lt3, tokens_are_fresh as _tf3, refresh_tokens as _rt3
+    uid3   = get_session_user_id(request)
+    tokens = _lt3(user_id=uid3)
+    if not tokens.get("refresh_token"):
         raise HTTPException(401, "Not connected to Strava")
-
-    tokens = json.loads(token_file.read_text())
-    if tokens.get("expires_at", 0) <= time.time() + 60:
-        # Refresh token
-        async with httpx.AsyncClient(timeout=20) as rc:
-            r = await rc.post("https://www.strava.com/oauth/token", data={
-                "client_id":     os.environ.get("STRAVA_CLIENT_ID", ""),
-                "client_secret": os.environ.get("STRAVA_CLIENT_SECRET", ""),
-                "grant_type":    "refresh_token",
-                "refresh_token": tokens["refresh_token"],
-            })
-            if r.status_code != 200:
-                raise HTTPException(401, "Strava token refresh failed")
-            data = r.json()
-            tokens.update({"access_token": data["access_token"],
-                           "refresh_token": data.get("refresh_token", tokens["refresh_token"]),
-                           "expires_at": data["expires_at"]})
-            token_file.write_text(json.dumps(tokens, indent=2))
+    if not _tf3(tokens):
+        tokens = await _rt3(tokens, user_id=uid3)
 
     token   = tokens["access_token"]
     updated = 0
@@ -859,3 +835,4 @@ async def segment_compare_manual(req: MultiCompareRequest):
         raise HTTPException(404, "None of the selected activities contain this segment")
 
     return {"matches": matches, "segment_name": seg["name"]}
+

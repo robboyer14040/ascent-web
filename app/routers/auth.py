@@ -1,0 +1,280 @@
+"""
+routers/auth.py — Login, logout, register, and invite routes.
+"""
+
+import os
+import time
+from typing import Callable, Optional
+
+from fastapi import APIRouter, Request, Form, Query, Depends
+from fastapi.responses import HTMLResponse, RedirectResponse
+
+router = APIRouter()
+db_getter: Callable = None
+templates = None
+
+# ── Login ─────────────────────────────────────────────────────────────────────
+
+@router.get("/auth/test-cookie")
+async def test_cookie(request: Request):
+    """Debug: test if cookies are being set and read."""
+    from app.auth import get_session_user_id, set_session_cookie
+    from fastapi.responses import JSONResponse
+    uid = get_session_user_id(request)
+    resp = JSONResponse({"session_uid": uid, "cookie_present": uid is not None,
+                         "all_cookies": dict(request.cookies)})
+    if uid is None:
+        # Set a test cookie
+        set_session_cookie(resp, 99999)
+        resp.headers["X-Debug"] = "set test cookie uid=99999"
+    return resp
+
+@router.get("/login", response_class=HTMLResponse)
+async def login_page(request: Request, next: str = Query("/"), error: str = Query(None)):
+    return templates.TemplateResponse("login.html", {
+        "request": request,
+        "next":    next,
+        "error":   error,
+    })
+
+@router.post("/login")
+async def login_submit(
+    request: Request,
+    email:    str = Form(...),
+    password: str = Form(...),
+    next:     str = Form("/"),
+):
+    from app.auth import verify_password, set_session_cookie
+
+    db   = db_getter()
+    user = db.get_user_by_email(email.strip().lower())
+
+    if not user or not user.get("password_hash"):
+        return RedirectResponse(f"/login?next={next}&error=Invalid+email+or+password", status_code=303)
+
+    if not verify_password(password, user["password_hash"]):
+        return RedirectResponse(f"/login?next={next}&error=Invalid+email+or+password", status_code=303)
+
+    response = RedirectResponse(next or "/", status_code=303)
+    set_session_cookie(response, user["id"])
+    return response
+
+# ── Logout ────────────────────────────────────────────────────────────────────
+
+@router.get("/logout")
+async def logout():
+    from app.auth import clear_session_cookie
+    response = RedirectResponse("/login", status_code=303)
+    clear_session_cookie(response)
+    return response
+
+# ── Register (invite-only) ────────────────────────────────────────────────────
+
+@router.get("/register", response_class=HTMLResponse)
+async def register_page(request: Request, token: str = Query(...), error: str = Query(None)):
+    db     = db_getter()
+    invite = db.get_invite(token)
+    if not invite or invite.get("used_at"):
+        return templates.TemplateResponse("error.html", {
+            "request": request,
+            "message": "This invite link is invalid or has already been used.",
+        })
+    return templates.TemplateResponse("register.html", {
+        "request": request,
+        "token":   token,
+        "email":   invite.get("email", ""),
+        "error":   error,
+    })
+
+@router.post("/register")
+async def register_submit(
+    request:  Request,
+    token:    str = Form(...),
+    username: str = Form(...),
+    email:    str = Form(...),
+    password: str = Form(...),
+    password2: str = Form(...),
+):
+    from app.auth import hash_password, set_session_cookie
+
+    db     = db_getter()
+    invite = db.get_invite(token)
+    if not invite or invite.get("used_at"):
+        return RedirectResponse("/register?token=invalid&error=Invalid+invite", status_code=303)
+
+    if password != password2:
+        return RedirectResponse(f"/register?token={token}&error=Passwords+do+not+match", status_code=303)
+
+    if len(password) < 8:
+        return RedirectResponse(f"/register?token={token}&error=Password+must+be+at+least+8+characters", status_code=303)
+
+    email = email.strip().lower()
+    if db.get_user_by_email(email):
+        return RedirectResponse(f"/register?token={token}&error=Email+already+registered", status_code=303)
+
+    user_id = db.create_user(
+        email=email,
+        username=username.strip(),
+        password_hash=hash_password(password),
+        invited_by=invite.get("invited_by_user_id"),
+    )
+    db.mark_invite_used(token, user_id)
+
+    response = RedirectResponse("/", status_code=303)
+    set_session_cookie(response, user_id)
+    return response
+
+# ── Strava OAuth login ────────────────────────────────────────────────────────
+# When Strava callback completes, if a user with that athlete_id exists → log them in.
+# If not, show a "connect to existing account" or "no invite" message.
+
+@router.get("/auth/strava/callback", response_class=HTMLResponse)
+async def strava_auth_callback(
+    request: Request,
+    code:    str = Query(None),
+    error:   str = Query(None),
+):
+    """
+    Strava OAuth callback for LOGIN (not sync).
+    Separate from /strava/callback which is for syncing activities.
+    """
+    import httpx
+    from app.auth import set_session_cookie
+    from app.routers.strava import STRAVA_TOKEN_URL
+
+    if error or not code:
+        return RedirectResponse(f"/login?error=Strava+auth+failed", status_code=303)
+
+    callback_uri = str(request.base_url).rstrip("/") + "/auth/strava/callback"
+    override = os.environ.get("STRAVA_AUTH_REDIRECT_URI")
+    if override:
+        callback_uri = override
+
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(STRAVA_TOKEN_URL, data={
+            "client_id":     os.environ.get("STRAVA_CLIENT_ID", ""),
+            "client_secret": os.environ.get("STRAVA_CLIENT_SECRET", ""),
+            "grant_type":    "authorization_code",
+            "code":          code,
+            "redirect_uri":  callback_uri,
+        })
+
+    if resp.status_code != 200:
+        return RedirectResponse("/login?error=Strava+auth+failed", status_code=303)
+
+    data        = resp.json()
+    athlete     = data.get("athlete", {})
+    athlete_id  = str(athlete.get("id", ""))
+    access_tok  = data["access_token"]
+    refresh_tok = data["refresh_token"]
+    expires_at  = data["expires_at"]
+
+    db   = db_getter()
+    user = db.get_user_by_strava_athlete_id(athlete_id)
+
+    if user:
+        # Existing user — update their tokens and log in
+        db.update_user_strava_tokens(user["id"], {
+            "access_token":  access_tok,
+            "refresh_token": refresh_tok,
+            "expires_at":    expires_at,
+            "athlete":       athlete,
+        })
+        response = RedirectResponse("/", status_code=303)
+        set_session_cookie(response, user["id"])
+        return response
+    else:
+        # No account linked to this Strava athlete
+        return templates.TemplateResponse("error.html", {
+            "request": request,
+            "message": (
+                f"No Ascent account is linked to your Strava profile "
+                f"({athlete.get('firstname', '')} {athlete.get('lastname', '')}).\n"
+                "Ask the admin for an invite link to create an account."
+            ),
+        })
+
+@router.get("/auth/strava")
+async def strava_auth_start(request: Request):
+    """Redirect to Strava OAuth for login purposes."""
+    from app.routers.strava import STRAVA_AUTH_URL, STRAVA_SCOPE
+    client_id    = os.environ.get("STRAVA_CLIENT_ID", "")
+    callback_uri = str(request.base_url).rstrip("/") + "/auth/strava/callback"
+    override     = os.environ.get("STRAVA_AUTH_REDIRECT_URI")
+    if override:
+        callback_uri = override
+    url = (f"{STRAVA_AUTH_URL}?client_id={client_id}&response_type=code"
+           f"&redirect_uri={callback_uri}&approval_prompt=auto&scope={STRAVA_SCOPE}")
+    return RedirectResponse(url)
+
+# ── Admin: invite management ──────────────────────────────────────────────────
+
+@router.get("/admin/invites", response_class=HTMLResponse)
+async def admin_invites(request: Request):
+    from app.auth import get_session_user_id
+    uid = get_session_user_id(request)
+    if not uid:
+        return RedirectResponse("/login?next=/admin/invites", status_code=303)
+
+    db   = db_getter()
+    user = db.get_user(uid)
+    if not user or not user.get("is_admin"):
+        return templates.TemplateResponse("error.html", {
+            "request": request,
+            "message": "Admin access required.",
+        })
+
+    invites = db.list_invites()
+    users   = db.list_users()
+    return templates.TemplateResponse("admin_invites.html", {
+        "request": request,
+        "invites": invites,
+        "users":   users,
+        "current_user": user,
+    })
+
+@router.post("/admin/invites/create")
+async def admin_create_invite(
+    request: Request,
+    email:   str = Form(""),
+):
+    from app.auth import get_session_user_id, generate_invite_token
+    uid = get_session_user_id(request)
+    if not uid:
+        return RedirectResponse("/login", status_code=303)
+
+    db   = db_getter()
+    user = db.get_user(uid)
+    if not user or not user.get("is_admin"):
+        return RedirectResponse("/", status_code=303)
+
+    token = generate_invite_token()
+    db.create_invite(email=email.strip().lower(), invited_by_user_id=uid, token=token)
+
+    base = str(request.base_url).rstrip("/")
+    invite_url = f"{base}/register?token={token}"
+
+    return templates.TemplateResponse("admin_invites.html", {
+        "request":    request,
+        "invites":    db.list_invites(),
+        "users":      db.list_users(),
+        "current_user": user,
+        "new_invite_url": invite_url,
+    })
+
+@router.post("/admin/invites/delete")
+async def admin_delete_invite(
+    request: Request,
+    token:   str = Form(...),
+):
+    from app.auth import get_session_user_id
+    uid = get_session_user_id(request)
+    if not uid:
+        return RedirectResponse("/login", status_code=303)
+    db   = db_getter()
+    user = db.get_user(uid)
+    if not user or not user.get("is_admin"):
+        return RedirectResponse("/", status_code=303)
+    db.delete_invite(token)
+    return RedirectResponse("/admin/invites", status_code=303)
+

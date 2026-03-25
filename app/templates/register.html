@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Create Account — Ascent</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif;
+  font-size:14px;background:#1c1c1e;color:#f2f2f7;
+  min-height:100vh;display:flex;align-items:center;justify-content:center}
+.card{background:#2c2c2e;border:1px solid #3a3a3c;border-radius:16px;
+  padding:2rem;width:100%;max-width:380px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.brand{font-size:1.4rem;font-weight:700;color:#f97316;text-align:center;margin-bottom:.25rem}
+.subtitle{color:#8e8e93;text-align:center;font-size:12px;margin-bottom:1.75rem}
+label{display:block;font-size:12px;color:#8e8e93;margin-bottom:.35rem;margin-top:1rem}
+input{width:100%;background:#1c1c1e;border:1px solid #3a3a3c;border-radius:8px;
+  color:#f2f2f7;padding:.6rem .75rem;font-size:14px;font-family:inherit;outline:none}
+input:focus{border-color:#f97316}
+.btn{width:100%;background:#f97316;color:#fff;border:none;border-radius:8px;
+  padding:.7rem;font-size:14px;font-weight:600;cursor:pointer;margin-top:1.25rem;
+  font-family:inherit}
+.btn:hover{background:#ea6c0a}
+.error{background:#3d1515;border:1px solid #7f1d1d;border-radius:8px;
+  color:#fca5a5;padding:.6rem .75rem;font-size:12px;margin-bottom:1rem}
+.hint{color:#636366;font-size:11px;margin-top:.3rem}
+.footer{text-align:center;color:#636366;font-size:11px;margin-top:1.25rem}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="brand">⛰ Ascent</div>
+  <div class="subtitle">Create your account</div>
+
+  {% if error %}
+  <div class="error">{{ error }}</div>
+  {% endif %}
+
+  <form method="post" action="/register">
+    <input type="hidden" name="token" value="{{ token }}">
+
+    <label>Username</label>
+    <input type="text" name="username" required autofocus autocomplete="username" placeholder="e.g. Rob">
+
+    <label>Email</label>
+    <input type="email" name="email" required autocomplete="email" value="{{ email }}">
+
+    <label>Password</label>
+    <input type="password" name="password" required autocomplete="new-password" minlength="8">
+    <div class="hint">At least 8 characters</div>
+
+    <label>Confirm Password</label>
+    <input type="password" name="password2" required autocomplete="new-password">
+
+    <button type="submit" class="btn">Create Account</button>
+  </form>
+
+  <div class="footer">Ascent v0.0.1</div>
+</div>
+</body>
+</html>

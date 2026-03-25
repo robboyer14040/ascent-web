@@ -29,6 +29,8 @@ from dotenv import load_dotenv
 from app.db import AscentDB
 from app.routers import activities, api, strava, photos, settings, weather
 from app.routers import coach
+from app.routers import auth as auth_router
+from app.auth import get_session_user_id
 
 load_dotenv()
 
@@ -75,6 +77,9 @@ async def lifespan(app: FastAPI):
 
 # ── app ───────────────────────────────────────────────────────────────────────
 app = FastAPI(title="Ascent Web", version="1.0.0", lifespan=lifespan)
+
+# Auth is handled per-route via get_session_user_id() checks.
+# No middleware needed — BaseHTTPMiddleware strips Set-Cookie headers on redirects.
 
 # Support both normal dev layout and PyInstaller bundle layout.
 # The launcher sets ASCENT_TEMPLATE_DIR / ASCENT_STATIC_DIR when running
@@ -134,6 +139,8 @@ settings.templates   = templates
 weather.db_getter    = get_db
 coach.db_getter      = get_db
 
+# Auth router MUST be first so /login, /logout, /register take priority
+app.include_router(auth_router.router)
 app.include_router(activities.router)
 app.include_router(api.router,     prefix="/api")
 app.include_router(strava.router,  prefix="/strava")
@@ -141,6 +148,10 @@ app.include_router(photos.router)
 app.include_router(settings.router)
 app.include_router(weather.router, prefix="/api")
 app.include_router(coach.router,   prefix="/api")
+
+auth_router.db_getter = get_db
+auth_router.templates = templates
+# (auth router already included above)
 
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon():
@@ -159,18 +170,26 @@ async def favicon():
 async def dashboard(request: Request):
     try:
         db             = get_db()
-        stats          = db.get_dashboard_stats()
-        years          = db.get_years()
-        activity_types = db.get_activity_types()
-        monthly        = db.get_monthly_totals()
+        stats          = db.get_dashboard_stats(user_id=uid)
+        years          = db.get_years(user_id=uid)
+        activity_types = db.get_activity_types(user_id=uid)
+        monthly        = db.get_monthly_totals(user_id=uid)
         db_ok          = True
         db_error       = None
     except Exception as e:
         stats = {}; years = []; activity_types = []; monthly = []
         db_ok = False; db_error = str(e)
 
+    # Require authentication
+    uid = get_session_user_id(request)
+    if uid is None:
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse("/login?next=/", status_code=303)
+    user = get_db().get_user(uid) if uid else None
+
     return templates.TemplateResponse("dashboard.html", {
         "request":          request,
+        "current_user":     user,
         "stats":            stats,
         "years":            years,
         "activity_types":   activity_types,
@@ -179,3 +198,5 @@ async def dashboard(request: Request):
         "db_error":         db_error,
         "strava_client_id": os.environ.get("STRAVA_CLIENT_ID", ""),
     })
+
+

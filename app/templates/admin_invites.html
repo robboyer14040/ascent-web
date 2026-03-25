@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Admin — Ascent</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif;
+  font-size:14px;background:#1c1c1e;color:#f2f2f7;min-height:100vh}
+nav{display:flex;align-items:center;gap:1rem;padding:.65rem 1.25rem;
+  background:#2c2c2e;border-bottom:1px solid #3a3a3c}
+.brand{font-size:1rem;font-weight:700;color:#f97316;text-decoration:none}
+nav a{color:#8e8e93;font-size:.85rem;text-decoration:none}
+nav a:hover{color:#f2f2f7}
+.spacer{flex:1}
+.container{max-width:720px;margin:2rem auto;padding:0 1.25rem 4rem}
+h1{font-size:1.15rem;font-weight:600;margin-bottom:1.25rem}
+h2{font-size:.95rem;font-weight:600;margin-bottom:.75rem;color:#8e8e93;
+   text-transform:uppercase;letter-spacing:.05em;font-size:11px}
+.card{background:#2c2c2e;border:1px solid #3a3a3c;border-radius:12px;
+  padding:1.25rem;margin-bottom:1rem}
+.row{display:flex;align-items:center;gap:.75rem;margin-bottom:.5rem}
+input[type=email]{flex:1;background:#1c1c1e;border:1px solid #3a3a3c;border-radius:8px;
+  color:#f2f2f7;padding:.5rem .75rem;font-size:13px;font-family:inherit;outline:none}
+input[type=email]:focus{border-color:#f97316}
+.btn{background:#f97316;color:#fff;border:none;border-radius:8px;
+  padding:.5rem 1rem;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap}
+.btn:hover{background:#ea6c0a}
+.btn-del{background:#3a1010;color:#fca5a5;border:1px solid #7f1d1d}
+.btn-del:hover{background:#4a1515}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{color:#636366;text-align:left;padding:.4rem .5rem;border-bottom:1px solid #3a3a3c;font-weight:500}
+td{padding:.5rem;border-bottom:1px solid #2a2a2c;vertical-align:middle}
+.badge{display:inline-block;padding:.1rem .45rem;border-radius:4px;font-size:10px;font-weight:600}
+.badge-used{background:#1a3a1a;color:#4ade80}
+.badge-open{background:#3a3010;color:#fbbf24}
+.badge-admin{background:#1a2a3a;color:#60a5fa}
+.invite-url{font-family:monospace;font-size:11px;background:#1c1c1e;
+  border:1px solid #3a3a3c;border-radius:6px;padding:.5rem .75rem;
+  color:#f97316;word-break:break-all;margin-top:.75rem}
+.copy-btn{background:#3a3a3c;color:#f2f2f7;border:none;border-radius:6px;
+  padding:.3rem .6rem;font-size:11px;cursor:pointer;margin-left:.5rem;font-family:inherit}
+.copy-btn:hover{background:#4a4a4e}
+</style>
+</head>
+<body>
+<nav>
+  <a class="brand" href="/">⛰ Ascent</a>
+  <div class="spacer"></div>
+  <a href="/settings">Settings</a>
+  <a href="/logout">Sign Out</a>
+</nav>
+
+<div class="container">
+  <h1>Admin — Invites & Users</h1>
+
+  {% if new_invite_url %}
+  <div class="card" style="border-color:#f97316">
+    <div style="font-size:12px;color:#f97316;font-weight:600;margin-bottom:.5rem">✓ Invite link created</div>
+    <div class="invite-url" id="invite-url">{{ new_invite_url }}</div>
+    <button class="copy-btn" onclick="navigator.clipboard.writeText(document.getElementById('invite-url').textContent);this.textContent='Copied!'">Copy</button>
+  </div>
+  {% endif %}
+
+  <div class="card">
+    <h2>Create Invite</h2>
+    <form method="post" action="/admin/invites/create">
+      <div class="row">
+        <input type="email" name="email" placeholder="friend@email.com (optional)">
+        <button type="submit" class="btn">Generate Invite Link</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>Pending Invites</h2>
+    {% if invites %}
+    <table>
+      <tr><th>Email</th><th>Status</th><th>Created</th><th></th></tr>
+      {% for inv in invites %}
+      <tr>
+        <td>{{ inv.email or '—' }}</td>
+        <td>
+          {% if inv.used_at %}
+          <span class="badge badge-used">Used</span>
+          {% else %}
+          <span class="badge badge-open">Open</span>
+          {% endif %}
+        </td>
+        <td style="color:#8e8e93">{{ inv.created_at | fmt_date }}</td>
+        <td>
+          {% if not inv.used_at %}
+          <form method="post" action="/admin/invites/delete" style="display:inline">
+            <input type="hidden" name="token" value="{{ inv.token }}">
+            <button type="submit" class="btn btn-del" onclick="return confirm('Delete this invite?')">Delete</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+    {% else %}
+    <div style="color:#636366;font-size:12px">No invites yet.</div>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h2>Users</h2>
+    {% if users %}
+    <table>
+      <tr><th>Username</th><th>Email</th><th>Role</th><th>Joined</th></tr>
+      {% for u in users %}
+      <tr>
+        <td>{{ u.username }}</td>
+        <td style="color:#8e8e93">{{ u.email }}</td>
+        <td>
+          {% if u.is_admin %}<span class="badge badge-admin">Admin</span>{% endif %}
+        </td>
+        <td style="color:#8e8e93">{{ u.created_at | fmt_date }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+    {% else %}
+    <div style="color:#636366;font-size:12px">No users yet.</div>
+    {% endif %}
+  </div>
+</div>
+</body>
+</html>

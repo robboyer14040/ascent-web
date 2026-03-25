@@ -569,7 +569,7 @@ input,select{font:inherit}
   <div style="display:flex;gap:6px">
     <button class="tb-btn" onclick="window.location='/'">📊 Dashboard</button>
     <button class="tb-btn" id="coach-open-btn" onclick="openCoach()" title="AI Coach">🧠 Coach<span id="coach-new-dot" class="coach-dot" style="display:none"></span></button>
-    <button class="tb-btn" onclick="window.location='/settings'" style="background:#3a3a3c">⚙</button>
+    <button class="tb-btn" onclick="window.location='/settings'" style="background:#3a3a3c" title="Settings">⚙</button><button class="tb-btn" onclick="window.location=window.location.origin+'/logout'" style="background:#3a3a3c" title="Sign Out">⏏</button>
     <button class="tb-btn strava" onclick="window.location='/strava/sync'">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169"/></svg>
       Strava Sync
@@ -5080,5 +5080,7 @@ document.addEventListener('DOMContentLoaded', () => {
 </div>
 </body>
 </html>
+
+
 
 

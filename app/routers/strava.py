@@ -21,23 +21,42 @@ STRAVA_SCOPE     = "read,profile:read_all,activity:read,activity:read_all"
 # ── token helpers ─────────────────────────────────────────────────────────────
 
 def _tokens_path() -> Path:
+    """Legacy: strava_tokens.json fallback for single-user mode."""
     db_path = os.environ.get("ASCENT_DB_PATH", ".")
     return Path(db_path).parent / "strava_tokens.json"
 
-def load_tokens() -> dict:
+def load_tokens(user_id: Optional[int] = None) -> dict:
+    """Load tokens from DB for user_id, or fall back to legacy file."""
+    if user_id is not None:
+        try:
+            tokens = db_getter().get_user_strava_tokens(user_id)
+            if tokens: return tokens
+        except Exception:
+            pass
+    # Legacy fallback
     p = _tokens_path()
     if p.exists():
         try: return json.loads(p.read_text())
         except Exception: pass
     return {}
 
-def save_tokens(tokens: dict):
-    _tokens_path().write_text(json.dumps(tokens, indent=2))
+def save_tokens(tokens: dict, user_id: Optional[int] = None):
+    """Save tokens to DB for user_id, and keep file in sync for compatibility."""
+    if user_id is not None:
+        try:
+            db_getter().update_user_strava_tokens(user_id, tokens)
+        except Exception:
+            pass
+    # Also write file for backward compatibility
+    try:
+        _tokens_path().write_text(json.dumps(tokens, indent=2))
+    except Exception:
+        pass
 
 def tokens_are_fresh(tokens: dict) -> bool:
     return bool(tokens.get("access_token")) and tokens.get("expires_at", 0) > time.time() + 60
 
-async def refresh_tokens(tokens: dict) -> dict:
+async def refresh_tokens(tokens: dict, user_id: Optional[int] = None) -> dict:
     async with httpx.AsyncClient() as client:
         resp = await client.post(STRAVA_TOKEN_URL, data={
             "client_id":     os.environ.get("STRAVA_CLIENT_ID", ""),
@@ -52,13 +71,14 @@ async def refresh_tokens(tokens: dict) -> dict:
         "refresh_token": data.get("refresh_token", tokens["refresh_token"]),
         "expires_at":    data["expires_at"],
     })
-    save_tokens(tokens)
+    save_tokens(tokens, user_id=user_id)
     return tokens
 
-async def get_fresh_token() -> Optional[str]:
-    tokens = load_tokens()
+async def get_fresh_token(user_id: Optional[int] = None) -> Optional[str]:
+    tokens = load_tokens(user_id)
     if not tokens.get("refresh_token"): return None
-    if not tokens_are_fresh(tokens):    tokens = await refresh_tokens(tokens)
+    if not tokens_are_fresh(tokens):
+        tokens = await refresh_tokens(tokens, user_id=user_id)
     return tokens.get("access_token")
 
 def _callback_uri(request: Request) -> str:
@@ -95,8 +115,19 @@ async def strava_callback(request: Request, code: str = Query(None), error: str 
         return templates.TemplateResponse("error.html",
             {"request": request, "message": f"Token exchange failed: {resp.text}"})
     data = resp.json()
-    save_tokens({"access_token": data["access_token"], "refresh_token": data["refresh_token"],
-                 "expires_at": data["expires_at"], "athlete": data.get("athlete", {})})
+    from app.auth import get_session_user_id
+    uid = get_session_user_id(request)
+    tokens = {"access_token": data["access_token"], "refresh_token": data["refresh_token"],
+              "expires_at": data["expires_at"], "athlete": data.get("athlete", {})}
+    save_tokens(tokens, user_id=uid)
+    # Also link athlete_id to this user
+    if uid:
+        athlete = data.get("athlete", {})
+        athlete_id = str(athlete.get("id", "")) if athlete else None
+        if athlete_id:
+            db_getter()._con.execute(
+                "UPDATE users SET strava_athlete_id=? WHERE id=?", (athlete_id, uid))
+            db_getter()._con.commit()
     return templates.TemplateResponse("strava_connected.html",
         {"request": request, "athlete": data.get("athlete", {})})
 
@@ -107,8 +138,10 @@ async def strava_disconnect():
     return RedirectResponse("/")
 
 @router.get("/status")
-async def strava_status():
-    tokens = load_tokens()
+async def strava_status(request: Request):
+    from app.auth import get_session_user_id
+    uid = get_session_user_id(request)
+    tokens = load_tokens(user_id=uid)
     return {"authorized":   bool(tokens.get("refresh_token")),
             "token_fresh":  tokens_are_fresh(tokens),
             "expires_at":   tokens.get("expires_at"),
@@ -118,7 +151,12 @@ async def strava_status():
 
 @router.get("/sync", response_class=HTMLResponse)
 async def strava_sync_page(request: Request):
-    tokens  = load_tokens()
+    from app.auth import get_session_user_id
+    uid     = get_session_user_id(request)
+    if uid is None:
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse("/login?next=/strava/sync", status_code=303)
+    tokens  = load_tokens(user_id=uid)
     db      = db_getter()
     last_ts = db.get_last_sync_time()
 
@@ -173,7 +211,9 @@ async def run_sync(
       range  — between after_date and before_date
       all    — no date filter (fetches everything, use sparingly)
     """
-    token = await get_fresh_token()
+    from app.auth import get_session_user_id
+    uid = get_session_user_id(request)
+    token = await get_fresh_token(user_id=uid)
     if not token:
         async def no_auth():
             yield 'data: {"type":"error","msg":"Not authorized — connect Strava first"}\n\n'
@@ -238,6 +278,7 @@ async def run_sync(
                 after_ts=after_ts,
                 before_ts=before_ts,
                 gear_map=gear_map,
+                user_id=uid,
             ):
                 yield f"data: {json.dumps(event)}\n\n"
                 await asyncio.sleep(0)
@@ -272,3 +313,4 @@ async def strava_fetch_activities(
                                 params=params, timeout=30)
     resp.raise_for_status()
     return resp.json()
+

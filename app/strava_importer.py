@@ -396,7 +396,8 @@ class StravaImporter:
             con.close()
 
     def insert_activity_summary(self, act: dict,
-                                 gear_name: Optional[str] = None) -> Optional[int]:
+                                 gear_name: Optional[str] = None,
+                                 user_id: Optional[int] = None) -> Optional[int]:
         """
         Insert one Strava activity *summary* (no GPS streams) into the activities table.
         points_saved=0, points_count=0 — streams fetched later on demand.
@@ -443,7 +444,7 @@ class StravaImporter:
                 INSERT INTO activities (
                     uuid, name, creation_time_s, creation_time_override_s,
                     distance_mi, attributes_json,
-                    strava_activity_id,
+                    strava_activity_id, user_id,
                     src_distance, src_max_speed,
                     src_avg_heartrate, src_max_heartrate,
                     src_avg_temperature,
@@ -462,7 +463,7 @@ class StravaImporter:
                 ) VALUES (
                     ?,?,?,NULL,
                     ?,?,
-                    ?,
+                    ?,?,
                     ?,?,
                     ?,?,
                     ?,
@@ -485,7 +486,7 @@ class StravaImporter:
                 start_unix,
                 dist_mi,
                 attrs_json,
-                strava_id,
+                strava_id, user_id,
                 src_distance, src_max_speed,
                 src_avg_hr, src_max_hr,
                 src_avg_temp_f,
@@ -525,6 +526,7 @@ class StravaImporter:
         after_ts:  Optional[int] = None,
         before_ts: Optional[int] = None,
         gear_map:  Optional[dict] = None,
+        user_id:   Optional[int] = None,
     ):
         """
         Fetch Strava activity *summaries* for the given date range and insert
@@ -601,7 +603,7 @@ class StravaImporter:
                         gear_name = gear_map.get(gear_id)
 
                     try:
-                        db_id = self.insert_activity_summary(act, gear_name=gear_name)
+                        db_id = self.insert_activity_summary(act, gear_name=gear_name, user_id=user_id)
                         existing_ids.add(strava_id)
                         imported += 1
                         yield {
@@ -632,4 +634,5 @@ class StravaImporter:
             "skipped":  skipped,
             "errors":   errors,
         }
+
 

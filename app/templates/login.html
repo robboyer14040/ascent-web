@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sign In — Ascent</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif;
+  font-size:14px;background:#1c1c1e;color:#f2f2f7;
+  min-height:100vh;display:flex;align-items:center;justify-content:center}
+.card{background:#2c2c2e;border:1px solid #3a3a3c;border-radius:16px;
+  padding:2rem;width:100%;max-width:380px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.brand{font-size:1.4rem;font-weight:700;color:#f97316;text-align:center;margin-bottom:.25rem}
+.subtitle{color:#8e8e93;text-align:center;font-size:12px;margin-bottom:1.75rem}
+label{display:block;font-size:12px;color:#8e8e93;margin-bottom:.35rem;margin-top:1rem}
+input{width:100%;background:#1c1c1e;border:1px solid #3a3a3c;border-radius:8px;
+  color:#f2f2f7;padding:.6rem .75rem;font-size:14px;font-family:inherit;outline:none}
+input:focus{border-color:#f97316}
+.btn{width:100%;background:#f97316;color:#fff;border:none;border-radius:8px;
+  padding:.7rem;font-size:14px;font-weight:600;cursor:pointer;margin-top:1.25rem;
+  font-family:inherit}
+.btn:hover{background:#ea6c0a}
+.divider{display:flex;align-items:center;gap:.75rem;margin:1.25rem 0;color:#636366;font-size:12px}
+.divider::before,.divider::after{content:'';flex:1;height:1px;background:#3a3a3c}
+.btn-strava{width:100%;background:#fc4c02;color:#fff;border:none;border-radius:8px;
+  padding:.65rem;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;
+  display:flex;align-items:center;justify-content:center;gap:.5rem}
+.btn-strava:hover{background:#e04400}
+.error{background:#3d1515;border:1px solid #7f1d1d;border-radius:8px;
+  color:#fca5a5;padding:.6rem .75rem;font-size:12px;margin-bottom:1rem}
+.footer{text-align:center;color:#636366;font-size:11px;margin-top:1.25rem}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="brand">⛰ Ascent</div>
+  <div class="subtitle">Sign in to your account</div>
+
+  {% if error %}
+  <div class="error">{{ error }}</div>
+  {% endif %}
+
+  <form method="post" action="/login">
+    <input type="hidden" name="next" value="{{ next }}">
+    <label>Email</label>
+    <input type="email" name="email" autocomplete="email" required autofocus>
+    <label>Password</label>
+    <input type="password" name="password" autocomplete="current-password" required>
+    <button type="submit" class="btn">Sign In</button>
+  </form>
+
+  <div class="divider">or</div>
+
+  <a href="/auth/strava" style="text-decoration:none">
+    <button class="btn-strava">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
+        <path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169"/>
+      </svg>
+      Continue with Strava
+    </button>
+  </a>
+
+  <div class="footer">Ascent v0.0.1</div>
+</div>
+</body>
+</html>
