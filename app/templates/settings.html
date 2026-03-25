@@ -271,6 +271,36 @@ input[readonly]{color:#8e8e93;cursor:default}
     <div class="result" id="tp-result"></div>
   </div>
 
+  <!-- Sharing Settings -->
+  <div class="card" id="sharing-card">
+    <div class="card-header">
+      <h1>Sharing</h1>
+    </div>
+    <p style="color:#8e8e93;font-size:12px;margin-bottom:1rem">
+      Allow other Ascent users to see your activities and segments when they search.
+      Only users on this server can see shared data.
+    </p>
+    <div style="display:flex;flex-direction:column;gap:.75rem">
+      <label style="display:flex;align-items:center;justify-content:space-between;cursor:pointer">
+        <div>
+          <div style="font-weight:500">Share my activities</div>
+          <div style="color:#8e8e93;font-size:12px">Friends can find your rides in Compare searches</div>
+        </div>
+        <input type="checkbox" id="share-activities" onchange="saveSharing()"
+               style="width:18px;height:18px;accent-color:#f97316;cursor:pointer">
+      </label>
+      <label style="display:flex;align-items:center;justify-content:space-between;cursor:pointer">
+        <div>
+          <div style="font-weight:500">Share my segments</div>
+          <div style="color:#8e8e93;font-size:12px">Friends can see and use your saved segments</div>
+        </div>
+        <input type="checkbox" id="share-segments" onchange="saveSharing()"
+               style="width:18px;height:18px;accent-color:#f97316;cursor:pointer">
+      </label>
+    </div>
+    <div id="sharing-status" style="margin-top:.75rem;font-size:12px;color:#8e8e93"></div>
+  </div>
+
 </div><!-- /container -->
 
 <div style="text-align:center;padding:1.5rem 0 2rem;color:#636366;font-size:11px;letter-spacing:.04em">
@@ -568,8 +598,38 @@ function show(el, type, msg) {
   el.textContent = msg;
   el.style.display = 'block';
 }
+
+async function loadSharing() {
+  try {
+    const r = await fetch('/api/settings/sharing');
+    if (!r.ok) return;
+    const d = await r.json();
+    document.getElementById('share-activities').checked = !!d.share_activities;
+    document.getElementById('share-segments').checked   = !!d.share_segments;
+  } catch(e) {}
+}
+
+async function saveSharing() {
+  const share_activities = document.getElementById('share-activities').checked ? 1 : 0;
+  const share_segments   = document.getElementById('share-segments').checked   ? 1 : 0;
+  const status = document.getElementById('sharing-status');
+  try {
+    const r = await fetch('/api/settings/sharing', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({share_activities, share_segments}),
+    });
+    status.textContent = r.ok ? '✓ Saved' : 'Error saving';
+    setTimeout(() => status.textContent = '', 2000);
+  } catch(e) {
+    status.textContent = 'Error saving';
+  }
+}
+
+document.addEventListener('DOMContentLoaded', loadSharing);
 </script>
 </body>
 </html>
+
 
 

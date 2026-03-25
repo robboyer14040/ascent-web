@@ -3722,6 +3722,8 @@ async function cmpOpenManual() {
   const savedSpeed = localStorage.getItem('ascent-cmp-speed') || '25';
   const speedSel = document.getElementById('cmp-speed');
   if (speedSel) speedSel.value = savedSpeed;
+  const friendsCb = document.getElementById('cmp-include-friends');
+  if (friendsCb) friendsCb.checked = localStorage.getItem('ascent-cmp-friends') === '1';
 
   titleEl.textContent = `${ordered.length} Activities — choose a segment`;
   loading.style.display = 'none';
@@ -3837,6 +3839,8 @@ async function openCompare() {
   const savedSpeed = localStorage.getItem('ascent-cmp-speed') || '25';
   const speedSel = document.getElementById('cmp-speed');
   if (speedSel) speedSel.value = savedSpeed;
+  const friendsCb = document.getElementById('cmp-include-friends');
+  if (friendsCb) friendsCb.checked = localStorage.getItem('ascent-cmp-friends') === '1';
 
   // If no segment selected, open in browse mode — show full activity, let user pick a segment
   if (cmp.selStartIdx === null || cmp.selEndIdx === null) {
@@ -3874,11 +3878,12 @@ async function openCompare() {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({
-        activity_id: currentAct.id,
-        start_idx:   cmp.selStartIdx,
-        end_idx:     cmp.selEndIdx,
-        max_results: 4,
-        radius_m:    150,
+        activity_id:     currentAct.id,
+        start_idx:       cmp.selStartIdx,
+        end_idx:         cmp.selEndIdx,
+        max_results:     4,
+        radius_m:        150,
+        include_friends: !!(document.getElementById('cmp-include-friends')?.checked),
       }),
     });
     const d = await r.json();
@@ -4670,11 +4675,12 @@ async function cmpLoadSavedSegment(segId) {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({
-        activity_id: currentAct.id,
-        start_idx:   seg.start_idx,
-        end_idx:     seg.end_idx,
-        max_results: 4,
-        radius_m:    150,
+        activity_id:     currentAct.id,
+        start_idx:       seg.start_idx,
+        end_idx:         seg.end_idx,
+        max_results:     4,
+        radius_m:        150,
+        include_friends: !!(document.getElementById('cmp-include-friends')?.checked),
       }),
     });
     const d = await r.json();
@@ -4915,6 +4921,11 @@ document.addEventListener('DOMContentLoaded', () => {
         <option value="">— choose —</option>
       </select>
       <button class="cmp-t-btn" onclick="cmpDeleteSegment()" title="Delete selected segment" style="padding:3px 7px;font-size:12px;color:#f87171">🗑</button>
+      <label style="margin-left:10px;display:flex;align-items:center;gap:4px;font-size:12px;color:var(--muted);cursor:pointer" title="Include activities from friends who have sharing enabled">
+        <input type="checkbox" id="cmp-include-friends" style="accent-color:#f97316"
+               onchange="localStorage.setItem('ascent-cmp-friends',this.checked?'1':'0')">
+        Friends
+      </label>
     </div>
     <div id="compare-body">
       <div id="compare-maps">
@@ -5080,6 +5091,7 @@ document.addEventListener('DOMContentLoaded', () => {
 </div>
 </body>
 </html>
+
 
 
 

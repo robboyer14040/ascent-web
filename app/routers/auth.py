@@ -15,20 +15,6 @@ templates = None
 
 # ── Login ─────────────────────────────────────────────────────────────────────
 
-@router.get("/auth/test-cookie")
-async def test_cookie(request: Request):
-    """Debug: test if cookies are being set and read."""
-    from app.auth import get_session_user_id, set_session_cookie
-    from fastapi.responses import JSONResponse
-    uid = get_session_user_id(request)
-    resp = JSONResponse({"session_uid": uid, "cookie_present": uid is not None,
-                         "all_cookies": dict(request.cookies)})
-    if uid is None:
-        # Set a test cookie
-        set_session_cookie(resp, 99999)
-        resp.headers["X-Debug"] = "set test cookie uid=99999"
-    return resp
-
 @router.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request, next: str = Query("/"), error: str = Query(None)):
     return templates.TemplateResponse("login.html", {
@@ -277,4 +263,5 @@ async def admin_delete_invite(
         return RedirectResponse("/", status_code=303)
     db.delete_invite(token)
     return RedirectResponse("/admin/invites", status_code=303)
+
 

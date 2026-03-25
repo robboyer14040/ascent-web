@@ -247,3 +247,35 @@ async def save_training_zones(req: dict):
         raise HTTPException(500, str(e))
 
 
+
+
+# ── Sharing settings ──────────────────────────────────────────────────────────
+
+@router.get("/api/settings/sharing")
+async def get_sharing(request: Request):
+    from app.auth import get_session_user_id
+    uid = get_session_user_id(request)
+    if uid is None:
+        raise HTTPException(401, "Not authenticated")
+    user = db_getter().get_user(uid)
+    if not user:
+        raise HTTPException(404, "User not found")
+    return {
+        "share_activities": bool(user.get("share_activities")),
+        "share_segments":   bool(user.get("share_segments")),
+    }
+
+
+@router.post("/api/settings/sharing")
+async def save_sharing(request: Request):
+    from app.auth import get_session_user_id
+    uid = get_session_user_id(request)
+    if uid is None:
+        raise HTTPException(401, "Not authenticated")
+    body = await request.json()
+    db_getter().update_user_settings(
+        uid,
+        share_activities=int(bool(body.get("share_activities"))),
+        share_segments=int(bool(body.get("share_segments"))),
+    )
+    return {"status": "ok"}

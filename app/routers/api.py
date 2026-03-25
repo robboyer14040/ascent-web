@@ -123,11 +123,12 @@ async def fetch_points_from_strava(activity_id: int, request: Request):
 # ── SEGMENT COMPARE ──────────────────────────────────────────────────────────
 
 class SegmentRequest(BaseModel):
-    activity_id:  int
-    start_idx:    int
-    end_idx:      int
-    max_results:  int = 4
-    radius_m:     float = 150.0
+    activity_id:     int
+    start_idx:       int
+    end_idx:         int
+    max_results:     int   = 4
+    radius_m:        float = 150.0
+    include_friends: bool  = False
 
 
 @router.post("/segment/compare")
@@ -356,30 +357,41 @@ async def segment_compare(req: SegmentRequest, request: Request):
     """)
     db._con.commit()
 
-    candidates = db._con.execute("""
+    # Build user filter for candidate activities
+    uid = get_session_user_id(request)
+    if req.include_friends and uid is not None:
+        user_filter = """AND (user_id = ? OR user_id IN (
+                SELECT id FROM users WHERE share_activities = 1 AND id != ?))"""
+        user_params = [uid, uid]
+    elif uid is not None:
+        user_filter = "AND (user_id = ? OR user_id IS NULL)"
+        user_params = [uid]
+    else:
+        user_filter = ""
+        user_params = []
+
+    candidates = db._con.execute(f"""
         SELECT id, name,
                COALESCE(creation_time_override_s, creation_time_s) AS ts,
                points_saved, points_count, strava_activity_id
         FROM activities
         WHERE id != ?
+          {user_filter}
           AND (
-            -- Has points loaded: use accurate bbox from GPS backfill (map_min_lat set from points)
-            -- OR include if no bbox yet — backfill may not have run for this activity
             (points_saved = 1 AND points_count > 0
              AND (map_min_lat IS NULL
                   OR (map_min_lat <= ? AND map_max_lat >= ?
                       AND map_min_lon <= ? AND map_max_lon >= ?)))
-            -- No points: use Strava summary bbox (may be lossy, so pad generously)
             OR (points_saved = 0
                 AND map_min_lat IS NOT NULL
                 AND map_min_lat <= ? AND map_max_lat >= ?
                 AND map_min_lon <= ? AND map_max_lon >= ?)
           )
         ORDER BY ts DESC
-    """, (req.activity_id,
-          seg_max_lat, seg_min_lat, seg_max_lon, seg_min_lon,   # points bbox
-          seg_max_lat, seg_min_lat, seg_max_lon, seg_min_lon,   # no-points bbox
-          )).fetchall()
+    """, [req.activity_id] + user_params +
+         [seg_max_lat, seg_min_lat, seg_max_lon, seg_min_lon,
+          seg_max_lat, seg_min_lat, seg_max_lon, seg_min_lon]
+    ).fetchall()
 
 
 
@@ -835,4 +847,5 @@ async def segment_compare_manual(req: MultiCompareRequest):
         raise HTTPException(404, "None of the selected activities contain this segment")
 
     return {"matches": matches, "segment_name": seg["name"]}
+
 

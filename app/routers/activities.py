@@ -59,24 +59,6 @@ async def filter_options(request: Request, include_friends: bool = Query(False))
     }
 
 
-@router.get("/activities/debug-count")
-async def debug_count(request: Request):
-    """Temporary debug endpoint — remove after confirming fix."""
-    uid = get_session_user_id(request)
-    db  = db_getter()
-    total_all    = db._con.execute("SELECT COUNT(*) FROM activities").fetchone()[0]
-    total_uid    = db._con.execute("SELECT COUNT(*) FROM activities WHERE user_id=?", (uid,)).fetchone()[0]
-    total_null   = db._con.execute("SELECT COUNT(*) FROM activities WHERE user_id IS NULL").fetchone()[0]
-    distinct_ids = [r[0] for r in db._con.execute("SELECT DISTINCT user_id FROM activities").fetchall()]
-    return {
-        "session_uid":    uid,
-        "total_all":      total_all,
-        "total_for_uid":  total_uid,
-        "total_null_uid": total_null,
-        "distinct_user_ids": distinct_ids,
-    }
-
-
 # Explicit routes to prevent /activities/login, /activities/logout etc
 # from being caught by the /{activity_id} DELETE route
 @router.get("/activities/login")
@@ -149,3 +131,4 @@ async def delete_activities_bulk(request: Request):
         return {"deleted": 0}
     count = db.delete_activities(owned)
     return {"deleted": count}
+

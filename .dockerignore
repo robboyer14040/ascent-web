@@ -1,12 +1,12 @@
 .env
 *.ascentdb
 strava_tokens.json
-__pycache__/
+__pycache__
 *.pyc
 *.pyo
-venv*/
+.git
+venv*
 dist/
 build/
 *.zip
 *.log
-.DS_Store
