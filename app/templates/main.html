@@ -124,8 +124,20 @@ input,select{font:inherit}
 .map-style-btn:hover{background:rgba(0,0,0,.8);color:#fff}
 .map-style-btn.active{background:#f97316;color:#fff;border-color:#f97316}
 
-#chart-wrap{flex:none;height:22%;border-top:1px solid var(--border);background:var(--bg);position:relative;overflow:hidden;min-height:40px}
-#elevChart{width:100%!important;height:100%!important}
+#chart-wrap{flex:none;height:22%;border-top:1px solid var(--border);background:var(--bg);position:relative;overflow:hidden;min-height:40px;display:flex;flex-direction:column}
+#elev-canvas-area{flex:1;position:relative;min-height:0;overflow:hidden}
+#elev-zoom-bar{
+  flex-shrink:0;display:none;align-items:center;gap:6px;
+  padding:2px 8px 3px;background:var(--surface2);border-top:1px solid var(--border);
+}
+#elev-zoom-scroll{flex:1;accent-color:#f97316;height:4px}
+.elev-zoom-btn{
+  background:var(--surface);border:1px solid var(--border2);color:var(--text);
+  border-radius:4px;padding:1px 7px;font-size:13px;cursor:pointer;line-height:1.4;flex-shrink:0;
+}
+.elev-zoom-btn:hover{background:var(--border2)}
+#elev-zoom-label{font-size:10px;color:var(--muted);min-width:28px;text-align:center;flex-shrink:0}
+#elevChart{width:100%!important;height:100%!important;display:block}
 .chart-label{display:none}
 
 #info-panel{flex:1;border-top:none;display:flex;overflow:hidden;min-height:60px}
@@ -142,6 +154,8 @@ input,select{font:inherit}
 .act-title-links a{font-size:11px;color:var(--muted);border:1px solid var(--border2);border-radius:4px;padding:2px 7px}
 .act-title-links a:hover{color:var(--text);border-color:var(--text)}
 .act-title-links a.strava{color:#fc4c02;border-color:rgba(252,76,2,.4)}
+.zones-btn{font-size:11px;color:var(--muted);border:1px solid var(--border2);border-radius:4px;padding:2px 7px;background:none;cursor:pointer}
+.zones-btn:hover{color:var(--text);border-color:var(--text)}
 
 .stats-row{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
 .stat-chip{background:var(--surface2);border:1px solid var(--border2);border-radius:7px;padding:5px 10px;display:flex;flex-direction:column;align-items:center;min-width:70px;}
@@ -200,6 +214,114 @@ input,select{font:inherit}
 #coach-change-goal-btn:hover{color:var(--text);border-color:var(--text)}
 #coach-close-btn{font-size:20px;color:var(--muted);background:none;border:none;cursor:pointer;padding:0 2px;line-height:1}
 #coach-close-btn:hover{color:var(--text)}
+
+/* ── Compare Overlay ──────────────────────────────────────────────────────── */
+#compare-overlay{
+  display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:3000;
+  align-items:center;justify-content:center;backdrop-filter:blur(3px);
+}
+#compare-overlay.open{display:flex}
+#compare-panel{
+  background:var(--surface);border:1px solid var(--border2);border-radius:14px;
+  width:min(820px,96vw);height:min(680px,92vh);
+  display:flex;flex-direction:column;box-shadow:0 24px 64px rgba(0,0,0,.7);
+  overflow:hidden;
+}
+#compare-header{
+  display:flex;align-items:center;gap:8px;padding:12px 16px 10px;
+  border-bottom:1px solid var(--border);flex-shrink:0;
+}
+#compare-title{font-size:14px;font-weight:700;flex:1;color:var(--text)}
+#compare-close-btn{font-size:20px;color:var(--muted);background:none;border:none;cursor:pointer;padding:0 2px;line-height:1}
+#compare-close-btn:hover{color:var(--text)}
+#compare-body{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0}
+#compare-maps{display:flex;flex:1;min-height:0;overflow:hidden}
+#compare-map{flex:3;min-height:0;min-width:0}
+#compare-zoom{flex:2;min-height:0;min-width:0;border-left:1px solid var(--border)}
+#compare-legend{
+  flex-shrink:0;display:flex;flex-direction:column;gap:5px;
+  padding:8px 14px;border-top:1px solid var(--border);background:var(--surface);
+}
+.cmp-legend-item{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text);width:100%}
+.cmp-sphere{
+  width:14px;height:14px;border-radius:50%;flex-shrink:0;
+  box-shadow:2px 2px 4px rgba(0,0,0,.5), inset -2px -2px 4px rgba(0,0,0,.3), inset 1px 1px 3px rgba(255,255,255,.35);
+}
+.cmp-elapsed{font-size:11px;color:var(--muted);margin-left:2px}
+.cmp-delta{font-size:12px;font-family:"SF Mono","Fira Code",monospace;font-weight:600;
+  min-width:72px;text-align:right;margin-left:auto;color:var(--muted2);
+  font-variant-numeric:tabular-nums;}
+#compare-transport{
+  flex-shrink:0;background:#1a1a1c;border-top:1px solid #3a3a3c;
+  padding:6px 12px;display:flex;align-items:center;gap:10px;
+}
+#cmp-time{font-family:"SF Mono","Fira Code",monospace;font-size:14px;font-weight:600;color:#f2f2f7;min-width:64px}
+#cmp-scrub{flex:1;accent-color:#f97316}
+.cmp-t-btn{
+  background:var(--surface2);border:1px solid var(--border2);color:var(--text);
+  border-radius:6px;padding:3px 8px;font-size:14px;cursor:pointer;line-height:1;
+}
+.cmp-t-btn:hover{background:var(--border2)}
+#compare-profile{
+  flex-shrink:0;height:90px;background:var(--bg);border-top:1px solid var(--border);
+  position:relative;
+}
+#cmp-profile-canvas{width:100%!important;height:100%!important}
+#cmp-seg-bar{
+  flex-shrink:0;display:flex;align-items:center;gap:8px;
+  padding:7px 14px;border-bottom:1px solid var(--border);background:var(--surface2);
+}
+#cmp-seg-bar label{font-size:11px;color:var(--muted);white-space:nowrap}
+#cmp-seg-name{
+  flex:1;background:var(--surface);border:1px solid var(--border2);
+  border-radius:6px;padding:4px 8px;font-size:12px;color:var(--text);
+  min-width:0;
+}
+#cmp-seg-name:focus{outline:none;border-color:#f97316}
+#cmp-seg-save{
+  background:#f97316;border:none;color:#fff;border-radius:6px;
+  padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;
+}
+#cmp-seg-save:hover{background:#ea6c0a}
+#cmp-seg-save.saved{background:#22c55e}
+#cmp-seg-select{
+  max-width:220px;background:var(--surface);border:1px solid var(--border2);
+  border-radius:6px;padding:4px 6px;font-size:12px;color:var(--text);
+}
+#cmp-loading{
+  position:absolute;inset:0;background:rgba(0,0,0,.6);display:flex;
+  align-items:center;justify-content:center;color:var(--text);font-size:13px;
+  border-radius:14px;z-index:10;
+}
+
+#zones-overlay{
+  display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:3000;
+  align-items:center;justify-content:center;backdrop-filter:blur(3px);
+}
+#zones-overlay.open{display:flex}
+#zones-panel{
+  background:var(--surface);border:1px solid var(--border2);border-radius:14px;
+  width:min(640px,96vw);max-height:88vh;
+  display:flex;flex-direction:column;box-shadow:0 24px 64px rgba(0,0,0,.7);
+  overflow:hidden;
+}
+#zones-header{
+  display:flex;align-items:center;gap:8px;padding:14px 16px 12px;
+  border-bottom:1px solid var(--border);flex-shrink:0;
+}
+#zones-title{font-size:15px;font-weight:700;flex:1;color:var(--text)}
+#zones-close-btn{font-size:20px;color:var(--muted);background:none;border:none;cursor:pointer;padding:0 2px;line-height:1}
+#zones-close-btn:hover{color:var(--text)}
+#zones-body{flex:1;overflow-y:auto;padding:18px 20px;display:flex;flex-direction:column;gap:24px}
+.zones-section-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:10px}
+.zone-row{display:flex;align-items:center;gap:5px;margin-bottom:6px}
+.zone-label{font-size:12px;font-weight:600;width:160px;flex-shrink:0;color:var(--text)}
+.zone-range{font-size:11px;font-weight:400;color:var(--muted);margin-left:4px}
+.zone-bar-wrap{flex:1;height:22px;background:var(--surface2);border-radius:5px;overflow:hidden}
+.zone-bar{height:100%;border-radius:5px;transition:width .4s ease;min-width:2px}
+.zone-time{font-size:11px;color:var(--muted);width:52px;text-align:right;flex-shrink:0;font-variant-numeric:tabular-nums}
+.zone-pct{font-size:11px;color:var(--muted2);width:36px;text-align:right;flex-shrink:0}
+.zones-no-data{font-size:13px;color:var(--muted);text-align:center;padding:20px 0}
 #coach-setup{
   flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
   padding:32px 40px;gap:16px;text-align:center;
@@ -380,6 +502,11 @@ input,select{font:inherit}
 #elev-hover-panel .eh-label{color:rgba(255,255,255,.45);letter-spacing:.01em}
 #elev-hover-panel .eh-val{font-weight:600;font-variant-numeric:tabular-nums;
   text-shadow:0 0 8px currentColor}
+#elev-sel-rect{
+  position:absolute;top:0;bottom:0;background:rgba(74,222,128,.15);
+  border-left:1px solid rgba(74,222,128,.5);border-right:1px solid rgba(74,222,128,.5);
+  pointer-events:none;display:none;z-index:4;
+}
 #elev-crosshair{position:absolute;top:0;bottom:0;width:1px;
   background:rgba(255,255,255,.25);pointer-events:none;display:none;z-index:14}
 #elev-anim-dot{position:absolute;width:10px;height:10px;border-radius:50%;
@@ -482,13 +609,13 @@ input,select{font:inherit}
         <div class="ss-group">
           <div class="ss-label">Split Length</div>
           <div class="ss-radios" id="sp-len-radios">
-            <label class="ss-radio"><input type="radio" name="sp-len" value="0.25"> ¼ mi</label>
-            <label class="ss-radio"><input type="radio" name="sp-len" value="0.5"> ½ mi</label>
-            <label class="ss-radio"><input type="radio" name="sp-len" value="1" checked> 1 mi</label>
-            <label class="ss-radio"><input type="radio" name="sp-len" value="2"> 2 mi</label>
-            <label class="ss-radio"><input type="radio" name="sp-len" value="5"> 5 mi</label>
-            <label class="ss-radio"><input type="radio" name="sp-len" value="10"> 10 mi</label>
-            <label class="ss-radio"><input type="radio" name="sp-len" value="km1"> 1 km</label>
+            <label class="ss-radio" id="sp-len-lbl-01"><input type="radio" name="sp-len" value="0.1"> 1/10 mi</label>
+            <label class="ss-radio" id="sp-len-lbl-025"><input type="radio" name="sp-len" value="0.25"> ¼ mi</label>
+            <label class="ss-radio" id="sp-len-lbl-05"><input type="radio" name="sp-len" value="0.5"> ½ mi</label>
+            <label class="ss-radio" id="sp-len-lbl-1"><input type="radio" name="sp-len" value="1" checked> 1 mi</label>
+            <label class="ss-radio" id="sp-len-lbl-2"><input type="radio" name="sp-len" value="2"> 2 mi</label>
+            <label class="ss-radio" id="sp-len-lbl-5"><input type="radio" name="sp-len" value="5"> 5 mi</label>
+            <label class="ss-radio" id="sp-len-lbl-10"><input type="radio" name="sp-len" value="10"> 10 mi</label>
           </div>
         </div>
       </div>
@@ -517,6 +644,7 @@ input,select{font:inherit}
     <div class="drag-handle" id="drag-map-chart" title="Drag to resize"></div>
     <div id="chart-wrap">
       <div id="chart-titlebar" style="position:absolute;top:0;left:0;right:0;height:20px;z-index:5;display:flex;align-items:center;justify-content:flex-end;padding:0 6px;pointer-events:none">
+        <button class="sp-tb-btn" onclick="elevZoomStep(1)" title="Zoom in" style="pointer-events:all;font-size:13px;padding:1px 6px;line-height:1.4">+</button>
         <button class="sp-tb-btn" onclick="toggleChartSettings(event)" title="Chart overlays" style="pointer-events:all;font-size:16px;padding:2px 6px;line-height:1">⚙</button>
       </div>
       <div id="chart-settings" style="display:none;position:absolute;top:20px;right:4px;z-index:20;background:var(--surface);border:1px solid var(--border2);border-radius:8px;padding:8px 10px;box-shadow:0 4px 16px rgba(0,0,0,.5);min-width:200px">
@@ -540,10 +668,21 @@ input,select{font:inherit}
           <input type="checkbox" id="show-peaks" checked onchange="redrawElevWithOverlays()" style="accent-color:#f97316"> Show altitude peaks
         </label>
       </div>
-      <canvas id="elevChart"></canvas>
-      <div id="elev-anim-dot"></div>
-      <div id="elev-crosshair"></div>
-      <div id="elev-hover-panel"></div>
+      <div id="elev-canvas-area">
+        <canvas id="elevChart"></canvas>
+        <div id="elev-anim-dot"></div>
+        <div id="elev-crosshair"></div>
+        <div id="elev-sel-rect"></div>
+        <div id="elev-hover-panel"></div>
+      </div>
+      <div id="elev-zoom-bar">
+        <button class="elev-zoom-btn" onclick="elevZoomReset()" title="Reset zoom">⟲</button>
+        <input type="range" id="elev-zoom-scroll" min="0" max="1000" value="0"
+               oninput="elevScrollTo(this.value)" title="Scroll">
+        <span id="elev-zoom-label">2×</span>
+        <button class="elev-zoom-btn" onclick="elevZoomStep(-1)">−</button>
+        <button class="elev-zoom-btn" onclick="elevZoomStep(1)">+</button>
+      </div>
     </div>
     <div class="drag-handle" id="drag-chart-info" title="Drag to resize"></div>
     <div id="info-panel">
@@ -583,6 +722,101 @@ input,select{font:inherit}
 <script>
 // ── STATE ────────────────────────────────────────────────────────────────────
 let elevRenderVersion = 0; // incremented each selectActivity call to cancel stale renders
+let currentAct    = null;  // last selected activity object
+let currentCharts = null;  // last fetched chart data
+let cachedProfile = null;  // user profile (max_hr, ftp_watts) — fetched once per activity
+
+async function ensureProfile() {
+  if (cachedProfile) return cachedProfile;
+  try { const r = await fetch('/api/settings/training-zones'); cachedProfile = await r.json(); }
+  catch(e) { cachedProfile = {}; }
+  return cachedProfile;
+}
+
+// ── UNITS ─────────────────────────────────────────────────────────────────────
+const U = {
+  metric: false,  // false = statute, true = metric — loaded from DB on init
+
+  // Conversion helpers
+  dist:  (mi)  => U.metric ? +(mi * 1.60934).toFixed(2) : mi,
+  distS: (mi)  => U.metric ? (+(mi * 1.60934).toFixed(2)) + ' km' : mi + ' mi',
+  speed: (mph) => U.metric ? +(mph * 1.60934).toFixed(1) : mph,
+  speedS:(mph) => U.metric ? (+(mph * 1.60934).toFixed(1)) + ' km/h' : mph + ' mph',
+  alt:   (ft)  => U.metric ? Math.round(ft * 0.3048) : Math.round(ft),
+  altS:  (ft)  => U.metric ? Math.round(ft * 0.3048) + ' m'  : Math.round(ft) + ' ft',
+  climb: (ft)  => U.metric ? Math.round(ft * 0.3048) : Math.round(ft),
+  climbS:(ft)  => U.metric ? Math.round(ft * 0.3048) + ' m'  : Math.round(ft) + ' ft',
+  temp:  (f)   => U.metric ? +((f - 32) * 5/9).toFixed(1) : f,
+  tempS: (f)   => U.metric ? +((f - 32) * 5/9).toFixed(1) + ' °C' : Math.round(f) + ' °F',
+
+  // Label strings
+  distUnit:  () => U.metric ? 'km'   : 'mi',
+  speedUnit: () => U.metric ? 'km/h' : 'mph',
+  altUnit:   () => U.metric ? 'm'    : 'ft',
+  climbUnit: () => U.metric ? 'm'    : 'ft',
+  tempUnit:  () => U.metric ? '°C'   : '°F',
+
+  // Load from profile and trigger full redraw
+  async load() {
+    try {
+      const p = await ensureProfile();
+      U.metric = !!p.use_metric;
+    } catch(e) { U.metric = false; }
+    U.apply();
+  },
+
+  // Re-render everything that depends on units
+  apply() {
+    // Activity list columns — re-render
+    buildColHead();
+    renderVirtualList();
+    // Detail panel — re-render if an activity is selected
+    if (currentAct) {
+      const det = document.getElementById('act-detail');
+      if (det && det.style.display !== 'none') det.innerHTML = buildDetailHTML(currentAct);
+      // Map badge
+      const badge = document.getElementById('mapBadge');
+      if (badge && badge.style.display !== 'none' && currentAct.distance_mi) {
+        badge.textContent = `${U.distS(currentAct.distance_mi)} · ${U.climbS(currentAct.total_climb_ft||0)} climb`;
+      }
+    }
+    // Elevation chart — redraw with new axis units
+    if (elevChartData) drawElevation(elevChartData);
+    // Splits — redraw
+    updateSplitLenLabels();
+    renderSplits();
+    // Transport bar labels
+    const altLbl = document.getElementById('as-alt-lbl');
+    const dstLbl = document.getElementById('as-dst-lbl');
+    const spdLbl = document.getElementById('as-spd-lbl');
+    if (altLbl) altLbl.textContent = U.altUnit();
+    if (dstLbl) dstLbl.textContent = U.distUnit();
+    if (spdLbl) spdLbl.textContent = U.speedUnit();
+    // METRIC_UNITS for splits y-axis
+    METRIC_UNITS.speed = U.speedUnit();
+    METRIC_UNITS.climb = U.climbUnit();
+  },
+};
+
+function zoneColorFor(val, boundaries) {
+  // boundaries: [z1max, z2max, z3max, z4max]
+  if (!val || val <= 0 || !boundaries) return null;
+  for (let i = 0; i < boundaries.length; i++) {
+    if (val <= boundaries[i]) return ZONE_COLORS[i];
+  }
+  return ZONE_COLORS[4];
+}
+
+function hrBoundsFor(profile, act) {
+  const maxHR = (profile && profile.max_hr) || (act && act.max_heartrate) || 190;
+  return [maxHR*.60, maxHR*.70, maxHR*.80, maxHR*.90].map(Math.round);
+}
+
+function pwrBoundsFor(profile, act) {
+  const ftp = (profile && profile.ftp_watts) || (act && act.avg_power ? Math.round(act.avg_power / 0.75) : 0);
+  if (!ftp) return null;
+  return [ftp*.55, ftp*.75, ftp*.90, ftp*1.05].map(Math.round);
+}
 
 const state = {
   all: [],          // full loaded list (all activities from server)
@@ -600,11 +834,12 @@ const state = {
 const ALL_COLS = [
   {id:'date',      label:'Date/Time',   sort:'start_time',   w:'168px', align:'left',  render: a => fmtDate(a.start_time)},
   {id:'name',      label:'Title',       sort:'name',         w:'1fr',   align:'left',  render: a => escHtml(a.name) + (a.strava_activity_id?'<span class="ac-strava">↗</span>':'')},
-  {id:'dist',      label:'Dist',        sort:'distance_m',   w:'62px',  align:'right', render: a => fmtN(a.distance_mi,2)},
-  {id:'active',    label:'Active',      sort:'active_time',  w:'76px',  align:'right', render: a => fmtHMS(a.active_time)},
+  {id:'dist',      label:'Dist',        sort:'distance_m',   w:'78px',  align:'right', unitLabel: () => U.distUnit(),  render: a => fmtN(U.dist(a.distance_mi),2)},
+  {id:'active',    label:'MovTime',     sort:'active_time',  w:'76px',  align:'right', render: a => fmtHMS(a.active_time)},
   {id:'duration',  label:'Duration',    sort:'duration',     w:'76px',  align:'right', render: a => fmtHMS(a.duration)},
-  {id:'climb',     label:'Climb',       sort:'total_climb_m',w:'58px',  align:'right', render: a => a.total_climb_ft?Math.round(a.total_climb_ft):'—'},
-  {id:'mvspd',     label:'MvSpd',       sort:'avg_speed_mps',w:'58px',  align:'right', render: a => fmtN(a.avg_speed_mph,1)},
+  {id:'climb',     label:'Climb',       sort:'total_climb_m',w:'72px',  align:'right', unitLabel: () => U.climbUnit(), render: a => a.total_climb_ft?U.climb(a.total_climb_ft):'—'},
+  {id:'mvspd',     label:'MvSpd',       sort:'avg_speed_mps',w:'88px',  align:'right', unitLabel: () => U.speedUnit(), render: a => fmtN(U.speed(a.avg_speed_mph),1)},
+  {id:'avgspd',    label:'AvgSpd',      sort:'',             w:'88px',  align:'right', unitLabel: () => U.speedUnit(), render: a => { const s=(a.duration&&a.distance_mi)?(a.distance_mi/(a.duration/3600)):0; return fmtN(U.speed(s),1); }},
   {id:'hr',        label:'HR',          sort:'avg_heartrate',w:'52px',  align:'right', render: a => a.avg_heartrate?Math.round(a.avg_heartrate):'—'},
   {id:'maxhr',     label:'MaxHR',       sort:'',             w:'58px',  align:'right', render: a => a.max_heartrate?Math.round(a.max_heartrate):'—'},
   {id:'power',     label:'Power',       sort:'',             w:'58px',  align:'right', render: a => a.avg_power?Math.round(a.avg_power)+' W':'—'},
@@ -784,6 +1019,36 @@ function setMapStyle(styleKey, save=true) {
     b.classList.toggle('active', b.dataset.style === styleKey);
   });
 }
+function setCmpMapStyle(styleKey) {
+  const style = MAP_STYLES[styleKey] || MAP_STYLES['osm'];
+  localStorage.setItem('ascent-map-style', styleKey);  // shared key with main map
+
+  // Update main map too
+  if (tileLayer && leafMap) {
+    leafMap.removeLayer(tileLayer);
+    tileLayer = L.tileLayer(style.url, { maxZoom: 19, attribution: style.attr });
+    tileLayer.addTo(leafMap);
+  }
+
+  // Update compare overview map
+  if (cmp.tileLayer && cmp.map) {
+    cmp.map.removeLayer(cmp.tileLayer);
+    cmp.tileLayer = L.tileLayer(style.url, { maxZoom: 19 });
+    cmp.tileLayer.addTo(cmp.map);
+  }
+  // Update chase-cam map
+  if (cmp.zoomTile && cmp.zoomMap) {
+    cmp.zoomMap.removeLayer(cmp.zoomTile);
+    cmp.zoomTile = L.tileLayer(style.url, { maxZoom: 19 });
+    cmp.zoomTile.addTo(cmp.zoomMap);
+  }
+
+  // Update all style buttons (main map + compare map)
+  document.querySelectorAll('.map-style-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.style === styleKey);
+  });
+}
+
 function clearMap() {
   [trackLayer,startMark,endMark].forEach(l=>{ if(l) leafMap.removeLayer(l); });
   trackLayer=startMark=endMark=null;
@@ -869,8 +1134,8 @@ async function drawElevationFromSummary(act, version) {
     const t = i / (pts - 1);
     // bell-ish curve peaking around 40% of distance
     const shape = Math.sin(t * Math.PI * 0.9);
-    labels.push((t * dist).toFixed(1));
-    vals.push(Math.round(base + (peak - base) * shape));
+    labels.push(U.dist(t * dist).toFixed(1));
+    vals.push(U.alt(Math.round(base + (peak - base) * shape)));
   }
 
   // Custom peak marker plugin
@@ -886,7 +1151,7 @@ async function drawElevationFromSummary(act, version) {
       peakList.forEach(pk => {
         const px = xSc.getPixelForValue(pk.x);
         const py = ySc.getPixelForValue(pk.y);
-        const label = Math.round(pk.y) + ' ft';
+        const label = U.alt(pk.y) + ' ' + U.altUnit();
         // Stem line
         cx.beginPath();
         cx.moveTo(px, py);
@@ -923,15 +1188,15 @@ async function drawElevationFromSummary(act, version) {
       responsive:true,maintainAspectRatio:false,animation:false,
       plugins:{
         legend:{display:false},
-        tooltip:{callbacks:{label:c=>`~${Math.round(c.raw)} ft (estimated)`},titleFont:{size:11},bodyFont:{size:11}},
+        tooltip:{callbacks:{label:c=>`~${U.alt(c.raw)} ${U.altUnit()} (estimated)`},titleFont:{size:11},bodyFont:{size:11}},
       },
       scales:{
         x:{
           type:'linear', display:true,
-          ticks:{color:'#64748b',font:{size:9},maxTicksLimit:8,callback:v=>`${v.toFixed(0)}mi`},
+          ticks:{color:'#64748b',font:{size:9},maxTicksLimit:8,callback:v=>`${v.toFixed(1)}${U.distUnit()}`},
           grid:{color:'rgba(255,255,255,.04)'},
         },
-        y:{ticks:{color:'#64748b',font:{size:10},maxTicksLimit:4,callback:v=>`${Math.round(v)}ft`},grid:{color:'rgba(255,255,255,.06)'}},
+        y:{ticks:{color:'#64748b',font:{size:10},maxTicksLimit:4,callback:v=>`${U.alt(v)}${U.altUnit()}`},grid:{color:'rgba(255,255,255,.06)'}},
       }
     }
   });
@@ -1037,9 +1302,13 @@ async function drawElevation(data, version) {
   if (!alt_ft || alt_ft.every(v => v === 0)) return;
 
   // Full-resolution points for accurate peak detection (before downsampling)
+  const xConv = U.metric ? (m => m/1000)        : (m => m/1609.344);
+  const yConv = U.metric ? (ft => Math.round(ft*0.3048)) : (ft => Math.round(ft));
+  const xUnit = U.metric ? 'km'  : 'mi';
+
   const fullPoints = [];
   for (let i = 0; i < dist_m.length; i++) {
-    fullPoints.push({ x: dist_m[i] / 1609.344, y: Math.round(alt_ft[i]) });
+    fullPoints.push({ x: xConv(dist_m[i]), y: yConv(alt_ft[i]) });
   }
 
   // Sample to ~600 points
@@ -1047,11 +1316,11 @@ async function drawElevation(data, version) {
   const step  = Math.max(1, Math.floor(total / 600));
   const points = [];
   for (let i = 0; i < total; i += step) {
-    const x = dist_m[i] / 1609.344;
-    points.push({ x, y: Math.round(alt_ft[i]) });
+    const x = xConv(dist_m[i]);
+    points.push({ x, y: yConv(alt_ft[i]) });
   }
   if (!points.length) return;
-  const totalMi = points[points.length - 1].x;
+  const totalMi = points[points.length - 1].x;  // actually total in current unit
 
   // Overlay settings
   const o1key = document.getElementById('overlay1-sel')?.value || '';
@@ -1059,7 +1328,7 @@ async function drawElevation(data, version) {
   const showPeaks = document.getElementById('show-peaks')?.checked ?? true;
 
   const overlayArrs   = { hr, speed, power, cadence };
-  const overlayUnits  = { hr: 'bpm', speed: 'mph', power: 'W', cadence: 'rpm' };
+  const overlayUnits  = { hr: 'bpm', speed: U.speedUnit(), power: 'W', cadence: 'rpm' };
   const overlayLabels = { hr: 'Heart Rate', speed: 'Speed', power: 'Power', cadence: 'Cadence' };
   const overlayColors = { hr: '#ef4444', speed: '#22c55e', power: '#eab308', cadence: '#a855f7' };
 
@@ -1069,9 +1338,22 @@ async function drawElevation(data, version) {
     const pts = [];
     for (let i = 0; i < total; i += step) {
       const v = arr[i];
-      if (v != null) pts.push({ x: dist_m[i] / 1609.344, y: Math.round(v * 10) / 10 });
+      if (v != null) pts.push({ x: xConv(dist_m[i]), y: Math.round(v * 10) / 10, _raw: v });
     }
     return pts;
+  }
+
+  function makeSegmentColor(key, pts) {
+    // Returns a segment.borderColor function for Chart.js that colors by zone
+    if (key !== 'hr' && key !== 'power') return null;
+    const _p = cachedProfile || {};
+    const bounds = key === 'hr' ? hrBoundsFor(_p, currentAct) : pwrBoundsFor(_p, currentAct);
+    if (!bounds) return null;
+    return (ctx) => {
+      const pt = pts[ctx.p0DataIndex];
+      if (!pt) return overlayColors[key];
+      return zoneColorFor(pt._raw, bounds) || overlayColors[key];
+    };
   }
 
   const datasets = [
@@ -1086,11 +1368,11 @@ async function drawElevation(data, version) {
   const scales = {
     x: {
       type: 'linear', display: true, min: 0, max: totalMi,
-      ticks: { color: '#64748b', font: { size: 9 }, maxTicksLimit: 10, callback: v => `${Math.round(v)}mi` },
+      ticks: { color: '#64748b', font: { size: 9 }, maxTicksLimit: 10, callback: v => `${v.toFixed(1)}${xUnit}` },
       grid: { color: 'rgba(255,255,255,.04)' },
     },
     yElev: {
-      position: 'left', ticks: { color: '#64748b', font: { size: 9 }, maxTicksLimit: 5, callback: v => `${Math.round(v)}ft` },
+      position: 'left', ticks: { color: '#64748b', font: { size: 9 }, maxTicksLimit: 5, callback: v => `${U.alt(v)}${U.altUnit()}` },
       grid: { color: 'rgba(255,255,255,.06)' },
     },
   };
@@ -1099,9 +1381,12 @@ async function drawElevation(data, version) {
     const o1pts = makeOverlayPoints(o1key);
     if (o1pts.length) {
       const c1 = overlayColors[o1key] || '#22d3ee';
+      const seg1 = makeSegmentColor(o1key, o1pts);
       datasets.push({
         data: o1pts, fill: false,
-        borderColor: c1, backgroundColor: 'transparent',
+        borderColor: seg1 ? c1 : c1,
+        ...(seg1 ? {segment:{borderColor:seg1}} : {}),
+        backgroundColor: 'transparent',
         borderWidth: 1.5, pointRadius: 0, tension: 0.3, order: 2,
         yAxisID: 'yLeft',
       });
@@ -1118,9 +1403,12 @@ async function drawElevation(data, version) {
     const o2pts = makeOverlayPoints(o2key);
     if (o2pts.length) {
       const c2 = overlayColors[o2key] || '#f97316';
+      const seg2 = makeSegmentColor(o2key, o2pts);
       datasets.push({
         data: o2pts, fill: false,
-        borderColor: c2, backgroundColor: 'transparent',
+        borderColor: seg2 ? c2 : c2,
+        ...(seg2 ? {segment:{borderColor:seg2}} : {}),
+        backgroundColor: 'transparent',
         borderWidth: 1.5, pointRadius: 0, tension: 0.3, order: 1,
         yAxisID: 'yRight',
       });
@@ -1149,7 +1437,7 @@ async function drawElevation(data, version) {
       peakList.forEach(pk => {
         const px = xSc.getPixelForValue(pk.x);
         const py = ySc.getPixelForValue(pk.y);
-        const label = Math.round(pk.y) + ' ft';
+        const label = U.alt(pk.y) + ' ' + U.altUnit();
         // Stem line
         cx.beginPath();
         cx.moveTo(px, py);
@@ -1233,7 +1521,7 @@ async function drawElevation(data, version) {
   }
 
   function setupHover() {
-    const wrap = document.getElementById('chart-wrap');
+    const wrap = document.getElementById('elev-canvas-area') || document.getElementById('chart-wrap');
     const panel = document.getElementById('elev-hover-panel');
     const cross = document.getElementById('elev-crosshair');
     if (!wrap || !panel || !cross) return;
@@ -1251,7 +1539,7 @@ async function drawElevation(data, version) {
       // Map xMi → data index
       const data = elevChartData;
       const n    = data.dist_m.length;
-      const xM   = xMi * 1609.344;
+      const xM   = U.metric ? xMi * 1000 : xMi * 1609.344;  // chart x is km or mi
       // Binary search for closest index
       let lo=0, hi=n-1;
       while (lo < hi-1) { const mid=Math.floor((lo+hi)/2); if (data.dist_m[mid] < xM) lo=mid; else hi=mid; }
@@ -1281,10 +1569,11 @@ async function drawElevation(data, version) {
       if (scrub) scrub.value = Math.round(hoverFrac * 1000);
       // Timecode from anim.pts if available, else from elevChartData.time
       const timeArr = (anim.pts && anim.pts.time) ? anim.pts.time : data.time;
+      let hoverSecs = null;
       if (timeArr && timeArr.length) {
         const tIdx = Math.round(hoverFrac * (timeArr.length - 1));
-        const secs = timeArr[Math.max(0, Math.min(timeArr.length-1, tIdx))] || 0;
-        const h = Math.floor(secs/3600), m = Math.floor((secs%3600)/60), s = Math.floor(secs%60);
+        hoverSecs = timeArr[Math.max(0, Math.min(timeArr.length-1, tIdx))] || 0;
+        const h = Math.floor(hoverSecs/3600), m = Math.floor((hoverSecs%3600)/60), s = Math.floor(hoverSecs%60);
         const ttime = document.getElementById('t-time');
         if (ttime) ttime.textContent = `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
       }
@@ -1316,14 +1605,18 @@ async function drawElevation(data, version) {
       const grad  = calcGradient(data, idx);
       const dist  = lerp(data.dist_m,  idx);
 
+      const _prof = cachedProfile || {};
+      const _hrZC = (hr && hr>0) ? (zoneColorFor(hr,  hrBoundsFor(_prof, currentAct))  || COLORS.hr)    : COLORS.hr;
+      const _pwZC = (pwr && pwr>0)? (zoneColorFor(pwr, pwrBoundsFor(_prof, currentAct)) || COLORS.power) : COLORS.power;
       const rows = [
-        { label:'Distance', val: dist != null ? (dist/1609.344).toFixed(2)+' mi' : '—', color: COLORS.distance },
-        { label:'Altitude', val: alt  != null ? Math.round(alt)+' ft'            : '—', color: COLORS.altitude },
+        { label:'Time',     val: hoverSecs != null ? (()=>{ const h=Math.floor(hoverSecs/3600),m=Math.floor((hoverSecs%3600)/60),s=Math.floor(hoverSecs%60); return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`; })() : '—', color: 'rgba(255,255,255,.75)' },
+        { label:'Distance', val: dist != null ? U.distS(+(dist/1609.344).toFixed(2)) : '—', color: COLORS.distance },
+        { label:'Altitude', val: alt  != null ? U.altS(alt)                      : '—', color: COLORS.altitude },
         { label:'Gradient', val: grad != null ? grad.toFixed(1)+'%'              : '—', color: COLORS.gradient },
-        { label:'Heart Rate',val:hr && hr>0   ? Math.round(hr)+' bpm'           : '—', color: COLORS.hr },
-        { label:'Power',    val: pwr != null  ? Math.round(pwr)+' W'            : '—', color: COLORS.power },
+        { label:'Heart Rate',val:hr && hr>0   ? Math.round(hr)+' bpm'           : '—', color: _hrZC },
+        { label:'Power',    val: pwr && pwr>0  ? Math.round(pwr)+' W'           : '—', color: _pwZC },
         { label:'Cadence',  val: cad && cad>0 ? Math.round(cad)+' rpm'          : '—', color: COLORS.cadence },
-        { label:'Speed',    val: spd && spd>0 ? spd.toFixed(1)+' mph'           : '—', color: COLORS.speed },
+        { label:'Speed',    val: spd && spd>0 ? U.speedS(spd)                   : '—', color: COLORS.speed },
       ];
 
       panel.innerHTML = rows.map(r =>
@@ -1361,6 +1654,148 @@ async function drawElevation(data, version) {
 
   document.addEventListener('DOMContentLoaded', setupHover);
   setTimeout(setupHover, 800);
+})();
+
+// ── ELEVATION RANGE SELECTION ─────────────────────────────────────────────────
+(function() {
+  let dragging   = false;
+  let startPx    = 0;
+  let startIdx   = 0;
+
+  // Convert pixel x within chart-wrap → data index
+  function pxToIdx(px) {
+    if (!elevChart || !elevChartData) return -1;
+    const ca     = elevChart.chartArea;
+    if (!ca) return -1;
+    const xScale = elevChart.scales.x;
+    const xVal   = xScale.getValueForPixel(Math.max(ca.left, Math.min(ca.right, px)));
+    const data   = elevChartData;
+    const n      = data.dist_m.length;
+    const xM     = U.metric ? xVal * 1000 : xVal * 1609.344;
+    let lo = 0, hi = n - 1;
+    while (lo < hi - 1) { const mid = Math.floor((lo+hi)/2); if (data.dist_m[mid] < xM) lo = mid; else hi = mid; }
+    return Math.max(0, Math.min(n - 1, Math.round(lo + (xM - data.dist_m[lo]) / Math.max(1, data.dist_m[hi] - data.dist_m[lo]))));
+  }
+
+  function applyElevSelection(i0, i1) {
+    const data = elevChartData;
+    if (!data || !elevChart) return;
+    const lo = Math.min(i0, i1), hi = Math.max(i0, i1);
+    setElevSelection(lo, hi);
+
+    // ── Shade elevation chart ────────────────────────────────────────────────
+    elevChart.data.datasets = elevChart.data.datasets.filter(d => !d._elevSel);
+    if (hi > lo) {
+      const slice = data.dist_m.slice(lo, hi + 1).map((d, j) => ({
+        x: U.metric ? d / 1000 : d / 1609.344,
+        y: U.alt(data.alt_ft[lo + j] || 0),
+      }));
+      elevChart.data.datasets.push({
+        _elevSel: true, data: slice,
+        borderColor: 'rgba(74,222,128,0)', backgroundColor: 'rgba(74,222,128,0.35)',
+        fill: true, pointRadius: 0, tension: 0, order: 0, yAxisID: 'yElev',
+      });
+    }
+    elevChart.update('none');
+
+    // ── Highlight map segment ─────────────────────────────────────────────────
+    if (splitsState._elevSelMapLayer && leafMap) {
+      leafMap.removeLayer(splitsState._elevSelMapLayer);
+      splitsState._elevSelMapLayer = null;
+    }
+    const geo = splitsState.geo;
+    const pts = splitsState.pts;
+    if (hi > lo && geo && pts) {
+      const n = pts.dist_m.length;
+      const coords = geo.geometry?.coordinates || [];
+      const ci1 = Math.floor((lo / (n - 1)) * (coords.length - 1));
+      const ci2 = Math.ceil( (hi / (n - 1)) * (coords.length - 1));
+      const lls = coords.slice(ci1, ci2 + 1).map(c => [c[1], c[0]]);
+      if (lls.length > 1 && leafMap) {
+        splitsState._elevSelMapLayer = L.polyline(lls, {
+          color: '#4ade80', weight: 5, opacity: 0.85
+        }).addTo(leafMap);
+      }
+    }
+  }
+
+  function clearElevSelection() {
+    setElevSelection(null, null);
+    if (elevChart) {
+      elevChart.data.datasets = elevChart.data.datasets.filter(d => !d._elevSel);
+      elevChart.update('none');
+    }
+    if (splitsState._elevSelMapLayer && leafMap) {
+      leafMap.removeLayer(splitsState._elevSelMapLayer);
+      splitsState._elevSelMapLayer = null;
+    }
+  }
+
+  function setup() {
+    const wrap  = document.getElementById('elev-canvas-area');
+    const panel = document.getElementById('elev-hover-panel');
+    const cross = document.getElementById('elev-crosshair');
+    const rect  = document.getElementById('elev-sel-rect');
+    if (!wrap || !rect) return;
+
+    wrap.addEventListener('mousedown', e => {
+      if (!elevChart || !elevChartData) return;
+      const ca = elevChart.chartArea;
+      if (!ca) return;
+      const wRect = wrap.getBoundingClientRect();
+      const px = e.clientX - wRect.left;
+      if (px < ca.left || px > ca.right) return;
+      e.preventDefault();
+
+      dragging = true;
+      startPx  = px;
+      startIdx = pxToIdx(px);
+
+      // Hide HUD immediately
+      if (panel) panel.style.display = 'none';
+      if (cross) cross.style.display = 'none';
+
+      // Show sel-rect at start position
+      rect.style.display = 'block';
+      rect.style.left  = px + 'px';
+      rect.style.width = '0px';
+
+      function onMove(ev) {
+        if (!dragging) return;
+        const curPx  = ev.clientX - wRect.left;
+        const lo     = Math.max(ca.left, Math.min(startPx, curPx));
+        const hi     = Math.min(ca.right, Math.max(startPx, curPx));
+        rect.style.left  = lo + 'px';
+        rect.style.width = (hi - lo) + 'px';
+
+        const curIdx = pxToIdx(curPx);
+        applyElevSelection(startIdx, curIdx);
+      }
+
+      function onUp(ev) {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        rect.style.display = 'none';
+
+        const curPx  = ev.clientX - wRect.left;
+        const curIdx = pxToIdx(curPx);
+        const moved  = Math.abs(curPx - startPx) > 4;
+
+        if (moved) {
+          applyElevSelection(startIdx, curIdx);
+        } else {
+          clearElevSelection();
+        }
+        dragging = false;
+      }
+
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', setup);
+  setTimeout(setup, 800);
 })();
 
 // ── ACTIVITY DETAIL ───────────────────────────────────────────────────────────
@@ -1420,6 +1855,8 @@ async function selectActivity(id) {
   const myVersion = ++elevRenderVersion;
   state.selectedId = id;
   animReset();
+  setElevSelection(null, null);
+  elevZoomReset();
   splitsState.pts = null; splitsState.geo = null; splitsState.selected = new Set(); clearSplitHighlights(); renderSplits();  // stop any running animation
   renderVirtualList(); // re-render to update highlight without scroll reset
 
@@ -1446,6 +1883,10 @@ async function selectActivity(id) {
   // Bail again after parallel fetches complete
   if (myVersion !== elevRenderVersion) return;
 
+  currentAct    = act;
+  currentCharts = charts;
+  cachedProfile = null;  // reset so zones re-fetch profile for new activity
+  ensureProfile(); // pre-fetch so zone colors are ready for chart overlay
   det.innerHTML = buildDetailHTML(act);
   loadPhotos(id); // async
   loadWeatherLocation(id); // async
@@ -1543,7 +1984,7 @@ async function selectActivity(id) {
 
   const badge=document.getElementById('mapBadge');
   if (geo?.geometry?.coordinates?.length>1) {
-    badge.textContent=`${act.distance_mi} mi · ${Math.round(act.total_climb_ft||0)} ft climb`;
+    badge.textContent=`${U.distS(act.distance_mi)} · ${U.climbS(act.total_climb_ft||0)} climb`;
     badge.style.display='block';
   } else { badge.style.display='none'; }
 }
@@ -1553,19 +1994,20 @@ function buildDetailHTML(a) {
     ? `<a href="https://www.strava.com/activities/${a.strava_activity_id}" target="_blank" class="strava">View on Strava ↗</a>`
     : '';
   const chips = [
-    ['Distance',  a.distance_mi   ? a.distance_mi+' mi'             : null],
-    ['Active',    a.active_time   ? fmtHMS(a.active_time)            : null],
-    ['Duration',  a.duration      ? fmtHMS(a.duration)               : null],
-    ['Climb',     a.total_climb_ft? Math.round(a.total_climb_ft)+' ft': null],
-    ['Descent',   a.total_descent_ft ? Math.round(a.total_descent_ft)+' ft': null],
-    ['Avg Speed', a.avg_speed_mph ? a.avg_speed_mph+' mph'           : null],
+    ['Distance',  a.distance_mi       ? U.distS(a.distance_mi)                                          : null],
+    ['MovTime',   a.active_time        ? fmtHMS(a.active_time)                                           : null],
+    ['Duration',  a.duration           ? fmtHMS(a.duration)                                              : null],
+    ['Climb',     a.total_climb_ft     ? U.climbS(a.total_climb_ft)                                      : null],
+    ['Descent',   a.total_descent_ft   ? U.climbS(a.total_descent_ft)                                    : null],
+    ['MovSpd',    a.avg_speed_mph      ? U.speedS(a.avg_speed_mph)                                       : null],
+    ['AvgSpd',    (a.duration&&a.distance_mi) ? U.speedS(+(a.distance_mi/(a.duration/3600)).toFixed(1))  : null],
     ['Avg Pace',  a.avg_pace||null],
-    ['Avg HR',    a.avg_heartrate ? Math.round(a.avg_heartrate)+' bpm': null],
-    ['Max HR',    a.max_heartrate ? Math.round(a.max_heartrate)+' bpm': null],
-    ['Cadence',   a.avg_cadence   ? Math.round(a.avg_cadence)+' rpm' : null],
-    ['Power',     a.avg_power     ? Math.round(a.avg_power)+' W'     : null],
-    ['Calories',  a.calories      ? Math.round(a.calories)+''        : null],
-    ['Suffer',    a.suffer_score  ? Math.round(a.suffer_score)+''     : null],
+    ['Avg HR',    a.avg_heartrate      ? Math.round(a.avg_heartrate)+' bpm'                              : null],
+    ['Max HR',    a.max_heartrate      ? Math.round(a.max_heartrate)+' bpm'                              : null],
+    ['Cadence',   a.avg_cadence        ? Math.round(a.avg_cadence)+' rpm'                                : null],
+    ['Power',     a.avg_power          ? Math.round(a.avg_power)+' W'                                    : null],
+    ['Calories',  a.calories           ? Math.round(a.calories)+''                                       : null],
+    ['Suffer',    a.suffer_score       ? Math.round(a.suffer_score)+''                                   : null],
   ].filter(([,v])=>v);
 
   const meta = [
@@ -1576,7 +2018,7 @@ function buildDetailHTML(a) {
   return `
     <div class="act-title-bar">
       <div class="act-title">${escHtml(a.name||'(unnamed)')}</div>
-      <div class="act-title-links"><a href="/activities/${a.id}">Detail</a>${strava}</div>
+      <div class="act-title-links"><button class="zones-btn" id="compare-btn" onclick="openCompare()" style="display:none">Compare…</button><button class="zones-btn" onclick="openZones()">Zones</button>${strava}</div>
     </div>
     <div style="font-size:11.5px;color:var(--muted);margin-bottom:10px">${fmtDate(a.start_time)}</div>
     <div class="stats-row">${chips.map(([l,v])=>`<div class="stat-chip"><div class="sc-label">${l}</div><div class="sc-val">${v}</div></div>`).join('')}</div>
@@ -1625,7 +2067,7 @@ const handle=document.getElementById('resize-handle');
 let resizing=false,rsX=0,rsW=0;
 handle.addEventListener('mousedown',e=>{ resizing=true;rsX=e.clientX;rsW=sidebar.offsetWidth;handle.classList.add('dragging');document.body.style.cssText='cursor:col-resize;user-select:none'; });
 window.addEventListener('mousemove',e=>{ if(!resizing)return; sidebar.style.width=Math.max(380,Math.min(window.innerWidth*.65,rsW+e.clientX-rsX))+'px'; if(leafMap)leafMap.invalidateSize(); });
-window.addEventListener('mouseup',()=>{ if(!resizing)return; resizing=false;handle.classList.remove('dragging');document.body.style.cssText=''; });
+window.addEventListener('mouseup',()=>{ if(!resizing)return; resizing=false;handle.classList.remove('dragging');document.body.style.cssText=''; savePaneSizes({sidebarW:sidebar.offsetWidth}); });
 
 // ── KEYBOARD NAV ──────────────────────────────────────────────────────────────
 document.addEventListener('keydown',e=>{
@@ -1767,7 +2209,7 @@ async function loadWeatherLocation(activityId) {
       const w = d.weather;
       let wstr = `<strong>Weather</strong><br>${w.description}`;
       const details = [];
-      if (w.avg_temp_f  != null) details.push(`${Math.round(w.avg_temp_f)}°F`);
+      if (w.avg_temp_f  != null) details.push(U.tempS(w.avg_temp_f));
       if (w.avg_wind_kph != null) details.push(`Wind ${Math.round(w.avg_wind_kph)} km/h`);
       if (w.avg_humidity != null) details.push(`${Math.round(w.avg_humidity)}% humidity`);
       if (w.precip_mm > 0)        details.push(`${w.precip_mm}mm precip`);
@@ -1951,11 +2393,21 @@ function animUpdateUI(i) {
   const alt = pts.alt_ft?.[i];
   const dst = pts.dist_m?.[i];
 
-  document.getElementById('as-hr').textContent  = hr  > 0 ? Math.round(hr)  : '—';
-  document.getElementById('as-spd').textContent = spd > 0 ? spd.toFixed(1)  : '—';
-  document.getElementById('as-pwr').textContent = pwr > 0 ? Math.round(pwr) : '—';
-  document.getElementById('as-alt').textContent = alt > 0 ? Math.round(alt) : '—';
-  document.getElementById('as-dst').textContent = dst > 0 ? (dst/1609.344).toFixed(1) : '—';
+  const _hrEl  = document.getElementById('as-hr');
+  const _pwrEl = document.getElementById('as-pwr');
+  const _hrLbl = document.getElementById('as-hr-lbl');
+  const _pwrLbl= document.getElementById('as-pwr-lbl');
+  _hrEl.textContent  = hr  > 0 ? Math.round(hr)  : '—';
+  document.getElementById('as-spd').textContent = spd > 0 ? U.speed(spd).toFixed(1)  : '—';
+  _pwrEl.textContent = pwr > 0 ? Math.round(pwr) : '—';
+  document.getElementById('as-alt').textContent = alt > 0 ? U.alt(alt) : '—';
+  document.getElementById('as-dst').textContent = dst > 0 ? U.dist(dst/1609.344).toFixed(1) : '—';
+  // Zone coloring
+  const _p = cachedProfile || {};
+  const _hrC = hr  > 0 ? zoneColorFor(hr,  hrBoundsFor(_p, currentAct))  : null;
+  const _pwC = pwr > 0 ? zoneColorFor(pwr, pwrBoundsFor(_p, currentAct)) : null;
+  if (_hrEl)  { _hrEl.style.color  = _hrC  || ''; if (_hrLbl)  _hrLbl.style.color  = _hrC  || ''; }
+  if (_pwrEl) { _pwrEl.style.color = _pwC  || ''; if (_pwrLbl) _pwrLbl.style.color = _pwC  || ''; }
 
   // Map dot
   if (anim.mapDot && anim.latLon?.[i]) {
@@ -1969,7 +2421,7 @@ function animUpdateUI(i) {
     if (chartArea) {
       const xScale = elevChart.scales.x;
       const yScale = elevChart.scales.yElev || elevChart.scales.y;
-      const xMi = pts.dist_m[i] / 1609.344;
+      const xMi = U.metric ? pts.dist_m[i] / 1000 : pts.dist_m[i] / 1609.344;
       const px  = xScale.getPixelForValue(xMi);
       const py  = yScale.getPixelForValue(Math.round(alt || 0));
       dot.style.display = 'block';
@@ -2026,16 +2478,43 @@ const METRIC_LABELS = {
   speed:'Speed', power:'Power', hr:'Heart Rate',
   climb:'Climb', pace:'Pace', cadence:'Cadence'
 };
+function getMetricUnit(m) {
+  if (m === 'speed') return U.speedUnit();
+  if (m === 'climb') return U.climbUnit();
+  if (m === 'pace')  return U.metric ? 'min/km' : 'min/mi';
+  return {power:'W', hr:'bpm', cadence:'rpm'}[m] || '';
+}
+// Keep legacy object for backward compat — updated dynamically via getMetricUnit()
 const METRIC_UNITS = {
-  speed:'mph', power:'watts', hr:'bpm',
+  speed:'mph', power:'W', hr:'bpm',
   climb:'ft', pace:'min/mi', cadence:'rpm'
 };
+
+function updateSplitLenLabels() {
+  // Static mi→km distances for the split length options
+  const opts = [
+    ['sp-len-lbl-01',  0.1,   '1/10 mi', '0.2 km'],
+    ['sp-len-lbl-025', 0.25,  '¼ mi',  '0.4 km'],
+    ['sp-len-lbl-05',  0.5,   '½ mi',  '1 km'],
+    ['sp-len-lbl-1',   1,     '1 mi',  '2 km'],
+    ['sp-len-lbl-2',   2,     '2 mi',  '3 km'],
+    ['sp-len-lbl-5',   5,     '5 mi',  '8 km'],
+    ['sp-len-lbl-10',  10,    '10 mi', '16 km'],
+  ];
+  opts.forEach(([id,,,]) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const inp = el.querySelector('input');
+    const [,, statLabel, metLabel] = opts.find(o => o[0] === id);
+    el.childNodes[el.childNodes.length - 1].textContent = ' ' + (U.metric ? metLabel : statLabel);
+  });
+}
 
 function splitsMetric() { return document.querySelector('input[name="sp-metric"]:checked')?.value || 'speed'; }
 function splitsAgg()    { return document.querySelector('input[name="sp-agg"]:checked')?.value || 'avg'; }
 function splitsLenMi()  {
   const v = document.querySelector('input[name="sp-len"]:checked')?.value || '1';
-  return v === 'km1' ? 0.621371 : parseFloat(v);
+  return parseFloat(v) || 1;
 }
 
 function toggleSplitsSettings() {
@@ -2079,7 +2558,7 @@ function computeSplits(pts, lenMi, metric, agg) {
         value = 0;
         for (let j = 1; j < alt.length; j++) if (alt[j] > alt[j-1]) value += alt[j]-alt[j-1];
       }
-      if (metric === 'pace' && value > 0) value = 60 / value;
+      if (metric === 'pace' && value > 0) value = U.metric ? 60 / (value * 1.60934) : 60 / value;
 
       splits.push({
         startIdx: si, endIdx: i,
@@ -2156,7 +2635,14 @@ function renderSplits() {
     return;
   }
 
-  const maxVal  = Math.max(...splits.map(s => s.value), 0.001);
+  // Convert split values for display if metric
+  const displaySplits = splits.map(s => {
+    let v = s.value;
+    if (metric === 'climb' && U.metric) v = Math.round(v * 0.3048);
+    if (metric === 'speed' && U.metric) v = Math.round(v * 1.60934 * 10) / 10;
+    return {...s, displayVal: v};
+  });
+  const maxVal  = Math.max(...displaySplits.map(s => s.displayVal), 0.001);
   const totalMi = splits[splits.length-1].endMi;
 
   // Nice y-axis ticks
@@ -2183,17 +2669,28 @@ function renderSplits() {
     ctx.moveTo(PAD_L, y);
     ctx.lineTo(PAD_L + chartW, y);
     ctx.stroke();
-    ctx.fillText(Math.round(val), PAD_L - 4, y + 3);
+    ctx.fillText(Math.round(val * 10) / 10, PAD_L - 4, y + 3);
   }
 
   // Bars
   const barGap  = 1;
   const barW    = Math.max(2, (chartW / splits.length) - barGap);
+  const _sp = cachedProfile || {};
+  const _hrB  = (metric === 'hr')    ? hrBoundsFor(_sp, currentAct)  : null;
+  const _pwrB = (metric === 'power') ? pwrBoundsFor(_sp, currentAct) : null;
   splits.forEach((sp, i) => {
     const x    = PAD_L + (sp.startMi / totalMi) * chartW;
-    const barH = (sp.value / yMax) * chartH;
+    const barH = (displaySplits[i].displayVal / yMax) * chartH;
     const y    = PAD_T + chartH - barH;
-    ctx.fillStyle = splitsState.selected.has(i) ? green : accent;
+    let barColor = accent;
+    if (splitsState.selected.has(i)) {
+      barColor = green;
+    } else if (_hrB) {
+      barColor = zoneColorFor(sp.value, _hrB) || accent;
+    } else if (_pwrB) {
+      barColor = zoneColorFor(sp.value, _pwrB) || accent;
+    }
+    ctx.fillStyle = barColor;
     ctx.fillRect(x + barGap/2, y, barW, barH);
   });
 
@@ -2214,7 +2711,7 @@ function renderSplits() {
     ctx.moveTo(x, PAD_T + chartH);
     ctx.lineTo(x, PAD_T + chartH + 4);
     ctx.stroke();
-    ctx.fillText(mi, x, PAD_T + chartH + 13);
+    ctx.fillText(U.metric ? (mi*1.60934).toFixed(0) : mi, x, PAD_T + chartH + 13);
   }
 
   // X-axis line
@@ -2232,19 +2729,21 @@ function renderSplits() {
   ctx.fillStyle  = muted;
   ctx.textAlign  = 'center';
   ctx.font       = '9px -apple-system, sans-serif';
-  ctx.fillText(METRIC_UNITS[metric] || '', 0, 0);
+  ctx.fillText(getMetricUnit(metric), 0, 0);
   ctx.restore();
 
   // Metric label top-right
   ctx.fillStyle  = muted;
   ctx.textAlign  = 'right';
   ctx.font       = '10px -apple-system, sans-serif';
-  ctx.fillText((agg === 'max' ? 'Maximum ' : 'Average ') + METRIC_LABELS[metric], W - PAD_R, PAD_T - 4);
+  const metricUnit = getMetricUnit(metric);
+  const unitStr = metricUnit ? ` (${metricUnit})` : '';
+  ctx.fillText((agg === 'max' ? 'Maximum ' : 'Average ') + METRIC_LABELS[metric] + unitStr, W - PAD_R, PAD_T - 4);
 
   // X-axis unit label bottom-right
   ctx.textAlign = 'right';
   ctx.font      = '9px -apple-system, sans-serif';
-  ctx.fillText('mi', W - PAD_R, H - 2);
+  ctx.fillText(U.distUnit(), W - PAD_R, H - 2);
 }
 
 function toggleSplitSelect(idx, additive) {
@@ -2276,8 +2775,12 @@ function clearSplitHighlights() {
     leafMap.removeLayer(splitsState.mapHighlight);
     splitsState.mapHighlight = null;
   }
+  if (splitsState._elevSelMapLayer && leafMap) {
+    leafMap.removeLayer(splitsState._elevSelMapLayer);
+    splitsState._elevSelMapLayer = null;
+  }
   if (elevChart) {
-    elevChart.data.datasets = elevChart.data.datasets.filter(d => !d._splitHighlight);
+    elevChart.data.datasets = elevChart.data.datasets.filter(d => !d._splitHighlight && !d._elevSel);
     elevChart.update('none');
   }
 }
@@ -2310,7 +2813,7 @@ function highlightSplitsOnChart() {
   splitsState.selected.forEach(si => {
     const sp = splitsState.splits[si]; if (!sp) return;
     const slice = pts.dist_m.slice(sp.startIdx, sp.endIdx+1).map((d,j) => ({
-      x: d/1609.344, y: Math.round(pts.alt_ft[sp.startIdx+j] || 0)
+      x: U.metric ? d/1000 : d/1609.344, y: U.alt(pts.alt_ft[sp.startIdx+j] || 0)
     }));
     elevChart.data.datasets.push({
       _splitHighlight: true, data: slice,
@@ -2427,6 +2930,7 @@ document.addEventListener('DOMContentLoaded', loadSplitsPrefs);
       document.body.style.cssText = '';
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
+      savePaneSizes({splitsH: pane.offsetHeight});
     }
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onUp);
@@ -2459,6 +2963,7 @@ document.addEventListener('DOMContentLoaded', loadSplitsPrefs);
         document.body.style.cssText = '';
         document.removeEventListener('mousemove', onMove);
         document.removeEventListener('mouseup', onUp);
+        savePaneSizes({splitsH: pane.offsetHeight});
       }
       document.addEventListener('mousemove', onMove);
       document.addEventListener('mouseup', onUp);
@@ -2467,9 +2972,20 @@ document.addEventListener('DOMContentLoaded', loadSplitsPrefs);
 })();
 
 
+// ── PANE SIZE PERSISTENCE ────────────────────────────────────────────────────
+function savePaneSizes(patch) {
+  try {
+    const cur = JSON.parse(localStorage.getItem('ascent-pane-sizes') || '{}');
+    localStorage.setItem('ascent-pane-sizes', JSON.stringify(Object.assign(cur, patch)));
+  } catch(e) {}
+}
+function loadPaneSizes() {
+  try { return JSON.parse(localStorage.getItem('ascent-pane-sizes') || '{}'); } catch(e) { return {}; }
+}
+
 // ── RESIZE HANDLES ───────────────────────────────────────────────────────────
 (function() {
-  function initDrag(handleId, topPaneId, bottomPaneId, onDone) {
+  function initDrag(handleId, topPaneId, storageKey, onDone) {
     const handle   = document.getElementById(handleId);
     const topPane  = document.getElementById(topPaneId);
     const detail   = document.getElementById('detail');
@@ -2500,6 +3016,7 @@ document.addEventListener('DOMContentLoaded', loadSplitsPrefs);
         document.removeEventListener('mousemove', onMove);
         document.removeEventListener('mouseup', onUp);
         if (onDone) onDone();
+        savePaneSizes({[storageKey]: topPane.offsetHeight});
       }
 
       document.addEventListener('mousemove', onMove);
@@ -2508,12 +3025,12 @@ document.addEventListener('DOMContentLoaded', loadSplitsPrefs);
   }
 
   // Map ↔ Elevation handle — invalidate map after resize
-  initDrag('drag-map-chart', 'map-wrap', 'chart-wrap', () => {
+  initDrag('drag-map-chart', 'map-wrap', 'mapH', () => {
     if (leafMap) leafMap.invalidateSize();
   });
 
   // Elevation ↔ Info handle
-  initDrag('drag-chart-info', 'chart-wrap', 'info-panel', () => {
+  initDrag('drag-chart-info', 'chart-wrap', 'chartH', () => {
     if (elevChart) elevChart.resize();
   });
 })();
@@ -2531,7 +3048,8 @@ function buildColHead() {
     div.dataset.colId = col.id;
     div.style.justifyContent = col.align === 'right' ? 'flex-end' : '';
     div.draggable = true;
-    div.innerHTML = col.label + (state.sortBy === col.sort ? ` <span class="sort-arr">${state.sortDir==='desc'?'↓':'↑'}</span>` : '');
+    const unitSuffix = col.unitLabel ? ` <span style="font-size:9px;font-weight:400;opacity:.6;text-transform:none;letter-spacing:0">(${col.unitLabel()})</span>` : '';
+    div.innerHTML = col.label + unitSuffix + (state.sortBy === col.sort ? ` <span class="sort-arr">${state.sortDir==='desc'?'↓':'↑'}</span>` : '');
 
     // Sort on click (not drag)
     div.addEventListener('click', () => {
@@ -3023,9 +3541,820 @@ setInterval(async () => {
   } catch(e) {}
 }, 120_000);
 
+// ── ZONES ────────────────────────────────────────────────────────────────────
+const ZONE_COLORS = ['#22c55e','#86efac','#eab308','#f97316','#ef4444'];
+const ZONE_NAMES  = ['Z1','Z2','Z3','Z4','Z5'];
+
+function computeZoneTimes(valArr, timeArr, boundaries) {
+  const times = [0,0,0,0,0];
+  for (let i = 1; i < valArr.length; i++) {
+    const v = valArr[i];
+    if (!v || v <= 0) continue;
+    const dt = timeArr[i] - timeArr[i-1];
+    if (dt <= 0 || dt > 60) continue;
+    let z = 4;
+    for (let b = 0; b < boundaries.length; b++) { if (v <= boundaries[b]) { z = b; break; } }
+    times[z] += dt;
+  }
+  return times;
+}
+
+function fmtZoneTime(s) {
+  const h = Math.floor(s/3600), m = Math.floor((s%3600)/60), ss = Math.floor(s%60);
+  if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
+  return `${m}:${String(ss).padStart(2,'0')}`;
+}
+
+function renderZoneChart(times, title, boundaries, unit) {
+  const total = times.reduce((a,b)=>a+b,0);
+  if (total === 0) return `<div class="zones-no-data">No ${title} data for this activity</div>`;
+  const maxT = Math.max(...times);
+  // Build range labels: [0, b0], [b0+1, b1], ..., [b3+1, ∞)
+  const ranges = boundaries.map((b, i) => {
+    const lo = i === 0 ? 1 : Math.round(boundaries[i-1]) + 1;
+    const hi = Math.round(b);
+    return `${lo} – ${hi} ${unit}`;
+  });
+  ranges.push(`${Math.round(boundaries[boundaries.length-1]) + 1}+ ${unit}`);
+
+  let html = `<div><div class="zones-section-title">${title}</div>`;
+  times.forEach((t, i) => {
+    const pct  = total > 0 ? Math.round(t/total*100) : 0;
+    const barW = maxT  > 0 ? Math.round(t/maxT*100)  : 0;
+    html += `<div class="zone-row">
+      <div class="zone-label" style="color:${ZONE_COLORS[i]}">${ZONE_NAMES[i]}<span class="zone-range">(${ranges[i]})</span></div>
+      <div class="zone-bar-wrap">
+        <div class="zone-bar" style="width:${barW}%;background:${ZONE_COLORS[i]}"></div>
+      </div>
+      <div class="zone-time">${fmtZoneTime(t)}</div>
+      <div class="zone-pct">${pct}%</div>
+    </div>`;
+  });
+  html += '</div>';
+  return html;
+}
+
+async function openZones() {
+  const overlay = document.getElementById('zones-overlay');
+  const body    = document.getElementById('zones-body');
+  const title   = document.getElementById('zones-title');
+  const act     = currentAct;
+  const charts  = currentCharts;
+  if (!act) return;
+
+  title.textContent = act.name || 'Zones';
+  body.innerHTML = '<div style="color:var(--muted);padding:1rem;text-align:center">Loading…</div>';
+  overlay.classList.add('open');
+
+  // Fetch stored profile for real max_hr / ftp
+  let profile = {};
+  try { const r = await fetch('/api/settings/training-zones'); profile = await r.json(); } catch(e) {}
+
+  let html = '';
+
+  if (charts && charts.hr && charts.time && charts.hr.some(v=>v>0)) {
+    const maxHR = profile.max_hr || act.max_heartrate || 190;
+    const hrBounds = [Math.round(maxHR*.60), Math.round(maxHR*.70),
+                      Math.round(maxHR*.80), Math.round(maxHR*.90)];
+    const hrTimes  = computeZoneTimes(charts.hr, charts.time, hrBounds);
+    html += renderZoneChart(hrTimes, `Heart Rate Zones (max ${maxHR} bpm)`, hrBounds, 'bpm');
+  }
+
+  if (charts && charts.power && charts.time && charts.power.some(v=>v>0)) {
+    const ftp = profile.ftp_watts || (act.avg_power ? Math.round(act.avg_power / 0.75) : 0);
+    if (ftp > 0) {
+      const pwrBounds = [Math.round(ftp*.55), Math.round(ftp*.75),
+                         Math.round(ftp*.90), Math.round(ftp*1.05)];
+      const pwrTimes  = computeZoneTimes(charts.power, charts.time, pwrBounds);
+      html += renderZoneChart(pwrTimes, `Power Zones (FTP ${ftp} W)`, pwrBounds, 'W');
+    } else {
+      html += '<div><div class="zones-section-title">Power Zones</div><div class="zones-no-data">Set your FTP in Settings → Training Profile to enable power zones</div></div>';
+    }
+  }
+
+  if (!html) html = '<div class="zones-no-data">No heart rate or power data for this activity</div>';
+  body.innerHTML = html;
+}
+
+function closeZones() {
+  document.getElementById('zones-overlay').classList.remove('open');
+}
+
+// ── COMPARE ───────────────────────────────────────────────────────────────────
+const CMP_COLORS = ['#f97316','#3b82f6','#a855f7','#facc15','#10b981'];
+
+const cmp = {
+  open:        false,
+  matches:     [],       // [{activity_id,name,start_time,elapsed_s,points:[{t,lat,lon,...}]}]
+  maxT:        0,
+  currentT:    0,
+  playing:     false,
+  rafId:       null,
+  lastTs:      null,
+  map:         null,
+  markers:     [],       // Leaflet markers, one per match (overview)
+  tracks:      [],       // Leaflet polylines
+  zoomMap:     null,     // chase-cam map
+  zoomMarkers: [],       // markers on zoom map
+  tileLayer:   null,     // overview map tile layer
+  zoomTile:    null,     // chase-cam tile layer
+  profileChart:  null,   // Chart.js elevation profile
+  profileDots:   [],     // {x,y} per match for dot overlay
+  savedSegId:    null,   // currently loaded saved segment id (null = unsaved)
+  savedSegments: [],     // list of saved segments for current activity
+  // Segment selection state (set by elevation drag)
+  selStartIdx: null,
+  selEndIdx:   null,
+};
+
+function fmtCmpTime(s) {
+  const h = Math.floor(s/3600), m = Math.floor((s%3600)/60), ss = Math.floor(s%60);
+  return `${h}:${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
+}
+
+function fmtElapsed(s) {
+  const m = Math.floor(s/60), ss = Math.floor(s%60);
+  return `${m}:${String(ss).padStart(2,'0')}`;
+}
+
+// Called by elevation selection drag to record the selected indices
+function setElevSelection(startIdx, endIdx) {
+  cmp.selStartIdx = startIdx;
+  cmp.selEndIdx   = endIdx;
+  const btn = document.getElementById('compare-btn');
+  if (btn) btn.style.display = (startIdx !== null && endIdx !== null && endIdx > startIdx) ? '' : 'none';
+}
+
+async function openCompare() {
+  if (cmp.selStartIdx === null || cmp.selEndIdx === null) return;
+  if (!currentAct) return;
+
+  const overlay  = document.getElementById('compare-overlay');
+  const loading  = document.getElementById('cmp-loading');
+  const titleEl  = document.getElementById('compare-title');
+  overlay.classList.add('open');
+  loading.style.display = 'flex';
+  titleEl.textContent = 'Searching activities…';
+
+  try {
+    const r = await fetch('/api/segment/compare', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        activity_id: currentAct.id,
+        start_idx:   cmp.selStartIdx,
+        end_idx:     cmp.selEndIdx,
+        max_results: 4,
+        radius_m:    150,
+      }),
+    });
+    const d = await r.json();
+    if (!r.ok) {
+      loading.style.display = 'none';
+      titleEl.textContent = d.detail || 'No matches found';
+      return;
+    }
+
+    // Reference activity first, then others sorted fastest first
+    const refId = currentAct ? currentAct.id : null;
+    const ref   = d.matches.find(m => m.activity_id === refId);
+    const rest  = d.matches.filter(m => m.activity_id !== refId);
+    rest.sort((a, b) => a.elapsed_s - b.elapsed_s);
+    cmp.matches  = ref ? [ref, ...rest] : d.matches;
+    cmp.maxT     = 1;   // normalized: 0→1
+    cmp.currentT = 0;
+
+    loading.style.display = 'none';
+    const nOthers = cmp.matches.length - 1;
+    titleEl.textContent = `Selected Activity vs. ${nOthers} Fastest`;
+
+    // Reset saved segment state for a fresh elevation-drag selection
+    cmp.savedSegId = null;
+    const nameEl = document.getElementById('cmp-seg-name');
+    if (nameEl) nameEl.value = '';
+
+    // Sync map style buttons to current stored style
+    const _curStyle = localStorage.getItem('ascent-map-style') || 'osm';
+    document.querySelectorAll('.map-style-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.style === _curStyle);
+    });
+    buildCompareLegend();
+    initCompareMap();
+    initCompareProfile();
+    cmpUpdateUI(0);
+
+    // Populate saved segments for this activity
+    await cmpLoadSavedSegments();
+
+  } catch(e) {
+    loading.style.display = 'none';
+    titleEl.textContent = 'Error: ' + e.message;
+  }
+}
+
+function closeCompare() {
+  document.getElementById('compare-overlay').classList.remove('open');
+  cmpStop();
+  if (cmp.map)          { cmp.map.remove();          cmp.map = null; }
+  if (cmp.zoomMap)      { cmp.zoomMap.remove();      cmp.zoomMap = null; }
+  if (cmp.profileChart) { cmp.profileChart.destroy(); cmp.profileChart = null; }
+  cmp.tileLayer = null; cmp.zoomTile = null;
+  cmp.markers      = [];
+  cmp.zoomMarkers  = [];
+  cmp.tracks       = [];
+  cmp.savedSegments = [];
+}
+
+function buildCompareLegend() {
+  const leg = document.getElementById('compare-legend');
+  leg.innerHTML = '';
+  cmp.matches.forEach((m, i) => {
+    const color   = CMP_COLORS[i % CMP_COLORS.length];
+    const isRef   = currentAct && m.activity_id === currentAct.id;
+    const date    = m.start_time ? new Date(m.start_time*1000).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '';
+    const nameStyle = isRef ? 'font-weight:700' : '';
+    const item    = document.createElement('div');
+    item.className = 'cmp-legend-item';
+    item.innerHTML =
+      `<div class="cmp-sphere" style="background:radial-gradient(circle at 35% 35%,${color}ee,${color}88 55%,${color}44);flex-shrink:0"></div>` +
+      `<span style="${nameStyle}">${escHtml(m.name)}</span>` +
+      `<span style="color:var(--muted);font-size:11px;white-space:nowrap">${date}</span>` +
+      `<span style="font-size:11px;color:var(--muted);white-space:nowrap;margin-left:2px">${fmtElapsed(m.elapsed_s)}</span>` +
+      `<span id="cmp-delta-${i}" style="margin-left:auto;font-family:ui-monospace,'SF Mono','Fira Code',monospace;` +
+      `font-size:12px;font-weight:600;min-width:70px;text-align:right;font-variant-numeric:tabular-nums;` +
+      `color:var(--muted2);flex-shrink:0">0:00</span>`;
+    leg.appendChild(item);
+  });
+}
+
+function initCompareMap() {
+  const mapEl = document.getElementById('compare-map');
+  if (cmp.map) { cmp.map.remove(); cmp.map = null; }
+  cmp.map = L.map(mapEl, {zoomControl:true, attributionControl:false});
+  const _cmpStyle = MAP_STYLES[localStorage.getItem('ascent-map-style') || 'osm'] || MAP_STYLES['osm'];
+  cmp.tileLayer = L.tileLayer(_cmpStyle.url, {maxZoom:19});
+  cmp.tileLayer.addTo(cmp.map);
+
+  cmp.tracks  = [];
+  cmp.markers = [];
+
+  const allLL = [];
+
+  cmp.matches.forEach((m, i) => {
+    const color = CMP_COLORS[i % CMP_COLORS.length];
+
+    // Faint full-segment track
+    const lls = m.points.map(p => [p.lat, p.lon]);
+    allLL.push(...lls);
+    const track = L.polyline(lls, {color:'#ef4444', weight:3, opacity:0.8, smoothFactor:1.5}).addTo(cmp.map);
+    cmp.tracks.push(track);
+
+    // Sphere marker at start
+    const startLL = [m.points[0].lat, m.points[0].lon];
+    const icon = L.divIcon({
+      html: `<div style="width:14px;height:14px;border-radius:50%;background:radial-gradient(circle at 35% 35%,${color}ee,${color}88 55%,${color}44);box-shadow:0 1px 4px rgba(0,0,0,.7),inset -1px -1px 3px rgba(0,0,0,.3),inset 1px 1px 2px rgba(255,255,255,.4)"></div>`,
+      iconSize:[14,14], iconAnchor:[7,7], className:''
+    });
+    const marker = L.marker(startLL, {icon, zIndexOffset: 1000 + i}).addTo(cmp.map);
+    cmp.markers.push(marker);
+  });
+
+  // Fit map to all track points
+  if (allLL.length > 0) cmp.map.fitBounds(L.latLngBounds(allLL), {padding:[16,16]});
+
+  // Init zoom (chase-cam) map
+  const zoomEl = document.getElementById('compare-zoom');
+  if (cmp.zoomMap) { cmp.zoomMap.remove(); cmp.zoomMap = null; }
+  if (zoomEl && allLL.length > 0) {
+    const center = allLL[Math.floor(allLL.length / 2)];
+    cmp.zoomMap = L.map(zoomEl, {
+      zoomControl: false, attributionControl: false,
+      dragging: false, scrollWheelZoom: false, doubleClickZoom: false,
+      keyboard: false, touchZoom: false, boxZoom: false,
+    });
+    cmp.zoomTile = L.tileLayer(_cmpStyle.url, {maxZoom:19});
+    cmp.zoomTile.addTo(cmp.zoomMap);
+    cmp.zoomMap.setView(center, 16);
+
+    // Add faint segment tracks to zoom map too
+    cmp.matches.forEach((m) => {
+      const lls = m.points.map(p => [p.lat, p.lon]);
+      L.polyline(lls, {color:'#ef4444', weight:2, opacity:0.4, smoothFactor:1}).addTo(cmp.zoomMap);
+    });
+
+    // Add zoom markers (same colors, slightly larger)
+    cmp.zoomMarkers = [];
+    cmp.matches.forEach((m, i) => {
+      const color = CMP_COLORS[i % CMP_COLORS.length];
+      const startLL = [m.points[0].lat, m.points[0].lon];
+      const icon = L.divIcon({
+        html: `<div style="width:18px;height:18px;border-radius:50%;background:radial-gradient(circle at 35% 35%,${color}ee,${color}88 55%,${color}44);box-shadow:0 2px 6px rgba(0,0,0,.8),inset -1px -1px 3px rgba(0,0,0,.3),inset 1px 1px 2px rgba(255,255,255,.4)"></div>`,
+        iconSize:[18,18], iconAnchor:[9,9], className:''
+      });
+      const marker = L.marker(startLL, {icon, zIndexOffset: 2000 + i}).addTo(cmp.zoomMap);
+      cmp.zoomMarkers.push(marker);
+    });
+  }
+
+  setTimeout(() => {
+    if (cmp.map) cmp.map.invalidateSize();
+    if (cmp.zoomMap) cmp.zoomMap.invalidateSize();
+  }, 100);
+}
+
+// ── Compare Elevation Profile ────────────────────────────────────────────────
+function initCompareProfile() {
+  const ctx = document.getElementById('cmp-profile-canvas');
+  if (!ctx) return;
+  if (cmp.profileChart) { cmp.profileChart.destroy(); cmp.profileChart = null; }
+  if (!cmp.matches.length) return;
+
+  // Use reference activity (index 0) points for elevation profile
+  const ref = cmp.matches[0];
+  if (!ref.points || !ref.points.length) return;
+
+  // Build profile from dist_m already in point data
+  const profilePts = ref.points.map(p => ({
+    x: U.metric ? (p.dist_m||0)/1000 : (p.dist_m||0)/1609.344,
+    y: U.alt(p.alt_ft || 0)
+  }));
+
+  const totalDist = profilePts[profilePts.length-1]?.x || 1;
+  const xUnit = U.metric ? 'km' : 'mi';
+  const yUnit = U.altUnit();
+
+  // Per-rider dot plugin
+  const dotPlugin = {
+    id: 'cmpDots',
+    afterDatasetsDraw(chart) {
+      const {ctx: cx, scales} = chart;
+      const xSc = scales.x, ySc = scales.y;
+      if (!xSc || !ySc) return;
+      cmp.profileDots.forEach((d, i) => {
+        if (d == null) return;
+        const color = CMP_COLORS[i % CMP_COLORS.length];
+        const px = xSc.getPixelForValue(d.x);
+        const py = ySc.getPixelForValue(d.y);
+        cx.save();
+        cx.beginPath();
+        cx.arc(px, py, 6, 0, Math.PI*2);
+        const grad = cx.createRadialGradient(px-1, py-2, 1, px, py, 6);
+        grad.addColorStop(0, color + 'ff');
+        grad.addColorStop(1, color + '88');
+        cx.fillStyle = grad;
+        cx.shadowColor = 'rgba(0,0,0,.6)';
+        cx.shadowBlur = 4;
+        cx.fill();
+        cx.restore();
+      });
+    }
+  };
+
+  cmp.profileChart = new Chart(ctx, {
+    type: 'line',
+    data: { datasets: [{
+      data: profilePts, fill: true,
+      borderColor: '#3b82f6', backgroundColor: 'rgba(30,80,180,.5)',
+      borderWidth: 1.5, pointRadius: 0, tension: 0.3,
+    }]},
+    plugins: [dotPlugin],
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      plugins: { legend: { display: false }, tooltip: { enabled: false } },
+      scales: {
+        x: {
+          type: 'linear', min: 0, max: totalDist,
+          ticks: { color: '#64748b', font: { size: 9 }, maxTicksLimit: 8,
+                   callback: v => `${v.toFixed(1)}${xUnit}` },
+          grid: { color: 'rgba(255,255,255,.04)' },
+        },
+        y: {
+          ticks: { color: '#64748b', font: { size: 9 }, maxTicksLimit: 4,
+                   callback: v => `${Math.round(v)}${yUnit}` },
+          grid: { color: 'rgba(255,255,255,.06)' },
+        },
+      },
+      layout: { padding: { top: 10, bottom: 2, left: 2, right: 8 } },
+    },
+  });
+
+  // Initialize dots at start
+  cmp.profileDots = cmp.matches.map(() => profilePts[0] ? {...profilePts[0]} : null);
+}
+
+// ── Animation (normalized time: progress 0→1, all riders start+finish together)
+// At normalized progress p, rider i is at the point in their track where
+// their_elapsed_time / their_total_elapsed = p.
+// Faster riders appear ahead spatially at any given p.
+// The scrubber/timecode are keyed to the fastest rider's actual elapsed time.
+// ─────────────────────────────────────────────────────────────────────────────
+function interpAtTime(points, wallT) {
+  // Look up interpolated data at wall-clock time wallT (seconds, 0-based).
+  if (!points || points.length === 0) return null;
+  if (wallT <= 0) return {...points[0]};
+  for (let i = 1; i < points.length; i++) {
+    if (points[i].t >= wallT) {
+      const frac = (wallT - points[i-1].t) / Math.max(0.001, points[i].t - points[i-1].t);
+      const lerp = (a, b) => a + frac * (b - a);
+      return {
+        lat:       lerp(points[i-1].lat,       points[i].lat),
+        lon:       lerp(points[i-1].lon,       points[i].lon),
+        alt_ft:    lerp(points[i-1].alt_ft,    points[i].alt_ft),
+        speed_mph: lerp(points[i-1].speed_mph, points[i].speed_mph),
+        dist_m:    lerp(points[i-1].dist_m||0, points[i].dist_m||0),
+      };
+    }
+  }
+  return {...points[points.length-1]};
+}
+
+function interpOnRefByDist(refPoints, distM) {
+  // Project a distance (metres) onto the reference track, returning {lat, lon}.
+  // Used to place all riders on the same physical path for map display.
+  if (!refPoints || refPoints.length === 0) return null;
+  if (distM <= 0) return {lat: refPoints[0].lat, lon: refPoints[0].lon};
+  const last = refPoints[refPoints.length-1];
+  if (distM >= (last.dist_m||0)) return {lat: last.lat, lon: last.lon};
+  for (let i = 1; i < refPoints.length; i++) {
+    const d0 = refPoints[i-1].dist_m || 0;
+    const d1 = refPoints[i].dist_m   || 0;
+    if (d1 >= distM) {
+      const frac = (d1 - d0) > 0.001 ? (distM - d0) / (d1 - d0) : 0;
+      return {
+        lat: refPoints[i-1].lat + frac * (refPoints[i].lat - refPoints[i-1].lat),
+        lon: refPoints[i-1].lon + frac * (refPoints[i].lon - refPoints[i-1].lon),
+      };
+    }
+  }
+  return {lat: last.lat, lon: last.lon};
+}
+
+function cmpUpdateUI(wallT) {
+  // wallT = seconds elapsed in animation (0 → reference elapsed_s)
+  const refEl = cmp.matches.length ? cmp.matches[0].elapsed_s : 1;
+  cmp.currentT = Math.max(0, Math.min(wallT, refEl));
+
+  document.getElementById('cmp-time').textContent = fmtCmpTime(cmp.currentT);
+  document.getElementById('cmp-scrub').value = Math.round((cmp.currentT / refEl) * 1000);
+
+  const refData = interpAtTime(cmp.matches[0]?.points, cmp.currentT);
+
+  let sumLat = 0, sumLon = 0, zoomCount = 0;
+
+  const refPoints = cmp.matches[0]?.points;
+
+  cmp.matches.forEach((m, i) => {
+    const d = interpAtTime(m.points, cmp.currentT);
+    if (!d) return;
+
+    // Map position: project each rider's current distance onto the REFERENCE track
+    // so all spheres travel along the same red line, making relative position unambiguous
+    const mapPos = (i === 0 || !refPoints)
+      ? {lat: d.lat, lon: d.lon}
+      : interpOnRefByDist(refPoints, d.dist_m || 0);
+
+    if (cmp.markers[i])     cmp.markers[i].setLatLng([mapPos.lat, mapPos.lon]);
+    if (cmp.zoomMarkers[i]) {
+      cmp.zoomMarkers[i].setLatLng([mapPos.lat, mapPos.lon]);
+      sumLat += mapPos.lat; sumLon += mapPos.lon; zoomCount++;
+    }
+
+    // Profile dot using dist_m from the point data
+    if (cmp.profileChart) {
+      const distX = U.metric ? (d.dist_m||0)/1000 : (d.dist_m||0)/1609.344;
+      cmp.profileDots[i] = { x: distX, y: U.alt(d.alt_ft||0) };
+    }
+
+    // Delta: estimate time ahead/behind reference using distance gap + current speeds
+    const deltaEl = document.getElementById('cmp-delta-' + i);
+    if (deltaEl) {
+      if (i === 0) {
+        deltaEl.textContent = '0:00';
+        deltaEl.style.color = 'var(--muted2)';
+      } else if (refData) {
+        const refDist  = refData.dist_m  || 0;
+        const thisDist = d.dist_m || 0;
+        const distDiff = thisDist - refDist; // positive = this rider is ahead
+        // Use average speed to convert distance gap to time
+        const refSpd  = Math.max(0.5, (refData.speed_mph  || 1) * 0.44704);
+        const thisSpd = Math.max(0.5, (d.speed_mph || 1) * 0.44704);
+        const avgSpd  = (refSpd + thisSpd) / 2;
+        const timeDiff = distDiff / avgSpd; // seconds ahead (+) or behind (-)
+        const absDiff  = Math.abs(timeDiff);
+        const mm = Math.floor(absDiff / 60);
+        const ss = Math.floor(absDiff % 60);
+        const sign = timeDiff > 1 ? '−' : timeDiff < -1 ? '+' : '';
+        deltaEl.textContent = `${sign}${mm}:${String(ss).padStart(2,'0')}`;
+        deltaEl.style.color = timeDiff > 1 ? '#4ade80' : timeDiff < -1 ? '#f87171' : 'var(--muted2)';
+      }
+    }
+  });
+
+  if (cmp.profileChart) cmp.profileChart.update('none');
+  if (zoomCount > 0 && cmp.zoomMap) {
+    cmp.zoomMap.panTo([sumLat / zoomCount, sumLon / zoomCount], {animate: false});
+  }
+}
+
+
+// Playback speed: normalized units per second.
+// At speed=1 the animation takes as long as the fastest rider's segment.
+// Use speed=1 so the animation runs in real-time for the fastest rider.
+function cmpGetSpeed() { return parseFloat(document.getElementById("cmp-speed")?.value || 10); }
+function cmpSetSpeed(v) { /* just reads from select on each frame */ }
+
+function cmpFrame(ts) {
+  if (!cmp.playing) return;
+  if (cmp.lastTs !== null) {
+    const refElapsed = cmp.matches.length ? cmp.matches[0].elapsed_s : 1;
+    cmp.currentT += ((ts - cmp.lastTs) / 1000) * cmpGetSpeed();
+    if (cmp.currentT >= refElapsed) {
+      cmpUpdateUI(refElapsed);
+      cmpStop();
+      return;
+    }
+    cmpUpdateUI(cmp.currentT);
+  }
+  cmp.lastTs = ts;
+  cmp.rafId  = requestAnimationFrame(cmpFrame);
+}
+
+function cmpPlay() {
+  if (cmp.playing) { cmpStop(); return; }
+  const _refEl = cmp.matches.length ? cmp.matches[0].elapsed_s : 1;
+  if (cmp.currentT >= _refEl) cmp.currentT = 0;
+  cmp.playing = true;
+  cmp.lastTs  = null;
+  document.getElementById('cmp-play').textContent = '⏸';
+  cmp.rafId = requestAnimationFrame(cmpFrame);
+}
+
+function cmpStop() {
+  cmp.playing = false;
+  if (cmp.rafId) { cancelAnimationFrame(cmp.rafId); cmp.rafId = null; }
+  cmp.lastTs = null;
+  document.getElementById('cmp-play').textContent = '▶';
+}
+
+function cmpJump(frac) {
+  cmpStop();
+  const refEl = cmp.matches.length ? cmp.matches[0].elapsed_s : 1;
+  cmpUpdateUI(frac * refEl);
+}
+
+function cmpScrub(val) {
+  cmpStop();
+  const refEl = cmp.matches.length ? cmp.matches[0].elapsed_s : 1;
+  cmpUpdateUI((val / 1000) * refEl);
+}
+
+// ── SEGMENT SAVE / LOAD ──────────────────────────────────────────────────────
+
+async function cmpLoadSavedSegments() {
+  if (!currentAct) return;
+  const sel = document.getElementById('cmp-seg-select');
+  if (!sel) return;
+  try {
+    const r = await fetch(`/api/segments/for-activity/${currentAct.id}`);
+    const d = await r.json();
+    cmp.savedSegments = d.segments || [];
+    // Rebuild options
+    sel.innerHTML = '<option value="">— choose —</option>';
+    cmp.savedSegments.forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s.id;
+      opt.textContent = `${s.name} (${s.length_km ? s.length_km.toFixed(2)+'km' : '?'})`;
+      if (s.id === cmp.savedSegId) opt.selected = true;
+      sel.appendChild(opt);
+    });
+  } catch(e) { console.warn('cmpLoadSavedSegments:', e); }
+}
+
+async function cmpSaveSegment() {
+  if (!currentAct) return;
+  const nameEl = document.getElementById('cmp-seg-name');
+  const btn    = document.getElementById('cmp-seg-save');
+  const name   = (nameEl?.value || '').trim();
+  if (!name) { nameEl?.focus(); return; }
+
+  // If we already have a saved segment loaded, just rename it
+  if (cmp.savedSegId) {
+    try {
+      await fetch(`/api/segments/${cmp.savedSegId}`, {
+        method: 'PATCH',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({name}),
+      });
+      btn.textContent = 'Saved!'; btn.classList.add('saved');
+      setTimeout(() => { btn.textContent = 'Save'; btn.classList.remove('saved'); }, 1500);
+      await cmpLoadSavedSegments();
+    } catch(e) { console.error(e); }
+    return;
+  }
+
+  // New save
+  const body = {
+    name,
+    activity_id: currentAct.id,
+    start_idx:   cmp.selStartIdx,
+    end_idx:     cmp.selEndIdx,
+  };
+  try {
+    const r = await fetch('/api/segments', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(body),
+    });
+    if (!r.ok) { console.error(await r.text()); return; }
+    const d = await r.json();
+    cmp.savedSegId = d.id;
+    btn.textContent = 'Saved!'; btn.classList.add('saved');
+    setTimeout(() => { btn.textContent = 'Save'; btn.classList.remove('saved'); }, 1500);
+    await cmpLoadSavedSegments();
+    // Select the newly saved segment
+    const sel = document.getElementById('cmp-seg-select');
+    if (sel) sel.value = d.id;
+  } catch(e) { console.error(e); }
+}
+
+async function cmpLoadSavedSegment(segId) {
+  if (!segId || !currentAct) return;
+  const seg = cmp.savedSegments.find(s => s.id == segId);
+  if (!seg) return;
+
+  cmp.savedSegId = seg.id;
+  const nameEl = document.getElementById('cmp-seg-name');
+  if (nameEl) nameEl.value = seg.name;
+
+  // Update elevation selection to match saved segment
+  cmp.selStartIdx = seg.start_idx;
+  cmp.selEndIdx   = seg.end_idx;
+
+  // Re-run compare with the saved segment's start/end on the reference activity
+  const overlay = document.getElementById('compare-overlay');
+  const loading = document.getElementById('cmp-loading');
+  const titleEl = document.getElementById('compare-title');
+  overlay.classList.add('open');
+  loading.style.display = 'flex';
+  titleEl.textContent = 'Searching…';
+
+  try {
+    const r = await fetch('/api/segment/compare', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        activity_id: currentAct.id,
+        start_idx:   seg.start_idx,
+        end_idx:     seg.end_idx,
+        max_results: 4,
+        radius_m:    150,
+      }),
+    });
+    const d = await r.json();
+    loading.style.display = 'none';
+    if (!r.ok) { titleEl.textContent = d.detail || 'No matches'; return; }
+
+    const refId = currentAct.id;
+    const ref   = d.matches.find(m => m.activity_id === refId);
+    const rest  = d.matches.filter(m => m.activity_id !== refId);
+    rest.sort((a, b) => a.elapsed_s - b.elapsed_s);
+    cmp.matches  = ref ? [ref, ...rest] : d.matches;
+    cmp.currentT = 0;
+
+    const nOthers = cmp.matches.length - 1;
+    titleEl.textContent = `${escHtml(seg.name)} — vs. ${nOthers} Fastest`;
+
+    buildCompareLegend();
+    initCompareMap();
+    initCompareProfile();
+    cmpUpdateUI(0);
+  } catch(e) {
+    loading.style.display = 'none';
+    titleEl.textContent = 'Error: ' + e.message;
+  }
+}
+
+async function cmpDeleteSegment() {
+  const sel = document.getElementById('cmp-seg-select');
+  const segId = sel?.value;
+  if (!segId) return;
+  const seg = cmp.savedSegments.find(s => s.id == segId);
+  if (!seg) return;
+  if (!confirm(`Delete segment "${seg.name}"?`)) return;
+  await fetch(`/api/segments/${segId}`, {method: 'DELETE'});
+  if (cmp.savedSegId == segId) {
+    cmp.savedSegId = null;
+    const nameEl = document.getElementById('cmp-seg-name');
+    if (nameEl) nameEl.value = '';
+  }
+  await cmpLoadSavedSegments();
+}
+
+// ── ELEVATION CHART ZOOM ─────────────────────────────────────────────────────
+const elevZoom = {
+  level:    1,      // 1 = full view, >1 = zoomed in
+  offset:   0,      // scroll position 0–1 (fraction of total range)
+  maxLevel: 16,
+};
+
+function elevZoomApply() {
+  if (!elevChart || !elevChartData) return;
+  const dist  = elevChartData.dist_m;
+  const total = U.metric ? dist[dist.length-1]/1000 : dist[dist.length-1]/1609.344;
+  const bar   = document.getElementById('elev-zoom-bar');
+  const label = document.getElementById('elev-zoom-label');
+  const scroll = document.getElementById('elev-zoom-scroll');
+
+  if (elevZoom.level <= 1) {
+    // Full view — remove min/max constraints
+    elevChart.options.scales.x.min = undefined;
+    elevChart.options.scales.x.max = undefined;
+    bar.style.display = 'none';
+  } else {
+    const window_size = total / elevZoom.level;
+    const max_offset  = total - window_size;
+    const start = Math.max(0, Math.min(elevZoom.offset * max_offset, max_offset));
+    elevChart.options.scales.x.min = start;
+    elevChart.options.scales.x.max = start + window_size;
+    bar.style.display = 'flex';
+    label.textContent = elevZoom.level + '×';
+    scroll.value = Math.round((elevZoom.offset) * 1000);
+  }
+  elevChart.update('none');
+}
+
+function elevZoomStep(dir) {
+  // dir: +1 = zoom in, -1 = zoom out
+  const steps = [1, 1.5, 2, 3, 4, 6, 8, 12, 16];
+  const cur = elevZoom.level;
+  let idx = steps.findIndex(s => s >= cur);
+  if (idx < 0) idx = steps.length - 1;
+  idx = Math.max(0, Math.min(steps.length - 1, idx + dir));
+  elevZoom.level = steps[idx];
+  elevZoomApply();
+}
+
+function elevZoomReset() {
+  elevZoom.level  = 1;
+  elevZoom.offset = 0;
+  elevZoomApply();
+}
+
+function elevScrollTo(val) {
+  elevZoom.offset = val / 1000;
+  elevZoomApply();
+}
+
+function elevZoomAtPixel(px, factor) {
+  // Zoom in/out centered on pixel position px within chart-wrap
+  if (!elevChart || !elevChartData) return;
+  const dist  = elevChartData.dist_m;
+  const total = U.metric ? dist[dist.length-1]/1000 : dist[dist.length-1]/1609.344;
+  const ca    = elevChart.chartArea;
+  if (!ca) return;
+
+  // Find x-value at cursor
+  const xScale = elevChart.scales.x;
+  const curX   = xScale.getValueForPixel(Math.max(ca.left, Math.min(ca.right, px)));
+  const curXFrac = curX / total;
+
+  // Apply zoom
+  const oldLevel = elevZoom.level;
+  elevZoom.level = Math.max(1, Math.min(elevZoom.maxLevel, elevZoom.level * factor));
+
+  if (elevZoom.level <= 1) {
+    elevZoom.offset = 0;
+  } else {
+    // Keep cursor position fixed: curXFrac should stay at same screen position
+    const windowFrac = 1 / elevZoom.level;
+    const maxOffset  = 1 - windowFrac;
+    elevZoom.offset  = Math.max(0, Math.min(maxOffset, curXFrac - windowFrac / 2));
+    // Normalise to 0–1 of scrollable range
+    if (maxOffset > 0) elevZoom.offset = elevZoom.offset / maxOffset;
+    else elevZoom.offset = 0;
+  }
+  elevZoomApply();
+}
+
+// Wire mouse wheel on chart-wrap
+document.addEventListener('DOMContentLoaded', () => {
+  const wrap = document.getElementById('elev-canvas-area') || document.getElementById('chart-wrap');
+  if (!wrap) return;
+  wrap.addEventListener('wheel', e => {
+    if (!elevChart) return;
+    e.preventDefault();
+    const rect  = wrap.getBoundingClientRect();
+    const px    = e.clientX - rect.left;
+    const factor = e.deltaY < 0 ? 1.4 : 1 / 1.4;
+    elevZoomAtPixel(px, factor);
+  }, {passive: false});
+});
+
 // ── INIT ──────────────────────────────────────────────────────────────────────
 (async()=>{
   initMap();
+  await U.load();  // fetch metric pref before first render
+  updateSplitLenLabels();
   buildColHead();
   await loadFilterOptions();
   await loadAll();
@@ -3036,6 +4365,19 @@ setInterval(async () => {
     const pane = document.getElementById('splits-pane');
     const btn  = document.getElementById('splits-collapse-btn');
     if (pane) { pane.classList.remove('collapsed'); btn.textContent = '▼'; }
+  }
+  // Restore pane sizes
+  const ps = loadPaneSizes();
+  if (ps.sidebarW) { const sb = document.getElementById('sidebar'); if (sb) sb.style.width = ps.sidebarW + 'px'; }
+  if (ps.mapH)     { const el = document.getElementById('map-wrap');   if (el) el.style.height = ps.mapH   + 'px'; }
+  if (ps.chartH)   { const el = document.getElementById('chart-wrap'); if (el) el.style.height = ps.chartH + 'px'; }
+  if (ps.splitsH && ps.splitsH > 32) {
+    const pane = document.getElementById('splits-pane');
+    const btn  = document.getElementById('splits-collapse-btn');
+    const list = document.getElementById('act-list');
+    if (pane) { pane.style.height = ps.splitsH + 'px'; pane.classList.remove('collapsed'); }
+    if (btn)  btn.textContent = '▼';
+    if (list) list.style.paddingBottom = (ps.splitsH + 44) + 'px';
   }
   // Auto-select activity from ?select= param
   const sel = new URLSearchParams(location.search).get('select');
@@ -3075,13 +4417,76 @@ setInterval(async () => {
     <option value="8">8×</option>
   </select>
   <div id="anim-stats">
-    <div class="anim-stat"><div class="anim-stat-val" id="as-hr">—</div><div class="anim-stat-lbl">HR bpm</div></div>
-    <div class="anim-stat"><div class="anim-stat-val" id="as-spd">—</div><div class="anim-stat-lbl">mph</div></div>
-    <div class="anim-stat"><div class="anim-stat-val" id="as-pwr">—</div><div class="anim-stat-lbl">watts</div></div>
-    <div class="anim-stat"><div class="anim-stat-val" id="as-alt">—</div><div class="anim-stat-lbl">ft</div></div>
-    <div class="anim-stat"><div class="anim-stat-val" id="as-dst">—</div><div class="anim-stat-lbl">mi</div></div>
+    <div class="anim-stat"><div class="anim-stat-val" id="as-hr">—</div><div class="anim-stat-lbl" id="as-hr-lbl">HR bpm</div></div>
+    <div class="anim-stat"><div class="anim-stat-val" id="as-spd">—</div><div class="anim-stat-lbl" id="as-spd-lbl">mph</div></div>
+    <div class="anim-stat"><div class="anim-stat-val" id="as-pwr">—</div><div class="anim-stat-lbl" id="as-pwr-lbl">watts</div></div>
+    <div class="anim-stat"><div class="anim-stat-val" id="as-alt">—</div><div class="anim-stat-lbl" id="as-alt-lbl">ft</div></div>
+    <div class="anim-stat"><div class="anim-stat-val" id="as-dst">—</div><div class="anim-stat-lbl" id="as-dst-lbl">mi</div></div>
   </div>
 </div>
+<!-- ── Compare Panel ─────────────────────────────────────────────────────── -->
+<div id="compare-overlay" onclick="if(event.target===this)closeCompare()">
+  <div id="compare-panel" style="position:relative">
+    <div id="cmp-loading" style="display:none">Searching activities…</div>
+    <div id="compare-header">
+      <span id="compare-title">Segment Compare</span>
+      <button id="compare-close-btn" onclick="closeCompare()">✕</button>
+    </div>
+    <div id="cmp-seg-bar">
+      <label>Segment:</label>
+      <input id="cmp-seg-name" type="text" placeholder="Name this segment…" maxlength="80">
+      <button id="cmp-seg-save" onclick="cmpSaveSegment()">Save</button>
+      <label style="margin-left:6px">Saved:</label>
+      <select id="cmp-seg-select" onchange="cmpLoadSavedSegment(this.value)" title="Switch to a saved segment">
+        <option value="">— choose —</option>
+      </select>
+      <button class="cmp-t-btn" onclick="cmpDeleteSegment()" title="Delete selected segment" style="padding:3px 7px;font-size:12px;color:#f87171">🗑</button>
+    </div>
+    <div id="compare-body">
+      <div id="compare-maps">
+        <div id="compare-map" style="position:relative">
+          <div id="cmp-map-style-bar" style="position:absolute;top:8px;right:8px;z-index:500;display:flex;gap:3px;flex-wrap:wrap;justify-content:flex-end">
+            <button class="map-style-btn" data-style="osm"          onclick="setCmpMapStyle('osm')">Street</button>
+            <button class="map-style-btn" data-style="topo"         onclick="setCmpMapStyle('topo')">Topo</button>
+            <button class="map-style-btn" data-style="carto-dark"   onclick="setCmpMapStyle('carto-dark')">Dark</button>
+            <button class="map-style-btn" data-style="carto-light"  onclick="setCmpMapStyle('carto-light')">Light</button>
+            <button class="map-style-btn" data-style="esri-sat"     onclick="setCmpMapStyle('esri-sat')">Satellite</button>
+          </div>
+        </div>
+        <div id="compare-zoom"></div>
+      </div>
+      <div id="compare-profile"><canvas id="cmp-profile-canvas"></canvas></div>
+      <div id="compare-legend"></div>
+    </div>
+    <div id="compare-transport">
+      <button class="cmp-t-btn" id="cmp-play"  onclick="cmpPlay()">▶</button>
+      <button class="cmp-t-btn" id="cmp-stop"  onclick="cmpStop()">⏹</button>
+      <button class="cmp-t-btn" id="cmp-start" onclick="cmpJump(0)">⏮</button>
+      <span id="cmp-time">0:00:00</span>
+      <input type="range" id="cmp-scrub" min="0" max="1000" value="0" oninput="cmpScrub(this.value)">
+      <select id="cmp-speed" onchange="cmpSetSpeed(this.value)" title="Playback speed" style="background:var(--surface2);border:1px solid var(--border2);color:var(--text);border-radius:6px;padding:3px 6px;font-size:12px;font:inherit">
+        <option value="1">1×</option>
+        <option value="5">5×</option>
+        <option value="10" selected>10×</option>
+        <option value="25">25×</option>
+        <option value="50">50×</option>
+        <option value="100">100×</option>
+      </select>
+    </div>
+  </div>
+</div>
+
+<!-- ── Zones Panel ───────────────────────────────────────────────────────── -->
+<div id="zones-overlay" onclick="if(event.target===this)closeZones()">
+  <div id="zones-panel">
+    <div id="zones-header">
+      <span id="zones-title">Heart Rate &amp; Power Zones</span>
+      <button id="zones-close-btn" onclick="closeZones()">✕</button>
+    </div>
+    <div id="zones-body"></div>
+  </div>
+</div>
+
 <!-- ── AI Coach Panel ─────────────────────────────────────────────────────── -->
 <div id="coach-overlay" onclick="coachOverlayClick(event)">
   <div id="coach-panel">
@@ -3200,4 +4605,5 @@ setInterval(async () => {
 </div>
 </body>
 </html>
+
 

@@ -162,12 +162,12 @@ def find_free_port(preferred: int = 8000) -> int:
     for port in range(preferred, preferred + 20):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             try:
-                s.bind(("127.0.0.1", port))
+                s.bind(("0.0.0.0", port))
                 return port
             except OSError:
                 continue
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind(("127.0.0.1", 0))
+        s.bind(("0.0.0.0", 0))
         return s.getsockname()[1]
 
 
@@ -296,7 +296,7 @@ def main():
         try:
             import uvicorn
             from app.main import app as fastapi_app
-            uvicorn.run(fastapi_app, host="127.0.0.1", port=port, log_level="error")
+            uvicorn.run(fastapi_app, host="0.0.0.0", port=port, log_level="error")
         except Exception as e:
             server_error.append(str(e))
 

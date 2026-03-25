@@ -231,6 +231,46 @@ input[readonly]{color:#8e8e93;cursor:default}
     </div>
   </div>
 
+
+  <!-- ── Training Profile ─────────────────────────────────────────────────── -->
+
+  <div class="card">
+    <div class="card-header">
+      <h1>Training Profile</h1>
+    </div>
+    <p class="section-intro">
+      Used to calculate heart rate and power zones. Stored in your database.
+    </p>
+    <div style="margin-bottom:1rem">
+      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none">
+        <input type="checkbox" id="tp-metric" style="width:16px;height:16px;accent-color:#f97316">
+        <span>Use metric units <span style="color:#636366;font-weight:400">(km, m, km/h, °C)</span></span>
+      </label>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+      <div>
+        <label for="tp-max-hr">Max Heart Rate <span style="color:#636366;font-weight:400">(bpm)</span></label>
+        <input type="text" id="tp-max-hr" placeholder="e.g. 185">
+      </div>
+      <div>
+        <label for="tp-ftp">FTP <span style="color:#636366;font-weight:400">(watts)</span></label>
+        <input type="text" id="tp-ftp" placeholder="e.g. 250">
+      </div>
+      <div>
+        <label for="tp-age">Age <span style="color:#636366;font-weight:400">(years)</span></label>
+        <input type="text" id="tp-age" placeholder="e.g. 42">
+      </div>
+      <div>
+        <label for="tp-weight">Weight <span style="color:#636366;font-weight:400">(lbs)</span></label>
+        <input type="text" id="tp-weight" placeholder="e.g. 165">
+      </div>
+    </div>
+    <div class="btn-row" style="margin-top:1rem">
+      <button class="btn btn-primary" onclick="saveTrainingProfile()">Save Profile</button>
+    </div>
+    <div class="result" id="tp-result"></div>
+  </div>
+
 </div><!-- /container -->
 
 
@@ -484,6 +524,41 @@ document.addEventListener('keydown', e => {
 });
 
 // ── Utility ───────────────────────────────────────────────────────────────────
+// ── Training Profile ─────────────────────────────────────────────────────────
+async function loadTrainingProfile() {
+  try {
+    const r = await fetch('/api/settings/training-zones');
+    const d = await r.json();
+    if (d.max_hr)    document.getElementById('tp-max-hr').value = d.max_hr;
+    if (d.ftp_watts) document.getElementById('tp-ftp').value    = d.ftp_watts;
+    if (d.age)       document.getElementById('tp-age').value    = d.age;
+    if (d.weight_lb) document.getElementById('tp-weight').value = d.weight_lb;
+    document.getElementById('tp-metric').checked = !!d.use_metric;
+  } catch(e) {}
+}
+
+async function saveTrainingProfile() {
+  const res = document.getElementById('tp-result');
+  const max_hr    = document.getElementById('tp-max-hr').value.trim() || null;
+  const ftp_watts = document.getElementById('tp-ftp').value.trim()    || null;
+  const age       = document.getElementById('tp-age').value.trim()    || null;
+  const weight_lb = document.getElementById('tp-weight').value.trim() || null;
+  const use_metric= document.getElementById('tp-metric').checked;
+  const btn = event.target;
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    const r = await fetch('/api/settings/training-zones', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({max_hr, ftp_watts, age, weight_lb, use_metric}),
+    });
+    const d = await r.json();
+    show(res, r.ok ? 'ok' : 'err', r.ok ? '✓ Training profile saved' : `✗ ${d.detail||'Error'}`);
+  } catch(e) { show(res, 'err', `✗ ${e.message}`); }
+  btn.disabled = false; btn.textContent = 'Save Profile';
+}
+
+document.addEventListener('DOMContentLoaded', loadTrainingProfile);
+
 function show(el, type, msg) {
   el.className = `result result-${type}`;
   el.textContent = msg;
@@ -492,3 +567,4 @@ function show(el, type, msg) {
 </script>
 </body>
 </html>
+

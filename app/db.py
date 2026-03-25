@@ -222,6 +222,12 @@ def build_activity(row: sqlite3.Row) -> dict:
     a["avg_speed_mph"]   = round(avg_moving_spd, 1)
     a["avg_pace"]        = pace_str(avg_moving_spd)
     a["max_speed_mph"]   = round(safe_float(attrs.get("maxSpeed")), 1)
+    # Overall avg speed = distance / elapsed time (includes stops)
+    _dur = duration_s or a.get("duration") or 0
+    if dist_mi and _dur and _dur > 0:
+        a["avg_overall_speed_mph"] = round(dist_mi / (_dur / 3600.0), 1)
+    else:
+        a["avg_overall_speed_mph"] = 0
 
     # ── heart rate ────────────────────────────────────────────────────────
     a["avg_heartrate"] = round(safe_float(attrs.get("avgHeartRate") or d.get("src_avg_heartrate")))
@@ -267,6 +273,15 @@ class AscentDB:
         self._con = sqlite3.connect(path, check_same_thread=False)
         self._con.row_factory = sqlite3.Row
         self._con.execute("PRAGMA journal_mode=WAL")
+        # Migration: add start_lat/start_lon and map bbox columns if missing
+        for col in ("start_lat REAL", "start_lon REAL",
+                    "map_min_lat REAL", "map_max_lat REAL",
+                    "map_min_lon REAL", "map_max_lon REAL"):
+            try:
+                self._con.execute(f"ALTER TABLE activities ADD COLUMN {col}")
+                self._con.commit()
+            except Exception:
+                pass
 
     def close(self):
         self._con.close()
@@ -674,4 +689,128 @@ class AscentDB:
             {"cid": r[0], "name": r[1], "type": r[2]}
             for r in self._con.execute(f"PRAGMA table_info('{table}')").fetchall()
         ]
+
+    # ── user profile ──────────────────────────────────────────────────────────
+
+    def _ensure_user_profile_table(self):
+        self._con.execute("""
+            CREATE TABLE IF NOT EXISTS user_profile (
+                id         INTEGER PRIMARY KEY CHECK(id=1),
+                max_hr     INTEGER,
+                ftp_watts  INTEGER,
+                age        INTEGER,
+                weight_lb  REAL,
+                use_metric INTEGER DEFAULT 0
+            )
+        """)
+        self._con.execute(
+            "INSERT OR IGNORE INTO user_profile (id) VALUES (1)"
+        )
+        # Migration: add use_metric column if missing (existing databases)
+        try:
+            self._con.execute("ALTER TABLE user_profile ADD COLUMN use_metric INTEGER DEFAULT 0")
+        except Exception:
+            pass  # column already exists
+        self._con.commit()
+
+    def get_user_profile(self) -> dict:
+        self._ensure_user_profile_table()
+        row = self._con.execute(
+            "SELECT max_hr, ftp_watts, age, weight_lb, use_metric FROM user_profile WHERE id=1"
+        ).fetchone()
+        if row:
+            return {
+                "max_hr":     row[0],
+                "ftp_watts":  row[1],
+                "age":        row[2],
+                "weight_lb":  row[3],
+                "use_metric": bool(row[4]),
+            }
+        return {"max_hr": None, "ftp_watts": None, "age": None, "weight_lb": None, "use_metric": False}
+
+    def set_user_profile(self, max_hr=None, ftp_watts=None, age=None, weight_lb=None, use_metric=None):
+        self._ensure_user_profile_table()
+        con = sqlite3.connect(self.path, timeout=30)
+        try:
+            con.execute("PRAGMA journal_mode=WAL")
+            con.execute("""
+                UPDATE user_profile SET
+                    max_hr     = COALESCE(?, max_hr),
+                    ftp_watts  = COALESCE(?, ftp_watts),
+                    age        = COALESCE(?, age),
+                    weight_lb  = COALESCE(?, weight_lb),
+                    use_metric = CASE WHEN ? IS NOT NULL THEN ? ELSE use_metric END
+                WHERE id=1
+            """, (max_hr, ftp_watts, age, weight_lb, use_metric, use_metric))
+            con.commit()
+        finally:
+            con.close()
+
+    # ── Segments ──────────────────────────────────────────────────────────────
+
+    def _ensure_segments_table(self):
+        self._con.execute("""
+            CREATE TABLE IF NOT EXISTS segments (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                name        TEXT NOT NULL,
+                activity_id INTEGER NOT NULL,
+                start_idx   INTEGER NOT NULL,
+                end_idx     INTEGER NOT NULL,
+                length_km   REAL,
+                min_lat     REAL, max_lat REAL,
+                min_lon     REAL, max_lon REAL,
+                points_json TEXT,
+                created_at  INTEGER DEFAULT (strftime('%s','now'))
+            )
+        """)
+        self._con.commit()
+
+    def save_segment(self, name: str, activity_id: int, start_idx: int, end_idx: int,
+                     length_km: float, min_lat: float, max_lat: float,
+                     min_lon: float, max_lon: float, points_json: str) -> int:
+        self._ensure_segments_table()
+        cur = self._con.execute("""
+            INSERT INTO segments
+              (name, activity_id, start_idx, end_idx, length_km,
+               min_lat, max_lat, min_lon, max_lon, points_json)
+            VALUES (?,?,?,?,?,?,?,?,?,?)
+        """, (name, activity_id, start_idx, end_idx, length_km,
+              min_lat, max_lat, min_lon, max_lon, points_json))
+        self._con.commit()
+        return cur.lastrowid
+
+    def update_segment_name(self, segment_id: int, name: str):
+        self._ensure_segments_table()
+        self._con.execute("UPDATE segments SET name=? WHERE id=?", (name, segment_id))
+        self._con.commit()
+
+    def get_segments_for_activity(self, activity_id: int) -> list:
+        """Return all segments whose GPS points overlap the given activity's track."""
+        self._ensure_segments_table()
+        # Use bbox of activity's points to filter
+        rows = self._con.execute("""
+            SELECT s.id, s.name, s.activity_id, s.start_idx, s.end_idx,
+                   s.length_km, s.min_lat, s.max_lat, s.min_lon, s.max_lon,
+                   s.points_json, s.created_at
+            FROM segments s
+            WHERE EXISTS (
+                SELECT 1 FROM points p WHERE p.track_id = ?
+                AND p.latitude_e7  BETWEEN s.min_lat AND s.max_lat
+                AND p.longitude_e7 BETWEEN s.min_lon AND s.max_lon
+            )
+            ORDER BY s.name
+        """, (activity_id,)).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_segment(self, segment_id: int):
+        self._ensure_segments_table()
+        row = self._con.execute(
+            "SELECT * FROM segments WHERE id=?", (segment_id,)
+        ).fetchone()
+        return dict(row) if row else None
+
+    def delete_segment(self, segment_id: int):
+        self._ensure_segments_table()
+        self._con.execute("DELETE FROM segments WHERE id=?", (segment_id,))
+        self._con.commit()
 

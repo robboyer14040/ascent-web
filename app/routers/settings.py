@@ -199,3 +199,45 @@ async def save_strava_keys(req: dict):
     os.environ["STRAVA_CLIENT_ID"]     = client_id
     os.environ["STRAVA_CLIENT_SECRET"] = client_secret
     return {"status": "ok", "client_id": client_id, "masked_secret": _mask_key(client_secret)}
+
+
+@router.get("/api/settings/training-zones")
+async def get_training_zones():
+    """Return the user profile (max HR, FTP, age, weight) from the database."""
+    try:
+        profile = db_getter().get_user_profile()
+        return {"status": "ok", **profile}
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+@router.post("/api/settings/training-zones")
+async def save_training_zones(req: dict):
+    """Save user profile fields to the database."""
+    def to_int(v):
+        try: return int(v) if v not in (None, "", "null") else None
+        except: return None
+    def to_float(v):
+        try: return float(v) if v not in (None, "", "null") else None
+        except: return None
+
+    max_hr    = to_int(req.get("max_hr"))
+    ftp_watts = to_int(req.get("ftp_watts"))
+    age       = to_int(req.get("age"))
+    weight_lb = to_float(req.get("weight_lb"))
+
+    use_metric_raw = req.get("use_metric")
+    use_metric = None
+    if use_metric_raw is not None:
+        use_metric = 1 if use_metric_raw in (True, 1, "true", "1") else 0
+
+    try:
+        db_getter().set_user_profile(
+            max_hr=max_hr, ftp_watts=ftp_watts, age=age, weight_lb=weight_lb,
+            use_metric=use_metric
+        )
+        return {"status": "ok", "max_hr": max_hr, "ftp_watts": ftp_watts,
+                "age": age, "weight_lb": weight_lb, "use_metric": bool(use_metric)}
+    except Exception as e:
+        raise HTTPException(500, str(e))
+

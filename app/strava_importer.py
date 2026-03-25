@@ -29,6 +29,32 @@ M_TO_MI    = 0.000621371
 M_TO_FT    = 3.28084
 MPS_TO_MPH = 2.2369362921
 
+def _decode_polyline_bbox(encoded: str):
+    """Decode Google-encoded polyline, return (min_lat,max_lat,min_lon,max_lon) or None."""
+    if not encoded:
+        return None
+    try:
+        lats, lons = [], []
+        index = lat = lng = 0
+        while index < len(encoded):
+            for is_lng in (False, True):
+                result = shift = 0
+                while True:
+                    b = ord(encoded[index]) - 63
+                    index += 1
+                    result |= (b & 0x1f) << shift
+                    shift += 5
+                    if b < 0x20:
+                        break
+                val = ~(result >> 1) if result & 1 else result >> 1
+                if is_lng: lng += val
+                else:       lat += val
+            lats.append(lat / 1e5)
+            lons.append(lng / 1e5)
+        return (min(lats), max(lats), min(lons), max(lons)) if lats else None
+    except Exception:
+        return None
+
 
 def _f(v, default=None):
     try:
@@ -401,6 +427,16 @@ class StravaImporter:
         src_elapsed     = _f(act.get("elapsed_time"))
         src_moving      = _f(act.get("moving_time"))
 
+        # start_latlng from Strava summary — [lat, lon] or None
+        start_latlng = act.get("start_latlng") or []
+        start_lat = float(start_latlng[0]) if len(start_latlng) >= 2 else None
+        start_lon = float(start_latlng[1]) if len(start_latlng) >= 2 else None
+
+        # Bounding box from summary_polyline
+        polyline = (act.get("map") or {}).get("summary_polyline") or ""
+        bbox = _decode_polyline_bbox(polyline)
+        map_min_lat, map_max_lat, map_min_lon, map_max_lon = bbox if bbox else (None, None, None, None)
+
         con = self._connect()
         try:
             cur = con.execute("""
@@ -420,7 +456,9 @@ class StravaImporter:
                     has_distance_data, moving_speed_only,
                     points_saved, points_count,
                     weight_lb, altitude_smooth_factor, equipment_weight_lb, device_total_time_s,
-                    local_media_items_json, photo_urls_json
+                    local_media_items_json, photo_urls_json,
+                    start_lat, start_lon,
+                    map_min_lat, map_max_lat, map_min_lon, map_max_lon
                 ) VALUES (
                     ?,?,?,NULL,
                     ?,?,
@@ -437,7 +475,9 @@ class StravaImporter:
                     1,0,
                     0,0,
                     0,0,0,0,
-                    NULL,NULL
+                    NULL,NULL,
+                    ?,?,
+                    ?,?,?,?
                 )
             """, (
                 act_uuid,
@@ -454,6 +494,8 @@ class StravaImporter:
                 src_avg_cad, src_total_climb,
                 src_kj, src_elapsed, src_moving,
                 parse_tz_name(act), parse_tz_offset(act),
+                start_lat, start_lon,
+                map_min_lat, map_max_lat, map_min_lon, map_max_lon,
             ))
             activity_db_id = cur.lastrowid
 
@@ -590,3 +632,4 @@ class StravaImporter:
             "skipped":  skipped,
             "errors":   errors,
         }
+
