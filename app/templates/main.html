@@ -225,8 +225,14 @@ input,select{font:inherit}
   background:var(--surface);border:1px solid var(--border2);border-radius:14px;
   width:min(820px,96vw);height:min(680px,92vh);
   display:flex;flex-direction:column;box-shadow:0 24px 64px rgba(0,0,0,.7);
-  overflow:hidden;
+  overflow:hidden;position:relative;
+  resize:both;min-width:480px;min-height:400px;
 }
+#cmp-maps-handle{
+  flex-shrink:0;height:5px;cursor:row-resize;background:transparent;
+  border-top:1px solid var(--border);transition:background .15s;
+}
+#cmp-maps-handle:hover,#cmp-maps-handle.dragging{background:#f97316;opacity:.6}
 #compare-header{
   display:flex;align-items:center;gap:8px;padding:12px 16px 10px;
   border-bottom:1px solid var(--border);flex-shrink:0;
@@ -290,8 +296,17 @@ input,select{font:inherit}
 }
 #cmp-loading{
   position:absolute;inset:0;background:rgba(0,0,0,.6);display:flex;
-  align-items:center;justify-content:center;color:var(--text);font-size:13px;
-  border-radius:14px;z-index:10;
+  flex-direction:column;align-items:center;justify-content:center;
+  color:var(--text);font-size:13px;gap:14px;
+  border-radius:14px;z-index:1000;
+}
+#cmp-progress-wrap{
+  width:260px;height:6px;background:rgba(255,255,255,.15);
+  border-radius:3px;overflow:hidden;
+}
+#cmp-progress-bar{
+  height:100%;width:0%;background:#f97316;border-radius:3px;
+  transition:width .2s ease;
 }
 
 #zones-overlay{
@@ -741,7 +756,7 @@ const U = {
   dist:  (mi)  => U.metric ? +(mi * 1.60934).toFixed(2) : mi,
   distS: (mi)  => U.metric ? (+(mi * 1.60934).toFixed(2)) + ' km' : mi + ' mi',
   speed: (mph) => U.metric ? +(mph * 1.60934).toFixed(1) : mph,
-  speedS:(mph) => U.metric ? (+(mph * 1.60934).toFixed(1)) + ' km/h' : mph + ' mph',
+  speedS:(mph) => U.metric ? (+(mph * 1.60934).toFixed(1)) + ' km/h' : (+mph).toFixed(1) + ' mph',
   alt:   (ft)  => U.metric ? Math.round(ft * 0.3048) : Math.round(ft),
   altS:  (ft)  => U.metric ? Math.round(ft * 0.3048) + ' m'  : Math.round(ft) + ' ft',
   climb: (ft)  => U.metric ? Math.round(ft * 0.3048) : Math.round(ft),
@@ -2018,7 +2033,7 @@ function buildDetailHTML(a) {
   return `
     <div class="act-title-bar">
       <div class="act-title">${escHtml(a.name||'(unnamed)')}</div>
-      <div class="act-title-links"><button class="zones-btn" id="compare-btn" onclick="openCompare()" style="display:none">Compare…</button><button class="zones-btn" onclick="openZones()">Zones</button>${strava}</div>
+      <div class="act-title-links"><button class="zones-btn" id="compare-btn" onclick="openCompare()">Compare…</button><button class="zones-btn" onclick="openZones()">Zones</button>${strava}</div>
     </div>
     <div style="font-size:11.5px;color:var(--muted);margin-bottom:10px">${fmtDate(a.start_time)}</div>
     <div class="stats-row">${chips.map(([l,v])=>`<div class="stat-chip"><div class="sc-label">${l}</div><div class="sc-val">${v}</div></div>`).join('')}</div>
@@ -3660,6 +3675,8 @@ const cmp = {
   zoomTile:    null,     // chase-cam tile layer
   profileChart:  null,   // Chart.js elevation profile
   profileDots:   [],     // {x,y} per match for dot overlay
+  _resizing:     false,  // true during/just after resize to suppress overlay click
+  _resizeTimer:  null,
   savedSegId:    null,   // currently loaded saved segment id (null = unsaved)
   savedSegments: [],     // list of saved segments for current activity
   // Segment selection state (set by elevation drag)
@@ -3681,20 +3698,176 @@ function fmtElapsed(s) {
 function setElevSelection(startIdx, endIdx) {
   cmp.selStartIdx = startIdx;
   cmp.selEndIdx   = endIdx;
-  const btn = document.getElementById('compare-btn');
-  if (btn) btn.style.display = (startIdx !== null && endIdx !== null && endIdx > startIdx) ? '' : 'none';
+  // Button always visible when activity loaded; selection state tracked separately
+}
+
+async function cmpOpenManual() {
+  // Manual compare: use the currently selected activities directly (no matching).
+  // First selected = reference; up to 4 total.
+  const actIds = [...state.selectedIds].slice(0, 4);
+  // Ensure reference (selectedId) is first
+  const refId = state.selectedId || actIds[0];
+  const ordered = [refId, ...actIds.filter(id => id !== refId)].slice(0, 4);
+
+  const overlay = document.getElementById('compare-overlay');
+  const loading = document.getElementById('cmp-loading');
+  const titleEl = document.getElementById('compare-title');
+  const panel   = document.getElementById('compare-panel');
+  overlay.classList.add('open');
+
+  const savedW = localStorage.getItem('ascent-cmp-w');
+  const savedH = localStorage.getItem('ascent-cmp-h');
+  if (panel && savedW) panel.style.width  = savedW;
+  if (panel && savedH) panel.style.height = savedH;
+  const savedSpeed = localStorage.getItem('ascent-cmp-speed') || '25';
+  const speedSel = document.getElementById('cmp-speed');
+  if (speedSel) speedSel.value = savedSpeed;
+
+  titleEl.textContent = `${ordered.length} Activities — choose a segment`;
+  loading.style.display = 'none';
+  cmp.matches  = [];
+  cmp.currentT = 0;
+  cmp.savedSegId = null;
+  cmp._manualIds = ordered;  // store for later use when segment chosen
+
+  // Build placeholder legend with activity names + colors
+  const colors = ['#ef4444','#3b82f6','#22c55e','#f97316'];
+  const legendEl = document.getElementById('compare-legend');
+  if (legendEl) {
+    legendEl.innerHTML = '';
+    ordered.forEach((id, i) => {
+      const act = state.activities?.find(a => a.id === id) || state.filtered?.find(a => a.id === id);
+      const name = act?.name || `Activity ${id}`;
+      const li = document.createElement('div');
+      li.className = 'cmp-legend-item';
+      li.innerHTML = `<span class="cmp-dot" style="background:${colors[i%colors.length]}"></span>` +
+        `<span style="font-weight:${i===0?700:400}">${escHtml(name)}</span>`;
+      legendEl.appendChild(li);
+    });
+  }
+
+  // Show full tracks on overview map
+  await initCompareMapManual(ordered);
+
+  // Clear profile
+  if (cmp.profileChart) { cmp.profileChart.destroy(); cmp.profileChart = null; }
+
+  // Load segments for all selected activities
+  await cmpLoadSavedSegments();
+}
+
+async function initCompareMapManual(actIds) {
+  const mapEl  = document.getElementById('compare-map');
+  const zoomEl = document.getElementById('compare-zoom');
+  if (cmp.map)          { cmp.map.remove();          cmp.map = null; }
+  if (cmp.zoomMap)      { cmp.zoomMap.remove();      cmp.zoomMap = null; }
+  if (cmp.profileChart) { cmp.profileChart.destroy(); cmp.profileChart = null; }
+  cmp.markers = []; cmp.zoomMarkers = []; cmp.tracks = [];
+
+  const style = MAP_STYLES[localStorage.getItem('ascent-map-style') || 'osm'] || MAP_STYLES['osm'];
+
+  // Overview map
+  cmp.map = L.map(mapEl, {zoomControl:true, attributionControl:false});
+  cmp.tileLayer = L.tileLayer(style.url, {maxZoom:19}).addTo(cmp.map);
+
+  // Chase-cam map (no interaction)
+  if (zoomEl) {
+    cmp.zoomMap = L.map(zoomEl, {
+      zoomControl:false, attributionControl:false,
+      dragging:false, scrollWheelZoom:false, doubleClickZoom:false,
+      keyboard:false, touchZoom:false, boxZoom:false,
+    });
+    cmp.zoomTile = L.tileLayer(style.url, {maxZoom:19}).addTo(cmp.zoomMap);
+  }
+
+  const colors = ['#ef4444','#3b82f6','#22c55e','#f97316'];
+  const allBounds = [];
+  let firstLL = null;
+
+  for (let i = 0; i < actIds.length; i++) {
+    try {
+      const r = await fetch(`/api/activities/${actIds[i]}/geojson`);
+      if (!r.ok) continue;
+      const geo = await r.json();
+      const coords = geo?.geometry?.coordinates || [];
+      if (coords.length < 2) continue;
+      const lls = coords.map(c => [c[1], c[0]]);
+      if (!firstLL) firstLL = lls[0];
+      L.polyline(lls, {color: colors[i % colors.length], weight: i===0?3:2,
+                        opacity: i===0?0.9:0.5, smoothFactor:1.5}).addTo(cmp.map);
+      if (cmp.zoomMap) {
+        L.polyline(lls, {color: colors[i % colors.length], weight: i===0?2:1.5,
+                          opacity:0.5, smoothFactor:1.5}).addTo(cmp.zoomMap);
+      }
+      lls.forEach(ll => allBounds.push(ll));
+    } catch(e) { console.warn('initCompareMapManual geo fetch:', e); }
+  }
+
+  if (allBounds.length) {
+    cmp.map.fitBounds(L.latLngBounds(allBounds), {padding:[16,16]});
+    if (cmp.zoomMap && firstLL) cmp.zoomMap.setView(firstLL, 14);
+  }
+
+  setTimeout(() => {
+    if (cmp.map)     cmp.map.invalidateSize();
+    if (cmp.zoomMap) cmp.zoomMap.invalidateSize();
+  }, 100);
 }
 
 async function openCompare() {
-  if (cmp.selStartIdx === null || cmp.selEndIdx === null) return;
   if (!currentAct) return;
+
+  // Multi-select mode: ≥2 activities selected → manual compare
+  if (state.selectedIds.size >= 2) {
+    await cmpOpenManual();
+    return;
+  }
 
   const overlay  = document.getElementById('compare-overlay');
   const loading  = document.getElementById('cmp-loading');
   const titleEl  = document.getElementById('compare-title');
   overlay.classList.add('open');
+
+  // Restore persisted settings
+  const panel = document.getElementById('compare-panel');
+  const savedW = localStorage.getItem('ascent-cmp-w');
+  const savedH = localStorage.getItem('ascent-cmp-h');
+  if (panel && savedW) panel.style.width  = savedW;
+  if (panel && savedH) panel.style.height = savedH;
+  const savedSpeed = localStorage.getItem('ascent-cmp-speed') || '25';
+  const speedSel = document.getElementById('cmp-speed');
+  if (speedSel) speedSel.value = savedSpeed;
+
+  // If no segment selected, open in browse mode — show full activity, let user pick a segment
+  if (cmp.selStartIdx === null || cmp.selEndIdx === null) {
+    titleEl.textContent = 'Choose a segment to compare';
+    loading.style.display = 'none';
+    cmp.matches  = [];
+    cmp.currentT = 0;
+    cmp.savedSegId = null;
+    // Show full activity track on overview map
+    initCompareMapBrowse();
+    // Clear profile
+    if (cmp.profileChart) { cmp.profileChart.destroy(); cmp.profileChart = null; }
+    const canvas = document.getElementById('cmp-profile-canvas');
+    if (canvas) { const ctx = canvas.getContext('2d'); ctx.clearRect(0,0,canvas.width,canvas.height); }
+    // Populate saved segments dropdown
+    await cmpLoadSavedSegments();
+    return;
+  }
+
   loading.style.display = 'flex';
-  titleEl.textContent = 'Searching activities…';
+  document.getElementById('cmp-loading-text').textContent = 'Searching activities…';
+
+  // Animate progress bar — force reflow so loading div is visible before fetch
+  const _bar = document.getElementById('cmp-progress-bar');
+  if (_bar) { _bar.style.transition = 'none'; _bar.style.width = '0%'; }
+  void loading.offsetHeight; // force reflow
+  let _pct = 0;
+  const _prog = setInterval(() => {
+    _pct = _pct + (85 - _pct) * 0.06;
+    if (_bar) _bar.style.width = _pct.toFixed(1) + '%';
+  }, 80);
 
   try {
     const r = await fetch('/api/segment/compare', {
@@ -3710,7 +3883,9 @@ async function openCompare() {
     });
     const d = await r.json();
     if (!r.ok) {
+      clearInterval(_prog);
       loading.style.display = 'none';
+      if (_bar) _bar.style.width = '0%';
       titleEl.textContent = d.detail || 'No matches found';
       return;
     }
@@ -3724,7 +3899,9 @@ async function openCompare() {
     cmp.maxT     = 1;   // normalized: 0→1
     cmp.currentT = 0;
 
-    loading.style.display = 'none';
+    clearInterval(_prog);
+    if (_bar) { _bar.style.transition = 'width .15s ease'; _bar.style.width = '100%'; }
+    setTimeout(() => { loading.style.display = 'none'; if (_bar) _bar.style.width = '0%'; }, 150);
     const nOthers = cmp.matches.length - 1;
     titleEl.textContent = `Selected Activity vs. ${nOthers} Fastest`;
 
@@ -3747,13 +3924,37 @@ async function openCompare() {
     await cmpLoadSavedSegments();
 
   } catch(e) {
+    clearInterval(_prog);
     loading.style.display = 'none';
+    if (_bar) _bar.style.width = '0%';
     titleEl.textContent = 'Error: ' + e.message;
   }
 }
 
+function initCompareOverlayClose() {
+  const overlay = document.getElementById('compare-overlay');
+  if (!overlay) return;
+  let downOnOverlay = false;
+  overlay.addEventListener('mousedown', e => {
+    downOnOverlay = e.target === overlay;
+  });
+  overlay.addEventListener('mouseup', e => {
+    if (downOnOverlay && e.target === overlay) closeCompare();
+    downOnOverlay = false;
+  });
+}
+document.addEventListener('DOMContentLoaded', initCompareOverlayClose);
+setTimeout(initCompareOverlayClose, 500);
+
 function closeCompare() {
   document.getElementById('compare-overlay').classList.remove('open');
+  // Persist panel size
+  const _panel = document.getElementById('compare-panel');
+  if (_panel) {
+    localStorage.setItem('ascent-cmp-w', _panel.style.width  || _panel.offsetWidth  + 'px');
+    localStorage.setItem('ascent-cmp-h', _panel.style.height || _panel.offsetHeight + 'px');
+  }
+  cmp._manualIds = null;
   cmpStop();
   if (cmp.map)          { cmp.map.remove();          cmp.map = null; }
   if (cmp.zoomMap)      { cmp.zoomMap.remove();      cmp.zoomMap = null; }
@@ -3784,6 +3985,96 @@ function buildCompareLegend() {
       `font-size:12px;font-weight:600;min-width:70px;text-align:right;font-variant-numeric:tabular-nums;` +
       `color:var(--muted2);flex-shrink:0">0:00</span>`;
     leg.appendChild(item);
+  });
+}
+
+function initCompareMapBrowse() {
+  // Show full activity on the overview map in browse mode (no segment selected)
+  const mapEl = document.getElementById('compare-map');
+  if (cmp.map) { cmp.map.remove(); cmp.map = null; }
+  if (cmp.zoomMap) { cmp.zoomMap.remove(); cmp.zoomMap = null; }
+  cmp.markers = []; cmp.zoomMarkers = []; cmp.tracks = [];
+
+  cmp.map = L.map(mapEl, {zoomControl:true, attributionControl:false});
+  const _cmpStyle = MAP_STYLES[localStorage.getItem('ascent-map-style') || 'osm'] || MAP_STYLES['osm'];
+  cmp.tileLayer = L.tileLayer(_cmpStyle.url, {maxZoom:19});
+  cmp.tileLayer.addTo(cmp.map);
+
+  // Draw the full activity track
+  if (splitsState.geo) {
+    const coords = splitsState.geo.geometry?.coordinates || [];
+    if (coords.length > 1) {
+      const lls = coords.map(c => [c[1], c[0]]);
+      L.polyline(lls, {color:'#ef4444', weight:3, opacity:0.85, smoothFactor:1.5}).addTo(cmp.map);
+      cmp.map.fitBounds(L.latLngBounds(lls), {padding:[16,16]});
+    }
+  }
+
+  // Zoom pane: start of activity
+  const zoomEl = document.getElementById('compare-zoom');
+  if (zoomEl && splitsState.geo) {
+    cmp.zoomMap = L.map(zoomEl, {
+      zoomControl:false, attributionControl:false,
+      dragging:false, scrollWheelZoom:false, doubleClickZoom:false,
+      keyboard:false, touchZoom:false, boxZoom:false,
+    });
+    cmp.zoomTile = L.tileLayer(_cmpStyle.url, {maxZoom:19});
+    cmp.zoomTile.addTo(cmp.zoomMap);
+    const coords = splitsState.geo.geometry?.coordinates || [];
+    if (coords.length > 1) {
+      const lls = coords.map(c => [c[1], c[0]]);
+      L.polyline(lls, {color:'#ef4444', weight:2, opacity:0.4}).addTo(cmp.zoomMap);
+      cmp.zoomMap.setView(lls[0], 14);
+    }
+  }
+
+  setTimeout(() => {
+    if (cmp.map) cmp.map.invalidateSize();
+    if (cmp.zoomMap) cmp.zoomMap.invalidateSize();
+  }, 100);
+
+  // Show full activity elevation profile
+  if (elevChartData) {
+    initCompareProfileFromData(elevChartData);
+  }
+}
+
+function initCompareProfileFromData(data) {
+  // Build compare profile from full activity elevation chart data
+  const ctx = document.getElementById('cmp-profile-canvas');
+  if (!ctx || !data) return;
+  if (cmp.profileChart) { cmp.profileChart.destroy(); cmp.profileChart = null; }
+
+  const dist  = data.dist_m;
+  const alt   = data.alt_ft;
+  if (!dist || !alt) return;
+
+  const step = Math.max(1, Math.floor(dist.length / 600));
+  const pts  = [];
+  for (let i = 0; i < dist.length; i += step) {
+    pts.push({ x: U.metric ? dist[i]/1000 : dist[i]/1609.344, y: U.alt(alt[i]||0) });
+  }
+  const totalX = pts[pts.length-1]?.x || 1;
+  const xUnit  = U.metric ? 'km' : 'mi';
+  const yUnit  = U.altUnit();
+
+  cmp.profileChart = new Chart(ctx, {
+    type: 'line',
+    data: { datasets: [{ data: pts, fill: true,
+      borderColor: '#3b82f6', backgroundColor: 'rgba(30,80,180,.5)',
+      borderWidth: 1.5, pointRadius: 0, tension: 0.3 }]},
+    options: {
+      responsive:true, maintainAspectRatio:false, animation:false,
+      plugins: { legend:{display:false}, tooltip:{enabled:false} },
+      scales: {
+        x: { type:'linear', min:0, max:totalX,
+             ticks:{color:'#64748b',font:{size:9},maxTicksLimit:8,callback:v=>`${v.toFixed(1)}${xUnit}`},
+             grid:{color:'rgba(255,255,255,.04)'} },
+        y: { ticks:{color:'#64748b',font:{size:9},maxTicksLimit:4,callback:v=>`${Math.round(v)}${yUnit}`},
+             grid:{color:'rgba(255,255,255,.06)'} },
+      },
+      layout:{padding:{top:10,bottom:2,left:2,right:8}},
+    },
   });
 }
 
@@ -4052,7 +4343,27 @@ function cmpUpdateUI(wallT) {
 
   if (cmp.profileChart) cmp.profileChart.update('none');
   if (zoomCount > 0 && cmp.zoomMap) {
-    cmp.zoomMap.panTo([sumLat / zoomCount, sumLon / zoomCount], {animate: false});
+    const lls = cmp.zoomMarkers.map(m => m.getLatLng()).filter(ll => ll);
+    if (lls.length === 1) {
+      cmp.zoomMap.panTo(lls[0], {animate: true, duration: 0.3});
+    } else if (lls.length > 1) {
+      const bounds = L.latLngBounds(lls);
+      // Only refit if bounds changed significantly (>5% of current view)
+      // to avoid constant animation jitter at 60fps
+      const cur = cmp.zoomMap.getBounds();
+      const newSpanLat = bounds.getNorth() - bounds.getSouth();
+      const newSpanLon = bounds.getEast()  - bounds.getWest();
+      const curSpanLat = cur.getNorth()    - cur.getSouth();
+      const curSpanLon = cur.getEast()     - cur.getWest();
+      const center     = bounds.getCenter();
+      const curCenter  = cur.getCenter();
+      const centerShift = Math.abs(center.lat - curCenter.lat) + Math.abs(center.lng - curCenter.lng);
+      const spanChange  = Math.abs(newSpanLat - curSpanLat) / (curSpanLat || 0.001)
+                        + Math.abs(newSpanLon - curSpanLon) / (curSpanLon || 0.001);
+      if (spanChange > 0.08 || centerShift > (curSpanLat + curSpanLon) * 0.05) {
+        cmp.zoomMap.fitBounds(bounds, {animate: true, duration: 0.5, padding: [40, 40], maxZoom: 16});
+      }
+    }
   }
 }
 
@@ -4060,8 +4371,10 @@ function cmpUpdateUI(wallT) {
 // Playback speed: normalized units per second.
 // At speed=1 the animation takes as long as the fastest rider's segment.
 // Use speed=1 so the animation runs in real-time for the fastest rider.
-function cmpGetSpeed() { return parseFloat(document.getElementById("cmp-speed")?.value || 10); }
-function cmpSetSpeed(v) { /* just reads from select on each frame */ }
+function cmpGetSpeed() { return parseFloat(document.getElementById("cmp-speed")?.value || 25); }
+function cmpSetSpeed(v) {
+  localStorage.setItem('ascent-cmp-speed', v);
+}
 
 function cmpFrame(ts) {
   if (!cmp.playing) return;
@@ -4108,22 +4421,108 @@ function cmpScrub(val) {
   cmpUpdateUI((val / 1000) * refEl);
 }
 
+// ── COMPARE PANE RESIZE ──────────────────────────────────────────────────────
+(function() {
+  function initCmpResize() {
+    const handle  = document.getElementById('cmp-maps-handle');
+    const mapsRow = document.getElementById('compare-maps');
+    if (!handle || !mapsRow) return;
+
+    let startY = 0, startH = 0;
+
+    handle.addEventListener('mousedown', e => {
+      e.preventDefault();
+      startY = e.clientY;
+      startH = mapsRow.getBoundingClientRect().height;
+      handle.classList.add('dragging');
+      document.body.style.cursor = 'row-resize';
+      document.body.style.userSelect = 'none';
+
+      function onMove(e) {
+        const dy   = e.clientY - startY;
+        const newH = Math.max(120, startH + dy);
+        mapsRow.style.flex = 'none';
+        mapsRow.style.height = newH + 'px';
+        if (cmp.map)     cmp.map.invalidateSize();
+        if (cmp.zoomMap) cmp.zoomMap.invalidateSize();
+      }
+
+      function onUp() {
+        handle.classList.remove('dragging');
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup',  onUp);
+        if (cmp.map)     cmp.map.invalidateSize();
+        if (cmp.zoomMap) cmp.zoomMap.invalidateSize();
+        if (cmp.profileChart) cmp.profileChart.resize();
+      }
+
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup',   onUp);
+    });
+
+    // When the panel itself is resized (via CSS resize handle), invalidate maps
+    const panel = document.getElementById('compare-panel');
+    if (panel && typeof ResizeObserver !== 'undefined') {
+      new ResizeObserver(() => {
+        if (cmp.map)          cmp.map.invalidateSize();
+        if (cmp.zoomMap)      cmp.zoomMap.invalidateSize();
+        if (cmp.profileChart) cmp.profileChart.resize();
+        // Mark resizing so overlay click doesn't close panel
+        cmp._resizing = true;
+        clearTimeout(cmp._resizeTimer);
+        cmp._resizeTimer = setTimeout(() => { cmp._resizing = false; }, 300);
+      }).observe(panel);
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', initCmpResize);
+  setTimeout(initCmpResize, 500);
+})();
+
 // ── SEGMENT SAVE / LOAD ──────────────────────────────────────────────────────
 
 async function cmpLoadSavedSegments() {
-  if (!currentAct) return;
   const sel = document.getElementById('cmp-seg-select');
   if (!sel) return;
+
+  // Manual mode: fetch segments for all selected activities
+  const ids = (cmp._manualIds && cmp._manualIds.length >= 2)
+    ? cmp._manualIds
+    : (currentAct ? [currentAct.id] : []);
+  if (!ids.length) return;
+
   try {
-    const r = await fetch(`/api/segments/for-activity/${currentAct.id}`);
-    const d = await r.json();
-    cmp.savedSegments = d.segments || [];
-    // Rebuild options
+    // Collect all segments per activity, then intersect
+    const perActivity = [];
+    for (const id of ids) {
+      const r = await fetch(`/api/segments/for-activity/${id}`);
+      if (!r.ok) continue;
+      const d = await r.json();
+      perActivity.push(Array.isArray(d) ? d : (d.segments || []));
+    }
+    if (!perActivity.length) { cmp.savedSegments = []; sel.innerHTML = '<option value="">— choose —</option>'; return; }
+
+    // Start with first activity's segments, filter to only those in ALL others
+    let allSegs = [...perActivity[0]];
+    for (let i = 1; i < perActivity.length; i++) {
+      const idsI = new Set(perActivity[i].map(s => s.id));
+      allSegs = allSegs.filter(s => idsI.has(s.id));
+    }
+    allSegs.sort((a, b) => a.name.localeCompare(b.name));
+    cmp.savedSegments = allSegs;
+
     sel.innerHTML = '<option value="">— choose —</option>';
-    cmp.savedSegments.forEach(s => {
+    allSegs.forEach(s => {
       const opt = document.createElement('option');
       opt.value = s.id;
-      opt.textContent = `${s.name} (${s.length_km ? s.length_km.toFixed(2)+'km' : '?'})`;
+      const lenStr = s.length_km
+        ? U.metric
+          ? s.length_km.toFixed(2) + ' km'
+          : (s.length_km * 0.621371).toFixed(2) + ' mi'
+        : '?';
+      opt.textContent = `${s.name} (${lenStr})`;
       if (s.id === cmp.savedSegId) opt.selected = true;
       sel.appendChild(opt);
     });
@@ -4177,10 +4576,68 @@ async function cmpSaveSegment() {
   } catch(e) { console.error(e); }
 }
 
+async function cmpRunManualCompare(seg) {
+  const overlay = document.getElementById('compare-overlay');
+  const loading = document.getElementById('cmp-loading');
+  const titleEl = document.getElementById('compare-title');
+  overlay.classList.add('open');
+  loading.style.display = 'flex';
+  document.getElementById('cmp-loading-text').textContent = 'Loading activities…';
+
+  const _bar = document.getElementById('cmp-progress-bar');
+  if (_bar) { _bar.style.transition = 'none'; _bar.style.width = '0%'; }
+  void loading.offsetHeight;
+  let _pct = 0;
+  const _prog = setInterval(() => {
+    _pct = _pct + (85 - _pct) * 0.06;
+    if (_bar) _bar.style.width = _pct.toFixed(1) + '%';
+  }, 80);
+
+  try {
+    const r = await fetch('/api/segment/compare-manual', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ activity_ids: cmp._manualIds, segment_id: seg.id }),
+    });
+    const d = await r.json();
+    clearInterval(_prog);
+    if (_bar) { _bar.style.transition = 'width .15s ease'; _bar.style.width = '100%'; }
+    setTimeout(() => { loading.style.display = 'none'; if (_bar) _bar.style.width = '0%'; }, 150);
+    if (!r.ok) { titleEl.textContent = d.detail || 'No matches'; return; }
+
+    const refId = cmp._manualIds[0];
+    const ref   = d.matches.find(m => m.activity_id === refId);
+    const rest  = d.matches.filter(m => m.activity_id !== refId);
+    cmp.matches  = ref ? [ref, ...rest] : d.matches;
+    cmp.currentT = 0;
+    cmp.savedSegId = seg.id;
+
+    titleEl.textContent = `${escHtml(seg.name)} — ${cmp.matches.length} Activities`;
+
+    buildCompareLegend();
+    initCompareMap();
+    initCompareProfile();
+    cmpUpdateUI(0);
+    await cmpLoadSavedSegments();
+  } catch(e) {
+    clearInterval(_prog);
+    if (_bar) _bar.style.width = '0%';
+    loading.style.display = 'none';
+    titleEl.textContent = 'Error: ' + e.message;
+  }
+}
+
 async function cmpLoadSavedSegment(segId) {
-  if (!segId || !currentAct) return;
+  if (!segId) return;
   const seg = cmp.savedSegments.find(s => s.id == segId);
   if (!seg) return;
+
+  // Manual mode: use pre-selected activity IDs
+  if (cmp._manualIds && cmp._manualIds.length >= 2) {
+    await cmpRunManualCompare(seg);
+    return;
+  }
+  if (!currentAct) return;
 
   cmp.savedSegId = seg.id;
   const nameEl = document.getElementById('cmp-seg-name');
@@ -4189,6 +4646,7 @@ async function cmpLoadSavedSegment(segId) {
   // Update elevation selection to match saved segment
   cmp.selStartIdx = seg.start_idx;
   cmp.selEndIdx   = seg.end_idx;
+  setElevSelection(seg.start_idx, seg.end_idx);
 
   // Re-run compare with the saved segment's start/end on the reference activity
   const overlay = document.getElementById('compare-overlay');
@@ -4196,7 +4654,16 @@ async function cmpLoadSavedSegment(segId) {
   const titleEl = document.getElementById('compare-title');
   overlay.classList.add('open');
   loading.style.display = 'flex';
-  titleEl.textContent = 'Searching…';
+  document.getElementById('cmp-loading-text').textContent = 'Searching…';
+
+  const _bar = document.getElementById('cmp-progress-bar');
+  if (_bar) { _bar.style.transition = 'none'; _bar.style.width = '0%'; }
+  void loading.offsetHeight; // force reflow so display:flex takes effect before fetch
+  let _pct = 0;
+  const _prog = setInterval(() => {
+    _pct = _pct + (85 - _pct) * 0.06;
+    if (_bar) _bar.style.width = _pct.toFixed(1) + '%';
+  }, 80);
 
   try {
     const r = await fetch('/api/segment/compare', {
@@ -4211,7 +4678,9 @@ async function cmpLoadSavedSegment(segId) {
       }),
     });
     const d = await r.json();
-    loading.style.display = 'none';
+    clearInterval(_prog);
+    if (_bar) { _bar.style.transition = 'width .15s ease'; _bar.style.width = '100%'; }
+    setTimeout(() => { loading.style.display = 'none'; if (_bar) _bar.style.width = '0%'; }, 150);
     if (!r.ok) { titleEl.textContent = d.detail || 'No matches'; return; }
 
     const refId = currentAct.id;
@@ -4229,6 +4698,8 @@ async function cmpLoadSavedSegment(segId) {
     initCompareProfile();
     cmpUpdateUI(0);
   } catch(e) {
+    clearInterval(_prog);
+    if (_bar) _bar.style.width = '0%';
     loading.style.display = 'none';
     titleEl.textContent = 'Error: ' + e.message;
   }
@@ -4425,9 +4896,12 @@ document.addEventListener('DOMContentLoaded', () => {
   </div>
 </div>
 <!-- ── Compare Panel ─────────────────────────────────────────────────────── -->
-<div id="compare-overlay" onclick="if(event.target===this)closeCompare()">
+<div id="compare-overlay">
   <div id="compare-panel" style="position:relative">
-    <div id="cmp-loading" style="display:none">Searching activities…</div>
+    <div id="cmp-loading" style="display:none">
+      <span id="cmp-loading-text">Searching activities…</span>
+      <div id="cmp-progress-wrap"><div id="cmp-progress-bar"></div></div>
+    </div>
     <div id="compare-header">
       <span id="compare-title">Segment Compare</span>
       <button id="compare-close-btn" onclick="closeCompare()">✕</button>
@@ -4455,6 +4929,7 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
         <div id="compare-zoom"></div>
       </div>
+      <div id="cmp-maps-handle"></div>
       <div id="compare-profile"><canvas id="cmp-profile-canvas"></canvas></div>
       <div id="compare-legend"></div>
     </div>
@@ -4467,8 +4942,8 @@ document.addEventListener('DOMContentLoaded', () => {
       <select id="cmp-speed" onchange="cmpSetSpeed(this.value)" title="Playback speed" style="background:var(--surface2);border:1px solid var(--border2);color:var(--text);border-radius:6px;padding:3px 6px;font-size:12px;font:inherit">
         <option value="1">1×</option>
         <option value="5">5×</option>
-        <option value="10" selected>10×</option>
-        <option value="25">25×</option>
+        <option value="10">10×</option>
+        <option value="25" selected>25×</option>
         <option value="50">50×</option>
         <option value="100">100×</option>
       </select>

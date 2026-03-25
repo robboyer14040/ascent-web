@@ -785,9 +785,13 @@ class AscentDB:
         self._con.commit()
 
     def get_segments_for_activity(self, activity_id: int) -> list:
-        """Return all segments whose GPS points overlap the given activity's track."""
+        """Return segments that the activity actually traverses.
+        Checks that the activity has GPS points within 200m of the segment's
+        start, midpoint, and end — much more accurate than bbox overlap."""
+        import json, math
         self._ensure_segments_table()
-        # Use bbox of activity's points to filter
+
+        # Quick bbox pre-filter first (cheap)
         rows = self._con.execute("""
             SELECT s.id, s.name, s.activity_id, s.start_idx, s.end_idx,
                    s.length_km, s.min_lat, s.max_lat, s.min_lon, s.max_lon,
@@ -800,7 +804,47 @@ class AscentDB:
             )
             ORDER BY s.name
         """, (activity_id,)).fetchall()
-        return [dict(r) for r in rows]
+
+        if not rows:
+            return []
+
+        # Load activity points once for proximity check
+        act_pts = self._con.execute(
+            "SELECT latitude_e7, longitude_e7 FROM points WHERE track_id=? AND latitude_e7 != 999.0 ORDER BY wall_clock_delta_s",
+            (activity_id,)
+        ).fetchall()
+
+        if not act_pts:
+            return [dict(r) for r in rows]
+
+        def min_dist_deg(lat, lon, pts):
+            """Minimum squared degree distance from (lat,lon) to any point in pts."""
+            cos_l = math.cos(math.radians(lat))
+            best = float("inf")
+            for p in pts:
+                d2 = (p[0]-lat)**2 + ((p[1]-lon)*cos_l)**2
+                if d2 < best:
+                    best = d2
+            return math.sqrt(best) * 111000  # approx metres
+
+        tol_m = 200.0  # must be within 200m of start, mid, and end
+
+        result = []
+        for row in rows:
+            seg_pts = json.loads(row["points_json"]) if row["points_json"] else []
+            if len(seg_pts) < 2:
+                result.append(dict(row))
+                continue
+            start = seg_pts[0]
+            end   = seg_pts[-1]
+            mid   = seg_pts[len(seg_pts)//2]
+            # Check all three anchor points are close to some activity point
+            if (min_dist_deg(start[0], start[1], act_pts) <= tol_m and
+                min_dist_deg(mid[0],   mid[1],   act_pts) <= tol_m and
+                min_dist_deg(end[0],   end[1],   act_pts) <= tol_m):
+                result.append(dict(row))
+
+        return result
 
     def get_segment(self, segment_id: int):
         self._ensure_segments_table()
