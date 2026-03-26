@@ -21,7 +21,7 @@ from typing import Callable, Optional
 from datetime import datetime, timezone
 
 import httpx
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Request, HTTPException
 from pydantic import BaseModel
 
 router = APIRouter()
@@ -343,13 +343,15 @@ async def set_goal(req: GoalRequest):
         con.close()
 
     # Generate initial coach response (use selected model for initial assessment)
-    initial = await _call_claude(db, goal_id, req.goal_text.strip(), [], proactive=True,
+    from app.auth import get_session_user_id as _gsu
+    _uid = _gsu(request) if hasattr(request, 'cookies') else None
+    initial = await _call_claude(db, goal_id, req.goal_text.strip(), [], proactive=True, user_id=_uid,
                                   model=req.model if req.model in MODELS else DEFAULT_MODEL)
     return {"goal_id": goal_id, "initial_message": initial}
 
 
 @router.post("/coach/chat")
-async def coach_chat(req: ChatRequest):
+async def coach_chat(req: ChatRequest, request: Request):
     """
     Send a user message. Optionally prepend a proactive activity observation.
     Returns the assistant reply.
@@ -388,7 +390,9 @@ async def coach_chat(req: ChatRequest):
 
     # Call Claude
     model = req.model if req.model in MODELS else DEFAULT_MODEL
-    reply = await _call_claude(db, goal_id, goal_text, history, proactive=has_new, model=model)
+    from app.auth import get_session_user_id
+    uid = get_session_user_id(request)
+    reply = await _call_claude(db, goal_id, goal_text, history, proactive=has_new, model=model, user_id=uid)
     return {"reply": reply}
 
 
@@ -530,15 +534,22 @@ async def _call_claude(
     history: list,
     proactive: bool = False,
     model: str = DEFAULT_MODEL,
+    user_id: int = None,
 ) -> str:
     """
     Call the Claude API and persist the assistant reply to the DB.
     `history` should be the messages already in the DB (including the latest user msg).
     `model` should be a key in MODELS dict.
     """
-    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    # User's own key takes priority over global env key
+    api_key = ""
+    if user_id:
+        user = db.get_user(user_id)
+        api_key = (user or {}).get("anthropic_api_key") or ""
     if not api_key:
-        raise HTTPException(500, "ANTHROPIC_API_KEY is not set in .env")
+        api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        raise HTTPException(500, "No Anthropic API key set. Add your key in Settings.")
 
     activity_summary = _build_activity_summary(db)
     system_prompt    = _build_system_prompt(goal_text, activity_summary)
@@ -640,3 +651,4 @@ async def _call_claude(
         con.close()
 
     return reply
+

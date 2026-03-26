@@ -905,6 +905,7 @@ class AscentDB:
                 password_hash       TEXT,
                 strava_athlete_id   TEXT UNIQUE,
                 strava_tokens_json  TEXT,
+                anthropic_api_key   TEXT,
                 is_admin            INTEGER NOT NULL DEFAULT 0,
                 share_activities    INTEGER NOT NULL DEFAULT 0,
                 share_segments      INTEGER NOT NULL DEFAULT 0,
@@ -922,6 +923,13 @@ class AscentDB:
                 used_by_user_id     INTEGER
             );
         """)
+        # Add anthropic_api_key column if it doesn't exist (migration)
+        try:
+            self._con.execute("ALTER TABLE users ADD COLUMN anthropic_api_key TEXT")
+            self._con.commit()
+        except Exception:
+            pass  # column already exists
+
         self._con.commit()
 
     def get_user(self, user_id: int) -> Optional[dict]:
@@ -979,7 +987,7 @@ class AscentDB:
 
     def update_user_settings(self, user_id: int, **kwargs):
         """Update user settings fields. Allowed: share_activities, share_segments, username."""
-        allowed = {"share_activities", "share_segments", "username"}
+        allowed = {"share_activities", "share_segments", "username", "anthropic_api_key"}
         fields  = {k: v for k, v in kwargs.items() if k in allowed}
         if not fields: return
         sets = ", ".join(f"{k}=?" for k in fields)
@@ -1040,4 +1048,5 @@ class AscentDB:
             email=email, username=username, is_admin=True
         )
         return user_id
+
 

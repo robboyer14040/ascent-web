@@ -160,9 +160,13 @@ def _switch_to(path: str):
 # ── API key endpoints ─────────────────────────────────────────────────────────
 
 @router.get("/api/settings/keys")
-async def get_keys():
+async def get_keys(request: Request):
     """Return masked key values so the UI can show current state."""
-    anthropic_key = _read_env_key("ANTHROPIC_API_KEY") or ""
+    from app.auth import get_session_user_id
+    uid  = get_session_user_id(request)
+    user = db_getter().get_user(uid) if uid else {}
+    # User's own key takes priority over global env key
+    anthropic_key = (user or {}).get("anthropic_api_key") or _read_env_key("ANTHROPIC_API_KEY") or ""
     strava_id     = _read_env_key("STRAVA_CLIENT_ID") or ""
     strava_secret = _read_env_key("STRAVA_CLIENT_SECRET") or ""
     return {
@@ -172,7 +176,7 @@ async def get_keys():
         },
         "strava_id": {
             "set":    bool(strava_id),
-            "value":  strava_id,   # Client ID is not secret
+            "value":  strava_id,
         },
         "strava_secret": {
             "set":    bool(strava_secret),
@@ -182,14 +186,19 @@ async def get_keys():
 
 
 @router.post("/api/settings/anthropic-key")
-async def save_anthropic_key(req: ApiKeyRequest):
+async def save_anthropic_key(req: ApiKeyRequest, request: Request):
+    from app.auth import get_session_user_id
     key = req.key.strip()
     if not key:
         raise HTTPException(400, "Key cannot be empty")
     if not key.startswith("sk-ant-"):
         raise HTTPException(400, "Anthropic API keys should start with sk-ant-")
-    _write_env_key("ANTHROPIC_API_KEY", key)
-    os.environ["ANTHROPIC_API_KEY"] = key
+    uid = get_session_user_id(request)
+    if uid:
+        db_getter().update_user_settings(uid, anthropic_api_key=key)
+    else:
+        _write_env_key("ANTHROPIC_API_KEY", key)
+        os.environ["ANTHROPIC_API_KEY"] = key
     return {"status": "ok", "masked": _mask_key(key)}
 
 
