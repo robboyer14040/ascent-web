@@ -126,9 +126,10 @@ class SegmentRequest(BaseModel):
     activity_id:     int
     start_idx:       int
     end_idx:         int
-    max_results:     int   = 4
-    radius_m:        float = 150.0
-    include_friends: bool  = False
+    max_results:     int        = 4
+    radius_m:        float      = 150.0
+    include_friends: bool       = False
+    candidate_ids:   list[int]  = []  # if set, only compare against these activities
 
 
 @router.post("/segment/compare")
@@ -370,6 +371,28 @@ async def segment_compare(req: SegmentRequest, request: Request):
         user_filter = ""
         user_params = []
 
+    # E-bike filter: match reference activity type
+    # EBikeRide should only compare with EBikeRide, and non-ebike excludes EBikeRide
+    ref_act = db.get_activity(req.activity_id)
+    ref_type = (ref_act or {}).get("activity_type", "") if ref_act else ""
+    # Fallback: read directly from raw attributes_json if activity_type is empty
+    if not ref_type and ref_act:
+        raw = db._con.execute(
+            "SELECT attributes_json FROM activities WHERE id=?", (req.activity_id,)
+        ).fetchone()
+        if raw and raw[0]:
+            import sys; sys.path.insert(0, '/app')
+            from app.db import parse_attrs
+            ref_type = parse_attrs(raw[0]).get("activity", "")
+    EBIKE_TYPE = "EBikeRide"
+    # attributes_json is stored as a flat list [...,"activity","Ride",...] not a dict
+    # Use LIKE to match the activity type value that follows the "activity" key
+    _ebike_pat = '%"activity","EBikeRide"%'
+    if ref_type == EBIKE_TYPE:
+        ebike_filter = "AND attributes_json LIKE '" + _ebike_pat + "'"
+    else:
+        ebike_filter = "AND (attributes_json NOT LIKE '" + _ebike_pat + "')"
+
     candidates = db._con.execute(f"""
         SELECT id, name,
                COALESCE(creation_time_override_s, creation_time_s) AS ts,
@@ -377,6 +400,7 @@ async def segment_compare(req: SegmentRequest, request: Request):
         FROM activities
         WHERE id != ?
           {user_filter}
+          {ebike_filter}
           AND (
             (points_saved = 1 AND points_count > 0
              AND (map_min_lat IS NULL
@@ -393,6 +417,10 @@ async def segment_compare(req: SegmentRequest, request: Request):
           seg_max_lat, seg_min_lat, seg_max_lon, seg_min_lon]
     ).fetchall()
 
+    # If specific candidate IDs requested, filter to just those
+    if req.candidate_ids:
+        allowed = set(req.candidate_ids) | {req.activity_id}
+        candidates = [c for c in candidates if c["id"] in allowed]
 
 
     def max_dev_one_way(pts_a, pts_b):
@@ -847,5 +875,6 @@ async def segment_compare_manual(req: MultiCompareRequest):
         raise HTTPException(404, "None of the selected activities contain this segment")
 
     return {"matches": matches, "segment_name": seg["name"]}
+
 
 

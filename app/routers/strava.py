@@ -20,6 +20,23 @@ STRAVA_SCOPE     = "read,profile:read_all,activity:read,activity:read_all"
 
 # ── token helpers ─────────────────────────────────────────────────────────────
 
+def _get_strava_creds(user_id: Optional[int] = None) -> tuple[str, str]:
+    """Get Strava client_id and client_secret for user (per-user or global)."""
+    if user_id is not None:
+        try:
+            user = db_getter().get_user(user_id)
+            if user:
+                cid = user.get("strava_client_id") or ""
+                sec = user.get("strava_client_secret") or ""
+                if cid and sec:
+                    return cid, sec
+        except Exception:
+            pass
+    # Fall back to global env
+    return (os.environ.get("STRAVA_CLIENT_ID", ""),
+            os.environ.get("STRAVA_CLIENT_SECRET", ""))
+
+
 def _tokens_path() -> Path:
     """Legacy: strava_tokens.json fallback for single-user mode."""
     db_path = os.environ.get("ASCENT_DB_PATH", ".")
@@ -59,8 +76,8 @@ def tokens_are_fresh(tokens: dict) -> bool:
 async def refresh_tokens(tokens: dict, user_id: Optional[int] = None) -> dict:
     async with httpx.AsyncClient() as client:
         resp = await client.post(STRAVA_TOKEN_URL, data={
-            "client_id":     os.environ.get("STRAVA_CLIENT_ID", ""),
-            "client_secret": os.environ.get("STRAVA_CLIENT_SECRET", ""),
+            "client_id":     _get_strava_creds(user_id)[0],
+            "client_secret": _get_strava_creds(user_id)[1],
             "grant_type":    "refresh_token",
             "refresh_token": tokens["refresh_token"],
         })
@@ -90,7 +107,8 @@ def _callback_uri(request: Request) -> str:
 
 @router.get("/connect")
 async def strava_connect(request: Request):
-    client_id = os.environ.get("STRAVA_CLIENT_ID", "")
+    uid = get_session_user_id(request)
+    client_id, _ = _get_strava_creds(uid)
     if not client_id:
         return templates.TemplateResponse("error.html",
             {"request": request, "message": "STRAVA_CLIENT_ID is not set. Add it in Settings."})
@@ -104,9 +122,11 @@ async def strava_callback(request: Request, code: str = Query(None), error: str 
         return templates.TemplateResponse("error.html",
             {"request": request, "message": f"Strava auth failed: {error or 'no code'}"})
     async with httpx.AsyncClient() as client:
+        uid = get_session_user_id(request)
+        cid, csec = _get_strava_creds(uid)
         resp = await client.post(STRAVA_TOKEN_URL, data={
-            "client_id":     os.environ.get("STRAVA_CLIENT_ID", ""),
-            "client_secret": os.environ.get("STRAVA_CLIENT_SECRET", ""),
+            "client_id":     cid,
+            "client_secret": csec,
             "grant_type":    "authorization_code",
             "code":          code,
             "redirect_uri":  _callback_uri(request),
@@ -115,8 +135,8 @@ async def strava_callback(request: Request, code: str = Query(None), error: str 
         return templates.TemplateResponse("error.html",
             {"request": request, "message": f"Token exchange failed: {resp.text}"})
     data = resp.json()
-    from app.auth import get_session_user_id
-    uid = get_session_user_id(request)
+    from app.auth import get_session_user_id as _gsu
+    uid = _gsu(request)
     tokens = {"access_token": data["access_token"], "refresh_token": data["refresh_token"],
               "expires_at": data["expires_at"], "athlete": data.get("athlete", {})}
     save_tokens(tokens, user_id=uid)
@@ -313,4 +333,5 @@ async def strava_fetch_activities(
                                 params=params, timeout=30)
     resp.raise_for_status()
     return resp.json()
+
 

@@ -53,7 +53,12 @@ input,select{font:inherit}
   display:grid;grid-template-columns:var(--cols);
   background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0;padding:0 8px;
 }
-.ch{
+.ch-sep{
+  position:absolute;right:-3px;top:0;bottom:0;width:6px;
+  cursor:col-resize;background:transparent;z-index:10;
+}
+.ch-sep:hover,.ch-sep.resizing{background:var(--accent);opacity:.7;}
+.ch{position:relative;
   padding:6px 4px;font-size:11px;font-weight:600;color:var(--muted);
   text-transform:uppercase;letter-spacing:.04em;cursor:pointer;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
@@ -881,13 +886,32 @@ function getActiveCols() {
   return activeColIds.map(id => ALL_COLS.find(c => c.id === id)).filter(Boolean);
 }
 
+// Per-column width overrides (set by dragging separators)
+let colWidthOverrides = {};
+try { colWidthOverrides = JSON.parse(localStorage.getItem('ascent-col-widths') || '{}'); } catch(e) {}
+function saveColWidths() { localStorage.setItem('ascent-col-widths', JSON.stringify(colWidthOverrides)); }
+
+function getColW(col) {
+  return colWidthOverrides[col.id] || col.w;
+}
+
 function buildColsTemplate() {
-  return getActiveCols().map(c => c.w).join(' ');
+  return getActiveCols().map(c => getColW(c)).join(' ');
 }
 
 const COLS = buildColsTemplate(); // kept for backward compat but dynamic now
 function currentCOLS() { return buildColsTemplate(); }
 const ROW_H = 34;
+
+// Event delegation for activity rows — handles click, cmd-click, shift-click
+document.addEventListener('click', function(e) {
+  const row = e.target.closest('.act-row');
+  if (!row) return;
+  const id = parseInt(row.dataset.id);
+  if (isNaN(id)) return;
+  handleRowClick(e, id);
+}, true); // useCapture=true to fire before any other handlers
+
 
 // ── HELPERS ───────────────────────────────────────────────────────────────────
 function escHtml(s) {
@@ -931,7 +955,7 @@ function renderVirtualList() {
       const selClass  = isSel ? ' selected' : (isMulti ? ' multi-sel' : '');
       const cols = getActiveCols();
       const colsT = currentCOLS();
-      html += `<div class="act-row${selClass}" data-id="${a.id}" style="--cols:${colsT}" onclick="handleRowClick(event,${a.id})">
+      html += `<div class="act-row${selClass}" data-id="${a.id}" style="--cols:${colsT}">
         ${cols.map(col => `<div class="ac ${col.align==='right'?'ac-num':'ac-date'}" style="${col.id==='name'?'min-width:0':''}">${col.render(a)}</div>`).join('')}
       </div>`;
     }
@@ -1816,7 +1840,7 @@ async function drawElevation(data, version) {
 // ── ACTIVITY DETAIL ───────────────────────────────────────────────────────────
 function handleRowClick(e, id) {
   if (e.shiftKey && state.selectedId !== null) {
-    // Range select from last primary selection to this row
+    e.preventDefault();
     const fromIdx = state.filtered.findIndex(a => a.id === state.selectedId);
     const toIdx   = state.filtered.findIndex(a => a.id === id);
     if (fromIdx >= 0 && toIdx >= 0) {
@@ -1824,10 +1848,24 @@ function handleRowClick(e, id) {
       state.selectedIds.clear();
       for (let i = lo; i <= hi; i++) state.selectedIds.add(state.filtered[i].id);
       renderVirtualList();
-      return;
     }
+    return;
   }
-  // Normal click — clear multi-select and do single select
+  if (e.metaKey || e.ctrlKey) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (state.selectedIds.has(id)) {
+      state.selectedIds.delete(id);
+      if (state.selectedId === id)
+        state.selectedId = state.selectedIds.size > 0 ? [...state.selectedIds][0] : null;
+    } else {
+      if (state.selectedId !== null) state.selectedIds.add(state.selectedId);
+      state.selectedIds.add(id);
+    }
+    renderVirtualList();
+    return;
+  }
+  // Normal click
   state.selectedIds.clear();
   selectActivity(id);
 }
@@ -1870,7 +1908,8 @@ async function selectActivity(id) {
   const myVersion = ++elevRenderVersion;
   state.selectedId = id;
   animReset();
-  setElevSelection(null, null);
+  // Only clear elevation selection if not in multi-select mode
+  if (state.selectedIds.size === 0) setElevSelection(null, null);
   elevZoomReset();
   splitsState.pts = null; splitsState.geo = null; splitsState.selected = new Set(); clearSplitHighlights(); renderSplits();  // stop any running animation
   renderVirtualList(); // re-render to update highlight without scroll reset
@@ -3098,6 +3137,47 @@ function buildColHead() {
       renderVirtualList();
     });
 
+    // Add resize separator INSIDE header div (so it doesn't affect grid)
+    if (i < cols.length - 1) {
+      const sep = document.createElement('div');
+      sep.className = 'ch-sep';
+      sep.dataset.colId = col.id;
+      sep.addEventListener('mousedown', e => {
+        e.preventDefault();
+        e.stopPropagation();
+        sep.classList.add('resizing');
+        const startX = e.clientX;
+        const startW = getColW(col);
+        // Parse starting width in px
+        const headerEl = head.parentElement || head.closest('#act-list') || document.getElementById('act-list');
+        const colEls = head.querySelectorAll('.ch');
+        const colEl  = colEls[i];
+        const startPx = colEl ? colEl.offsetWidth : parseInt(startW) || 100;
+
+        function onMove(me) {
+          const delta = me.clientX - startX;
+          const newPx = Math.max(40, startPx + delta);
+          colWidthOverrides[col.id] = newPx + 'px';
+          head.style.setProperty('--cols', buildColsTemplate());
+          // Update all rows immediately
+          document.querySelectorAll('.act-row').forEach(r => r.style.setProperty('--cols', buildColsTemplate()));
+        }
+        function onUp() {
+          sep.classList.remove('resizing');
+          saveColWidths();
+          buildColHead();
+          renderVirtualList();
+          window.removeEventListener('mousemove', onMove);
+          window.removeEventListener('mouseup', onUp);
+          document.body.style.cssText = '';
+        }
+        document.body.style.cssText = 'cursor:col-resize;user-select:none';
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+      });
+      div.appendChild(sep);
+    }
+
     head.appendChild(div);
   });
 }
@@ -3701,6 +3781,81 @@ function setElevSelection(startIdx, endIdx) {
   // Button always visible when activity loaded; selection state tracked separately
 }
 
+async function cmpOpenManualWithSegment() {
+  // Multi-select + segment drawn: run compare on selected activities using the drawn segment
+  const actIds = [...state.selectedIds].slice(0, 4);
+  const refId  = state.selectedId || actIds[0];
+  const ordered = [refId, ...actIds.filter(id => id !== refId)].slice(0, 4);
+
+  const overlay = document.getElementById('compare-overlay');
+  const loading = document.getElementById('cmp-loading');
+  const titleEl = document.getElementById('compare-title');
+  const panel   = document.getElementById('compare-panel');
+  overlay.classList.add('open');
+
+  const savedW = localStorage.getItem('ascent-cmp-w');
+  const savedH = localStorage.getItem('ascent-cmp-h');
+  if (panel && savedW) panel.style.width  = savedW;
+  if (panel && savedH) panel.style.height = savedH;
+  const savedSpeed = localStorage.getItem('ascent-cmp-speed') || '25';
+  const speedSel = document.getElementById('cmp-speed');
+  if (speedSel) speedSel.value = savedSpeed;
+  const friendsCb = document.getElementById('cmp-include-friends');
+  if (friendsCb) friendsCb.checked = localStorage.getItem('ascent-cmp-friends') === '1';
+
+  loading.style.display = 'flex';
+  document.getElementById('cmp-loading-text').textContent = 'Searching activities…';
+
+  const _bar = document.getElementById('cmp-progress-bar');
+  if (_bar) { _bar.style.transition = 'none'; _bar.style.width = '0%'; }
+  void loading.offsetHeight;
+  let _pct = 0;
+  const _prog = setInterval(() => {
+    _pct = _pct + (85 - _pct) * 0.06;
+    if (_bar) _bar.style.width = _pct.toFixed(1) + '%';
+  }, 80);
+
+  try {
+    const r = await fetch('/api/segment/compare', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        activity_id:     currentAct.id,
+        start_idx:       cmp.selStartIdx,
+        end_idx:         cmp.selEndIdx,
+        max_results:     ordered.length - 1,
+        radius_m:        150,
+        include_friends: !!(document.getElementById('cmp-include-friends')?.checked),
+        // Pass the specific activity IDs to restrict candidates
+        candidate_ids:   ordered.filter(id => id !== currentAct.id),
+      }),
+    });
+    const d = await r.json();
+    clearInterval(_prog);
+    if (_bar) { _bar.style.transition = 'width .15s ease'; _bar.style.width = '100%'; }
+    setTimeout(() => { loading.style.display = 'none'; if (_bar) _bar.style.width = '0%'; }, 150);
+    if (!r.ok) { titleEl.textContent = d.detail || 'No matches'; return; }
+
+    cmp.matches  = d.matches;
+    cmp.currentT = 0;
+    cmp.savedSegId = null;
+    cmp._manualIds = ordered;
+
+    titleEl.textContent = `${cmp.matches.length} Activit${cmp.matches.length===1?'y':'ies'} — ${d.segment_name||'Segment'}`;
+
+    buildCompareLegend();
+    initCompareMap();
+    initCompareProfile();
+    cmpUpdateUI(0);
+    await cmpLoadSavedSegments();
+  } catch(e) {
+    clearInterval(_prog);
+    if (_bar) _bar.style.width = '0%';
+    loading.style.display = 'none';
+    titleEl.textContent = 'Error: ' + e.message;
+  }
+}
+
 async function cmpOpenManual() {
   // Manual compare: use the currently selected activities directly (no matching).
   // First selected = reference; up to 4 total.
@@ -3819,9 +3974,18 @@ async function initCompareMapManual(actIds) {
 async function openCompare() {
   if (!currentAct) return;
 
-  // Multi-select mode: ≥2 activities selected → manual compare
+  // Multi-select mode: ≥2 activities selected
   if (state.selectedIds.size >= 2) {
-    await cmpOpenManual();
+    console.log('[compare] multiselect mode, selectedIds:', [...state.selectedIds], 'selStartIdx:', cmp.selStartIdx, 'selEndIdx:', cmp.selEndIdx);
+    // If a segment is already drawn on the elevation chart, use it directly
+    // to run a targeted compare on those specific activities
+    if (cmp.selStartIdx !== null && cmp.selEndIdx !== null) {
+      console.log('[compare] → cmpOpenManualWithSegment');
+      await cmpOpenManualWithSegment();
+    } else {
+      console.log('[compare] → cmpOpenManual (no segment)');
+      await cmpOpenManual();
+    }
     return;
   }
 
@@ -5091,6 +5255,7 @@ document.addEventListener('DOMContentLoaded', () => {
 </div>
 </body>
 </html>
+
 
 
 

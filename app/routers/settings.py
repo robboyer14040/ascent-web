@@ -165,10 +165,10 @@ async def get_keys(request: Request):
     from app.auth import get_session_user_id
     uid  = get_session_user_id(request)
     user = db_getter().get_user(uid) if uid else {}
-    # User's own key takes priority over global env key
+    # User's own keys take priority over global env keys
     anthropic_key = (user or {}).get("anthropic_api_key") or _read_env_key("ANTHROPIC_API_KEY") or ""
-    strava_id     = _read_env_key("STRAVA_CLIENT_ID") or ""
-    strava_secret = _read_env_key("STRAVA_CLIENT_SECRET") or ""
+    strava_id     = (user or {}).get("strava_client_id") or _read_env_key("STRAVA_CLIENT_ID") or ""
+    strava_secret = (user or {}).get("strava_client_secret") or _read_env_key("STRAVA_CLIENT_SECRET") or ""
     return {
         "anthropic": {
             "set":    bool(anthropic_key),
@@ -203,15 +203,21 @@ async def save_anthropic_key(req: ApiKeyRequest, request: Request):
 
 
 @router.post("/api/settings/strava-keys")
-async def save_strava_keys(req: dict):
+async def save_strava_keys(req: dict, request: Request):
+    from app.auth import get_session_user_id
     client_id     = str(req.get("client_id", "")).strip()
     client_secret = str(req.get("client_secret", "")).strip()
     if not client_id or not client_secret:
         raise HTTPException(400, "Both Client ID and Client Secret are required")
-    _write_env_key("STRAVA_CLIENT_ID",     client_id)
-    _write_env_key("STRAVA_CLIENT_SECRET", client_secret)
-    os.environ["STRAVA_CLIENT_ID"]     = client_id
-    os.environ["STRAVA_CLIENT_SECRET"] = client_secret
+    uid = get_session_user_id(request)
+    if uid:
+        db_getter().update_user_settings(uid,
+            strava_client_id=client_id, strava_client_secret=client_secret)
+    else:
+        _write_env_key("STRAVA_CLIENT_ID",     client_id)
+        _write_env_key("STRAVA_CLIENT_SECRET", client_secret)
+        os.environ["STRAVA_CLIENT_ID"]     = client_id
+        os.environ["STRAVA_CLIENT_SECRET"] = client_secret
     return {"status": "ok", "client_id": client_id, "masked_secret": _mask_key(client_secret)}
 
 
@@ -288,3 +294,4 @@ async def save_sharing(request: Request):
         share_segments=int(bool(body.get("share_segments"))),
     )
     return {"status": "ok"}
+
