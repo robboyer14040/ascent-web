@@ -248,6 +248,27 @@ async def admin_create_invite(
         "new_invite_url": invite_url,
     })
 
+@router.post("/admin/users/delete")
+async def admin_delete_user(
+    request: Request,
+    user_id: int = Form(...),
+):
+    from app.auth import get_session_user_id
+    uid = get_session_user_id(request)
+    if not uid:
+        return RedirectResponse("/login", status_code=303)
+    db   = db_getter()
+    user = db.get_user(uid)
+    if not user or not user.get("is_admin"):
+        return RedirectResponse("/", status_code=303)
+    # Prevent deleting yourself or other admins
+    target = db.get_user(user_id)
+    if not target or target.get("is_admin") or user_id == uid:
+        return RedirectResponse("/admin/invites", status_code=303)
+    db._con.execute("DELETE FROM users WHERE id=?", (user_id,))
+    db._con.commit()
+    return RedirectResponse("/admin/invites", status_code=303)
+
 @router.post("/admin/invites/delete")
 async def admin_delete_invite(
     request: Request,

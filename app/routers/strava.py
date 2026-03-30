@@ -191,7 +191,7 @@ async def strava_sync_page(request: Request):
         return RedirectResponse("/login?next=/strava/sync", status_code=303)
     tokens  = load_tokens(user_id=uid)
     db      = db_getter()
-    last_ts = db.get_last_sync_time()
+    last_ts = db.get_last_sync_time(user_id=uid)
 
     # Format the date for display in the template
     last_sync_str = None
@@ -205,7 +205,7 @@ async def strava_sync_page(request: Request):
         "athlete":       tokens.get("athlete", {}),
         "last_sync":     last_ts,
         "last_sync_str": last_sync_str,
-        "db_count":      db.count_activities(),
+        "db_count":      db.count_activities(user_id=uid),
     })
 
 # ── Gear map helper ───────────────────────────────────────────────────────────
@@ -260,7 +260,7 @@ async def run_sync(
 
     if mode == "recent":
         db      = db_getter()
-        last_ts = db.get_last_sync_time()
+        last_ts = db.get_last_sync_time(user_id=uid)
         if last_ts:
             after_ts = last_ts - (2 * 24 * 3600)  # 2-day overlap as safety buffer
         else:

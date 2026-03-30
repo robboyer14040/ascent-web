@@ -91,12 +91,10 @@ td{padding:.5rem;border-bottom:1px solid #2a2a2c;vertical-align:middle}
         </td>
         <td style="color:#8e8e93">{{ inv.created_at | fmt_date }}</td>
         <td>
-          {% if not inv.used_at %}
           <form method="post" action="/admin/invites/delete" style="display:inline">
             <input type="hidden" name="token" value="{{ inv.token }}">
             <button type="submit" class="btn btn-del" onclick="return confirm('Delete this invite?')">Delete</button>
           </form>
-          {% endif %}
         </td>
       </tr>
       {% endfor %}
@@ -110,7 +108,7 @@ td{padding:.5rem;border-bottom:1px solid #2a2a2c;vertical-align:middle}
     <h2>Users</h2>
     {% if users %}
     <table>
-      <tr><th>Username</th><th>Email</th><th>Role</th><th>Joined</th></tr>
+      <tr><th>Username</th><th>Email</th><th>Role</th><th>Joined</th><th></th></tr>
       {% for u in users %}
       <tr>
         <td>{{ u.username }}</td>
@@ -119,6 +117,14 @@ td{padding:.5rem;border-bottom:1px solid #2a2a2c;vertical-align:middle}
           {% if u.is_admin %}<span class="badge badge-admin">Admin</span>{% endif %}
         </td>
         <td style="color:#8e8e93">{{ u.created_at | fmt_date }}</td>
+        <td>
+          {% if not u.is_admin %}
+          <form method="post" action="/admin/users/delete" style="display:inline">
+            <input type="hidden" name="user_id" value="{{ u.id }}">
+            <button type="submit" class="btn btn-del" onclick="return confirm('Delete {{ u.username }}? This cannot be undone.')">Delete</button>
+          </form>
+          {% endif %}
+        </td>
       </tr>
       {% endfor %}
     </table>

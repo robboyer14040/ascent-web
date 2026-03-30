@@ -12,13 +12,15 @@ db_getter: Callable = None
 
 
 @router.get("/stats/recent")
-async def recent_stats(limit: int = Query(15)):
-    return db_getter().get_activities(limit=limit, sort_by="start_time", sort_dir="desc")
+async def recent_stats(request: Request, limit: int = Query(15)):
+    uid = get_session_user_id(request)
+    return db_getter().get_activities(limit=limit, sort_by="start_time", sort_dir="desc", user_id=uid)
 
 
 @router.get("/stats/monthly")
-async def monthly_stats(year: Optional[int] = Query(None)):
-    return db_getter().get_monthly_totals(year=year)
+async def monthly_stats(request: Request, year: Optional[int] = Query(None)):
+    uid = get_session_user_id(request)
+    return db_getter().get_monthly_totals(year=year, user_id=uid)
 
 @router.get("/stats/weekly")
 async def weekly_stats(request: Request, year: Optional[int] = Query(None)):

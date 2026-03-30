@@ -774,11 +774,17 @@ class AscentDB:
         finally:
             con.close()
 
-    def get_last_sync_time(self) -> Optional[int]:
+    def get_last_sync_time(self, user_id: Optional[int] = None) -> Optional[int]:
         """Return unix timestamp of the most recent activity in the DB."""
-        row = self._con.execute(
-            "SELECT MAX(COALESCE(creation_time_override_s, creation_time_s)) FROM activities"
-        ).fetchone()
+        if user_id is not None:
+            row = self._con.execute(
+                "SELECT MAX(COALESCE(creation_time_override_s, creation_time_s)) FROM activities WHERE user_id=?",
+                (user_id,)
+            ).fetchone()
+        else:
+            row = self._con.execute(
+                "SELECT MAX(COALESCE(creation_time_override_s, creation_time_s)) FROM activities"
+            ).fetchone()
         return row[0] if row and row[0] else None
 
     def raw_tables(self) -> list[str]:
