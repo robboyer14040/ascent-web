@@ -41,10 +41,11 @@ input,select{font:inherit}
 .tb-count{font-size:11px;color:var(--muted);padding:0 6px;white-space:nowrap}
 
 /* root */
-#root{display:flex;height:calc(100vh - 44px);overflow:hidden}
+#root{display:flex;height:calc(100vh - 44px);overflow:hidden;touch-action:none;}
+#sidebar,#detail,#resize-handle{touch-action:none;}
 
 /* sidebar */
-#sidebar{width:640px;min-width:380px;max-width:55vw;display:flex;flex-direction:column;border-right:1px solid var(--border);flex-shrink:0;overflow:hidden;padding-bottom:44px}
+#sidebar{width:640px;min-width:380px;max-width:55vw;display:flex;flex-direction:column;border-right:1px solid var(--border);flex-shrink:0;overflow:hidden;padding-bottom:44px;position:relative}
 #filter-bar{display:flex;gap:6px;padding:8px 10px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0;align-items:center;}
 #filter-bar select{background:var(--surface2);border:1px solid var(--border2);color:var(--text);border-radius:6px;padding:4px 8px;font-size:12px;}
 
@@ -52,10 +53,12 @@ input,select{font:inherit}
 #col-head{
   display:grid;grid-template-columns:var(--cols);
   background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0;padding:0 8px;
+  min-width:max-content;
 }
 .ch-sep{
   position:absolute;right:-3px;top:0;bottom:0;width:6px;
   cursor:col-resize;background:transparent;z-index:10;
+  touch-action:none;
 }
 .ch-sep:hover,.ch-sep.resizing{background:var(--accent);opacity:.7;}
 .ch{position:relative;
@@ -69,12 +72,34 @@ input,select{font:inherit}
 .sort-arr{color:var(--accent);font-size:11px}
 
 /* list — virtual scroll container */
-#act-list{flex:1;overflow-y:auto;overflow-x:hidden;position:relative;min-height:80px}
-#act-list::-webkit-scrollbar{width:6px}
-#act-list::-webkit-scrollbar-track{background:transparent}
-#act-list::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
-#list-spacer{width:1px} /* height set by JS for virtual scroll */
-#list-rows{position:absolute;top:0;left:0;right:0;}
+#list-scroll{flex:1;display:flex;flex-direction:column;overflow-x:scroll;overflow-y:hidden;min-height:0;scrollbar-width:none}
+#list-scroll::-webkit-scrollbar{display:none}
+#act-list{flex:1;overflow-y:scroll;overflow-x:visible;position:relative;min-height:80px;scrollbar-width:none}
+#act-list::-webkit-scrollbar{display:none}
+#list-spacer{width:1px}
+#list-rows{position:absolute;top:0;left:0;right:0}
+
+/* Custom always-visible scrollbars */
+#hscroll-track{
+  height:8px;background:var(--surface);border-top:1px solid var(--border);
+  flex-shrink:0;position:relative;display:none;
+}
+#hscroll-thumb{
+  position:absolute;top:1px;height:6px;border-radius:3px;
+  background:var(--border2);cursor:pointer;min-width:30px;
+  transition:background .15s;
+}
+#hscroll-thumb:hover, #hscroll-thumb.dragging{background:var(--muted2)}
+#vscroll-track{
+  position:absolute;right:0;width:8px;background:transparent;
+  pointer-events:none;display:none;z-index:5;
+}
+#vscroll-thumb{
+  position:absolute;right:1px;width:6px;border-radius:3px;
+  background:var(--border2);cursor:pointer;min-height:30px;
+  pointer-events:all;transition:background .15s;
+}
+#vscroll-thumb:hover, #vscroll-thumb.dragging{background:var(--muted2)}
 
 .act-row{
   display:grid;grid-template-columns:var(--cols);
@@ -100,11 +125,26 @@ input,select{font:inherit}
 .ac-date{color:var(--muted);font-size:11.5px}
 .ac-name{font-weight:500}
 .ac-num{color:var(--text);text-align:right;font-variant-numeric:tabular-nums}
-.ac-strava{color:#fc4c02;font-size:10px;margin-left:3px}
+.ac-strava{color:#fc4c02;font-size:10px;margin-left:3px;text-decoration:none}
 .no-acts{padding:2rem;text-align:center;color:var(--muted)}
 
 /* resize */
-#resize-handle{width:4px;background:transparent;cursor:col-resize;flex-shrink:0;transition:background .15s;}
+#resize-handle{
+  width:6px;background:transparent;cursor:col-resize;flex-shrink:0;
+  transition:background .15s;touch-action:none;position:relative;
+  border-left:1px solid var(--border);border-right:1px solid var(--border);
+}
+#resize-handle:hover,#resize-handle.dragging{background:var(--accent);}
+#resize-handle::after{
+  content:'';position:absolute;top:50%;left:50%;
+  transform:translate(-50%,-50%);
+  width:2px;height:30px;border-radius:1px;
+  background:var(--muted2);pointer-events:none;
+}
+@media (pointer:coarse){
+  #resize-handle{ width:20px; background:rgba(249,115,22,0.15); }
+  #resize-handle::after{ width:4px; height:44px; background:#f97316; opacity:0.6; }
+}
 #resize-handle:hover,#resize-handle.dragging{background:var(--accent)}
 
 /* right panel */
@@ -159,6 +199,11 @@ input,select{font:inherit}
 .act-title-links a{font-size:11px;color:var(--muted);border:1px solid var(--border2);border-radius:4px;padding:2px 7px}
 .act-title-links a:hover{color:var(--text);border-color:var(--text)}
 .act-title-links a.strava{color:#fc4c02;border-color:rgba(252,76,2,.4)}
+.resync-btn{font-size:11px;color:var(--muted);border:1px solid var(--border2);border-radius:4px;padding:2px 7px;background:none;cursor:pointer;line-height:1.4;transition:color .15s,border-color .15s}
+.resync-btn:hover{color:var(--text);border-color:var(--text)}
+.resync-btn:disabled{opacity:.4;cursor:default}
+@keyframes spin{to{transform:rotate(360deg)}}
+.resync-btn.spinning .resync-icon{display:inline-block;animation:spin .7s linear infinite}
 .zones-btn{font-size:11px;color:var(--muted);border:1px solid var(--border2);border-radius:4px;padding:2px 7px;background:none;cursor:pointer}
 .zones-btn:hover{color:var(--text);border-color:var(--text)}
 
@@ -222,22 +267,43 @@ input,select{font:inherit}
 
 /* ── Compare Overlay ──────────────────────────────────────────────────────── */
 #compare-overlay{
-  display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:3000;
-  align-items:center;justify-content:center;backdrop-filter:blur(3px);
+  display:none;position:fixed;inset:0;z-index:3000;
+  align-items:center;justify-content:center;
 }
 #compare-overlay.open{display:flex}
+#cmp-backdrop{
+  position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(3px);
+  z-index:0;
+}
 #compare-panel{
   background:var(--surface);border:1px solid var(--border2);border-radius:14px;
   width:min(820px,96vw);height:min(680px,92vh);
   display:flex;flex-direction:column;box-shadow:0 24px 64px rgba(0,0,0,.7);
-  overflow:hidden;position:relative;
-  resize:both;min-width:480px;min-height:400px;
+  overflow:hidden;position:relative;z-index:1;
+  resize:both;min-width:320px;min-height:340px;
 }
+@media (pointer:coarse){
+  #compare-panel{
+    resize:none;
+    width:96vw !important;
+    height:92vh !important;
+    border-radius:10px;
+  }
+}
+#cmp-corner-handle{ display:none; }
 #cmp-maps-handle{
   flex-shrink:0;height:5px;cursor:row-resize;background:transparent;
   border-top:1px solid var(--border);transition:background .15s;
+  touch-action:none;position:relative;
 }
 #cmp-maps-handle:hover,#cmp-maps-handle.dragging{background:#f97316;opacity:.6}
+@media (pointer:coarse){
+  /* On touch: panel is always full-size, hide resize handle */
+  #cmp-maps-handle{ display:none; }
+  /* Give maps and profile a fixed split: maps 55%, profile rest */
+  #compare-maps{ flex:0 0 55% !important;height:55% !important; }
+  #compare-profile{ flex:1; }
+}
 #compare-header{
   display:flex;align-items:center;gap:8px;padding:12px 16px 10px;
   border-bottom:1px solid var(--border);flex-shrink:0;
@@ -492,6 +558,10 @@ input,select{font:inherit}
   background:#1a1a1c;border-top:1px solid var(--border);
   padding:6px 12px;gap:10px;align-items:center;
 }
+@media (pointer:fine){
+  /* Desktop: fixed at bottom */
+  #transport-bar{ position:fixed;bottom:0;left:0;right:0;z-index:1000; }
+}
 .tb-transport{display:flex;align-items:center;gap:4px}
 .t-btn{background:#2c2c2e;border:none;color:#f2f2f7;border-radius:6px;
   width:30px;height:30px;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .15s}
@@ -541,6 +611,23 @@ input,select{font:inherit}
 #splits-pane.collapsed{height:28px!important;flex-shrink:0}
 #splits-titlebar{display:flex;align-items:center;gap:6px;padding:0 8px;
   height:28px;flex-shrink:0;background:var(--surface);border-bottom:1px solid var(--border)}
+@media (pointer:coarse){
+  #sidebar{ padding-bottom:100px; }
+}
+@media (pointer:coarse){
+  /* On iPad: sidebar is full-width stacked layout.
+     act-list must flex-shrink so splits titlebar is always visible at the bottom */
+  #act-list{ flex:1;min-height:80px;overflow-y:auto; }
+  #splits-pane{ flex-shrink:0; }
+
+  /* Bigger touch targets on splits titlebar */
+  #splits-titlebar{ height:40px; }
+  #splits-title{ font-size:12px; }
+  .sp-tb-btn{ font-size:18px !important; padding:6px 10px !important; }
+  /* Make transport bar buttons taller on touch */
+  .t-btn{ width:38px; height:38px; font-size:16px; }
+  #transport-bar{ padding:8px 12px; }
+}
 #splits-title{font-size:11px;font-weight:600;text-transform:uppercase;
   letter-spacing:.06em;color:var(--muted);flex:1}
 .sp-tb-btn{background:none;border:none;color:var(--muted);cursor:pointer;
@@ -592,12 +679,18 @@ input,select{font:inherit}
       <div id="col-picker"></div>
     </div>
 
+    <div id="list-scroll">
     <div id="col-head"></div>
 
     <div id="act-list">
       <div id="list-spacer"></div>
       <div id="list-rows"></div>
     </div>
+    </div>
+
+    <!-- Custom always-visible scrollbars -->
+    <div id="hscroll-track"><div id="hscroll-thumb"></div></div>
+    <div id="vscroll-track"><div id="vscroll-thumb"></div></div>
 
     <div id="splits-drag"></div>
 
@@ -665,7 +758,7 @@ input,select{font:inherit}
     <div id="chart-wrap">
       <div id="chart-titlebar" style="position:absolute;top:0;left:0;right:0;height:20px;z-index:5;display:flex;align-items:center;justify-content:flex-end;padding:0 6px;pointer-events:none">
         <button class="sp-tb-btn" onclick="elevZoomStep(1)" title="Zoom in" style="pointer-events:all;font-size:13px;padding:1px 6px;line-height:1.4">+</button>
-        <button class="sp-tb-btn" onclick="toggleChartSettings(event)" title="Chart overlays" style="pointer-events:all;font-size:16px;padding:2px 6px;line-height:1">⚙</button>
+        <button class="sp-tb-btn" onclick="toggleChartSettings(event)" title="Chart overlays" style="pointer-events:all;font-size:16px;padding:2px 6px;line-height:1;user-select:none;-webkit-user-select:none;touch-action:manipulation">⚙</button>
       </div>
       <div id="chart-settings" style="display:none;position:absolute;top:20px;right:4px;z-index:20;background:var(--surface);border:1px solid var(--border2);border-radius:8px;padding:8px 10px;box-shadow:0 4px 16px rgba(0,0,0,.5);min-width:200px">
         <div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:6px">Overlay 1</div>
@@ -853,7 +946,7 @@ const state = {
 // ── COLUMN DEFINITIONS ────────────────────────────────────────────────────────
 const ALL_COLS = [
   {id:'date',      label:'Date/Time',   sort:'start_time',   w:'168px', align:'left',  render: a => fmtDate(a.start_time)},
-  {id:'name',      label:'Title',       sort:'name',         w:'1fr',   align:'left',  render: a => escHtml(a.name) + (a.strava_activity_id?'<span class="ac-strava">↗</span>':'')},
+  {id:'name',      label:'Title',       sort:'name',         w:'1fr',   align:'left',  render: a => escHtml(a.name) + (a.strava_activity_id?`<a href="https://www.strava.com/activities/${a.strava_activity_id}" target="_blank" class="ac-strava" title="View on Strava">↗</a>`:'')},
   {id:'dist',      label:'Dist',        sort:'distance_m',   w:'78px',  align:'right', unitLabel: () => U.distUnit(),  render: a => fmtN(U.dist(a.distance_mi),2)},
   {id:'active',    label:'MovTime',     sort:'active_time',  w:'76px',  align:'right', render: a => fmtHMS(a.active_time)},
   {id:'duration',  label:'Duration',    sort:'duration',     w:'76px',  align:'right', render: a => fmtHMS(a.duration)},
@@ -905,6 +998,8 @@ const ROW_H = 34;
 
 // Event delegation for activity rows — handles click, cmd-click, shift-click
 document.addEventListener('click', function(e) {
+  // Let Strava links (and any other <a> inside a row) pass through normally
+  if (e.target.closest('a')) return;
   const row = e.target.closest('.act-row');
   if (!row) return;
   const id = parseInt(row.dataset.id);
@@ -1249,17 +1344,28 @@ async function drawElevationFromSummary(act, version) {
 // Chart overlay state
 let elevChartData = null;  // store last chart data for re-render
 
+let _chartSettingsJustOpened = false;
 function toggleChartSettings(e) {
   e.stopPropagation();
   const s = document.getElementById('chart-settings');
-  s.style.display = s.style.display === 'none' ? 'block' : 'none';
-}
-document.addEventListener('click', e => {
-  if (!e.target.closest('#chart-wrap')) {
-    const s = document.getElementById('chart-settings');
-    if (s) s.style.display = 'none';
+  const opening = s.style.display === 'none';
+  s.style.display = opening ? 'block' : 'none';
+  if (opening) {
+    _chartSettingsJustOpened = true;
+    setTimeout(() => { _chartSettingsJustOpened = false; }, 300);
   }
-});
+}
+(function() {
+  function chartSettingsDismiss(e) {
+    if (_chartSettingsJustOpened) return;
+    if (!e.target.closest('#chart-wrap')) {
+      const s = document.getElementById('chart-settings');
+      if (s) s.style.display = 'none';
+    }
+  }
+  document.addEventListener('click',    chartSettingsDismiss);
+  document.addEventListener('touchend', chartSettingsDismiss, {passive: true});
+})();
 
 function loadChartPrefs() {
   try {
@@ -1777,60 +1883,71 @@ async function drawElevation(data, version) {
     const rect  = document.getElementById('elev-sel-rect');
     if (!wrap || !rect) return;
 
-    wrap.addEventListener('mousedown', e => {
-      if (!elevChart || !elevChartData) return;
+    function beginDrag(clientX) {
+      if (!elevChart || !elevChartData) return false;
       const ca = elevChart.chartArea;
-      if (!ca) return;
+      if (!ca) return false;
       const wRect = wrap.getBoundingClientRect();
-      const px = e.clientX - wRect.left;
-      if (px < ca.left || px > ca.right) return;
-      e.preventDefault();
-
+      const px = clientX - wRect.left;
+      if (px < ca.left || px > ca.right) return false;
       dragging = true;
       startPx  = px;
       startIdx = pxToIdx(px);
-
-      // Hide HUD immediately
       if (panel) panel.style.display = 'none';
       if (cross) cross.style.display = 'none';
-
-      // Show sel-rect at start position
       rect.style.display = 'block';
       rect.style.left  = px + 'px';
       rect.style.width = '0px';
+      return true;
+    }
 
-      function onMove(ev) {
-        if (!dragging) return;
-        const curPx  = ev.clientX - wRect.left;
-        const lo     = Math.max(ca.left, Math.min(startPx, curPx));
-        const hi     = Math.min(ca.right, Math.max(startPx, curPx));
-        rect.style.left  = lo + 'px';
-        rect.style.width = (hi - lo) + 'px';
+    function moveDrag(clientX) {
+      if (!dragging) return;
+      const ca = elevChart.chartArea;
+      const wRect = wrap.getBoundingClientRect();
+      const curPx  = clientX - wRect.left;
+      const lo     = Math.max(ca.left, Math.min(startPx, curPx));
+      const hi     = Math.min(ca.right, Math.max(startPx, curPx));
+      rect.style.left  = lo + 'px';
+      rect.style.width = (hi - lo) + 'px';
+      applyElevSelection(startIdx, pxToIdx(curPx));
+    }
 
-        const curIdx = pxToIdx(curPx);
-        applyElevSelection(startIdx, curIdx);
-      }
+    function endDrag(clientX) {
+      rect.style.display = 'none';
+      const wRect = wrap.getBoundingClientRect();
+      const curPx  = clientX - wRect.left;
+      const moved  = Math.abs(curPx - startPx) > 4;
+      if (moved) applyElevSelection(startIdx, pxToIdx(curPx));
+      else clearElevSelection();
+      dragging = false;
+    }
 
-      function onUp(ev) {
-        document.removeEventListener('mousemove', onMove);
-        document.removeEventListener('mouseup', onUp);
-        rect.style.display = 'none';
-
-        const curPx  = ev.clientX - wRect.left;
-        const curIdx = pxToIdx(curPx);
-        const moved  = Math.abs(curPx - startPx) > 4;
-
-        if (moved) {
-          applyElevSelection(startIdx, curIdx);
-        } else {
-          clearElevSelection();
-        }
-        dragging = false;
-      }
-
+    // Mouse
+    wrap.addEventListener('mousedown', e => {
+      if (!beginDrag(e.clientX)) return;
+      e.preventDefault();
+      function onMove(ev) { moveDrag(ev.clientX); }
+      function onUp(ev)   { document.removeEventListener('mousemove', onMove);
+                            document.removeEventListener('mouseup', onUp);
+                            endDrag(ev.clientX); }
       document.addEventListener('mousemove', onMove);
       document.addEventListener('mouseup', onUp);
     });
+
+    // Touch (iPad)
+    wrap.addEventListener('touchstart', e => {
+      const t = e.touches[0];
+      if (!t || !beginDrag(t.clientX)) return;
+      // Don't preventDefault — allow scroll unless we actually started dragging
+      function onMove(ev) { const t2 = ev.touches[0]; if (t2) moveDrag(t2.clientX); }
+      function onEnd(ev)  { const t2 = ev.changedTouches[0];
+                            document.removeEventListener('touchmove', onMove);
+                            document.removeEventListener('touchend', onEnd);
+                            if (t2) endDrag(t2.clientX); }
+      document.addEventListener('touchmove', onMove, {passive: true});
+      document.addEventListener('touchend',  onEnd,  {passive: true});
+    }, {passive: true});
   }
 
   document.addEventListener('DOMContentLoaded', setup);
@@ -2044,8 +2161,11 @@ async function selectActivity(id) {
 }
 
 function buildDetailHTML(a) {
-  const strava = a.strava_activity_id
+  const stravaLink = a.strava_activity_id
     ? `<a href="https://www.strava.com/activities/${a.strava_activity_id}" target="_blank" class="strava">View on Strava ↗</a>`
+    : '';
+  const resyncBtn = a.strava_activity_id
+    ? `<button class="resync-btn" id="resync-btn" onclick="resyncActivity(${a.id})" title="Re-sync metadata from Strava"><span class="resync-icon">↻</span> Sync</button>`
     : '';
   const chips = [
     ['Distance',  a.distance_mi       ? U.distS(a.distance_mi)                                          : null],
@@ -2072,7 +2192,7 @@ function buildDetailHTML(a) {
   return `
     <div class="act-title-bar">
       <div class="act-title">${escHtml(a.name||'(unnamed)')}</div>
-      <div class="act-title-links"><button class="zones-btn" id="compare-btn" onclick="openCompare()">Compare…</button><button class="zones-btn" onclick="openZones()">Zones</button>${strava}</div>
+      <div class="act-title-links"><button class="zones-btn" id="compare-btn" onclick="openCompare()">Compare…</button><button class="zones-btn" onclick="openZones()">Zones</button>${resyncBtn}${stravaLink}</div>
     </div>
     <div style="font-size:11.5px;color:var(--muted);margin-bottom:10px">${fmtDate(a.start_time)}</div>
     <div class="stats-row">${chips.map(([l,v])=>`<div class="stat-chip"><div class="sc-label">${l}</div><div class="sc-val">${v}</div></div>`).join('')}</div>
@@ -2119,9 +2239,45 @@ document.querySelectorAll('.ch[data-col]').forEach(el=>{
 const sidebar=document.getElementById('sidebar');
 const handle=document.getElementById('resize-handle');
 let resizing=false,rsX=0,rsW=0;
-handle.addEventListener('mousedown',e=>{ resizing=true;rsX=e.clientX;rsW=sidebar.offsetWidth;handle.classList.add('dragging');document.body.style.cssText='cursor:col-resize;user-select:none'; });
-window.addEventListener('mousemove',e=>{ if(!resizing)return; sidebar.style.width=Math.max(380,Math.min(window.innerWidth*.65,rsW+e.clientX-rsX))+'px'; if(leafMap)leafMap.invalidateSize(); });
-window.addEventListener('mouseup',()=>{ if(!resizing)return; resizing=false;handle.classList.remove('dragging');document.body.style.cssText=''; savePaneSizes({sidebarW:sidebar.offsetWidth}); });
+
+// addDrag: attach mouse+touch drag to any element
+// axis: 'x' or 'y', onMove(delta), onEnd()
+function addDrag(el, axis, onMove, onEnd, onStart) {
+  el.style.touchAction = 'none';
+  // Use Pointer Events — unified mouse+touch, no passive conflicts
+  el.addEventListener('pointerdown', e => {
+    if (e.button !== undefined && e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (onStart) onStart();
+    el.setPointerCapture(e.pointerId);
+    const start = axis==='x' ? e.clientX : e.clientY;
+    el.classList.add('dragging');
+    document.body.style.cssText = (axis==='x'?'cursor:col-resize;':'cursor:row-resize;') + 'user-select:none';
+    function pm(ev){ onMove(axis==='x' ? ev.clientX-start : ev.clientY-start); }
+    function pu(ev){
+      el.releasePointerCapture(ev.pointerId);
+      el.classList.remove('dragging');
+      document.body.style.cssText='';
+      if(onEnd) onEnd();
+      el.removeEventListener('pointermove', pm);
+      el.removeEventListener('pointerup',   pu);
+      el.removeEventListener('pointercancel', pu);
+    }
+    el.addEventListener('pointermove',   pm);
+    el.addEventListener('pointerup',     pu);
+    el.addEventListener('pointercancel', pu);
+  });
+}
+
+addDrag(handle, 'x',
+  delta => {
+    sidebar.style.width = Math.max(380, Math.min(window.innerWidth*.65, rsW+delta)) + 'px';
+    if(leafMap) leafMap.invalidateSize();
+  },
+  () => { savePaneSizes({sidebarW:sidebar.offsetWidth}); },
+  () => { rsW = sidebar.offsetWidth; }
+);
 
 // ── KEYBOARD NAV ──────────────────────────────────────────────────────────────
 document.addEventListener('keydown',e=>{
@@ -2324,7 +2480,23 @@ function animInit(chartsData, geojson) {
   anim.speed = 1;
 
   // Show transport bar
-  document.getElementById('transport-bar').style.display = 'flex';
+  const _tbar = document.getElementById('transport-bar');
+  const _isTouch = window.matchMedia('(pointer:coarse)').matches;
+  if (_isTouch) {
+    _tbar.style.position = 'static';
+    _tbar.style.left = '';
+    _tbar.style.right = '';
+    _tbar.style.bottom = '';
+    _tbar.style.zIndex = '';
+    _tbar.style.width = '';
+  } else {
+    _tbar.style.position = 'fixed';
+    _tbar.style.left = '0';
+    _tbar.style.right = '0';
+    _tbar.style.bottom = '0';
+    _tbar.style.zIndex = '1000';
+  }
+  _tbar.style.display = 'flex';
   document.getElementById('t-scrub').value = 0;
   document.getElementById('t-speed').value = '1';
   // Default state: stopped
@@ -3045,37 +3217,23 @@ function loadPaneSizes() {
     const detail   = document.getElementById('detail');
     if (!handle || !topPane) return;
 
-    let startY = 0, startH = 0, totalH = 0;
-
-    handle.addEventListener('mousedown', e => {
-      e.preventDefault();
-      startY  = e.clientY;
-      startH  = topPane.getBoundingClientRect().height;
-      totalH  = detail.getBoundingClientRect().height;
-      handle.classList.add('dragging');
-      document.body.style.cursor = 'row-resize';
-      document.body.style.userSelect = 'none';
-
-      function onMove(e) {
-        const dy    = e.clientY - startY;
-        const newH  = Math.max(60, Math.min(totalH - 120, startH + dy));
+    addDrag(handle, 'y',
+      delta => {
+        // startH/totalH captured fresh each drag via closure over pane elements
+        const newH = Math.max(60, Math.min(detail.getBoundingClientRect().height - 120,
+                                           _startH + delta));
         topPane.style.height = newH + 'px';
         if (onDone) onDone();
-      }
-
-      function onUp() {
-        handle.classList.remove('dragging');
-        document.body.style.cursor = '';
-        document.body.style.userSelect = '';
-        document.removeEventListener('mousemove', onMove);
-        document.removeEventListener('mouseup', onUp);
+      },
+      () => {
         if (onDone) onDone();
         savePaneSizes({[storageKey]: topPane.offsetHeight});
       }
-
-      document.addEventListener('mousemove', onMove);
-      document.addEventListener('mouseup', onUp);
-    });
+    );
+    // Capture startH at the moment drag begins
+    let _startH = 0;
+    handle.addEventListener('mousedown',  () => { _startH = topPane.getBoundingClientRect().height; }, true);
+    handle.addEventListener('touchstart', () => { _startH = topPane.getBoundingClientRect().height; }, true);
   }
 
   // Map ↔ Elevation handle — invalidate map after resize
@@ -3142,45 +3300,172 @@ function buildColHead() {
       const sep = document.createElement('div');
       sep.className = 'ch-sep';
       sep.dataset.colId = col.id;
-      sep.addEventListener('mousedown', e => {
+      sep.addEventListener('pointerdown', e => {
         e.preventDefault();
         e.stopPropagation();
+        div.draggable = false;
+        sep.setPointerCapture(e.pointerId);
         sep.classList.add('resizing');
         const startX = e.clientX;
-        const startW = getColW(col);
-        // Parse starting width in px
-        const headerEl = head.parentElement || head.closest('#act-list') || document.getElementById('act-list');
         const colEls = head.querySelectorAll('.ch');
         const colEl  = colEls[i];
-        const startPx = colEl ? colEl.offsetWidth : parseInt(startW) || 100;
+        const startPx = colEl ? colEl.offsetWidth : parseInt(getColW(col)) || 100;
 
         function onMove(me) {
           const delta = me.clientX - startX;
           const newPx = Math.max(40, startPx + delta);
           colWidthOverrides[col.id] = newPx + 'px';
           head.style.setProperty('--cols', buildColsTemplate());
-          // Update all rows immediately
           document.querySelectorAll('.act-row').forEach(r => r.style.setProperty('--cols', buildColsTemplate()));
         }
         function onUp() {
+          div.draggable = true;
           sep.classList.remove('resizing');
+          sep.removeEventListener('pointermove', onMove);
+          sep.removeEventListener('pointerup',   onUp);
+          sep.removeEventListener('pointercancel', onUp);
           saveColWidths();
           buildColHead();
           renderVirtualList();
-          window.removeEventListener('mousemove', onMove);
-          window.removeEventListener('mouseup', onUp);
-          document.body.style.cssText = '';
         }
-        document.body.style.cssText = 'cursor:col-resize;user-select:none';
-        window.addEventListener('mousemove', onMove);
-        window.addEventListener('mouseup', onUp);
+        sep.addEventListener('pointermove',  onMove);
+        sep.addEventListener('pointerup',    onUp);
+        sep.addEventListener('pointercancel', onUp);
       });
       div.appendChild(sep);
     }
 
     head.appendChild(div);
   });
+
+  // Sync act-list min-width to header so #list-scroll overflows correctly
+  // Double rAF ensures grid layout is complete before reading scrollWidth
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    const w = head.scrollWidth;
+    const list = document.getElementById('act-list');
+    const spacer = document.getElementById('list-spacer');
+    if (list)   list.style.minWidth   = w + 'px';
+    if (spacer) spacer.style.minWidth = w + 'px';
+    if (window._updateHScrollbar) window._updateHScrollbar();
+    if (window._updateVScrollbar) window._updateVScrollbar();
+  }));
 }
+
+// ── CUSTOM SCROLLBARS ────────────────────────────────────────────────────────
+// macOS hides native scrollbars — we build always-visible ones instead.
+(function initCustomScrollbars() {
+  function setup() {
+    const listScroll = document.getElementById('list-scroll');
+    const actList    = document.getElementById('act-list');
+    const hTrack     = document.getElementById('hscroll-track');
+    const hThumb     = document.getElementById('hscroll-thumb');
+    const vTrack     = document.getElementById('vscroll-track');
+    const vThumb     = document.getElementById('vscroll-thumb');
+    if (!listScroll || !actList || !hTrack || !hThumb) return;
+
+    // ── Horizontal scrollbar ─────────────────────────────────────────────
+    function updateHScrollbar() {
+      const sw = listScroll.scrollWidth;
+      const cw = listScroll.clientWidth;
+      if (sw <= cw) { hTrack.style.display = 'none'; return; }
+      hTrack.style.display = 'block';
+      const ratio     = cw / sw;
+      const thumbW    = Math.max(30, cw * ratio);
+      const thumbLeft = (listScroll.scrollLeft / (sw - cw)) * (cw - thumbW);
+      hThumb.style.width = thumbW + 'px';
+      hThumb.style.left  = thumbLeft + 'px';
+    }
+
+    listScroll.addEventListener('scroll', updateHScrollbar, {passive: true});
+
+    // Drag hThumb
+    hThumb.addEventListener('pointerdown', e => {
+      e.preventDefault();
+      hThumb.setPointerCapture(e.pointerId);
+      hThumb.classList.add('dragging');
+      const startX     = e.clientX;
+      const startLeft  = listScroll.scrollLeft;
+      const sw = listScroll.scrollWidth;
+      const cw = listScroll.clientWidth;
+      const thumbW = hThumb.offsetWidth;
+      function onMove(ev) {
+        const delta     = ev.clientX - startX;
+        const trackW    = cw - thumbW;
+        const scrollMax = sw - cw;
+        listScroll.scrollLeft = startLeft + (delta / trackW) * scrollMax;
+      }
+      function onUp() {
+        hThumb.classList.remove('dragging');
+        hThumb.removeEventListener('pointermove', onMove);
+        hThumb.removeEventListener('pointerup',   onUp);
+      }
+      hThumb.addEventListener('pointermove', onMove);
+      hThumb.addEventListener('pointerup',   onUp);
+    });
+
+    // ── Vertical scrollbar ───────────────────────────────────────────────
+    function updateVScrollbar() {
+      const sh = actList.scrollHeight;
+      const ch = actList.clientHeight;
+      if (sh <= ch) { vTrack.style.display = 'none'; return; }
+      vTrack.style.display = 'block';
+      // position vTrack over act-list
+      const rect = actList.getBoundingClientRect();
+      const pRect = actList.offsetParent ? actList.offsetParent.getBoundingClientRect() : {top:0,left:0};
+      vTrack.style.top    = (rect.top  - pRect.top)  + 'px';
+      vTrack.style.height = rect.height + 'px';
+      const ratio     = ch / sh;
+      const thumbH    = Math.max(30, ch * ratio);
+      const thumbTop  = (actList.scrollTop / (sh - ch)) * (ch - thumbH);
+      vThumb.style.height = thumbH + 'px';
+      vThumb.style.top    = thumbTop + 'px';
+    }
+
+    actList.addEventListener('scroll', updateVScrollbar, {passive: true});
+
+    // Drag vThumb
+    vThumb.addEventListener('pointerdown', e => {
+      e.preventDefault();
+      vThumb.setPointerCapture(e.pointerId);
+      vThumb.classList.add('dragging');
+      const startY    = e.clientY;
+      const startTop  = actList.scrollTop;
+      const sh = actList.scrollHeight;
+      const ch = actList.clientHeight;
+      const thumbH = vThumb.offsetHeight;
+      function onMove(ev) {
+        const delta     = ev.clientY - startY;
+        const trackH    = ch - thumbH;
+        const scrollMax = sh - ch;
+        actList.scrollTop = startTop + (delta / trackH) * scrollMax;
+      }
+      function onUp() {
+        vThumb.classList.remove('dragging');
+        vThumb.removeEventListener('pointermove', onMove);
+        vThumb.removeEventListener('pointerup',   onUp);
+      }
+      vThumb.addEventListener('pointermove', onMove);
+      vThumb.addEventListener('pointerup',   onUp);
+    });
+
+    // Update both on resize
+    const ro = new ResizeObserver(() => { updateHScrollbar(); updateVScrollbar(); });
+    ro.observe(listScroll);
+    ro.observe(actList);
+
+    // Initial update (after layout)
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      updateHScrollbar();
+      updateVScrollbar();
+    }));
+
+    // Re-export so buildColHead can trigger update
+    window._updateHScrollbar = updateHScrollbar;
+    window._updateVScrollbar = updateVScrollbar;
+  }
+
+  document.addEventListener('DOMContentLoaded', setup);
+})();
 
 function buildColPicker() {
   const picker = document.getElementById('col-picker');
@@ -3689,6 +3974,55 @@ function renderZoneChart(times, title, boundaries, unit) {
   return html;
 }
 
+async function resyncActivity(activityId) {
+  const btn = document.getElementById('resync-btn');
+  if (!btn || btn.disabled) return;
+  btn.disabled = true;
+  btn.classList.add('spinning');
+
+  try {
+    const resp = await fetch(`/api/activities/${activityId}/resync`, { method: 'POST' });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      btn.disabled = false;
+      btn.classList.remove('spinning');
+      alert('Sync failed: ' + (err.detail || resp.statusText));
+      return;
+    }
+    const updated = await resp.json();
+
+    // Update the cached activity in state.all and state.filtered
+    const idx = state.all.findIndex(a => a.id === activityId);
+    if (idx >= 0) state.all[idx] = updated;
+    const fidx = state.filtered.findIndex(a => a.id === activityId);
+    if (fidx >= 0) state.filtered[fidx] = updated;
+
+    // Re-render the detail panel and list row
+    const infoDiv = document.getElementById('act-info');
+    if (infoDiv) infoDiv.innerHTML = buildDetailHTML(updated);
+    renderVirtualList();
+
+    // Flash the new button green briefly to confirm
+    const newBtn = document.getElementById('resync-btn');
+    if (newBtn) {
+      newBtn.classList.remove('spinning');
+      newBtn.disabled = false;
+      newBtn.innerHTML = '✓ Synced';
+      newBtn.style.color = '#30d158';
+      newBtn.style.borderColor = '#30d158';
+      setTimeout(() => {
+        newBtn.innerHTML = '<span class="resync-icon">↻</span> Sync';
+        newBtn.style.color = '';
+        newBtn.style.borderColor = '';
+      }, 2000);
+    }
+  } catch(e) {
+    alert('Sync error: ' + e.message);
+    const b = document.getElementById('resync-btn');
+    if (b) { b.disabled = false; b.classList.remove('spinning'); }
+  }
+}
+
 async function openZones() {
   const overlay = document.getElementById('zones-overlay');
   const body    = document.getElementById('zones-body');
@@ -3823,7 +4157,7 @@ async function cmpOpenManualWithSegment() {
         activity_id:     currentAct.id,
         start_idx:       cmp.selStartIdx,
         end_idx:         cmp.selEndIdx,
-        max_results:     ordered.length - 1,
+        max_results:     ordered.length,  // total including reference activity
         radius_m:        150,
         include_friends: !!(document.getElementById('cmp-include-friends')?.checked),
         // Pass the specific activity IDs to restrict candidates
@@ -3834,7 +4168,13 @@ async function cmpOpenManualWithSegment() {
     clearInterval(_prog);
     if (_bar) { _bar.style.transition = 'width .15s ease'; _bar.style.width = '100%'; }
     setTimeout(() => { loading.style.display = 'none'; if (_bar) _bar.style.width = '0%'; }, 150);
-    if (!r.ok) { titleEl.textContent = d.detail || 'No matches'; return; }
+    if (!r.ok) {
+      cmp.matches = [];
+      const _leg = document.getElementById('compare-legend');
+      if (_leg) _leg.innerHTML = '';
+      titleEl.textContent = d.detail || 'No matches';
+      return;
+    }
 
     cmp.matches  = d.matches;
     cmp.currentT = 0;
@@ -4101,19 +4441,26 @@ async function openCompare() {
 }
 
 function initCompareOverlayClose() {
-  const overlay = document.getElementById('compare-overlay');
-  if (!overlay) return;
-  let downOnOverlay = false;
-  overlay.addEventListener('mousedown', e => {
-    downOnOverlay = e.target === overlay;
-  });
-  overlay.addEventListener('mouseup', e => {
-    if (downOnOverlay && e.target === overlay) closeCompare();
-    downOnOverlay = false;
-  });
+  function attachBackdrop() {
+    const backdrop = document.getElementById('cmp-backdrop');
+    if (!backdrop) return;
+    // Desktop only: click backdrop to close.
+    // On touch devices the panel fills the screen so there's no backdrop to tap;
+    // use the ✕ button instead. Swallowing touchstart on the backdrop prevents
+    // any accidental close on iPad.
+    const isTouch = window.matchMedia('(pointer:coarse)').matches;
+    if (!isTouch) {
+      backdrop.addEventListener('click', () => { if (!cmp._resizing) closeCompare(); });
+    } else {
+      // Absorb all touch events on the backdrop so nothing leaks through
+      backdrop.addEventListener('touchstart', e => e.stopPropagation(), {passive: true});
+      backdrop.addEventListener('touchend',   e => e.stopPropagation(), {passive: true});
+    }
+  }
+  document.addEventListener('DOMContentLoaded', attachBackdrop);
+  setTimeout(attachBackdrop, 500);
 }
-document.addEventListener('DOMContentLoaded', initCompareOverlayClose);
-setTimeout(initCompareOverlayClose, 500);
+initCompareOverlayClose();
 
 function closeCompare() {
   document.getElementById('compare-overlay').classList.remove('open');
@@ -4599,37 +4946,63 @@ function cmpScrub(val) {
 
     let startY = 0, startH = 0;
 
-    handle.addEventListener('mousedown', e => {
-      e.preventDefault();
-      startY = e.clientY;
+    function startResize(clientY) {
+      startY = clientY;
       startH = mapsRow.getBoundingClientRect().height;
       handle.classList.add('dragging');
       document.body.style.cursor = 'row-resize';
       document.body.style.userSelect = 'none';
+      cmp._resizing = true;
+      clearTimeout(cmp._resizeTimer);
+    }
+    function doResize(clientY) {
+      const dy   = clientY - startY;
+      const newH = Math.max(120, startH + dy);
+      mapsRow.style.flex = 'none';
+      mapsRow.style.height = newH + 'px';
+      if (cmp.map)     cmp.map.invalidateSize();
+      if (cmp.zoomMap) cmp.zoomMap.invalidateSize();
+    }
+    function endResize() {
+      handle.classList.remove('dragging');
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup',   onMouseUp);
+      document.removeEventListener('touchmove', onTouchMove);
+      document.removeEventListener('touchend',  onTouchEnd);
+      if (cmp.map)     cmp.map.invalidateSize();
+      if (cmp.zoomMap) cmp.zoomMap.invalidateSize();
+      if (cmp.profileChart) cmp.profileChart.resize();
+      cmp._resizeTimer = setTimeout(() => { cmp._resizing = false; }, 300);
+    }
 
-      function onMove(e) {
-        const dy   = e.clientY - startY;
-        const newH = Math.max(120, startH + dy);
-        mapsRow.style.flex = 'none';
-        mapsRow.style.height = newH + 'px';
-        if (cmp.map)     cmp.map.invalidateSize();
-        if (cmp.zoomMap) cmp.zoomMap.invalidateSize();
-      }
+    function onMouseMove(e) { doResize(e.clientY); }
+    function onMouseUp()    { endResize(); }
+    function onTouchMove(e) {
+      e.preventDefault();
+      const t = e.touches[0] || e.changedTouches[0];
+      if (t) doResize(t.clientY);
+    }
+    function onTouchEnd(e)  {
+      const t = e.changedTouches[0];
+      if (t) doResize(t.clientY);
+      endResize();
+    }
 
-      function onUp() {
-        handle.classList.remove('dragging');
-        document.body.style.cursor = '';
-        document.body.style.userSelect = '';
-        document.removeEventListener('mousemove', onMove);
-        document.removeEventListener('mouseup',  onUp);
-        if (cmp.map)     cmp.map.invalidateSize();
-        if (cmp.zoomMap) cmp.zoomMap.invalidateSize();
-        if (cmp.profileChart) cmp.profileChart.resize();
-      }
-
-      document.addEventListener('mousemove', onMove);
-      document.addEventListener('mouseup',   onUp);
+    handle.addEventListener('mousedown', e => {
+      e.preventDefault();
+      startResize(e.clientY);
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup',   onMouseUp);
     });
+    handle.addEventListener('touchstart', e => {
+      e.preventDefault();
+      const t = e.touches[0] || e.changedTouches[0];
+      if (t) startResize(t.clientY);
+      document.addEventListener('touchmove', onTouchMove, {passive: false});
+      document.addEventListener('touchend',  onTouchEnd,  {passive: false});
+    }, {passive: false});
 
     // When the panel itself is resized (via CSS resize handle), invalidate maps
     const panel = document.getElementById('compare-panel');
@@ -5036,7 +5409,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 <!-- Transport / Animation bar — inside page flow so it's visible -->
-<div id="transport-bar" style="display:none;flex-shrink:0;background:#1a1a1c;border-top:1px solid #3a3a3c;padding:6px 12px;gap:10px;align-items:center;position:fixed;bottom:0;left:0;right:0;z-index:1000;">
+<div id="transport-bar" style="display:none;flex-shrink:0;background:#1a1a1c;border-top:1px solid #3a3a3c;padding:6px 12px;gap:10px;align-items:center;">
   <div class="tb-transport">
     <button class="t-btn" id="t-start" onclick="animJump(0)"       title="Go to start">⏮</button>
     <button class="t-btn" id="t-rew"   onclick="animSetSpeed(-4)"  title="Reverse fast">⏪</button>
@@ -5067,6 +5440,7 @@ document.addEventListener('DOMContentLoaded', () => {
 </div>
 <!-- ── Compare Panel ─────────────────────────────────────────────────────── -->
 <div id="compare-overlay">
+  <div id="cmp-backdrop"></div>
   <div id="compare-panel" style="position:relative">
     <div id="cmp-loading" style="display:none">
       <span id="cmp-loading-text">Searching activities…</span>
@@ -5255,6 +5629,7 @@ document.addEventListener('DOMContentLoaded', () => {
 </div>
 </body>
 </html>
+
 
 
 

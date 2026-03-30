@@ -20,6 +20,16 @@ async def recent_stats(limit: int = Query(15)):
 async def monthly_stats(year: Optional[int] = Query(None)):
     return db_getter().get_monthly_totals(year=year)
 
+@router.get("/stats/weekly")
+async def weekly_stats(request: Request, year: Optional[int] = Query(None)):
+    uid = get_session_user_id(request)
+    return db_getter().get_weekly_totals(year=year, user_id=uid)
+
+@router.get("/stats/yearly")
+async def yearly_stats(request: Request, year: Optional[int] = Query(None)):
+    uid = get_session_user_id(request)
+    return db_getter().get_yearly_totals(year=year, user_id=uid)
+
 
 @router.get("/activities/{activity_id}/geojson")
 async def activity_geojson(activity_id: int):
@@ -373,25 +383,25 @@ async def segment_compare(req: SegmentRequest, request: Request):
 
     # E-bike filter: match reference activity type
     # EBikeRide should only compare with EBikeRide, and non-ebike excludes EBikeRide
-    ref_act = db.get_activity(req.activity_id)
-    ref_type = (ref_act or {}).get("activity_type", "") if ref_act else ""
-    # Fallback: read directly from raw attributes_json if activity_type is empty
-    if not ref_type and ref_act:
-        raw = db._con.execute(
-            "SELECT attributes_json FROM activities WHERE id=?", (req.activity_id,)
-        ).fetchone()
-        if raw and raw[0]:
-            import sys; sys.path.insert(0, '/app')
-            from app.db import parse_attrs
-            ref_type = parse_attrs(raw[0]).get("activity", "")
+    # ref_act was already fetched above; reuse it here.
+    # attributes_json is a flat alternating JSON array: ["activity","EBikeRide","name","My Ride",...]
+    # parse_attrs() already converts it to a dict, so ref_act["activity_type"] is reliable.
+    # For the SQL filter we use a json_each self-join which is immune to whitespace
+    # differences in serialization (unlike a LIKE pattern).
     EBIKE_TYPE = "EBikeRide"
-    # attributes_json is stored as a flat list [...,"activity","Ride",...] not a dict
-    # Use LIKE to match the activity type value that follows the "activity" key
-    _ebike_pat = '%"activity","EBikeRide"%'
+    ref_type = (ref_act or {}).get("activity_type", "")
+    _ebike_sql = """
+        EXISTS (
+            SELECT 1
+            FROM json_each(activities.attributes_json) k
+            JOIN json_each(activities.attributes_json) v ON v.key = k.key + 1
+            WHERE k.value = 'activity' AND v.value = 'EBikeRide'
+        )
+    """
     if ref_type == EBIKE_TYPE:
-        ebike_filter = "AND attributes_json LIKE '" + _ebike_pat + "'"
+        ebike_filter = f"AND ({_ebike_sql})"
     else:
-        ebike_filter = "AND (attributes_json NOT LIKE '" + _ebike_pat + "')"
+        ebike_filter = f"AND NOT ({_ebike_sql})"
 
     candidates = db._con.execute(f"""
         SELECT id, name,
@@ -875,6 +885,7 @@ async def segment_compare_manual(req: MultiCompareRequest):
         raise HTTPException(404, "None of the selected activities contain this segment")
 
     return {"matches": matches, "segment_name": seg["name"]}
+
 
 
 

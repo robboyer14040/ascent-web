@@ -168,6 +168,13 @@ async def favicon():
 # ── root: dashboard ───────────────────────────────────────────────────────────
 @app.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request):
+    # Auth first — uid must be defined before any DB calls
+    uid = get_session_user_id(request)
+    if uid is None:
+        return RedirectResponse("/login?next=/", status_code=303)
+
+    user = get_db().get_user(uid)
+
     try:
         db             = get_db()
         stats          = db.get_dashboard_stats(user_id=uid)
@@ -179,13 +186,6 @@ async def dashboard(request: Request):
     except Exception as e:
         stats = {}; years = []; activity_types = []; monthly = []
         db_ok = False; db_error = str(e)
-
-    # Require authentication
-    uid = get_session_user_id(request)
-    if uid is None:
-        from fastapi.responses import RedirectResponse
-        return RedirectResponse("/login?next=/", status_code=303)
-    user = get_db().get_user(uid) if uid else None
 
     return templates.TemplateResponse("dashboard.html", {
         "request":          request,

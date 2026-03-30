@@ -15,7 +15,10 @@ async def activities_spa(request: Request):
     uid = get_session_user_id(request)
     if uid is None:
         return RedirectResponse(f"/login?next=/activities", status_code=303)
-    return templates.TemplateResponse("main.html", {"request": request})
+    resp = templates.TemplateResponse("main.html", {"request": request})
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    resp.headers["Pragma"] = "no-cache"
+    return resp
 
 
 @router.get("/activities/list")

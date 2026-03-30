@@ -8,6 +8,7 @@ from typing import Callable, Optional
 import httpx
 from fastapi import APIRouter, Request, Query
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
+from app.auth import get_session_user_id
 
 router = APIRouter()
 db_getter: Callable = None
@@ -152,10 +153,22 @@ async def strava_callback(request: Request, code: str = Query(None), error: str 
         {"request": request, "athlete": data.get("athlete", {})})
 
 @router.get("/disconnect")
-async def strava_disconnect():
+async def strava_disconnect(request: Request):
+    from app.auth import get_session_user_id
+    uid = get_session_user_id(request)
+    # Clear tokens from DB for this user
+    if uid is not None:
+        try:
+            db_getter()._con.execute(
+                "UPDATE users SET strava_tokens_json=NULL, strava_athlete_id=NULL WHERE id=?",
+                (uid,))
+            db_getter()._con.commit()
+        except Exception:
+            pass
+    # Also clear legacy file if present
     p = _tokens_path()
     if p.exists(): p.unlink()
-    return RedirectResponse("/")
+    return RedirectResponse("/strava/sync")
 
 @router.get("/status")
 async def strava_status(request: Request):
@@ -335,3 +348,63 @@ async def strava_fetch_activities(
     return resp.json()
 
 
+
+
+# ── Strava Webhook (Deauthorization) ─────────────────────────────────────────
+# Strava requires apps to implement a webhook endpoint that receives events when
+# athletes deauthorize the app. We must delete their tokens immediately.
+# Docs: https://developers.strava.com/docs/webhooks/
+
+@router.get("/webhook")
+async def strava_webhook_verify(
+    hub_mode:      str = Query(None, alias="hub.mode"),
+    hub_challenge: str = Query(None, alias="hub.challenge"),
+    hub_verify_token: str = Query(None, alias="hub.verify_token"),
+):
+    """Strava webhook subscription verification (GET handshake)."""
+    expected = os.environ.get("STRAVA_WEBHOOK_VERIFY_TOKEN", "ascent-webhook-verify")
+    if hub_mode == "subscribe" and hub_verify_token == expected and hub_challenge:
+        return {"hub.challenge": hub_challenge}
+    from fastapi import HTTPException
+    raise HTTPException(403, "Webhook verification failed")
+
+
+@router.post("/webhook")
+async def strava_webhook_event(request: Request):
+    """
+    Strava webhook event receiver.
+    Per Strava API terms: on deauthorization we must immediately delete
+    the athlete's tokens and data.
+    """
+    import logging
+    log = logging.getLogger("uvicorn")
+    try:
+        event = await request.json()
+    except Exception:
+        return {"status": "ok"}  # always return 200 to Strava
+
+    object_type  = event.get("object_type")
+    aspect_type  = event.get("aspect_type")
+    owner_id     = event.get("owner_id")   # Strava athlete ID
+
+    log.info(f"[webhook] object_type={object_type} aspect_type={aspect_type} owner_id={owner_id}")
+
+    # Deauthorization event: athlete has revoked app access
+    if object_type == "athlete" and aspect_type == "delete" and owner_id:
+        try:
+            db = db_getter()
+            user = db.get_user_by_strava_athlete_id(str(owner_id))
+            if user:
+                uid = user["id"]
+                db._con.execute(
+                    "UPDATE users SET strava_tokens_json=NULL, strava_athlete_id=NULL WHERE id=?",
+                    (uid,))
+                db._con.commit()
+                log.info(f"[webhook] Cleared Strava tokens for user id={uid} (athlete {owner_id})")
+            else:
+                log.info(f"[webhook] No user found for Strava athlete {owner_id} — nothing to clear")
+        except Exception as e:
+            log.error(f"[webhook] Error handling deauth for athlete {owner_id}: {e}")
+
+    # Always respond 200 immediately — Strava will retry on failure
+    return {"status": "ok"}

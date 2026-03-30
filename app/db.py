@@ -614,6 +614,76 @@ class AscentDB:
             for r in rows
         ]
 
+    def get_weekly_totals(self, year: Optional[int] = None,
+                          user_id: Optional[int] = None,
+                          include_shared: bool = False) -> list[dict]:
+        base_where, params = self._build_where("", "", year,
+                                                user_id=user_id, include_shared=include_shared)
+        where = base_where if base_where else "WHERE creation_time_s IS NOT NULL"
+        if base_where:
+            where += " AND creation_time_s IS NOT NULL"
+
+        # Use the Monday of each week as the group key (reliable cross-year grouping)
+        # SQLite: 'weekday 1' = Monday; subtract days to get Monday of that week
+        rows = self._con.execute(
+            f"""SELECT
+                    date(datetime(creation_time_s,'unixepoch'), '-' || ((strftime('%w', datetime(creation_time_s,'unixepoch')) + 6) % 7) || ' days') AS week,
+                    COUNT(*)               AS count,
+                    SUM(distance_mi)       AS dist_mi,
+                    SUM(src_total_climb)   AS climb_ft,
+                    SUM(src_moving_time_s) AS moving_s
+                FROM activities
+                {where}
+                GROUP BY week
+                ORDER BY week ASC""",
+            params,
+        ).fetchall()
+
+        return [
+            {
+                "week":     r["week"],
+                "count":    r["count"],
+                "dist_mi":  round(r["dist_mi"] or 0, 1),
+                "climb_ft": round(r["climb_ft"] or 0),
+                "active_h": round((r["moving_s"] or 0) / 3600, 1),
+            }
+            for r in rows
+        ]
+
+    def get_yearly_totals(self, year: Optional[int] = None,
+                          user_id: Optional[int] = None,
+                          include_shared: bool = False) -> list[dict]:
+        base_where, params = self._build_where("", "", year,
+                                                user_id=user_id, include_shared=include_shared)
+        where = base_where if base_where else "WHERE creation_time_s IS NOT NULL"
+        if base_where:
+            where += " AND creation_time_s IS NOT NULL"
+
+        rows = self._con.execute(
+            f"""SELECT
+                    strftime('%Y', datetime(creation_time_s,'unixepoch')) AS year,
+                    COUNT(*)               AS count,
+                    SUM(distance_mi)       AS dist_mi,
+                    SUM(src_total_climb)   AS climb_ft,
+                    SUM(src_moving_time_s) AS moving_s
+                FROM activities
+                {where}
+                GROUP BY year
+                ORDER BY year ASC""",
+            params,
+        ).fetchall()
+
+        return [
+            {
+                "year":     r["year"],
+                "count":    r["count"],
+                "dist_mi":  round(r["dist_mi"] or 0, 1),
+                "climb_ft": round(r["climb_ft"] or 0),
+                "active_h": round((r["moving_s"] or 0) / 3600, 1),
+            }
+            for r in rows
+        ]
+
     # ── internal helpers ──────────────────────────────────────────────────
 
     def _build_where(self, search: str, activity_type: str, year: Optional[int],

@@ -203,7 +203,7 @@ input[readonly]{color:#8e8e93;cursor:default}
     <div id="strava-display" style="{% if not strava_id_set %}display:none{% endif %}">
       <label>Client ID</label>
       <div class="key-display">
-        <span class="key-mono" id="strava-id-display">{{ '' }}</span>
+        <span class="key-mono" id="strava-id-display">{{ strava_id_value or '' }}</span>
         <button class="btn btn-ghost btn-sm" onclick="showStravaEdit()">Change</button>
       </div>
       <label style="margin-top:.5rem">Client Secret</label>
@@ -370,8 +370,8 @@ input[readonly]{color:#8e8e93;cursor:default}
             <li><strong>Application Name:</strong> Ascent (or anything you like)</li>
             <li><strong>Category:</strong> Data Importer</li>
             <li><strong>Club:</strong> leave blank</li>
-            <li><strong>Website:</strong> <code>http://localhost</code></li>
-            <li><strong>Authorization Callback Domain:</strong> <code>localhost</code></li>
+            <li><strong>Website:</strong> <code>https://ascent-web.fly.dev</code></li>
+            <li><strong>Authorization Callback Domain:</strong> <code>ascent-web.fly.dev</code></li>
           </ul>
         </li>
         <li>Check the box to agree to Strava's API agreement</li>
@@ -630,6 +630,7 @@ document.addEventListener('DOMContentLoaded', loadSharing);
 </script>
 </body>
 </html>
+
 
 
 

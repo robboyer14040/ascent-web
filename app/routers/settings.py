@@ -97,9 +97,11 @@ async def settings_page(request: Request):
         db_path        = "Not connected"
         activity_count = 0
 
-    anthropic_key = _read_env_key("ANTHROPIC_API_KEY") or ""
-    strava_id     = _read_env_key("STRAVA_CLIENT_ID") or ""
-    strava_secret = _read_env_key("STRAVA_CLIENT_SECRET") or ""
+    # Per-user keys take priority over global env keys
+    user = db_getter().get_user(uid) if uid else {}
+    anthropic_key = (user or {}).get("anthropic_api_key") or _read_env_key("ANTHROPIC_API_KEY") or ""
+    strava_id     = (user or {}).get("strava_client_id") or _read_env_key("STRAVA_CLIENT_ID") or ""
+    strava_secret = (user or {}).get("strava_client_secret") or _read_env_key("STRAVA_CLIENT_SECRET") or ""
 
     return templates.TemplateResponse("settings.html", {
         "request":         request,
@@ -109,6 +111,7 @@ async def settings_page(request: Request):
         # Pass masked values for display; empty string means "not set"
         "anthropic_key_masked":  _mask_key(anthropic_key) if anthropic_key else "",
         "strava_id_set":         bool(strava_id),
+        "strava_id_value":       strava_id,
         "strava_secret_masked":  _mask_key(strava_secret) if strava_secret else "",
     })
 
@@ -294,4 +297,5 @@ async def save_sharing(request: Request):
         share_segments=int(bool(body.get("share_segments"))),
     )
     return {"status": "ok"}
+
 

@@ -10,10 +10,8 @@
 html,body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif;font-size:14px}
 a{color:var(--accent);text-decoration:none}
 nav{display:flex;align-items:center;gap:1rem;padding:.6rem 1.25rem;background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:99}
-.brand{font-size:1rem;font-weight:700;color:var(--accent)}
-.brand:hover{text-decoration:none}
-nav a{color:var(--muted);font-size:.85rem}
-nav a:hover{color:var(--text);text-decoration:none}
+.brand{font-size:1rem;font-weight:700;color:var(--accent)}.brand:hover{text-decoration:none}
+nav a{color:var(--muted);font-size:.85rem}nav a:hover{color:var(--text);text-decoration:none}
 .spacer{flex:1}
 .strava-btn{display:flex;align-items:center;gap:.35rem;background:#fc4c02;color:#fff;padding:.3rem .75rem;border-radius:6px;font-size:.8rem;font-weight:600}
 .strava-btn:hover{background:#e04402;text-decoration:none}
@@ -24,8 +22,9 @@ nav a:hover{color:var(--text);text-decoration:none}
 .card-val{font-size:1.7rem;font-weight:700}
 .card-sub{font-size:.75rem;color:var(--muted);margin-top:.2rem}
 .section{margin-bottom:1.5rem}
-.section-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem}
+.section-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;gap:.75rem;flex-wrap:wrap}
 .section-head h2{font-size:.95rem;font-weight:600}
+.section-controls{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
 .chart-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.1rem}
 .chart-wrap{position:relative;height:200px}
 .alert{padding:.75rem 1rem;border-radius:8px;margin-bottom:1rem;font-size:.875rem;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);color:#fca5a5}
@@ -42,6 +41,17 @@ tr:hover td{background:rgba(255,255,255,.03)}
 .btn{display:inline-flex;align-items:center;gap:.3rem;padding:.4rem .85rem;border-radius:6px;font-size:.85rem;font-weight:500;cursor:pointer;border:none}
 .btn-ghost{background:transparent;border:1px solid var(--border2);color:var(--text)}
 .btn-ghost:hover{border-color:var(--accent);color:var(--accent);text-decoration:none}
+/* period toggle */
+.period-toggle{display:flex;background:var(--surface2);border-radius:7px;padding:2px;gap:2px}
+.period-btn{background:none;border:none;color:var(--muted);font-size:.8rem;font-weight:500;padding:.25rem .7rem;border-radius:5px;cursor:pointer;transition:background .15s,color .15s}
+.period-btn.active{background:var(--surface);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.3)}
+/* period stats strip */
+.period-stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:.6rem;margin-bottom:.75rem}
+.ps-card{background:var(--surface2);border-radius:8px;padding:.7rem .9rem}
+.ps-label{font-size:.65rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:.2rem}
+.ps-val{font-size:1.2rem;font-weight:700}
+.ps-sub{font-size:.7rem;color:var(--muted);margin-top:.1rem}
+select.filter-sel{background:var(--surface2);border:1px solid var(--border2);color:var(--text);border-radius:6px;padding:.3rem .6rem;font-size:.8rem}
 </style>
 </head>
 <body>
@@ -60,28 +70,43 @@ tr:hover td{background:rgba(255,255,255,.03)}
   <div class="alert"><strong>Database not connected.</strong> {{ db_error }}<br>Set <code>ASCENT_DB_PATH</code> in your <code>.env</code> file.</div>
   {% endif %}
 
+  <!-- All-time stats -->
   <div class="stat-grid">
     <div class="card"><div class="card-label">Activities</div><div class="card-val">{{ stats.get("total_activities",0)|int }}</div></div>
     <div class="card"><div class="card-label">Distance</div><div class="card-val">{{ stats.get("total_distance_mi",0) }}</div><div class="card-sub">miles · {{ stats.get("total_distance_km",0) }} km</div></div>
     <div class="card"><div class="card-label">Total Time</div><div class="card-val" style="font-size:1.3rem">{{ stats.get("total_active_hms","—") }}</div></div>
     <div class="card"><div class="card-label">Climbing</div><div class="card-val">{{ "{:,}".format(stats.get("total_climb_ft",0)|int) }}</div><div class="card-sub">feet · {{ "{:,}".format(stats.get("total_climb_m",0)|int) }} m</div></div>
-    <div class="card"><div class="card-label">Calories</div><div class="card-val">{{ "{:,}".format(stats.get("total_calories",0)|int) }}</div></div>
     <div class="card"><div class="card-label">Avg Heart Rate</div><div class="card-val">{{ stats.get("avg_heartrate",0)|int }}</div><div class="card-sub">bpm</div></div>
     <div class="card"><div class="card-label">Longest</div><div class="card-val">{{ stats.get("longest_mi",0) }}</div><div class="card-sub">miles</div></div>
     <div class="card"><div class="card-label">Best Climb</div><div class="card-val">{{ "{:,}".format(stats.get("most_climb_ft",0)|int) }}</div><div class="card-sub">ft in one activity</div></div>
   </div>
 
+  <!-- Chart section with period toggle -->
   <div class="section">
     <div class="section-head">
-      <h2>Monthly Distance &amp; Climb</h2>
-      <select id="yearSel" style="background:var(--surface2);border:1px solid var(--border2);color:var(--text);border-radius:6px;padding:.3rem .6rem;font-size:.8rem">
-        <option value="">All years</option>
-        {% for y in years %}<option value="{{ y }}">{{ y }}</option>{% endfor %}
-      </select>
+      <h2 id="chartTitle">Distance &amp; Climb by Month</h2>
+      <div class="section-controls">
+        <div class="period-toggle">
+          <button class="period-btn" data-period="week" onclick="setPeriod('week')">Week</button>
+          <button class="period-btn active" data-period="month" onclick="setPeriod('month')">Month</button>
+          <button class="period-btn" data-period="year" onclick="setPeriod('year')">Year</button>
+        </div>
+        <select id="yearSel" class="filter-sel" onchange="loadChart()">
+          <option value="">All years</option>
+          {% for y in years %}<option value="{{ y }}">{{ y }}</option>{% endfor %}
+        </select>
+      </div>
     </div>
-    <div class="chart-card"><div class="chart-wrap"><canvas id="monthlyChart"></canvas></div></div>
+
+    <!-- Period summary stats -->
+    <div class="period-stats" id="periodStats"></div>
+
+    <div class="chart-card">
+      <div class="chart-wrap"><canvas id="mainChart"></canvas></div>
+    </div>
   </div>
 
+  <!-- Recent activities -->
   <div class="section">
     <div class="section-head">
       <h2>Recent Activities</h2>
@@ -102,42 +127,159 @@ tr:hover td{background:rgba(255,255,255,.03)}
 <script>
 const monthlyRaw = {{ monthly | tojson }};
 let chart = null;
+let currentPeriod = 'month';
+let currentData = [];
 
-function buildChart(data) {
-  const ctx = document.getElementById('monthlyChart').getContext('2d');
+// ── Period toggle ─────────────────────────────────────────────────────────────
+function setPeriod(p) {
+  currentPeriod = p;
+  document.querySelectorAll('.period-btn').forEach(b => b.classList.toggle('active', b.dataset.period === p));
+  // Year filter visible in all period views
+  document.getElementById('yearSel').style.display = '';
+  const titles = {week: 'Distance & Climb by Week', month: 'Distance & Climb by Month', year: 'Distance & Climb by Year'};
+  document.getElementById('chartTitle').textContent = titles[p];
+  loadChart();
+}
+
+// Convert "YYYY-MM-DD" (Monday of week) to "Jan 1" etc.
+function weekLabel(weekStr) {
+  try {
+    const [y, m, d] = weekStr.split('-').map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  } catch(e) { return weekStr; }
+}
+
+async function loadChart() {
+  const year = document.getElementById('yearSel').value;
+  let data;
+
+  if (currentPeriod === 'month') {
+    const r = await fetch(year ? `/api/stats/monthly?year=${year}` : '/api/stats/monthly');
+    data = await r.json();
+    currentData = data;
+    buildChart(data.map(d => d.month), data);
+  } else if (currentPeriod === 'week') {
+    const r = await fetch(year ? `/api/stats/weekly?year=${year}` : '/api/stats/weekly');
+    data = await r.json();
+    currentData = data;
+    // Format week labels as "Jan 1", "Jan 8" etc (first day of the week)
+    buildChart(data.map(d => weekLabel(d.week)), data);
+  } else {
+    const r = await fetch(year ? `/api/stats/yearly?year=${year}` : '/api/stats/yearly');
+    data = await r.json();
+    currentData = data;
+    buildChart(data.map(d => d.year), data);
+  }
+  updatePeriodStats(data);
+}
+
+// ── Period summary stats ──────────────────────────────────────────────────────
+function updatePeriodStats(data) {
+  if (!data || !data.length) {
+    document.getElementById('periodStats').innerHTML = '';
+    return;
+  }
+  // Show totals for the visible data range
+  const totalDist  = data.reduce((s, d) => s + (d.dist_mi  || 0), 0);
+  const totalClimb = data.reduce((s, d) => s + (d.climb_ft || 0), 0);
+  const totalH     = data.reduce((s, d) => s + (d.active_h || 0), 0);
+  const totalActs  = data.reduce((s, d) => s + (d.count    || 0), 0);
+  const periods    = data.length;
+
+  const periodLabel = {week: 'wk', month: 'mo', year: 'yr'}[currentPeriod];
+
+  // Current period (last item)
+  const last = data[data.length - 1];
+  const avgDist  = totalDist  / periods;
+  const avgClimb = totalClimb / periods;
+
+  document.getElementById('periodStats').innerHTML = `
+    <div class="ps-card">
+      <div class="ps-label">This ${periodLabel === 'wk' ? 'Week' : periodLabel === 'mo' ? 'Month' : 'Year'}</div>
+      <div class="ps-val">${(last.dist_mi||0).toFixed(1)} <span style="font-size:.8rem;font-weight:400;color:var(--muted)">mi</span></div>
+      <div class="ps-sub">${fmt(last.climb_ft||0)} ft climb</div>
+    </div>
+    <div class="ps-card">
+      <div class="ps-label">Avg / ${periodLabel}</div>
+      <div class="ps-val">${avgDist.toFixed(1)} <span style="font-size:.8rem;font-weight:400;color:var(--muted)">mi</span></div>
+      <div class="ps-sub">${fmt(Math.round(avgClimb))} ft climb</div>
+    </div>
+    <div class="ps-card">
+      <div class="ps-label">Total Distance</div>
+      <div class="ps-val">${totalDist.toFixed(0)} <span style="font-size:.8rem;font-weight:400;color:var(--muted)">mi</span></div>
+      <div class="ps-sub">${(totalDist*1.60934).toFixed(0)} km</div>
+    </div>
+    <div class="ps-card">
+      <div class="ps-label">Total Climb</div>
+      <div class="ps-val">${fmt(Math.round(totalClimb))} <span style="font-size:.8rem;font-weight:400;color:var(--muted)">ft</span></div>
+      <div class="ps-sub">${fmt(Math.round(totalClimb/3.28084))} m</div>
+    </div>
+    <div class="ps-card">
+      <div class="ps-label">Moving Time</div>
+      <div class="ps-val" style="font-size:1rem">${fmtH(totalH)}</div>
+      <div class="ps-sub">${totalActs} activities</div>
+    </div>
+  `;
+}
+
+function fmt(n) { return n.toLocaleString(); }
+function fmtH(h) {
+  const hh = Math.floor(h), mm = Math.round((h - hh) * 60);
+  return mm ? `${hh}h ${mm}m` : `${hh}h`;
+}
+
+// ── Chart ─────────────────────────────────────────────────────────────────────
+function buildChart(labels, data) {
+  const ctx = document.getElementById('mainChart').getContext('2d');
   if (chart) chart.destroy();
   chart = new Chart(ctx, {
-    type:'bar',
-    data:{
-      labels: data.map(d=>d.month),
-      datasets:[
-        {label:'Distance (mi)',data:data.map(d=>d.dist_mi),backgroundColor:'rgba(249,115,22,.75)',borderRadius:3,yAxisID:'y'},
-        {label:'Climb (k ft)',data:data.map(d=>(d.climb_ft/1000).toFixed(1)),type:'line',borderColor:'#3b82f6',backgroundColor:'rgba(59,130,246,.1)',borderWidth:2,pointRadius:2,tension:.3,fill:true,yAxisID:'y2'},
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Distance (mi)',
+          data: data.map(d => d.dist_mi),
+          backgroundColor: 'rgba(249,115,22,.75)',
+          borderRadius: 3,
+          yAxisID: 'y',
+        },
+        {
+          label: 'Climb (k ft)',
+          data: data.map(d => ((d.climb_ft||0)/1000).toFixed(2)),
+          type: 'line',
+          borderColor: '#3b82f6',
+          backgroundColor: 'rgba(59,130,246,.1)',
+          borderWidth: 2,
+          pointRadius: 2,
+          tension: .3,
+          fill: true,
+          yAxisID: 'y2',
+        },
       ]
     },
-    options:{
-      responsive:true,maintainAspectRatio:false,
-      plugins:{legend:{labels:{color:'#94a3b8',font:{size:11}}}},
-      scales:{
-        x:{ticks:{color:'#64748b',maxRotation:45},grid:{color:'#2a2d3a'}},
-        y:{ticks:{color:'#94a3b8'},grid:{color:'#2a2d3a'},title:{display:true,text:'Miles',color:'#64748b',font:{size:11}}},
-        y2:{position:'right',ticks:{color:'#94a3b8'},grid:{drawOnChartArea:false},title:{display:true,text:'k ft',color:'#64748b',font:{size:11}}},
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: '#94a3b8', font: { size: 11 } } } },
+      scales: {
+        x: { ticks: { color: '#64748b', maxRotation: 45, maxTicksLimit: 24 }, grid: { color: '#2a2d3a' } },
+        y: { ticks: { color: '#94a3b8' }, grid: { color: '#2a2d3a' }, title: { display: true, text: 'Miles', color: '#64748b', font: { size: 11 } } },
+        y2: { position: 'right', ticks: { color: '#94a3b8' }, grid: { drawOnChartArea: false }, title: { display: true, text: 'k ft', color: '#64748b', font: { size: 11 } } },
       }
     }
   });
 }
-buildChart(monthlyRaw);
 
-document.getElementById('yearSel').addEventListener('change', async e => {
-  const y = e.target.value;
-  const r = await fetch(y ? `/api/stats/monthly?year=${y}` : '/api/stats/monthly');
-  buildChart(await r.json());
-});
+// ── Init ──────────────────────────────────────────────────────────────────────
+buildChart(monthlyRaw.map(d => d.month), monthlyRaw);
+updatePeriodStats(monthlyRaw);
 
+// ── Recent activities ─────────────────────────────────────────────────────────
 function typeBadge(t) {
   if (!t) return '<span class="type-badge t-other">—</span>';
   const l = t.toLowerCase();
-  if (l.includes('run')) return `<span class="type-badge t-run">${t}</span>`;
+  if (l.includes('run'))  return `<span class="type-badge t-run">${t}</span>`;
   if (l.includes('ride')||l.includes('cycl')) return `<span class="type-badge t-ride">${t}</span>`;
   if (l.includes('swim')) return `<span class="type-badge t-swim">${t}</span>`;
   return `<span class="type-badge t-other">${t}</span>`;
@@ -146,13 +288,17 @@ function fmtDate(ts) {
   if (!ts) return '—';
   return new Date(ts*1000).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
 }
-function fmtHMS(s){if(!s)return'—';const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),ss=Math.floor(s%60);return h?`${h}:${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}`:`${m}:${String(ss).padStart(2,'0')}`}
+function fmtHMS(s) {
+  if (!s) return '—';
+  const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),ss=Math.floor(s%60);
+  return h ? `${h}:${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}` : `${m}:${String(ss).padStart(2,'0')}`;
+}
 
-(async()=>{
-  const r=await fetch('/api/stats/recent?limit=15');
-  if(!r.ok){document.getElementById('recentTbody').innerHTML='<tr><td colspan="7" style="text-align:center;color:var(--muted)">Could not load</td></tr>';return;}
-  const acts=await r.json();
-  document.getElementById('recentTbody').innerHTML=acts.map(a=>`
+(async () => {
+  const r = await fetch('/api/stats/recent?limit=15');
+  if (!r.ok) { document.getElementById('recentTbody').innerHTML='<tr><td colspan="7" style="text-align:center;color:var(--muted)">Could not load</td></tr>'; return; }
+  const acts = await r.json();
+  document.getElementById('recentTbody').innerHTML = acts.map(a => `
     <tr onclick="window.location='/activities/${a.id}'" style="cursor:pointer">
       <td style="color:var(--muted)">${fmtDate(a.start_time)}</td>
       <td><a href="/activities/${a.id}">${a.name||'(unnamed)'}</a></td>
