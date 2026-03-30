@@ -77,8 +77,8 @@ select.filter-sel{background:var(--surface2);border:1px solid var(--border2);col
     <div class="card"><div class="card-label">Total Time</div><div class="card-val" style="font-size:1.3rem">{{ stats.get("total_active_hms","—") }}</div></div>
     <div class="card"><div class="card-label">Climbing</div><div class="card-val">{{ "{:,}".format(stats.get("total_climb_ft",0)|int) }}</div><div class="card-sub">feet · {{ "{:,}".format(stats.get("total_climb_m",0)|int) }} m</div></div>
     <div class="card"><div class="card-label">Avg Heart Rate</div><div class="card-val">{{ stats.get("avg_heartrate",0)|int }}</div><div class="card-sub">bpm</div></div>
-    <div class="card"><div class="card-label">Longest</div><div class="card-val">{{ stats.get("longest_mi",0) }}</div><div class="card-sub">miles</div></div>
-    <div class="card"><div class="card-label">Best Climb</div><div class="card-val">{{ "{:,}".format(stats.get("most_climb_ft",0)|int) }}</div><div class="card-sub">ft in one activity</div></div>
+    <div class="card"><div class="card-label">Longest</div><div class="card-val">{{ stats.get("longest_mi",0) }}</div><div class="card-sub">miles · {{ "%.1f"|format(stats.get("longest_mi",0) * 1.60934) }} km</div></div>
+    <div class="card"><div class="card-label">Best Climb</div><div class="card-val">{{ "{:,}".format(stats.get("most_climb_ft",0)|int) }}</div><div class="card-sub">feet · {{ "{:,}".format((stats.get("most_climb_ft",0) / 3.28084)|int) }} m</div></div>
   </div>
 
   <!-- Chart section with period toggle -->
