@@ -67,6 +67,40 @@ async def delete_activities(req: DeleteActivitiesRequest):
     return {"deleted": count}
 
 
+@router.get("/me")
+async def me(request: Request):
+    uid = get_session_user_id(request)
+    if uid is None:
+        raise HTTPException(401, "Not authenticated")
+    user = db_getter().get_user(uid)
+    if not user:
+        raise HTTPException(404, "User not found")
+    return {"id": user["id"], "username": user.get("username") or user.get("email", "?")}
+
+
+@router.get("/users")
+async def list_users(request: Request):
+    uid = get_session_user_id(request)
+    if uid is None:
+        raise HTTPException(401, "Not authenticated")
+    users = db_getter().list_users()
+    return [{"id": u["id"], "username": u.get("username") or u.get("email", "?")} for u in users]
+
+
+@router.get("/debug/activity-user-counts")
+async def debug_activity_user_counts(request: Request):
+    """Diagnostic: return count of activities per user_id value in the DB."""
+    uid = get_session_user_id(request)
+    if uid is None:
+        raise HTTPException(401, "Not authenticated")
+    import sqlite3
+    db = db_getter()
+    rows = db._con.execute(
+        "SELECT user_id, COUNT(*) as cnt FROM activities GROUP BY user_id ORDER BY cnt DESC"
+    ).fetchall()
+    return [{"user_id": r[0], "count": r[1]} for r in rows]
+
+
 @router.get("/schema")
 async def schema_info():
     db = db_getter()
@@ -451,7 +485,7 @@ async def segment_compare(req: SegmentRequest, request: Request):
                  "speed_mph": out[k]["speed_mph"], "dist_m": dist_list[k]}
                 for k in range(len(out))]
 
-    def build_match(act_id, name, start_time, pts, si2, ei2):
+    def build_match(act_id, name, start_time, pts, si2, ei2, user_id=None):
         elapsed = pts[ei2]["t"] - pts[si2]["t"]
         if elapsed <= 0:
             return None
@@ -460,6 +494,7 @@ async def segment_compare(req: SegmentRequest, request: Request):
             "name":        name,
             "start_time":  start_time,
             "elapsed_s":   elapsed,
+            "user_id":     user_id,
             "points":      seg_points_sample(pts, si2, ei2),
         }
 
@@ -470,6 +505,7 @@ async def segment_compare(req: SegmentRequest, request: Request):
         "name":        ref_act.get("name", "(unnamed)") if ref_act else "(unnamed)",
         "start_time":  ref_act.get("start_time") if ref_act else None,
         "elapsed_s":   ref_elapsed,
+        "user_id":     ref_act.get("user_id") if ref_act else None,
         "points":      seg_points_sample(ref_pts, si, ei),
     }
 
@@ -544,7 +580,7 @@ async def segment_compare(req: SegmentRequest, request: Request):
     candidates = db._con.execute(f"""
         SELECT id, name,
                COALESCE(creation_time_override_s, creation_time_s) AS ts,
-               points_saved, points_count, strava_activity_id
+               points_saved, points_count, strava_activity_id, user_id
         FROM activities
         WHERE id != ?
           {user_filter}
@@ -599,6 +635,7 @@ async def segment_compare(req: SegmentRequest, request: Request):
         pts_saved   = row[3]
         pts_count   = row[4]
         strava_id   = row[5]
+        act_user_id = row[6] if len(row) > 6 else None
 
         # ── Get points ──────────────────────────────────────────────────────
         if pts_saved and pts_count:
@@ -696,7 +733,7 @@ async def segment_compare(req: SegmentRequest, request: Request):
         if d_b2a > max_dev_km:
             continue
 
-        m = build_match(act_id, act_name, act_ts, pts, si2, ei2)
+        m = build_match(act_id, act_name, act_ts, pts, si2, ei2, user_id=act_user_id)
         if m:
             matches.append(m)
 
@@ -1016,6 +1053,7 @@ async def segment_compare_manual(req: MultiCompareRequest):
             "name":        act.get("name", "(unnamed)"),
             "start_time":  act.get("start_time"),
             "elapsed_s":   elapsed,
+            "user_id":     act.get("user_id"),
             "points":      seg_points_sample(pts, si2, ei2),
         })
 

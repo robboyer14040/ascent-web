@@ -650,7 +650,7 @@ input,select{font:inherit}
 <body>
 
 <div id="toolbar">
-  <span class="tb-title">⛰ Ascent <span style="font-size:10px;font-weight:400;color:var(--muted);letter-spacing:.02em">v0.1.2</span></span>
+  <span class="tb-title">⛰ Ascent <span style="font-size:10px;font-weight:400;color:var(--muted);letter-spacing:.02em">v0.1.14</span></span><span id="viewing-user-badge" onclick="openUserPicker()" title="Switch user" style="margin-left:8px;font-size:11px;font-weight:500;color:#f97316;cursor:pointer;padding:2px 7px;border:1px solid #f97316;border-radius:10px;opacity:.85;user-select:none"></span>
   <div style="flex:1"></div>
   <div class="tb-search">
     <span class="tb-icon">⌕</span>
@@ -677,6 +677,12 @@ input,select{font:inherit}
       <div style="flex:1"></div>
       <button class="tb-btn" id="col-gear-btn" onclick="toggleColPicker(event)" title="Choose columns" style="padding:3px 7px;font-size:20px;line-height:1">⚙</button>
       <div id="col-picker"></div>
+    </div>
+
+    <!-- Selection mode bar (touch multi-select) -->
+    <div id="select-mode-bar" style="display:none;align-items:center;justify-content:space-between;padding:5px 10px;background:#f97316;gap:8px">
+      <span id="select-mode-count" style="color:#fff;font-size:13px;font-weight:600"></span>
+      <button onclick="exitSelectMode()" style="background:rgba(0,0,0,.25);border:none;color:#fff;border-radius:6px;padding:4px 12px;font-size:12px;font-weight:600;cursor:pointer">Done</button>
     </div>
 
     <div id="list-scroll">
@@ -817,6 +823,15 @@ input,select{font:inherit}
         </div>
       </div>
 
+      <!-- User picker dialog -->
+      <div id="user-picker-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9998;align-items:center;justify-content:center" onclick="if(event.target===this)closeUserPicker()">
+        <div style="background:#1c1c1e;border-radius:12px;padding:20px;min-width:260px;max-width:90vw;box-shadow:0 8px 32px rgba(0,0,0,.6)" onclick="event.stopPropagation()">
+          <div style="font-weight:600;font-size:15px;margin-bottom:14px;color:#f5f5f7">Show activities for…</div>
+          <div id="user-picker-list" style="display:flex;flex-direction:column;gap:8px;max-height:60vh;overflow-y:auto"></div>
+          <button onclick="closeUserPicker()" style="margin-top:8px;width:100%;padding:8px;background:#3a3a3c;border:none;border-radius:8px;color:#f5f5f7;cursor:pointer;font-size:13px">Cancel</button>
+        </div>
+      </div>
+
       <!-- Lightbox -->
       <div id="lightbox" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:9999;align-items:center;justify-content:center;flex-direction:column" onclick="closeLightbox()">
         <img id="lb-img" alt="" style="max-width:90vw;max-height:85vh;object-fit:contain;border-radius:6px">
@@ -945,10 +960,15 @@ const state = {
   year:    '',
   selectedId: null,
   selectedIds: new Set(), // multi-select set
+  selectMode: false,      // touch long-press selection mode
 };
 
 // ── COLUMN DEFINITIONS ────────────────────────────────────────────────────────
+// User lookup map: id → username (populated async during init)
+const userMap = {};
+
 const ALL_COLS = [
+  {id:'user',      label:'User',        sort:'',             w:'90px',  align:'left',  render: a => escHtml(userMap[a.user_id] || '')},
   {id:'date',      label:'Date/Time',   sort:'start_time',   w:'168px', align:'left',  render: a => fmtDate(a.start_time)},
   {id:'name',      label:'Title',       sort:'name',         w:'1fr',   align:'left',  render: a => escHtml(a.name) + (a.strava_activity_id?`<a href="https://www.strava.com/activities/${a.strava_activity_id}" target="_blank" class="ac-strava" title="View on Strava">↗</a>`:'')},
   {id:'dist',      label:'Dist',        sort:'distance_m',   w:'78px',  align:'right', unitLabel: () => U.distUnit(),  render: a => fmtN(U.dist(a.distance_mi),2)},
@@ -966,12 +986,21 @@ const ALL_COLS = [
   {id:'pace',      label:'Pace',        sort:'',             w:'70px',  align:'right', render: a => a.avg_pace||'—'},
 ];
 
-const DEFAULT_COL_IDS = ['date','name','dist','active','climb','mvspd','hr'];
+const DEFAULT_COL_IDS = ['date','user','name','dist','active','climb','mvspd','hr'];
 
 function loadColPrefs() {
   try {
     const saved = JSON.parse(localStorage.getItem('ascent-cols') || 'null');
-    if (saved && Array.isArray(saved) && saved.length >= 2) return saved;
+    if (saved && Array.isArray(saved) && saved.length >= 2) {
+      // Migrate: ensure 'user' sits immediately after 'date' whenever both are present
+      const ui = saved.indexOf('user'), di = saved.indexOf('date');
+      if (ui >= 0 && di >= 0 && ui !== di + 1) {
+        saved.splice(ui, 1);                       // remove from current position
+        saved.splice(saved.indexOf('date') + 1, 0, 'user'); // insert after 'date'
+        saveColPrefs(saved);
+      }
+      return saved;
+    }
   } catch(e) {}
   return DEFAULT_COL_IDS;
 }
@@ -1002,6 +1031,8 @@ const ROW_H = 34;
 
 // Event delegation for activity rows — handles click, cmd-click, shift-click
 document.addEventListener('click', function(e) {
+  // Suppress click fired immediately after a long-press
+  if (_lpSuppressClick) { _lpSuppressClick = false; return; }
   // Let Strava links (and any other <a> inside a row) pass through normally
   if (e.target.closest('a')) return;
   const row = e.target.closest('.act-row');
@@ -1118,9 +1149,32 @@ function updateSortHeaders() {
 }
 
 // ── LOAD ALL ACTIVITIES ───────────────────────────────────────────────────────
+// Multi-user view state: selectedUserIds is a Set of user IDs to show.
+// Empty set = show only own activities (myId).
+const viewState = { myId: null, myUsername: null, selectedUserIds: new Set() };
+
+function _viewUserIdsParam() {
+  return viewState.selectedUserIds.size > 0
+    ? [...viewState.selectedUserIds].join(',')
+    : (viewState.myId !== null ? String(viewState.myId) : '');
+}
+
+function _updateViewBadge() {
+  const badge = document.getElementById('viewing-user-badge');
+  if (!badge) return;
+  const ids = viewState.selectedUserIds.size > 0
+    ? [...viewState.selectedUserIds]
+    : (viewState.myId !== null ? [viewState.myId] : []);
+  const names = ids.map(id => userMap[id] || '?');
+  badge.textContent = names.join(', ');
+}
+
 async function loadAll() {
   buildColHead();
-  const r = await fetch('/activities/list?limit=2000&offset=0&sort_by=start_time&sort_dir=desc');
+  const ids = _viewUserIdsParam();
+  let url = '/activities/list?limit=2000&offset=0&sort_by=start_time&sort_dir=desc';
+  if (ids) url += '&view_user_ids=' + ids;
+  const r = await fetch(url);
   const d = await r.json();
   state.all = d.activities;
   applyFilterAndSort();
@@ -1958,8 +2012,72 @@ async function drawElevation(data, version) {
   setTimeout(setup, 800);
 })();
 
+// ── LONG-PRESS MULTI-SELECT (touch devices) ───────────────────────────────────
+let _lpTimer = null;
+let _lpSuppressClick = false;
+
+(function setupLongPress() {
+  const actList = document.getElementById('act-list');
+  if (!actList) { setTimeout(setupLongPress, 200); return; }
+
+  actList.addEventListener('touchstart', e => {
+    const row = e.target.closest('.act-row');
+    if (!row) return;
+    const id = parseInt(row.dataset.id);
+    if (isNaN(id)) return;
+    _lpTimer = setTimeout(() => {
+      _lpSuppressClick = true;
+      if (navigator.vibrate) navigator.vibrate(30);
+      if (!state.selectMode) {
+        enterSelectMode(id);
+      } else {
+        // Long press in select mode: toggle and update
+        if (state.selectedIds.has(id)) state.selectedIds.delete(id);
+        else state.selectedIds.add(id);
+        if (state.selectedIds.size === 0) exitSelectMode();
+        else { renderVirtualList(); _updateSelectBar(); }
+      }
+    }, 500);
+  }, {passive: true});
+
+  const cancel = () => { clearTimeout(_lpTimer); _lpTimer = null; };
+  actList.addEventListener('touchmove',   cancel, {passive: true});
+  actList.addEventListener('touchend',    cancel, {passive: true});
+  actList.addEventListener('touchcancel', cancel, {passive: true});
+})();
+
+function enterSelectMode(id) {
+  state.selectMode = true;
+  state.selectedIds.clear();
+  state.selectedIds.add(id);
+  document.getElementById('select-mode-bar').style.display = 'flex';
+  renderVirtualList();
+  _updateSelectBar();
+}
+
+function exitSelectMode() {
+  state.selectMode = false;
+  document.getElementById('select-mode-bar').style.display = 'none';
+  renderVirtualList();
+}
+
+function _updateSelectBar() {
+  const n = state.selectedIds.size;
+  document.getElementById('select-mode-count').textContent =
+    n === 1 ? '1 activity selected' : `${n} activities selected`;
+}
+
 // ── ACTIVITY DETAIL ───────────────────────────────────────────────────────────
 function handleRowClick(e, id) {
+  // In touch select mode: tap toggles selection
+  if (state.selectMode) {
+    e.preventDefault();
+    if (state.selectedIds.has(id)) state.selectedIds.delete(id);
+    else state.selectedIds.add(id);
+    if (state.selectedIds.size === 0) exitSelectMode();
+    else { renderVirtualList(); _updateSelectBar(); }
+    return;
+  }
   if (e.shiftKey && state.selectedId !== null) {
     e.preventDefault();
     const fromIdx = state.filtered.findIndex(a => a.id === state.selectedId);
@@ -2212,10 +2330,15 @@ function buildDetailHTML(a) {
 
 // ── FILTER CONTROLS ───────────────────────────────────────────────────────────
 async function loadFilterOptions() {
-  const d = await fetch('/activities/filter-options').then(r=>r.json());
+  const ids = _viewUserIdsParam();
+  let url = '/activities/filter-options';
+  if (ids) url += '?view_user_ids=' + ids;
+  const d = await fetch(url).then(r=>r.json());
   const tEl=document.getElementById('typeFilter');
+  tEl.innerHTML = '<option value="">All types</option>';
   d.types.forEach(t=>{ const o=document.createElement('option');o.value=t;o.textContent=t;tEl.appendChild(o); });
   const yEl=document.getElementById('yearFilter');
+  yEl.innerHTML = '<option value="">All years</option>';
   d.years.forEach(y=>{ const o=document.createElement('option');o.value=y;o.textContent=y;yEl.appendChild(o); });
 }
 
@@ -3360,6 +3483,66 @@ function loadPaneSizes() {
   });
 })();
 
+// ── COLUMN TOUCH DRAG-TO-REORDER ─────────────────────────────────────────────
+let _colDrag = null;      // active drag: { colId, ghost, startX, origLeft, toId }
+let _colDragPending = null; // waiting to see if touch moves enough: { colId, div, startX, startY }
+let _suppressColClick = false;
+
+document.addEventListener('touchmove', e => {
+  if (_colDragPending) {
+    const t = e.touches[0];
+    const dx = Math.abs(t.clientX - _colDragPending.startX);
+    const dy = Math.abs(t.clientY - _colDragPending.startY);
+    if (dx > 8 || dy > 4) {
+      // Commit to a drag
+      const div  = _colDragPending.div;
+      const rect = div.getBoundingClientRect();
+      const ghost = document.createElement('div');
+      ghost.textContent = div.textContent.replace(/[↑↓]/g,'').trim();
+      ghost.style.cssText = `position:fixed;top:${rect.top}px;left:${rect.left}px;width:${rect.width}px;height:${rect.height}px;display:flex;align-items:center;padding:0 8px;pointer-events:none;z-index:9999;opacity:.85;background:#3a3a3c;border-radius:4px;box-shadow:0 4px 16px rgba(0,0,0,.5);font-size:11px;font-weight:600;color:#f5f5f7;text-transform:uppercase;letter-spacing:.05em`;
+      document.body.appendChild(ghost);
+      div.classList.add('dragging-col');
+      _colDrag = { colId: _colDragPending.colId, ghost, startX: t.clientX, origLeft: rect.left, toId: null };
+      _colDragPending = null;
+    }
+  }
+  if (!_colDrag) return;
+  e.preventDefault();
+  const t = e.touches[0];
+  _colDrag.ghost.style.left = (_colDrag.origLeft + (t.clientX - _colDrag.startX)) + 'px';
+  // Find column header under finger
+  _colDrag.ghost.style.display = 'none';
+  const el = document.elementFromPoint(t.clientX, t.clientY);
+  _colDrag.ghost.style.display = '';
+  const target = el && el.closest('.ch[data-col-id]');
+  document.querySelectorAll('.ch').forEach(c => c.classList.remove('drag-over'));
+  if (target && target.dataset.colId !== _colDrag.colId) {
+    target.classList.add('drag-over');
+    _colDrag.toId = target.dataset.colId;
+  } else {
+    _colDrag.toId = null;
+  }
+}, {passive: false});
+
+document.addEventListener('touchend', () => {
+  _colDragPending = null;
+  if (!_colDrag) return;
+  document.querySelectorAll('.ch').forEach(c => { c.classList.remove('drag-over'); c.classList.remove('dragging-col'); });
+  _colDrag.ghost.remove();
+  const { colId, toId } = _colDrag;
+  _colDrag = null;
+  if (!toId || toId === colId) return;
+  _suppressColClick = true;
+  const fromIdx = activeColIds.indexOf(colId);
+  const toIdx   = activeColIds.indexOf(toId);
+  if (fromIdx < 0 || toIdx < 0) return;
+  activeColIds.splice(fromIdx, 1);
+  activeColIds.splice(toIdx, 0, colId);
+  saveColPrefs(activeColIds);
+  buildColHead();
+  renderVirtualList();
+});
+
 // ── COLUMN MANAGER ───────────────────────────────────────────────────────────
 function buildColHead() {
   const head = document.getElementById('col-head');
@@ -3378,11 +3561,21 @@ function buildColHead() {
 
     // Sort on click (not drag)
     div.addEventListener('click', () => {
+      if (_suppressColClick) { _suppressColClick = false; return; }
       if (!col.sort) return;
       if (state.sortBy === col.sort) state.sortDir = state.sortDir==='desc'?'asc':'desc';
       else { state.sortBy = col.sort; state.sortDir = 'desc'; }
       loadAll();
     });
+
+    // Touch drag-to-reorder (iOS doesn't support HTML5 DnD)
+    div.addEventListener('touchstart', e => {
+      if (e.touches.length !== 1) return;
+      // Don't start if touch is on the resize separator
+      if (e.target.classList.contains('ch-sep')) return;
+      const t = e.touches[0];
+      _colDragPending = { colId: col.id, div, startX: t.clientX, startY: t.clientY };
+    }, {passive: true});
 
     // Drag to reorder
     div.addEventListener('dragstart', e => {
@@ -3590,7 +3783,21 @@ function buildColPicker() {
     item.innerHTML = `<input type="checkbox" ${checked?'checked':''} data-col-id="${col.id}"> ${col.label}`;
     item.querySelector('input').addEventListener('change', e => {
       if (e.target.checked) {
-        if (!activeColIds.includes(col.id)) activeColIds.push(col.id);
+        if (!activeColIds.includes(col.id)) {
+          // Insert at the position from DEFAULT_COL_IDS rather than appending to end
+          const defaultPos = DEFAULT_COL_IDS.indexOf(col.id);
+          if (defaultPos <= 0) {
+            activeColIds.push(col.id);
+          } else {
+            // Find the nearest preceding default column that's currently active
+            let insertAfter = -1;
+            for (let p = defaultPos - 1; p >= 0; p--) {
+              const idx = activeColIds.indexOf(DEFAULT_COL_IDS[p]);
+              if (idx >= 0) { insertAfter = idx; break; }
+            }
+            activeColIds.splice(insertAfter + 1, 0, col.id);
+          }
+        }
       } else {
         if (activeColIds.length <= 2) { e.target.checked = true; return; } // keep at least 2
         activeColIds = activeColIds.filter(id => id !== col.id);
@@ -4289,12 +4496,33 @@ async function cmpOpenManualWithSegment() {
       return;
     }
 
-    cmp.matches  = d.matches;
+    // Build complete list including placeholder entries for activities missing the segment
+    const matchedIds = new Set(d.matches.map(m => m.activity_id));
+    const allMatches = [...d.matches];
+    for (const id of ordered) {
+      if (!matchedIds.has(id)) {
+        const act = state.all?.find(a => a.id === id) || state.filtered?.find(a => a.id === id);
+        allMatches.push({
+          activity_id: id,
+          name:        act?.name || `Activity ${id}`,
+          start_time:  act?.start_time || null,
+          elapsed_s:   null,
+          user_id:     act?.user_id || null,
+          points:      [],
+          missing:     true,
+        });
+      }
+    }
+    cmp.matches  = allMatches;
     cmp.currentT = 0;
     cmp.savedSegId = null;
     cmp._manualIds = ordered;
 
-    titleEl.textContent = `${cmp.matches.length} Activit${cmp.matches.length===1?'y':'ies'} — ${d.segment_name||'Segment'}`;
+    const nFound = d.matches.length;
+    const nTotal = ordered.length;
+    titleEl.textContent = nFound === nTotal
+      ? `${nFound} Activit${nFound===1?'y':'ies'} — ${d.segment_name||'Segment'}`
+      : `${nFound} of ${nTotal} Activities — ${d.segment_name||'Segment'}`;
 
     buildCompareLegend();
     initCompareMap();
@@ -4341,17 +4569,23 @@ async function cmpOpenManual() {
   cmp._manualIds = ordered;  // store for later use when segment chosen
 
   // Build placeholder legend with activity names + colors
-  const colors = ['#ef4444','#3b82f6','#22c55e','#f97316'];
   const legendEl = document.getElementById('compare-legend');
   if (legendEl) {
     legendEl.innerHTML = '';
+    const multiUser = new Set(ordered.map(id => {
+      const act = state.all?.find(a => a.id === id) || state.filtered?.find(a => a.id === id);
+      return act?.user_id;
+    }).filter(id => id != null)).size > 1;
     ordered.forEach((id, i) => {
-      const act = state.activities?.find(a => a.id === id) || state.filtered?.find(a => a.id === id);
-      const name = act?.name || `Activity ${id}`;
+      const act = state.all?.find(a => a.id === id) || state.filtered?.find(a => a.id === id);
+      const rawName = act?.name || `Activity ${id}`;
+      const userName = multiUser && act?.user_id && userMap[act.user_id] ? escHtml(userMap[act.user_id]) + ': ' : '';
+      const name = userName + escHtml(rawName);
+      const color = CMP_COLORS[i % CMP_COLORS.length];
       const li = document.createElement('div');
       li.className = 'cmp-legend-item';
-      li.innerHTML = `<span class="cmp-dot" style="background:${colors[i%colors.length]}"></span>` +
-        `<span style="font-weight:${i===0?700:400}">${escHtml(name)}</span>`;
+      li.innerHTML = `<span class="cmp-dot" style="background:${color}"></span>` +
+        `<span style="font-weight:${i===0?700:400}">${name}</span>`;
       legendEl.appendChild(li);
     });
   }
@@ -4459,21 +4693,13 @@ async function openCompare() {
   const friendsCb = document.getElementById('cmp-include-friends');
   if (friendsCb) friendsCb.checked = localStorage.getItem('ascent-cmp-friends') === '1';
 
-  // If no segment selected, open in browse mode — show full activity, let user pick a segment
+  // If no segment selected, single activity: show error (require segment or multiple activities)
   if (cmp.selStartIdx === null || cmp.selEndIdx === null) {
-    titleEl.textContent = 'Choose a segment to compare';
+    titleEl.textContent = 'You need to select multiple activities or a selection region to use Compare';
     loading.style.display = 'none';
     cmp.matches  = [];
     cmp.currentT = 0;
     cmp.savedSegId = null;
-    // Show full activity track on overview map
-    initCompareMapBrowse();
-    // Clear profile
-    if (cmp.profileChart) { cmp.profileChart.destroy(); cmp.profileChart = null; }
-    const canvas = document.getElementById('cmp-profile-canvas');
-    if (canvas) { const ctx = canvas.getContext('2d'); ctx.clearRect(0,0,canvas.width,canvas.height); }
-    // Populate saved segments dropdown
-    await cmpLoadSavedSegments();
     return;
   }
 
@@ -4598,21 +4824,33 @@ function closeCompare() {
 function buildCompareLegend() {
   const leg = document.getElementById('compare-legend');
   leg.innerHTML = '';
+  const multiUser = new Set(cmp.matches.map(m => m.user_id).filter(id => id != null)).size > 1;
   cmp.matches.forEach((m, i) => {
-    const color   = CMP_COLORS[i % CMP_COLORS.length];
-    const isRef   = currentAct && m.activity_id === currentAct.id;
-    const date    = m.start_time ? new Date(m.start_time*1000).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '';
-    const nameStyle = isRef ? 'font-weight:700' : '';
-    const item    = document.createElement('div');
+    const color    = CMP_COLORS[i % CMP_COLORS.length];
+    const isRef    = currentAct && m.activity_id === currentAct.id;
+    const date     = m.start_time ? new Date(m.start_time*1000).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '';
+    const userName = multiUser && m.user_id && userMap[m.user_id] ? escHtml(userMap[m.user_id]) + ': ' : '';
+    const dispName = userName + escHtml(m.name || '');
+    const item     = document.createElement('div');
     item.className = 'cmp-legend-item';
-    item.innerHTML =
-      `<div class="cmp-sphere" style="background:radial-gradient(circle at 35% 35%,${color}ee,${color}88 55%,${color}44);flex-shrink:0"></div>` +
-      `<span style="${nameStyle}">${escHtml(m.name)}</span>` +
-      `<span style="color:var(--muted);font-size:11px;white-space:nowrap">${date}</span>` +
-      `<span style="font-size:11px;color:var(--muted);white-space:nowrap;margin-left:2px">${fmtElapsed(m.elapsed_s)}</span>` +
-      `<span id="cmp-delta-${i}" style="margin-left:auto;font-family:ui-monospace,'SF Mono','Fira Code',monospace;` +
-      `font-size:12px;font-weight:600;min-width:70px;text-align:right;font-variant-numeric:tabular-nums;` +
-      `color:var(--muted2);flex-shrink:0">0:00</span>`;
+    if (m.missing) {
+      item.innerHTML =
+        `<div class="cmp-sphere" style="background:radial-gradient(circle at 35% 35%,#9ca3af66,#9ca3af33 55%,#9ca3af11);flex-shrink:0;opacity:0.6"></div>` +
+        `<span style="font-style:italic;color:var(--muted)">${dispName}</span>` +
+        `<span style="color:var(--muted);font-size:11px;white-space:nowrap">${date}</span>` +
+        `<span style="font-size:11px;color:var(--muted);white-space:nowrap;margin-left:2px">—</span>` +
+        `<span id="cmp-delta-${i}" style="margin-left:auto;font-size:12px;min-width:70px;text-align:right;color:var(--muted);flex-shrink:0">—</span>`;
+    } else {
+      const nameStyle = isRef ? 'font-weight:700' : '';
+      item.innerHTML =
+        `<div class="cmp-sphere" style="background:radial-gradient(circle at 35% 35%,${color}ee,${color}88 55%,${color}44);flex-shrink:0"></div>` +
+        `<span style="${nameStyle}">${dispName}</span>` +
+        `<span style="color:var(--muted);font-size:11px;white-space:nowrap">${date}</span>` +
+        `<span style="font-size:11px;color:var(--muted);white-space:nowrap;margin-left:2px">${fmtElapsed(m.elapsed_s)}</span>` +
+        `<span id="cmp-delta-${i}" style="margin-left:auto;font-family:ui-monospace,'SF Mono','Fira Code',monospace;` +
+        `font-size:12px;font-weight:600;min-width:70px;text-align:right;font-variant-numeric:tabular-nums;` +
+        `color:var(--muted2);flex-shrink:0">0:00</span>`;
+    }
     leg.appendChild(item);
   });
 }
@@ -4721,6 +4959,11 @@ function initCompareMap() {
   const allLL = [];
 
   cmp.matches.forEach((m, i) => {
+    if (m.missing || !m.points || !m.points.length) {
+      cmp.tracks.push(null);
+      cmp.markers.push(null);
+      return;
+    }
     const color = CMP_COLORS[i % CMP_COLORS.length];
 
     // Faint full-segment track
@@ -4758,6 +5001,7 @@ function initCompareMap() {
 
     // Add faint segment tracks to zoom map too
     cmp.matches.forEach((m) => {
+      if (m.missing || !m.points || !m.points.length) return;
       const lls = m.points.map(p => [p.lat, p.lon]);
       L.polyline(lls, {color:'#ef4444', weight:2, opacity:0.4, smoothFactor:1}).addTo(cmp.zoomMap);
     });
@@ -4765,6 +5009,10 @@ function initCompareMap() {
     // Add zoom markers (same colors, slightly larger)
     cmp.zoomMarkers = [];
     cmp.matches.forEach((m, i) => {
+      if (m.missing || !m.points || !m.points.length) {
+        cmp.zoomMarkers.push(null);
+        return;
+      }
       const color = CMP_COLORS[i % CMP_COLORS.length];
       const startLL = [m.points[0].lat, m.points[0].lon];
       const icon = L.divIcon({
@@ -4858,8 +5106,8 @@ function initCompareProfile() {
     },
   });
 
-  // Initialize dots at start
-  cmp.profileDots = cmp.matches.map(() => profilePts[0] ? {...profilePts[0]} : null);
+  // Initialize dots at start (null for missing entries — not drawn)
+  cmp.profileDots = cmp.matches.map((m) => (!m.missing && profilePts[0]) ? {...profilePts[0]} : null);
 }
 
 // ── Animation (normalized time: progress 0→1, all riders start+finish together)
@@ -4924,6 +5172,7 @@ function cmpUpdateUI(wallT) {
   const refPoints = cmp.matches[0]?.points;
 
   cmp.matches.forEach((m, i) => {
+    if (m.missing) return;
     const d = interpAtTime(m.points, cmp.currentT);
     if (!d) return;
 
@@ -5263,11 +5512,34 @@ async function cmpRunManualCompare(seg) {
     const refId = cmp._manualIds[0];
     const ref   = d.matches.find(m => m.activity_id === refId);
     const rest  = d.matches.filter(m => m.activity_id !== refId);
-    cmp.matches  = ref ? [ref, ...rest] : d.matches;
+    const baseMatches = ref ? [ref, ...rest] : d.matches;
+
+    // Add placeholder entries for activities missing the segment
+    const matchedIds = new Set(d.matches.map(m => m.activity_id));
+    const allMatches = [...baseMatches];
+    for (const id of (cmp._manualIds || [])) {
+      if (!matchedIds.has(id)) {
+        const act = state.all?.find(a => a.id === id) || state.filtered?.find(a => a.id === id);
+        allMatches.push({
+          activity_id: id,
+          name:        act?.name || `Activity ${id}`,
+          start_time:  act?.start_time || null,
+          elapsed_s:   null,
+          user_id:     act?.user_id || null,
+          points:      [],
+          missing:     true,
+        });
+      }
+    }
+    cmp.matches  = allMatches;
     cmp.currentT = 0;
     cmp.savedSegId = seg.id;
 
-    titleEl.textContent = `${escHtml(seg.name)} — ${cmp.matches.length} Activities`;
+    const nFound = d.matches.length;
+    const nTotal = (cmp._manualIds || []).length;
+    titleEl.textContent = nFound === nTotal
+      ? `${escHtml(seg.name)} — ${nFound} Activit${nFound===1?'y':'ies'}`
+      : `${escHtml(seg.name)} — ${nFound} of ${nTotal} Activities`;
 
     buildCompareLegend();
     initCompareMap();
@@ -5492,6 +5764,22 @@ document.addEventListener('DOMContentLoaded', () => {
   initMap();
   await U.load();  // fetch metric pref before first render
   updateSplitLenLabels();
+
+  // Load users first so userMap is ready before activities render
+  try {
+    const [mr, ur] = await Promise.all([fetch('/api/me'), fetch('/api/users')]);
+    if (mr.ok && ur.ok) {
+      const me    = await mr.json();
+      const users = await ur.json();
+      users.forEach(u => { userMap[u.id] = u.username; });
+      _allUsers = users;
+      viewState.myId       = me.id;
+      viewState.myUsername = me.username;
+      viewState.selectedUserIds.add(me.id);
+      _updateViewBadge();
+    }
+  } catch(e) {}
+
   buildColHead();
   await loadFilterOptions();
   await loadAll();
@@ -5528,6 +5816,79 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   } catch(e) {}
 })();
+
+// ── USER PICKER ───────────────────────────────────────────────────────────────
+let _allUsers = [];  // cached from /api/users
+
+async function openUserPicker() {
+  const modal = document.getElementById('user-picker-modal');
+  const list  = document.getElementById('user-picker-list');
+  modal.style.display = 'flex';
+  list.innerHTML = '<div style="color:#888;font-size:13px">Loading…</div>';
+  try {
+    if (!_allUsers.length) {
+      const r = await fetch('/api/users');
+      if (!r.ok) throw new Error('Failed to load users');
+      _allUsers = await r.json();
+    }
+    _renderUserPicker();
+  } catch(e) {
+    list.innerHTML = '<div style="color:#e55;font-size:13px">Error loading users</div>';
+  }
+}
+
+function _renderUserPicker() {
+  const list = document.getElementById('user-picker-list');
+  const effectiveIds = viewState.selectedUserIds.size > 0
+    ? viewState.selectedUserIds
+    : new Set(viewState.myId !== null ? [viewState.myId] : []);
+  list.innerHTML = '';
+  _allUsers.forEach(u => {
+    const checked = effectiveIds.has(u.id);
+    const row = document.createElement('label');
+    row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;cursor:pointer;background:#2c2c2e;user-select:none';
+    row.innerHTML = `<input type="checkbox" ${checked ? 'checked' : ''} style="accent-color:#f97316;width:16px;height:16px;cursor:pointer">
+      <span style="font-size:14px;color:#f5f5f7">${escHtml(u.username)}</span>`;
+    const cb = row.querySelector('input');
+    cb.addEventListener('change', () => _toggleUserSelection(u.id, cb.checked));
+    list.appendChild(row);
+  });
+  // Apply button
+  const applyBtn = document.createElement('button');
+  applyBtn.textContent = 'Apply';
+  applyBtn.style.cssText = 'margin-top:4px;width:100%;padding:9px;background:#f97316;border:none;border-radius:8px;color:#fff;cursor:pointer;font-size:13px;font-weight:600';
+  applyBtn.onclick = () => applyUserSelection();
+  list.appendChild(applyBtn);
+}
+
+function _toggleUserSelection(userId, checked) {
+  if (checked) viewState.selectedUserIds.add(userId);
+  else         viewState.selectedUserIds.delete(userId);
+}
+
+function closeUserPicker() {
+  document.getElementById('user-picker-modal').style.display = 'none';
+}
+
+async function applyUserSelection() {
+  closeUserPicker();
+  // If nothing selected, default back to own activities
+  if (viewState.selectedUserIds.size === 0 && viewState.myId !== null) {
+    viewState.selectedUserIds.add(viewState.myId);
+  }
+  _updateViewBadge();
+  // Reset filters
+  state.search = ''; state.actType = ''; state.year = '';
+  document.getElementById('searchInput').value = '';
+  document.getElementById('typeFilter').value  = '';
+  document.getElementById('yearFilter').value  = '';
+  state.all = []; state.filtered = []; state.selected = null;
+  document.getElementById('act-list').scrollTop = 0;
+  document.getElementById('list-rows').innerHTML = '';
+  document.getElementById('list-spacer').style.height = '0';
+  await loadFilterOptions();
+  await loadAll();
+}
 </script>
 
 
