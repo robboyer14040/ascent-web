@@ -32,33 +32,53 @@ async def activities_json(
     sort_dir:        str           = Query("desc"),
     year:            Optional[int] = Query(None),
     include_friends: bool          = Query(False),
+    view_user_ids:   str           = Query(""),
 ):
     uid = get_session_user_id(request)
     if uid is None:
         raise HTTPException(401, "Not authenticated")
+    # Parse comma-separated user IDs for multi-user view
+    user_ids_filter = [int(x) for x in view_user_ids.split(',') if x.strip().isdigit()] if view_user_ids else []
     db    = db_getter()
     acts  = db.get_activities(
         limit=limit, offset=offset, search=search,
         activity_type=activity_type, sort_by=sort_by,
         sort_dir=sort_dir, year=year,
-        user_id=uid, include_shared=include_friends,
+        user_id=uid if not user_ids_filter else None,
+        include_shared=include_friends,
+        user_ids=user_ids_filter if user_ids_filter else None,
     )
     total = db.count_activities(
         search=search, activity_type=activity_type, year=year,
-        user_id=uid, include_shared=include_friends,
+        user_id=uid if not user_ids_filter else None,
+        include_shared=include_friends,
+        user_ids=user_ids_filter if user_ids_filter else None,
     )
     return {"activities": acts, "total": total}
 
 
 @router.get("/activities/filter-options")
-async def filter_options(request: Request, include_friends: bool = Query(False)):
+async def filter_options(
+    request: Request,
+    include_friends: bool = Query(False),
+    view_user_ids: str = Query(""),
+):
     uid = get_session_user_id(request)
     if uid is None:
         raise HTTPException(401, "Not authenticated")
+    user_ids_filter = [int(x) for x in view_user_ids.split(',') if x.strip().isdigit()] if view_user_ids else []
     db = db_getter()
     return {
-        "types": db.get_activity_types(user_id=uid, include_shared=include_friends),
-        "years": db.get_years(user_id=uid, include_shared=include_friends),
+        "types": db.get_activity_types(
+            user_id=uid if not user_ids_filter else None,
+            include_shared=include_friends,
+            user_ids=user_ids_filter if user_ids_filter else None,
+        ),
+        "years": db.get_years(
+            user_id=uid if not user_ids_filter else None,
+            include_shared=include_friends,
+            user_ids=user_ids_filter if user_ids_filter else None,
+        ),
     }
 
 

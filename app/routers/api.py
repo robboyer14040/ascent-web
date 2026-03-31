@@ -644,9 +644,15 @@ async def segment_compare(req: SegmentRequest, request: Request):
         act_user_id = row[6] if len(row) > 6 else None
 
         # ── Get points ──────────────────────────────────────────────────────
+        def _valid_pt(p):
+            lat, lon = p.get("lat"), p.get("lon")
+            return (lat is not None and lon is not None
+                    and lat != 999.0 and lon != 999.0
+                    and -90 <= lat <= 90 and -180 <= lon <= 180
+                    and not (lat == 0.0 and lon == 0.0))
+
         if pts_saved and pts_count:
-            pts = [p for p in db.get_track_points(act_id)
-                   if p["lat"] != 999.0 and p["lon"] != 999.0]
+            pts = [p for p in db.get_track_points(act_id) if _valid_pt(p)]
         elif strava_id:
             # No points yet — fetch from Strava on demand
             try:
@@ -675,7 +681,7 @@ async def segment_compare(req: SegmentRequest, request: Request):
                 if not rows:
                     continue
                 db.store_points(act_id, rows)
-                pts = db.get_track_points(act_id)
+                pts = [p for p in db.get_track_points(act_id) if _valid_pt(p)]
             except Exception:
                 continue
         else:

@@ -650,7 +650,7 @@ input,select{font:inherit}
 <body>
 
 <div id="toolbar">
-  <span class="tb-title">⛰ Ascent <span style="font-size:10px;font-weight:400;color:var(--muted);letter-spacing:.02em">v0.1.15</span></span><span id="viewing-user-badge" onclick="openUserPicker()" title="Switch user" style="margin-left:8px;font-size:11px;font-weight:500;color:#f97316;cursor:pointer;padding:2px 7px;border:1px solid #f97316;border-radius:10px;opacity:.85;user-select:none"></span>
+  <span class="tb-title">⛰ Ascent <span style="font-size:10px;font-weight:400;color:var(--muted);letter-spacing:.02em">v0.1.18</span></span><span id="viewing-user-badge" onclick="openUserPicker()" title="Switch user" style="margin-left:8px;font-size:11px;font-weight:500;color:#f97316;cursor:pointer;padding:2px 7px;border:1px solid #f97316;border-radius:10px;opacity:.85;user-select:none"></span>
   <div style="flex:1"></div>
   <div class="tb-search">
     <span class="tb-icon">⌕</span>
@@ -4513,7 +4513,11 @@ async function cmpOpenManualWithSegment() {
         });
       }
     }
-    cmp.matches  = allMatches;
+    // Ensure reference activity is first (initCompareProfile uses matches[0] as ref)
+    const _refId = currentAct.id;
+    const _refM  = allMatches.find(m => m.activity_id === _refId);
+    const _restM = allMatches.filter(m => m.activity_id !== _refId);
+    cmp.matches  = _refM ? [_refM, ..._restM] : allMatches;
     cmp.currentT = 0;
     cmp.savedSegId = null;
     cmp._manualIds = ordered;
@@ -4967,13 +4971,14 @@ function initCompareMap() {
     const color = CMP_COLORS[i % CMP_COLORS.length];
 
     // Faint full-segment track
-    const lls = m.points.map(p => [p.lat, p.lon]);
+    const lls = m.points.filter(p => p.lat != null && p.lon != null).map(p => [p.lat, p.lon]);
+    if (!lls.length) { cmp.tracks.push(null); cmp.markers.push(null); return; }
     allLL.push(...lls);
     const track = L.polyline(lls, {color:'#ef4444', weight:3, opacity:0.8, smoothFactor:1.5}).addTo(cmp.map);
     cmp.tracks.push(track);
 
     // Sphere marker at start
-    const startLL = [m.points[0].lat, m.points[0].lon];
+    const startLL = lls[0];
     const icon = L.divIcon({
       html: `<div style="width:14px;height:14px;border-radius:50%;background:radial-gradient(circle at 35% 35%,${color}ee,${color}88 55%,${color}44);box-shadow:0 1px 4px rgba(0,0,0,.7),inset -1px -1px 3px rgba(0,0,0,.3),inset 1px 1px 2px rgba(255,255,255,.4)"></div>`,
       iconSize:[14,14], iconAnchor:[7,7], className:''
@@ -5002,7 +5007,8 @@ function initCompareMap() {
     // Add faint segment tracks to zoom map too
     cmp.matches.forEach((m) => {
       if (m.missing || !m.points || !m.points.length) return;
-      const lls = m.points.map(p => [p.lat, p.lon]);
+      const lls = m.points.filter(p => p.lat != null && p.lon != null).map(p => [p.lat, p.lon]);
+      if (!lls.length) return;
       L.polyline(lls, {color:'#ef4444', weight:2, opacity:0.4, smoothFactor:1}).addTo(cmp.zoomMap);
     });
 
@@ -5014,7 +5020,9 @@ function initCompareMap() {
         return;
       }
       const color = CMP_COLORS[i % CMP_COLORS.length];
-      const startLL = [m.points[0].lat, m.points[0].lon];
+      const zLls = m.points.filter(p => p.lat != null && p.lon != null).map(p => [p.lat, p.lon]);
+      if (!zLls.length) { cmp.zoomMarkers.push(null); return; }
+      const startLL = zLls[0];
       const icon = L.divIcon({
         html: `<div style="width:18px;height:18px;border-radius:50%;background:radial-gradient(circle at 35% 35%,${color}ee,${color}88 55%,${color}44);box-shadow:0 2px 6px rgba(0,0,0,.8),inset -1px -1px 3px rgba(0,0,0,.3),inset 1px 1px 2px rgba(255,255,255,.4)"></div>`,
         iconSize:[18,18], iconAnchor:[9,9], className:''
@@ -5176,11 +5184,8 @@ function cmpUpdateUI(wallT) {
     const d = interpAtTime(m.points, cmp.currentT);
     if (!d) return;
 
-    // Map position: project each rider's current distance onto the REFERENCE track
-    // so all spheres travel along the same red line, making relative position unambiguous
-    const mapPos = (i === 0 || !refPoints)
-      ? {lat: d.lat, lon: d.lon}
-      : interpOnRefByDist(refPoints, d.dist_m || 0);
+    // Map position: use each rider's actual GPS coordinates
+    const mapPos = {lat: d.lat, lon: d.lon};
 
     if (cmp.markers[i])     cmp.markers[i].setLatLng([mapPos.lat, mapPos.lon]);
     if (cmp.zoomMarkers[i]) {
@@ -5775,7 +5780,14 @@ document.addEventListener('DOMContentLoaded', () => {
       _allUsers = users;
       viewState.myId       = me.id;
       viewState.myUsername = me.username;
-      viewState.selectedUserIds.add(me.id);
+      // Restore saved user selection, falling back to own ID
+      const _savedIds = JSON.parse(localStorage.getItem('ascent-view-user-ids') || 'null');
+      const _validIds = _savedIds && _savedIds.filter(id => users.some(u => u.id === id));
+      if (_validIds && _validIds.length > 0) {
+        _validIds.forEach(id => viewState.selectedUserIds.add(id));
+      } else {
+        viewState.selectedUserIds.add(me.id);
+      }
       _updateViewBadge();
     }
   } catch(e) {}
@@ -5876,6 +5888,7 @@ async function applyUserSelection() {
   if (viewState.selectedUserIds.size === 0 && viewState.myId !== null) {
     viewState.selectedUserIds.add(viewState.myId);
   }
+  localStorage.setItem('ascent-view-user-ids', JSON.stringify([...viewState.selectedUserIds]));
   _updateViewBadge();
   // Reset filters
   state.search = ''; state.actType = ''; state.year = '';

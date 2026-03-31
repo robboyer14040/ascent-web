@@ -247,6 +247,9 @@ def build_activity(row: sqlite3.Row) -> dict:
     # Photos — pass through raw JSON string; API layer parses it
     a["local_media_items_json"] = d.get("local_media_items_json")
 
+    # User ownership
+    a["user_id"] = d.get("user_id")
+
     # ── altitude ─────────────────────────────────────────────────────────
     a["max_altitude_ft"] = round(safe_float(attrs.get("maxAltitude") or d.get("src_max_elevation")))
     a["min_altitude_ft"] = round(safe_float(attrs.get("minAltitude") or d.get("src_min_elevation")))
@@ -299,10 +302,12 @@ class AscentDB:
         year: Optional[int] = None,
         user_id: Optional[int] = None,
         include_shared: bool = False,
+        user_ids: Optional[list] = None,
     ) -> list[dict]:
 
         where, params = self._build_where(search, activity_type, year,
-                                          user_id=user_id, include_shared=include_shared)
+                                          user_id=user_id, include_shared=include_shared,
+                                          user_ids=user_ids)
         order = self._safe_order(sort_by, sort_dir)
 
         sql = f"""
@@ -344,20 +349,23 @@ class AscentDB:
     def count_activities(
         self, search: str = "", activity_type: str = "", year: Optional[int] = None,
         user_id: Optional[int] = None, include_shared: bool = False,
+        user_ids: Optional[list] = None,
     ) -> int:
         where, params = self._build_where(search, activity_type, year,
-                                          user_id=user_id, include_shared=include_shared)
+                                          user_id=user_id, include_shared=include_shared,
+                                          user_ids=user_ids)
         return self._con.execute(
             f"SELECT COUNT(*) FROM activities {where}", params
         ).fetchone()[0]
 
     def get_activity_types(self, user_id: Optional[int] = None,
-                            include_shared: bool = False) -> list[str]:
+                            include_shared: bool = False,
+                            user_ids: Optional[list] = None) -> list[str]:
         """Activity types stored in attributes_json as {"activity": "Ride"}."""
         try:
             where, params = self._build_where("", "", None,
-                                               user_id=user_id, include_shared=include_shared)
-            user_clause = where + (" AND " if where else " WHERE ")
+                                               user_id=user_id, include_shared=include_shared,
+                                               user_ids=user_ids)
             rows = self._con.execute(
                 f"""SELECT DISTINCT json_extract(attributes_json, '$.activity') AS t
                    FROM activities
@@ -371,9 +379,11 @@ class AscentDB:
             return []
 
     def get_years(self, user_id: Optional[int] = None,
-                  include_shared: bool = False) -> list[int]:
+                  include_shared: bool = False,
+                  user_ids: Optional[list] = None) -> list[int]:
         where, params = self._build_where("", "", None,
-                                          user_id=user_id, include_shared=include_shared)
+                                          user_id=user_id, include_shared=include_shared,
+                                          user_ids=user_ids)
         rows = self._con.execute(
             f"""SELECT DISTINCT strftime('%Y', datetime(
                    COALESCE(creation_time_override_s, creation_time_s), 'unixepoch'
@@ -687,11 +697,17 @@ class AscentDB:
     # ── internal helpers ──────────────────────────────────────────────────
 
     def _build_where(self, search: str, activity_type: str, year: Optional[int],
-                     user_id: Optional[int] = None, include_shared: bool = False):
+                     user_id: Optional[int] = None, include_shared: bool = False,
+                     user_ids: Optional[list] = None):
         where_parts, params = [], []
 
-        # User isolation: show own activities + optionally shared ones from others
-        if user_id is not None:
+        # Multi-user filter takes priority over single user_id
+        if user_ids:
+            placeholders = ','.join('?' * len(user_ids))
+            where_parts.append(f"user_id IN ({placeholders})")
+            params.extend(user_ids)
+        # Single user isolation: show own activities + optionally shared ones from others
+        elif user_id is not None:
             if include_shared:
                 where_parts.append(
                     "(user_id = ? OR user_id IN "
