@@ -105,6 +105,7 @@ async def settings_page(request: Request):
 
     return templates.TemplateResponse("settings.html", {
         "request":         request,
+        "current_user":    user,
         "db_path":         db_path,
         "activity_count":  activity_count,
         "username":        getpass.getuser(),

@@ -55,6 +55,7 @@ CREATE INDEX IF NOT EXISTS idx_coach_msg_goal
 _MIGRATIONS = [
     "ALTER TABLE coach_messages ADD COLUMN input_tokens  INTEGER DEFAULT 0",
     "ALTER TABLE coach_messages ADD COLUMN output_tokens INTEGER DEFAULT 0",
+    "ALTER TABLE coach_goals ADD COLUMN user_id INTEGER",
 ]
 
 
@@ -86,15 +87,18 @@ def _get_con(db) -> sqlite3.Connection:
 
 # ── Activity summary builder ──────────────────────────────────────────────────
 
-def _build_activity_summary(db) -> str:
+def _build_activity_summary(db, user_id: Optional[int] = None) -> str:
     """
     Query the last ~90 days of activities and return a compact text summary
     suitable for inclusion in the Claude system prompt.
     """
     cutoff = int(time.time()) - 90 * 86400  # 90 days ago
 
+    user_filter = "AND user_id = ?" if user_id is not None else ""
+    params = [cutoff] + ([user_id] if user_id is not None else [])
+
     try:
-        rows = db._con.execute("""
+        rows = db._con.execute(f"""
             SELECT
                 COALESCE(creation_time_override_s, creation_time_s) AS ts,
                 distance_mi,
@@ -107,9 +111,10 @@ def _build_activity_summary(db) -> str:
                 json_extract(attributes_json, '$.totalClimb') AS climb_attr
             FROM activities
             WHERE COALESCE(creation_time_override_s, creation_time_s) >= ?
+            {user_filter}
             ORDER BY ts DESC
             LIMIT 200
-        """, (cutoff,)).fetchall()
+        """, params).fetchall()
     except Exception:
         return "No activity data available."
 
@@ -235,7 +240,12 @@ class ChatRequest(BaseModel):
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _active_goal(con: sqlite3.Connection) -> Optional[sqlite3.Row]:
+def _active_goal(con: sqlite3.Connection, user_id: Optional[int] = None) -> Optional[sqlite3.Row]:
+    if user_id is not None:
+        return con.execute(
+            "SELECT * FROM coach_goals WHERE archived_at IS NULL AND user_id=? ORDER BY created_at DESC LIMIT 1",
+            (user_id,)
+        ).fetchone()
     return con.execute(
         "SELECT * FROM coach_goals WHERE archived_at IS NULL ORDER BY created_at DESC LIMIT 1"
     ).fetchone()
@@ -250,11 +260,17 @@ def _goal_messages(con: sqlite3.Connection, goal_id: int, limit: int = 60) -> li
     return [dict(r) for r in rows]
 
 
-def _last_activity_ts(db) -> int:
+def _last_activity_ts(db, user_id: Optional[int] = None) -> int:
     """Timestamp of the most recent activity in the DB."""
-    row = db._con.execute(
-        "SELECT MAX(COALESCE(creation_time_override_s, creation_time_s)) FROM activities"
-    ).fetchone()
+    if user_id is not None:
+        row = db._con.execute(
+            "SELECT MAX(COALESCE(creation_time_override_s, creation_time_s)) FROM activities WHERE user_id=?",
+            (user_id,)
+        ).fetchone()
+    else:
+        row = db._con.execute(
+            "SELECT MAX(COALESCE(creation_time_override_s, creation_time_s)) FROM activities"
+        ).fetchone()
     return row[0] if row and row[0] else 0
 
 
@@ -270,17 +286,19 @@ def _last_coach_message_ts(con: sqlite3.Connection, goal_id: int) -> int:
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @router.get("/coach/state")
-async def coach_state():
+async def coach_state(request: Request):
     """Return current goal info and whether there are new activities since last coach message."""
+    from app.auth import get_session_user_id
+    uid = get_session_user_id(request)
     db  = db_getter()
     con = _get_con(db)
     try:
-        goal = _active_goal(con)
+        goal = _active_goal(con, user_id=uid)
         if not goal:
             return {"has_goal": False, "goal": None, "has_new_activities": False}
 
         last_coach_ts    = _last_coach_message_ts(con, goal["id"])
-        last_activity_ts = _last_activity_ts(db)
+        last_activity_ts = _last_activity_ts(db, user_id=uid)
         has_new          = last_activity_ts > last_coach_ts if last_coach_ts else False
 
         msg_count = con.execute(
@@ -298,12 +316,14 @@ async def coach_state():
 
 
 @router.get("/coach/messages")
-async def coach_messages():
+async def coach_messages(request: Request):
     """Return full conversation history for the active goal."""
+    from app.auth import get_session_user_id
+    uid = get_session_user_id(request)
     db  = db_getter()
     con = _get_con(db)
     try:
-        goal = _active_goal(con)
+        goal = _active_goal(con, user_id=uid)
         if not goal:
             return {"goal": None, "messages": []}
         msgs = _goal_messages(con, goal["id"])
@@ -313,7 +333,7 @@ async def coach_messages():
 
 
 @router.post("/coach/goal")
-async def set_goal(req: GoalRequest):
+async def set_goal(req: GoalRequest, request: Request):
     """
     Set a new training goal. Archives any existing active goal first.
     Returns the new goal id and an initial AI assessment.
@@ -321,30 +341,31 @@ async def set_goal(req: GoalRequest):
     if not req.goal_text.strip():
         raise HTTPException(400, "Goal text cannot be empty")
 
+    from app.auth import get_session_user_id as _gsu
+    _uid = _gsu(request) if hasattr(request, 'cookies') else None
+
     db  = db_getter()
     con = _get_con(db)
     now = int(time.time())
 
     try:
-        # Archive existing active goal
+        # Archive existing active goal for this user only
         con.execute(
-            "UPDATE coach_goals SET archived_at=? WHERE archived_at IS NULL",
-            (now,)
+            "UPDATE coach_goals SET archived_at=? WHERE archived_at IS NULL AND user_id=?",
+            (now, _uid)
         )
 
-        # Insert new goal
+        # Insert new goal with user_id
         cur = con.execute(
-            "INSERT INTO coach_goals (goal_text, created_at) VALUES (?,?)",
-            (req.goal_text.strip(), now)
+            "INSERT INTO coach_goals (goal_text, created_at, user_id) VALUES (?,?,?)",
+            (req.goal_text.strip(), now, _uid)
         )
         goal_id = cur.lastrowid
         con.commit()
     finally:
         con.close()
 
-    # Generate initial coach response (use selected model for initial assessment)
-    from app.auth import get_session_user_id as _gsu
-    _uid = _gsu(request) if hasattr(request, 'cookies') else None
+    # Generate initial coach response
     initial = await _call_claude(db, goal_id, req.goal_text.strip(), [], proactive=True, user_id=_uid,
                                   model=req.model if req.model in MODELS else DEFAULT_MODEL)
     return {"goal_id": goal_id, "initial_message": initial}
@@ -359,12 +380,15 @@ async def coach_chat(req: ChatRequest, request: Request):
     if not req.message.strip():
         raise HTTPException(400, "Message cannot be empty")
 
+    from app.auth import get_session_user_id
+    uid = get_session_user_id(request)
+
     db  = db_getter()
     con = _get_con(db)
     now = int(time.time())
 
     try:
-        goal = _active_goal(con)
+        goal = _active_goal(con, user_id=uid)
         if not goal:
             raise HTTPException(400, "No active goal. Set a goal first.")
 
@@ -373,7 +397,7 @@ async def coach_chat(req: ChatRequest, request: Request):
 
         # Check for new activities to surface proactively
         last_coach_ts    = _last_coach_message_ts(con, goal_id)
-        last_activity_ts = _last_activity_ts(db)
+        last_activity_ts = _last_activity_ts(db, user_id=uid)
         has_new = (last_activity_ts > last_coach_ts) if last_coach_ts else False
 
         # Save user message
@@ -390,33 +414,43 @@ async def coach_chat(req: ChatRequest, request: Request):
 
     # Call Claude
     model = req.model if req.model in MODELS else DEFAULT_MODEL
-    from app.auth import get_session_user_id
-    uid = get_session_user_id(request)
     reply = await _call_claude(db, goal_id, goal_text, history, proactive=has_new, model=model, user_id=uid)
     return {"reply": reply}
 
 
 @router.get("/coach/goals/archived")
-async def archived_goals():
+async def archived_goals(request: Request):
+    from app.auth import get_session_user_id
+    uid = get_session_user_id(request)
     db  = db_getter()
     con = _get_con(db)
     try:
-        rows = con.execute(
-            "SELECT * FROM coach_goals WHERE archived_at IS NOT NULL ORDER BY archived_at DESC"
-        ).fetchall()
+        if uid is not None:
+            rows = con.execute(
+                "SELECT * FROM coach_goals WHERE archived_at IS NOT NULL AND user_id=? ORDER BY archived_at DESC",
+                (uid,)
+            ).fetchall()
+        else:
+            rows = con.execute(
+                "SELECT * FROM coach_goals WHERE archived_at IS NOT NULL ORDER BY archived_at DESC"
+            ).fetchall()
         return {"goals": [dict(r) for r in rows]}
     finally:
         con.close()
 
 
 @router.get("/coach/goals/{goal_id}/messages")
-async def goal_messages(goal_id: int):
+async def goal_messages(goal_id: int, request: Request):
+    from app.auth import get_session_user_id
+    uid = get_session_user_id(request)
     db  = db_getter()
     con = _get_con(db)
     try:
         goal = con.execute("SELECT * FROM coach_goals WHERE id=?", (goal_id,)).fetchone()
         if not goal:
             raise HTTPException(404, "Goal not found")
+        if uid is not None and goal["user_id"] is not None and goal["user_id"] != uid:
+            raise HTTPException(403, "Not your goal")
         msgs = _goal_messages(con, goal_id)
         return {"goal": dict(goal), "messages": msgs}
     finally:
@@ -426,52 +460,61 @@ async def goal_messages(goal_id: int):
 # ── Usage endpoint ───────────────────────────────────────────────────────────
 
 @router.get("/coach/usage")
-async def coach_usage():
+async def coach_usage(request: Request):
     """
     Return aggregated token usage and estimated cost for the AI Coach feature.
-    Covers all goals (active + archived).
+    Covers all goals (active + archived) for the current user.
     """
+    from app.auth import get_session_user_id
+    uid = get_session_user_id(request)
     db  = db_getter()
     con = _get_con(db)
+
+    # Build user filter for joining coach_goals
+    user_join  = "JOIN coach_goals g ON coach_messages.goal_id = g.id" if uid else ""
+    user_where = "AND g.user_id = ?" if uid else ""
+    user_params = [uid] if uid else []
+
     try:
         # All-time totals
-        row = con.execute("""
+        row = con.execute(f"""
             SELECT
                 COUNT(*)                          AS total_queries,
                 COALESCE(SUM(input_tokens),  0)   AS total_input,
                 COALESCE(SUM(output_tokens), 0)   AS total_output
             FROM coach_messages
-            WHERE role = 'assistant'
-        """).fetchone()
+            {user_join}
+            WHERE role = 'assistant' {user_where}
+        """, user_params).fetchone()
 
-        # This month
         import time as _time
         from datetime import datetime, timezone
         now_dt   = datetime.now(timezone.utc)
         month_ts = int(datetime(now_dt.year, now_dt.month, 1, tzinfo=timezone.utc).timestamp())
 
-        month_row = con.execute("""
+        month_row = con.execute(f"""
             SELECT
                 COUNT(*)                          AS queries,
                 COALESCE(SUM(input_tokens),  0)   AS input,
                 COALESCE(SUM(output_tokens), 0)   AS output
             FROM coach_messages
-            WHERE role = 'assistant' AND created_at >= ?
-        """, (month_ts,)).fetchone()
+            {user_join}
+            WHERE role = 'assistant' AND coach_messages.created_at >= ? {user_where}
+        """, [month_ts] + user_params).fetchone()
 
-        # Per-month breakdown (last 6 months)
-        monthly = con.execute("""
+        monthly = con.execute(f"""
             SELECT
-                strftime('%Y-%m', datetime(created_at, 'unixepoch')) AS month,
+                strftime('%Y-%m', datetime(coach_messages.created_at, 'unixepoch')) AS month,
                 COUNT(*)                          AS queries,
                 COALESCE(SUM(input_tokens),  0)   AS input_tokens,
                 COALESCE(SUM(output_tokens), 0)   AS output_tokens
             FROM coach_messages
+            {user_join}
             WHERE role = 'assistant'
-              AND created_at >= ?
+              AND coach_messages.created_at >= ? {user_where}
             GROUP BY month
             ORDER BY month ASC
-        """, (int(_time.time()) - 6 * 30 * 86400,)).fetchall()
+        """, [int(_time.time()) - 6 * 30 * 86400] + user_params).fetchall()
 
     finally:
         con.close()
@@ -551,7 +594,7 @@ async def _call_claude(
     if not api_key:
         raise HTTPException(500, "No Anthropic API key set. Add your key in Settings.")
 
-    activity_summary = _build_activity_summary(db)
+    activity_summary = _build_activity_summary(db, user_id=user_id)
     system_prompt    = _build_system_prompt(goal_text, activity_summary)
 
     # Build messages array for the API (skip system-role rows)

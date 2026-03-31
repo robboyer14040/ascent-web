@@ -269,6 +269,26 @@ async def admin_delete_user(
     db._con.commit()
     return RedirectResponse("/admin/invites", status_code=303)
 
+@router.post("/admin/users/toggle-admin")
+async def admin_toggle_admin(
+    request: Request,
+    user_id: int = Form(...),
+    make_admin: int = Form(...),
+):
+    from app.auth import get_session_user_id
+    uid = get_session_user_id(request)
+    if not uid:
+        return RedirectResponse("/login", status_code=303)
+    db   = db_getter()
+    user = db.get_user(uid)
+    if not user or not user.get("is_admin"):
+        return RedirectResponse("/", status_code=303)
+    if user_id == uid:  # can't change your own admin status
+        return RedirectResponse("/admin/invites", status_code=303)
+    db._con.execute("UPDATE users SET is_admin=? WHERE id=?", (1 if make_admin else 0, user_id))
+    db._con.commit()
+    return RedirectResponse("/admin/invites", status_code=303)
+
 @router.post("/admin/invites/delete")
 async def admin_delete_invite(
     request: Request,

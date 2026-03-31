@@ -623,7 +623,7 @@ input,select{font:inherit}
   /* Bigger touch targets on splits titlebar */
   #splits-titlebar{ height:40px; }
   #splits-title{ font-size:12px; }
-  .sp-tb-btn{ font-size:18px !important; padding:6px 10px !important; }
+  .sp-tb-btn{ font-size:20px !important; padding:6px 10px !important; }
   /* Make transport bar buttons taller on touch */
   .t-btn{ width:38px; height:38px; font-size:16px; }
   #transport-bar{ padding:8px 12px; }
@@ -651,7 +651,7 @@ input,select{font:inherit}
 <body>
 
 <div id="toolbar">
-  <span class="tb-title">⛰ Ascent</span>
+  <span class="tb-title">⛰ Ascent <span style="font-size:10px;font-weight:400;color:var(--muted);letter-spacing:.02em">v0.0.3</span></span>
   <div style="flex:1"></div>
   <div class="tb-search">
     <span class="tb-icon">⌕</span>
@@ -661,7 +661,7 @@ input,select{font:inherit}
   <div style="display:flex;gap:6px">
     <button class="tb-btn" onclick="window.location='/'">📊 Dashboard</button>
     <button class="tb-btn" id="coach-open-btn" onclick="openCoach()" title="AI Coach">🧠 Coach<span id="coach-new-dot" class="coach-dot" style="display:none"></span></button>
-    <button class="tb-btn" onclick="window.location='/settings'" style="background:#3a3a3c" title="Settings">⚙</button><button class="tb-btn" onclick="window.location=window.location.origin+'/logout'" style="background:#3a3a3c" title="Sign Out">⏏</button>
+    <button class="tb-btn" onclick="window.location='/settings'" style="background:#3a3a3c" title="Settings"><span style="font-size:20px;line-height:1">⚙</span></button><button class="tb-btn" onclick="window.location=window.location.origin+'/logout'" style="background:#3a3a3c" title="Sign Out">Sign out</button>
     <button class="tb-btn strava" onclick="window.location='/strava/sync'">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169"/></svg>
       Strava Sync
@@ -675,7 +675,7 @@ input,select{font:inherit}
       <select id="typeFilter"><option value="">All types</option></select>
       <select id="yearFilter"><option value="">All years</option></select>
       <div style="flex:1"></div>
-      <button class="tb-btn" id="col-gear-btn" onclick="toggleColPicker(event)" title="Choose columns" style="padding:3px 7px;font-size:13px">⚙</button>
+      <button class="tb-btn" id="col-gear-btn" onclick="toggleColPicker(event)" title="Choose columns" style="padding:3px 7px;font-size:20px;line-height:1">⚙</button>
       <div id="col-picker"></div>
     </div>
 
@@ -697,7 +697,7 @@ input,select{font:inherit}
     <div id="splits-pane" class="collapsed">
       <div id="splits-titlebar">
         <span id="splits-title">Splits</span>
-        <button class="sp-tb-btn" onclick="toggleSplitsSettings()" title="Settings" style="font-size:16px;padding:2px 6px;line-height:1">⚙</button>
+        <button class="sp-tb-btn" onclick="toggleSplitsSettings()" title="Settings" style="font-size:20px;padding:2px 6px;line-height:1">⚙</button>
         <button class="sp-tb-btn" onclick="toggleSplitsPane()" id="splits-collapse-btn" title="Collapse/Expand" style="font-size:16px;padding:2px 6px;line-height:1">▲</button>
       </div>
       <div id="splits-settings">
@@ -757,8 +757,9 @@ input,select{font:inherit}
     <div class="drag-handle" id="drag-map-chart" title="Drag to resize"></div>
     <div id="chart-wrap">
       <div id="chart-titlebar" style="position:absolute;top:0;left:0;right:0;height:20px;z-index:5;display:flex;align-items:center;justify-content:flex-end;padding:0 6px;pointer-events:none">
+        <button class="sp-tb-btn" onclick="elevZoomStep(-1)" title="Zoom out" style="pointer-events:all;font-size:13px;padding:1px 6px;line-height:1.4">−</button>
         <button class="sp-tb-btn" onclick="elevZoomStep(1)" title="Zoom in" style="pointer-events:all;font-size:13px;padding:1px 6px;line-height:1.4">+</button>
-        <button class="sp-tb-btn" onclick="toggleChartSettings(event)" title="Chart overlays" style="pointer-events:all;font-size:16px;padding:2px 6px;line-height:1;user-select:none;-webkit-user-select:none;touch-action:manipulation">⚙</button>
+        <button class="sp-tb-btn" onclick="toggleChartSettings(event)" title="Chart overlays" style="pointer-events:all;font-size:20px;padding:2px 6px;line-height:1;user-select:none;-webkit-user-select:none;touch-action:manipulation">⚙</button>
       </div>
       <div id="chart-settings" style="display:none;position:absolute;top:20px;right:4px;z-index:20;background:var(--surface);border:1px solid var(--border2);border-radius:8px;padding:8px 10px;box-shadow:0 4px 16px rgba(0,0,0,.5);min-width:200px">
         <div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:6px">Overlay 1</div>
@@ -2648,11 +2649,18 @@ function animUpdateUI(i) {
       const xScale = elevChart.scales.x;
       const yScale = elevChart.scales.yElev || elevChart.scales.y;
       const xMi = U.metric ? pts.dist_m[i] / 1000 : pts.dist_m[i] / 1609.344;
-      const px  = xScale.getPixelForValue(xMi);
-      const py  = yScale.getPixelForValue(Math.round(alt || 0));
-      dot.style.display = 'block';
-      dot.style.left    = px + 'px';
-      dot.style.top     = py + 'px';
+      // Hide dot if it's outside the visible zoom window
+      const xMin = elevChart.options.scales.x.min;
+      const xMax = elevChart.options.scales.x.max;
+      if (xMin !== undefined && xMax !== undefined && (xMi < xMin || xMi > xMax)) {
+        dot.style.display = 'none';
+      } else {
+        const px  = xScale.getPixelForValue(xMi);
+        const py  = yScale.getPixelForValue(Math.round(alt || 0));
+        dot.style.display = 'block';
+        dot.style.left    = px + 'px';
+        dot.style.top     = py + 'px';
+      }
     }
   }
 }
@@ -5275,26 +5283,36 @@ function elevZoomApply() {
   if (!elevChart || !elevChartData) return;
   const dist  = elevChartData.dist_m;
   const total = U.metric ? dist[dist.length-1]/1000 : dist[dist.length-1]/1609.344;
-  const bar   = document.getElementById('elev-zoom-bar');
-  const label = document.getElementById('elev-zoom-label');
+  const bar    = document.getElementById('elev-zoom-bar');
+  const label  = document.getElementById('elev-zoom-label');
   const scroll = document.getElementById('elev-zoom-scroll');
 
+  // Always clamp level to [1, maxLevel]
+  elevZoom.level = Math.max(1, Math.min(elevZoom.maxLevel, elevZoom.level));
+
   if (elevZoom.level <= 1) {
-    // Full view — remove min/max constraints
-    elevChart.options.scales.x.min = undefined;
-    elevChart.options.scales.x.max = undefined;
-    bar.style.display = 'none';
+    // Full view — set to exact data extents (never go beyond this)
+    elevChart.options.scales.x.min = 0;
+    elevChart.options.scales.x.max = total;
+    if (bar) bar.style.display = 'none';
   } else {
     const window_size = total / elevZoom.level;
     const max_offset  = total - window_size;
     const start = Math.max(0, Math.min(elevZoom.offset * max_offset, max_offset));
     elevChart.options.scales.x.min = start;
     elevChart.options.scales.x.max = start + window_size;
-    bar.style.display = 'flex';
-    label.textContent = elevZoom.level + '×';
-    scroll.value = Math.round((elevZoom.offset) * 1000);
+    if (bar) bar.style.display = 'flex';
+    if (label) label.textContent = elevZoom.level + '×';
+    if (scroll) scroll.value = Math.round(elevZoom.offset * 1000);
   }
   elevChart.update('none');
+
+  // Repaint the anim dot after zoom — must happen after chart update
+  requestAnimationFrame(() => {
+    if (anim && anim.pts && anim.idx !== undefined) {
+      animUpdateUI(Math.floor(anim.idx));
+    }
+  });
 }
 
 function elevZoomStep(dir) {

@@ -99,7 +99,7 @@ input[readonly]{color:#8e8e93;cursor:default}
   <a href="/strava/sync">Strava Sync</a>
   <div class="spacer"></div>
   <a href="/settings" style="color:#f2f2f7">Settings</a>
-<div class="spacer" style="flex:1"></div><a href="/admin/invites" style="color:#8e8e93;font-size:.85rem;text-decoration:none">Admin</a><a href="/logout" style="color:#8e8e93;font-size:.85rem;text-decoration:none">Sign Out</a></nav>
+<div class="spacer" style="flex:1"></div>{% if current_user and current_user.is_admin %}<a href="/admin/invites" style="color:#8e8e93;font-size:.85rem;text-decoration:none">Admin</a>{% endif %}<a href="/logout" style="color:#8e8e93;font-size:.85rem;text-decoration:none">Sign Out</a></nav>
 
 <div class="container">
 
@@ -304,7 +304,7 @@ input[readonly]{color:#8e8e93;cursor:default}
 </div><!-- /container -->
 
 <div style="text-align:center;padding:1.5rem 0 2rem;color:#636366;font-size:11px;letter-spacing:.04em">
-  Ascent v0.0.1
+  Ascent v0.0.3
 </div>
 
 
