@@ -544,67 +544,70 @@ async def segment_compare(req: SegmentRequest, request: Request):
 
     # Build user filter for candidate activities
     uid = get_session_user_id(request)
-    if req.include_friends and uid is not None:
-        user_filter = """AND (user_id = ? OR user_id IN (
-                SELECT id FROM users WHERE share_activities = 1 AND id != ?))"""
-        user_params = [uid, uid]
-    elif uid is not None:
-        user_filter = "AND (user_id = ? OR user_id IS NULL)"
-        user_params = [uid]
-    else:
-        user_filter = ""
-        user_params = []
 
-    # E-bike filter: match reference activity type
-    # EBikeRide should only compare with EBikeRide, and non-ebike excludes EBikeRide
-    # ref_act was already fetched above; reuse it here.
-    # attributes_json is a flat alternating JSON array: ["activity","EBikeRide","name","My Ride",...]
-    # parse_attrs() already converts it to a dict, so ref_act["activity_type"] is reliable.
-    # For the SQL filter we use a json_each self-join which is immune to whitespace
-    # differences in serialization (unlike a LIKE pattern).
-    EBIKE_TYPE = "EBikeRide"
-    ref_type = (ref_act or {}).get("activity_type", "")
-    _ebike_sql = """
-        EXISTS (
-            SELECT 1
-            FROM json_each(activities.attributes_json) k
-            JOIN json_each(activities.attributes_json) v ON v.key = k.key + 1
-            WHERE k.value = 'activity' AND v.value = 'EBikeRide'
-        )
-    """
-    if ref_type == EBIKE_TYPE:
-        ebike_filter = f"AND ({_ebike_sql})"
-    else:
-        ebike_filter = f"AND NOT ({_ebike_sql})"
-
-    candidates = db._con.execute(f"""
-        SELECT id, name,
-               COALESCE(creation_time_override_s, creation_time_s) AS ts,
-               points_saved, points_count, strava_activity_id, user_id
-        FROM activities
-        WHERE id != ?
-          {user_filter}
-          {ebike_filter}
-          AND (
-            (points_saved = 1 AND points_count > 0
-             AND (map_min_lat IS NULL
-                  OR (map_min_lat <= ? AND map_max_lat >= ?
-                      AND map_min_lon <= ? AND map_max_lon >= ?)))
-            OR (points_saved = 0
-                AND map_min_lat IS NOT NULL
-                AND map_min_lat <= ? AND map_max_lat >= ?
-                AND map_min_lon <= ? AND map_max_lon >= ?)
-          )
-        ORDER BY ts DESC
-    """, [req.activity_id] + user_params +
-         [seg_max_lat, seg_min_lat, seg_max_lon, seg_min_lon,
-          seg_max_lat, seg_min_lat, seg_max_lon, seg_min_lon]
-    ).fetchall()
-
-    # If specific candidate IDs requested, filter to just those
+    # When explicit candidate_ids are given (user manually selected activities),
+    # bypass user/spatial filters entirely — trust the explicit selection.
     if req.candidate_ids:
-        allowed = set(req.candidate_ids) | {req.activity_id}
-        candidates = [c for c in candidates if c["id"] in allowed]
+        placeholders = ','.join('?' * len(req.candidate_ids))
+        candidates = db._con.execute(f"""
+            SELECT id, name,
+                   COALESCE(creation_time_override_s, creation_time_s) AS ts,
+                   points_saved, points_count, strava_activity_id, user_id
+            FROM activities
+            WHERE id IN ({placeholders})
+            ORDER BY COALESCE(creation_time_override_s, creation_time_s) DESC
+        """, req.candidate_ids).fetchall()
+    else:
+        if req.include_friends and uid is not None:
+            user_filter = """AND (user_id = ? OR user_id IN (
+                    SELECT id FROM users WHERE share_activities = 1 AND id != ?))"""
+            user_params = [uid, uid]
+        elif uid is not None:
+            user_filter = "AND (user_id = ? OR user_id IS NULL)"
+            user_params = [uid]
+        else:
+            user_filter = ""
+            user_params = []
+
+        # E-bike filter: match reference activity type
+        EBIKE_TYPE = "EBikeRide"
+        ref_type = (ref_act or {}).get("activity_type", "")
+        _ebike_sql = """
+            EXISTS (
+                SELECT 1
+                FROM json_each(activities.attributes_json) k
+                JOIN json_each(activities.attributes_json) v ON v.key = k.key + 1
+                WHERE k.value = 'activity' AND v.value = 'EBikeRide'
+            )
+        """
+        if ref_type == EBIKE_TYPE:
+            ebike_filter = f"AND ({_ebike_sql})"
+        else:
+            ebike_filter = f"AND NOT ({_ebike_sql})"
+
+        candidates = db._con.execute(f"""
+            SELECT id, name,
+                   COALESCE(creation_time_override_s, creation_time_s) AS ts,
+                   points_saved, points_count, strava_activity_id, user_id
+            FROM activities
+            WHERE id != ?
+              {user_filter}
+              {ebike_filter}
+              AND (
+                (points_saved = 1 AND points_count > 0
+                 AND (map_min_lat IS NULL
+                      OR (map_min_lat <= ? AND map_max_lat >= ?
+                          AND map_min_lon <= ? AND map_max_lon >= ?)))
+                OR (points_saved = 0
+                    AND map_min_lat IS NOT NULL
+                    AND map_min_lat <= ? AND map_max_lat >= ?
+                    AND map_min_lon <= ? AND map_max_lon >= ?)
+              )
+            ORDER BY ts DESC
+        """, [req.activity_id] + user_params +
+             [seg_max_lat, seg_min_lat, seg_max_lon, seg_min_lon,
+              seg_max_lat, seg_min_lat, seg_max_lon, seg_min_lon]
+        ).fetchall()
 
 
     def max_dev_one_way(pts_a, pts_b):
