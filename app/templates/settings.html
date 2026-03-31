@@ -301,10 +301,25 @@ input[readonly]{color:#8e8e93;cursor:default}
     <div id="sharing-status" style="margin-top:.75rem;font-size:12px;color:#8e8e93"></div>
   </div>
 
+  <!-- ── App Preferences ──────────────────────────────────────────────────── -->
+  <div class="card">
+    <div class="card-header"><h2>App Preferences</h2></div>
+    <div style="display:flex;flex-direction:column;gap:.75rem;margin-top:.5rem">
+      <label style="display:flex;align-items:center;justify-content:space-between;cursor:pointer">
+        <div>
+          <div style="font-weight:500">Autoplay videos</div>
+          <div style="color:#8e8e93;font-size:12px">Start playing videos automatically when shown in the activity panel</div>
+        </div>
+        <input type="checkbox" id="pref-autoplay-videos" onchange="savePref('autoplay-videos', this.checked)"
+               style="width:18px;height:18px;accent-color:#f97316;cursor:pointer">
+      </label>
+    </div>
+  </div>
+
 </div><!-- /container -->
 
 <div style="text-align:center;padding:1.5rem 0 2rem;color:#636366;font-size:11px;letter-spacing:.04em">
-  Ascent v0.0.3
+  Ascent v0.1.2
 </div>
 
 
@@ -627,6 +642,17 @@ async function saveSharing() {
 }
 
 document.addEventListener('DOMContentLoaded', loadSharing);
+
+// ── App Preferences (localStorage) ──────────────────────────────────────────
+function savePref(key, value) {
+  localStorage.setItem('ascent-pref-' + key, value ? '1' : '0');
+}
+function loadPrefs() {
+  const autoplay = localStorage.getItem('ascent-pref-autoplay-videos');
+  // Default ON if never set
+  document.getElementById('pref-autoplay-videos').checked = autoplay !== '0';
+}
+document.addEventListener('DOMContentLoaded', loadPrefs);
 </script>
 </body>
 </html>

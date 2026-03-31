@@ -132,6 +132,142 @@ async def fetch_points_from_strava(activity_id: int, request: Request):
     count = db.store_points(activity_id, point_rows_raw)
 
     return {"status": "ok", "points_stored": count, "activity_id": activity_id}
+
+
+@router.post("/activities/{activity_id}/resync")
+async def resync_activity(activity_id: int, request: Request):
+    """
+    Re-fetch full activity metadata + photos/videos from Strava and update the DB.
+    Returns the refreshed activity dict (same shape as the activity list).
+    """
+    import sqlite3, time, httpx
+    from app.strava_importer import (
+        build_attributes_json, _decode_polyline_bbox,
+        iso_to_unix, parse_tz_name, parse_tz_offset,
+        _f, M_TO_MI, M_TO_FT, MPS_TO_MPH,
+    )
+    from app.routers.strava import load_tokens, tokens_are_fresh, refresh_tokens
+    from app.routers.photos import resolve_photos
+
+    db = db_getter()
+    act = db.get_activity(activity_id)
+    if not act:
+        raise HTTPException(404, "Activity not found")
+
+    strava_id = act.get("strava_activity_id")
+    if not strava_id:
+        raise HTTPException(400, "Activity has no Strava ID")
+
+    uid    = get_session_user_id(request)
+    tokens = load_tokens(user_id=uid)
+    if not tokens.get("refresh_token"):
+        raise HTTPException(401, "Not connected to Strava")
+    if not tokens_are_fresh(tokens):
+        tokens = await refresh_tokens(tokens, user_id=uid)
+    token = tokens["access_token"]
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.get(
+            f"https://www.strava.com/api/v3/activities/{strava_id}",
+            headers={"Authorization": f"Bearer {token}"},
+            params={"include_all_efforts": "false"},
+        )
+        if resp.status_code == 404:
+            raise HTTPException(404, "Activity not found on Strava")
+        if resp.status_code == 401:
+            raise HTTPException(401, "Strava token invalid — reconnect Strava")
+        resp.raise_for_status()
+        sa = resp.json()
+
+    # Build updated fields using the same logic as insert_activity_summary
+    attrs_json      = build_attributes_json(sa)
+    dist_mi         = _f(sa.get("distance"), 0) * M_TO_MI
+    start_unix      = iso_to_unix(sa.get("start_date"))
+    src_max_speed   = _f(sa.get("max_speed"),    0) * MPS_TO_MPH
+    src_avg_hr      = _f(sa.get("average_heartrate"))
+    src_max_hr      = _f(sa.get("max_heartrate"))
+    src_avg_temp_f  = (_f(sa.get("average_temp"), 0) * 9/5 + 32) \
+                      if sa.get("average_temp") is not None else None
+    src_max_elev_ft = _f(sa.get("elev_high"), 0) * M_TO_FT
+    src_min_elev_ft = _f(sa.get("elev_low"),  0) * M_TO_FT
+    src_avg_power   = _f(sa.get("weighted_average_watts") or sa.get("average_watts"))
+    src_max_power   = _f(sa.get("max_watts"))
+    src_avg_cad     = _f(sa.get("average_cadence"))
+    src_total_climb = _f(sa.get("total_elevation_gain"), 0) * M_TO_FT
+    src_kj          = _f(sa.get("kilojoules"))
+    src_elapsed     = _f(sa.get("elapsed_time"))
+    src_moving      = _f(sa.get("moving_time"))
+
+    start_latlng = sa.get("start_latlng") or []
+    start_lat = float(start_latlng[0]) if len(start_latlng) >= 2 else None
+    start_lon = float(start_latlng[1]) if len(start_latlng) >= 2 else None
+
+    polyline = (sa.get("map") or {}).get("summary_polyline") or ""
+    bbox = _decode_polyline_bbox(polyline)
+    map_min_lat, map_max_lat, map_min_lon, map_max_lon = bbox if bbox else (None, None, None, None)
+
+    db_path = os.environ.get("ASCENT_DB_PATH", "")
+    con = sqlite3.connect(db_path, timeout=30)
+    try:
+        con.execute("""
+            UPDATE activities SET
+                name                    = ?,
+                creation_time_s         = COALESCE(creation_time_s, ?),
+                distance_mi             = ?,
+                attributes_json         = ?,
+                src_distance            = ?,
+                src_max_speed           = ?,
+                src_avg_heartrate       = ?,
+                src_max_heartrate       = ?,
+                src_avg_temperature     = ?,
+                src_max_elevation       = ?,
+                src_min_elevation       = ?,
+                src_avg_power           = ?,
+                src_max_power           = ?,
+                src_avg_cadence         = ?,
+                src_total_climb         = ?,
+                src_kilojoules          = ?,
+                src_elapsed_time_s      = ?,
+                src_moving_time_s       = ?,
+                time_zone               = ?,
+                seconds_from_gmt_at_sync= ?,
+                start_lat               = ?,
+                start_lon               = ?,
+                map_min_lat             = ?,
+                map_max_lat             = ?,
+                map_min_lon             = ?,
+                map_max_lon             = ?,
+                local_media_items_json  = NULL
+            WHERE id = ?
+        """, (
+            sa.get("name", ""),
+            start_unix,
+            dist_mi,
+            attrs_json,
+            dist_mi, src_max_speed,
+            src_avg_hr, src_max_hr,
+            src_avg_temp_f,
+            src_max_elev_ft, src_min_elev_ft,
+            src_avg_power, src_max_power,
+            src_avg_cad, src_total_climb,
+            src_kj, src_elapsed, src_moving,
+            parse_tz_name(sa), parse_tz_offset(sa),
+            start_lat, start_lon,
+            map_min_lat, map_max_lat, map_min_lon, map_max_lon,
+            activity_id,
+        ))
+        con.commit()
+    finally:
+        con.close()
+
+    # Re-fetch photos and videos from Strava (local_media_items_json was cleared above)
+    await resolve_photos(activity_id)
+
+    # Return the refreshed activity in the same shape the frontend expects
+    updated = db.get_activity(activity_id)
+    return updated
+
+
 # ── SEGMENT COMPARE ──────────────────────────────────────────────────────────
 
 class SegmentRequest(BaseModel):

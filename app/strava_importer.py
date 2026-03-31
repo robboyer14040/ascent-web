@@ -337,10 +337,11 @@ async def download_activity_photos(
         if not url:
             continue
 
-        uid      = photo.get("unique_id") or photo.get("id") or i
-        ext      = ".jpg"
-        if ".png"  in url.lower(): ext = ".png"
-        elif ".webp" in url.lower(): ext = ".webp"
+        uid = photo.get("unique_id") or photo.get("id") or i
+        ext = ".jpg"
+        for e in [".mp4", ".mov", ".m4v", ".webm", ".png", ".webp", ".heic"]:
+            if e in url.lower():
+                ext = e; break
         filename = f"{uid}{ext}"
         dest     = photos_dir / filename
 
