@@ -630,6 +630,9 @@ async def segment_compare(req: SegmentRequest, request: Request):
         return max_d
 
     matches = []
+    # Explicit candidate_ids: user chose specific activities — use lenient matching
+    # (just find closest start/end, no deviation or tolerance checks).
+    use_lenient = bool(req.candidate_ids)
 
     for row in candidates:
         act_id      = row[0]
@@ -681,66 +684,87 @@ async def segment_compare(req: SegmentRequest, request: Request):
         if len(pts) < 2:
             continue
 
-        # Faithful port of findTracks / findShortestTracks from AscentPathFinder.m
-        # Uses same tolerances, same checks, same order.
+        cos_lat = math.cos(math.radians(start_lat))
 
-        cos_lat   = math.cos(math.radians(start_lat))
-        tol_deg_sq = (start_tol_km / 111.0) ** 2
+        if use_lenient:
+            # Lenient: trust the user's selection — just find closest start/end points.
+            # No tolerance threshold, no deviation check, no length window.
+            best_i, best_dsq = 0, float("inf")
+            for i, p in enumerate(pts):
+                d2 = (p["lat"]-start_lat)**2 + ((p["lon"]-start_lon)*cos_lat)**2
+                if d2 < best_dsq:
+                    best_dsq, best_i = d2, i
+            si2 = best_i
 
-        # a. FindPointIndexNearLocation — find closest point to segment start within tolerance
-        best_i, best_dsq = -1, float("inf")
-        for i, p in enumerate(pts):
-            d2 = (p["lat"]-start_lat)**2 + ((p["lon"]-start_lon)*cos_lat)**2
-            if d2 < best_dsq:
-                best_dsq, best_i = d2, i
-        if best_i < 0 or best_dsq > tol_deg_sq:
-            continue
-        si2 = best_i
+            best_j, best_dsq2 = si2 + 1, float("inf")
+            for j in range(si2 + 1, len(pts)):
+                d2 = (pts[j]["lat"]-end_lat)**2 + ((pts[j]["lon"]-end_lon)*cos_lat)**2
+                if d2 < best_dsq2:
+                    best_dsq2, best_j = d2, j
+            ei2 = best_j
 
-        # Quick sanity check: does the track get close to end coords within 1.5× length?
-        # If not, this is a false start (different part of route near start coords).
-        max_walk = ref_length_km * 1.5
-        accum_q = 0.0
-        min_end_q = float("inf")
-        for _q in range(si2, min(si2 + 5000, len(pts) - 1)):
-            accum_q += haversine_km(pts[_q]["lat"], pts[_q]["lon"], pts[_q+1]["lat"], pts[_q+1]["lon"])
-            d_q = haversine_km(pts[_q+1]["lat"], pts[_q+1]["lon"], end_lat, end_lon)
-            if d_q < min_end_q:
-                min_end_q = d_q
-            if accum_q > max_walk:
-                break
-        if min_end_q > max_dev_km * 3:
-            continue
+            if ei2 <= si2:
+                continue
+        else:
+            # Faithful port of findTracks / findShortestTracks from AscentPathFinder.m
+            # Uses same tolerances, same checks, same order.
+            tol_deg_sq = (start_tol_km / 111.0) ** 2
 
-        # b. Walk forward from si2 accumulating distance to find end index
-        ei2 = find_segment_end(pts, si2, ref_length_km, tol_km, end_lat, end_lon)
-        if ei2 < 0 or ei2 <= si2:
-            continue
+            # a. FindPointIndexNearLocation — find closest point to segment start within tolerance
+            best_i, best_dsq = -1, float("inf")
+            for i, p in enumerate(pts):
+                d2 = (p["lat"]-start_lat)**2 + ((p["lon"]-start_lon)*cos_lat)**2
+                if d2 < best_dsq:
+                    best_dsq, best_i = d2, i
+            if best_i < 0 or best_dsq > tol_deg_sq:
+                continue
+            si2 = best_i
 
-        # c. Length check (mirrors ObjC TrackSegmentLength comparison)
-        cand_len_km = seg_length_km(pts, si2, ei2)
-        if cand_len_km < min_length_km or cand_len_km > max_length_km:
-            continue
+            # Quick sanity check: does the track get close to end coords within 1.5× length?
+            max_walk = ref_length_km * 1.5
+            accum_q = 0.0
+            min_end_q = float("inf")
+            for _q in range(si2, min(si2 + 5000, len(pts) - 1)):
+                accum_q += haversine_km(pts[_q]["lat"], pts[_q]["lon"], pts[_q+1]["lat"], pts[_q+1]["lon"])
+                d_q = haversine_km(pts[_q+1]["lat"], pts[_q+1]["lon"], end_lat, end_lon)
+                if d_q < min_end_q:
+                    min_end_q = d_q
+                if accum_q > max_walk:
+                    break
+            if min_end_q > max_dev_km * 3:
+                continue
 
-        # d. isSegment:similarTo: — bidirectional max-deviation check
-        # Subsample both to ≤300 pts for speed; strict max (not p90) matching ObjC
-        step_a = max(1, (ei  - si)  // 300)
-        step_b = max(1, (ei2 - si2) // 300)
-        ref_sub  = ref_pts[si:ei+1:step_a]
-        cand_sub = pts[si2:ei2+1:step_b]
+            # b. Walk forward from si2 accumulating distance to find end index
+            ei2 = find_segment_end(pts, si2, ref_length_km, tol_km, end_lat, end_lon)
+            if ei2 < 0 or ei2 <= si2:
+                continue
 
-        d_a2b = max_dev_one_way(ref_sub,  cand_sub)
-        if d_a2b > max_dev_km:
-            continue
-        d_b2a = max_dev_one_way(cand_sub, ref_sub)
-        if d_b2a > max_dev_km:
-            continue
+            # c. Length check
+            cand_len_km = seg_length_km(pts, si2, ei2)
+            if cand_len_km < min_length_km or cand_len_km > max_length_km:
+                continue
+
+            # d. isSegment:similarTo: — bidirectional max-deviation check
+            step_a = max(1, (ei  - si)  // 300)
+            step_b = max(1, (ei2 - si2) // 300)
+            ref_sub  = ref_pts[si:ei+1:step_a]
+            cand_sub = pts[si2:ei2+1:step_b]
+
+            d_a2b = max_dev_one_way(ref_sub,  cand_sub)
+            if d_a2b > max_dev_km:
+                continue
+            d_b2a = max_dev_one_way(cand_sub, ref_sub)
+            if d_b2a > max_dev_km:
+                continue
 
         m = build_match(act_id, act_name, act_ts, pts, si2, ei2, user_id=act_user_id)
         if m:
             matches.append(m)
 
-    if not matches and len([ref_match]) < 2:
+    if not matches:
+        if use_lenient:
+            # Return just the reference; frontend will show candidates as "missing"
+            return {"matches": [ref_match], "segment_name": ""}
         raise HTTPException(404,
             "No other activities found passing through this segment. "
             "Try a shorter or more common segment, or sync more activities.")
