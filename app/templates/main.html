@@ -150,7 +150,7 @@ input,select{font:inherit}
 
 /* right panel */
 #detail{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
-#map-wrap{flex:none;height:45%;position:relative;background:#111;min-height:60px}
+#map-wrap{flex:1;position:relative;background:#111;min-height:60px}
 #map{width:100%;height:100%}
 .map-placeholder{display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-size:13px;}
 .drag-handle{
@@ -165,12 +165,20 @@ input,select{font:inherit}
   width:30px;height:2px;border-radius:1px;
   background:var(--muted2);pointer-events:none;
 }
+.drag-handle-v{
+  height:auto;width:5px;cursor:col-resize;
+  border-top:none;border-bottom:none;
+  border-left:1px solid var(--border);border-right:1px solid var(--border);
+}
+.drag-handle-v::after{width:2px;height:30px}
 .map-badge{position:absolute;bottom:8px;left:8px;z-index:500;background:rgba(0,0,0,.7);color:#fff;border-radius:5px;padding:3px 8px;font-size:11px;backdrop-filter:blur(4px);}
 .map-style-btn{background:rgba(0,0,0,.6);color:#ccc;border:1px solid rgba(255,255,255,.15);border-radius:4px;padding:2px 7px;font-size:11px;cursor:pointer;backdrop-filter:blur(4px);transition:all .15s}
 .map-style-btn:hover{background:rgba(0,0,0,.8);color:#fff}
 .map-style-btn.active{background:#f97316;color:#fff;border-color:#f97316}
 
-#chart-wrap{flex:none;height:200px;background:var(--bg);position:relative;overflow:hidden;min-height:40px;display:flex;flex-direction:column}
+#chart-wrap{flex:none;height:200px;background:var(--bg);position:relative;overflow:hidden;min-height:28px;display:flex;flex-direction:column;transition:height .2s ease}
+#chart-toolbar{flex:none;display:none;align-items:center;justify-content:flex-end;gap:6px;padding:2px 112px 0 8px;background:var(--bg)}
+#chart-toolbar.visible{display:flex}
 #elev-canvas-area{flex:1;position:relative;min-height:0;overflow:hidden}
 #elev-zoom-bar{
   flex-shrink:0;display:none;align-items:center;gap:6px;
@@ -186,32 +194,48 @@ input,select{font:inherit}
 #elevChart{width:100%!important;height:100%!important;display:block}
 .chart-label{display:none}
 
-#info-panel{flex:1;border-top:none;display:flex;overflow:hidden;min-height:60px}
+#info-panel{flex:none;height:200px;display:flex;flex-direction:column;overflow:hidden;transition:height .2s ease}
+#stats-titlebar{flex:none;height:28px;display:flex;align-items:center;padding:0 6px 0 12px;background:var(--surface2);border-bottom:1px solid var(--border);user-select:none;-webkit-user-select:none;cursor:row-resize;touch-action:none}
+#stats-title-label{flex:1;font-size:10px;font-weight:700;letter-spacing:.08em;color:var(--muted);text-transform:uppercase}
+#stats-disclose{background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;padding:0 8px;line-height:1;display:flex;align-items:center;height:28px;flex-shrink:0}
+#stats-disclose .arr{display:inline-block;transform:scale(2.25);transform-origin:center;transition:transform .2s}
+#stats-disclose.collapsed .arr{transform:scale(2.25) rotate(-90deg)}
+.stats-content{flex:1;display:flex;overflow:hidden;min-height:0}
+#analysis-titlebar{flex:none;height:28px;display:flex;align-items:center;padding:0 6px 0 12px;background:var(--surface2);border-bottom:1px solid var(--border);user-select:none;-webkit-user-select:none;cursor:row-resize;touch-action:none}
+#analysis-title-label{flex:1;font-size:10px;font-weight:700;letter-spacing:.08em;color:var(--muted);text-transform:uppercase}
+#analysis-disclose{background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;padding:0 8px;line-height:1;display:flex;align-items:center;height:28px;flex-shrink:0}
+#analysis-disclose .arr{display:inline-block;transform:scale(2.25);transform-origin:center;transition:transform .2s}
+#analysis-disclose.collapsed .arr{transform:scale(2.25) rotate(-90deg)}
 #info-left{flex:1;padding:12px 14px 60px 14px;overflow-y:auto;min-width:0;scrollbar-width:thin;scrollbar-color:var(--border2) transparent}
 #info-left::-webkit-scrollbar{width:5px}
 #info-left::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
-#info-right{width:220px;flex-shrink:0;border-left:1px solid var(--border);overflow:hidden;background:#000;}
+#wx-panel{display:none;flex-direction:column;gap:6px;flex:1;min-width:0}
+.wx-chip{background:var(--surface2);border:1px solid var(--border2);border-radius:7px;padding:5px 10px;display:flex;flex-direction:column;align-items:center;width:100%;box-sizing:border-box}
+.wx-scroll-val{font-size:14px;font-weight:600;white-space:normal;word-break:break-word;text-align:center;width:100%}
+#info-right{width:220px;flex-shrink:0;overflow:hidden;background:#000;}
 #info-photo{width:100%;height:100%;object-fit:cover;display:none}
 .photo-placeholder{display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted2);font-size:12px;}
 
 .act-title-bar{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px}
 .act-title{font-size:15px;font-weight:600;line-height:1.3}
 .act-title-links{display:flex;gap:6px;flex-shrink:0;margin-left:8px;margin-top:2px}
-.act-title-links a{font-size:11px;color:var(--muted);border:1px solid var(--border2);border-radius:4px;padding:2px 7px}
-.act-title-links a:hover{color:var(--text);border-color:var(--text)}
+.act-title-links a{font-size:11px;font-weight:600;color:var(--text);border:1px solid var(--border2);border-radius:4px;padding:3.5px 8px}
+.act-title-links a:hover{color:#f97316;border-color:#f97316}
 .act-title-links a.strava{color:#fc4c02;border-color:rgba(252,76,2,.4)}
-.resync-btn{font-size:11px;color:var(--muted);border:1px solid var(--border2);border-radius:4px;padding:2px 7px;background:none;cursor:pointer;line-height:1.4;transition:color .15s,border-color .15s}
-.resync-btn:hover{color:var(--text);border-color:var(--text)}
+.resync-btn{font-size:11px;font-weight:600;color:var(--text);border:1px solid var(--border2);border-radius:4px;padding:3.5px 8px;background:none;cursor:pointer;line-height:1.4;transition:color .15s,border-color .15s}
+.resync-btn:hover{color:#f97316;border-color:#f97316}
 .resync-btn:disabled{opacity:.4;cursor:default}
 @keyframes spin{to{transform:rotate(360deg)}}
 .resync-btn.spinning .resync-icon{display:inline-block;animation:spin .7s linear infinite}
-.zones-btn{font-size:11px;color:var(--muted);border:1px solid var(--border2);border-radius:4px;padding:2px 7px;background:none;cursor:pointer}
-.zones-btn:hover{color:var(--text);border-color:var(--text)}
+.zones-btn{font-size:11px;font-weight:600;color:var(--text);border:1px solid var(--border2);border-radius:4px;padding:3.5px 8px;background:none;cursor:pointer;margin:0;line-height:1.4}
+.zones-btn:hover{color:#f97316;border-color:#f97316}
 
 .stats-row{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
-.stat-chip{background:var(--surface2);border:1px solid var(--border2);border-radius:7px;padding:5px 10px;display:flex;flex-direction:column;align-items:center;min-width:70px;}
+.stats-grid{display:grid;grid-template-columns:repeat(6,80px);gap:6px;align-content:start;flex-shrink:0}
+.stat-chip{background:var(--surface2);border:1px solid var(--border2);border-radius:7px;padding:5px 4px;display:flex;flex-direction:column;align-items:center;}
 .sc-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:1px}
 .sc-val{font-size:14px;font-weight:600;font-variant-numeric:tabular-nums}
+.sc-sub{font-size:10px;color:var(--muted);margin-top:2px;min-height:1.2em;font-variant-numeric:tabular-nums}
 
 .meta-row{display:flex;gap:12px;margin-bottom:8px;flex-wrap:wrap}
 .meta-field{display:flex;flex-direction:column;gap:1px;min-width:100px}
@@ -555,7 +579,7 @@ input,select{font:inherit}
 
 /* ── Transport bar ───────────────────────────────────────────────────────── */
 #transport-bar{
-  display:none;flex:none;flex-shrink:0;
+  display:flex;flex:none;flex-shrink:0;
   background:#1a1a1c;border-top:1px solid var(--border);
   padding:6px 12px calc(6px + env(safe-area-inset-bottom)) 12px;gap:10px;align-items:center;
 }
@@ -615,7 +639,7 @@ input,select{font:inherit}
 <body>
 
 <div id="toolbar">
-  <span class="tb-title">⛰ Ascent <span style="font-size:10px;font-weight:400;color:var(--muted);letter-spacing:.02em">v0.1.29</span></span><span id="viewing-user-badge" onclick="openUserPicker()" title="Switch user" style="margin-left:8px;font-size:11px;font-weight:500;color:#f97316;cursor:pointer;padding:2px 7px;border:1px solid #f97316;border-radius:10px;opacity:.85;user-select:none"></span>
+  <span class="tb-title">⛰ Ascent <span style="font-size:10px;font-weight:400;color:var(--muted);letter-spacing:.02em">{{ app_version }}</span></span><span id="viewing-user-badge" onclick="openUserPicker()" title="Switch user" style="margin-left:8px;font-size:11px;font-weight:500;color:#f97316;cursor:pointer;padding:2px 7px;border:1px solid #f97316;border-radius:10px;opacity:.85;user-select:none"></span>
   <div style="flex:1"></div>
   <div class="tb-search">
     <span class="tb-icon">⌕</span>
@@ -682,12 +706,19 @@ input,select{font:inherit}
         <button class="map-style-btn"        data-style="esri-sat"    onclick="setMapStyle('esri-sat')">Satellite</button>
       </div>
     </div>
-    <div class="drag-handle" id="drag-map-info" title="Drag to resize"></div>
-    <div id="info-panel">
+  </div>
+  </div><!-- #top-row -->
+  <div id="info-panel">
+      <div id="stats-titlebar">
+        <span id="stats-title-label">Info</span>
+        <button id="stats-disclose" onclick="toggleStats()" title="Collapse/expand stats"><span class="arr">▾</span></button>
+      </div>
+      <div class="stats-content">
       <div id="info-left">
         <div id="no-selection"><span class="placeholder-icon">🏔</span><span>Select an activity</span></div>
         <div id="act-detail" style="display:none"></div>
       </div>
+      <div id="photo-drag-handle" class="drag-handle drag-handle-v"></div>
       <div id="info-right">
         <div id="photo-panel" style="width:100%;height:100%;position:relative;background:#111;display:flex;align-items:center;justify-content:center;cursor:pointer" onclick="photoClick()">
           <div id="photo-placeholder" style="color:#636366;font-size:12px">No photo</div>
@@ -700,6 +731,7 @@ input,select{font:inherit}
           </div>
         </div>
       </div>
+      </div><!-- .stats-content -->
 
       <!-- User picker dialog -->
       <div id="user-picker-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9998;align-items:center;justify-content:center" onclick="if(event.target===this)closeUserPicker()">
@@ -721,17 +753,19 @@ input,select{font:inherit}
         </div>
         <div style="color:#666;font-size:11px;margin-top:6px">Press Esc or click background to close · ← → to navigate</div>
       </div>
-    </div>
   </div>
-  </div><!-- #top-row -->
-  <div class="drag-handle" id="drag-bottom-chart" title="Drag to resize chart"></div>
   <div id="chart-wrap">
-      <div id="chart-titlebar" style="position:absolute;top:0;left:0;right:0;height:20px;z-index:5;display:flex;align-items:center;justify-content:flex-end;padding:0 6px;pointer-events:none">
-        <button class="sp-tb-btn" onclick="elevZoomStep(-1)" title="Zoom out" style="pointer-events:all;font-size:13px;padding:1px 6px;line-height:1.4">−</button>
-        <button class="sp-tb-btn" onclick="elevZoomStep(1)" title="Zoom in" style="pointer-events:all;font-size:13px;padding:1px 6px;line-height:1.4">+</button>
-        <button class="sp-tb-btn" onclick="toggleChartSettings(event)" title="Chart overlays" style="pointer-events:all;font-size:20px;padding:2px 6px;line-height:1;user-select:none;-webkit-user-select:none;touch-action:manipulation">⚙</button>
+      <div id="analysis-titlebar">
+        <span id="analysis-title-label">Analysis</span>
+        <button class="sp-tb-btn" onclick="elevZoomStep(-1)" title="Zoom out" style="font-size:13px;padding:1px 6px;line-height:1.4;pointer-events:all">−</button>
+        <button class="sp-tb-btn" onclick="elevZoomStep(1)" title="Zoom in" style="font-size:13px;padding:1px 6px;line-height:1.4;pointer-events:all">+</button>
+        <button class="sp-tb-btn" onclick="toggleChartSettings(event)" title="Chart overlays" style="font-size:20px;padding:2px 6px;line-height:1;user-select:none;-webkit-user-select:none;touch-action:manipulation;pointer-events:all">⚙</button>
+        <button id="analysis-disclose" onclick="toggleAnalysis()" title="Collapse/expand analysis"><span class="arr">▾</span></button>
       </div>
-      <div id="chart-settings" style="display:none;position:absolute;top:20px;right:4px;z-index:20;background:var(--surface);border:1px solid var(--border2);border-radius:8px;padding:8px 10px;box-shadow:0 4px 16px rgba(0,0,0,.5)">
+      <div id="chart-toolbar">
+        <button class="zones-btn" id="compare-btn" onclick="openCompare()" style="margin-top:2px">Compare…</button>
+      </div>
+      <div id="chart-settings" style="display:none;position:absolute;top:28px;right:4px;z-index:20;background:var(--surface);border:1px solid var(--border2);border-radius:8px;padding:8px 10px;box-shadow:0 4px 16px rgba(0,0,0,.5)">
         <div style="display:flex;gap:14px;align-items:flex-start">
           <!-- Overlay column -->
           <div style="min-width:120px">
@@ -814,11 +848,9 @@ input,select{font:inherit}
   <div id="transport-bar">
   <div class="tb-transport">
     <button class="t-btn" id="t-start" onclick="animJump(0)"       title="Go to start">⏮</button>
-    <button class="t-btn" id="t-rew"   onclick="animSetSpeed(-4)"  title="Reverse fast">⏪</button>
     <button class="t-btn" id="t-rev"   onclick="animSetSpeed(-1)"  title="Reverse">◀</button>
     <button class="t-btn" id="t-stop"  onclick="animStop()"        title="Stop">⏹</button>
     <button class="t-btn" id="t-play"  onclick="animPlay()"        title="Play">▶</button>
-    <button class="t-btn" id="t-fwd"   onclick="animSetSpeed(2)"   title="Fast forward">⏩</button>
     <button class="t-btn" id="t-end"   onclick="animJump(1)"       title="Go to end">⏭</button>
   </div>
   <span id="t-time">0:00:00</span>
@@ -1290,13 +1322,6 @@ function drawTrack(geojson) {
 // Draw a simple estimated profile from summary stats (min/max elevation + climb)
 async function drawElevationFromSummary(act, version) {
   const ctx = document.getElementById('elevChart');
-  if (elevChart){elevChart.destroy();elevChart=null;}
-
-  // Wait until canvas has non-zero dimensions
-  for (let i = 0; i < 20; i++) {
-    if (ctx.offsetHeight > 0 && ctx.offsetWidth > 0) break;
-    await new Promise(r => setTimeout(r, 25));
-  }
   if (version !== undefined && version !== elevRenderVersion) return; // stale
 
   const maxAlt = act.max_altitude_ft || act.src_max_elevation;
@@ -1362,6 +1387,7 @@ async function drawElevationFromSummary(act, version) {
     }
   };
 
+  if (elevChart){elevChart.destroy();elevChart=null;}
   elevChart = new Chart(ctx, {
     type:'line',
     data:{labels,datasets:[{data:vals,fill:true,borderColor:'#64748b',backgroundColor:'rgba(100,116,139,.3)',borderWidth:1.5,pointRadius:0,tension:.4,borderDash:[4,3]}]},
@@ -1545,13 +1571,6 @@ async function drawElevation(data, version) {
   const label = document.querySelector('.chart-label');
   if (label) label.textContent = 'Elevation';
   const ctx = document.getElementById('elevChart');
-  if (elevChart) { elevChart.destroy(); elevChart = null; }
-
-  // Wait until canvas has non-zero dimensions (up to 500ms)
-  for (let i = 0; i < 20; i++) {
-    if (ctx.offsetHeight > 0 && ctx.offsetWidth > 0) break;
-    await new Promise(r => setTimeout(r, 25));
-  }
   if (version !== undefined && version !== elevRenderVersion) return; // stale
 
   elevChartData = data;
@@ -1633,6 +1652,28 @@ async function drawElevation(data, version) {
     }
   ];
 
+  const elevMax = Math.max(...points.map(p => p.y));
+
+  // Clamp a scale to dataMax: remove the top auto-tick if it would be too crowded
+  // (gap < 50% of the tick interval), keeping the axis ceiling at the real data max.
+  function clampAxis(dataMax) {
+    return {
+      max: dataMax,
+      afterBuildTicks(axis) {
+        const t = axis.ticks;
+        if (t.length < 2) return;
+        const interval = t[1].value - t[0].value;
+        const gap = dataMax - t[t.length - 1].value;
+        // If the last auto-tick is already at or very near dataMax, keep it
+        if (gap < interval * 0.1) return;
+        // If there's enough room (≥50% of interval), add the actual max as top tick
+        if (gap >= interval * 0.5) { t.push({ value: dataMax }); return; }
+        // Otherwise gap is too tight — drop the last auto-tick so nothing overlaps
+        t.pop();
+      },
+    };
+  }
+
   const scales = {
     x: {
       type: 'linear', display: true, min: 0, max: totalMi,
@@ -1640,7 +1681,9 @@ async function drawElevation(data, version) {
       grid: { color: 'rgba(255,255,255,.04)' },
     },
     yElev: {
-      position: 'left', ticks: { color: '#64748b', font: { size: 9 }, maxTicksLimit: 5, callback: v => `${U.alt(v)}${U.altUnit()}` },
+      position: 'left',
+      ...clampAxis(elevMax),
+      ticks: { color: '#64748b', font: { size: 9 }, maxTicksLimit: 5, callback: v => `${U.alt(v)}${U.altUnit()}` },
       grid: { color: 'rgba(255,255,255,.06)' },
     },
   };
@@ -1658,8 +1701,10 @@ async function drawElevation(data, version) {
         borderWidth: 1.5, pointRadius: 0, tension: 0.3, order: 2,
         yAxisID: 'yLeft',
       });
+      const o1max = Math.max(...o1pts.map(p => p.y));
       scales.yLeft = {
         position: 'left', offset: true,
+        ...clampAxis(o1max),
         ticks: { color: c1, font: { size: 9 }, maxTicksLimit: 5, callback: v => `${v}` },
         grid: { display: false },
         title: { display: true, text: overlayUnits[o1key], color: c1, font: { size: 9 } },
@@ -1695,7 +1740,7 @@ async function drawElevation(data, version) {
         scales.yRight = {
           position: 'right',
           suggestedMin: 0,
-          suggestedMax: _maxV > 0 ? _maxV * 1.15 : 1,
+          ...(_maxV > 0 ? clampAxis(_maxV) : {}),
           ticks: {
             color: _splitAxisColor, font: { size: 9 }, maxTicksLimit: 5,
             callback: v => {
@@ -1801,13 +1846,14 @@ async function drawElevation(data, version) {
     }
   };
 
+  if (elevChart) { elevChart.destroy(); elevChart = null; }
   elevChart = new Chart(ctx, {
     type: 'line',
     data: { datasets },
     plugins: [peakPlugin, ...(splitsPlugin ? [splitsPlugin] : [])],
     options: {
       responsive: true, maintainAspectRatio: false, animation: false,
-      layout: { padding: { top: peakList.length ? 42 : 4, bottom: 2, right: 2 } },
+      layout: { padding: { top: peakList.length ? 42 : 2, bottom: 2, right: 2 } },
       plugins: {
         legend: { display: false },
         tooltip: {
@@ -2266,6 +2312,8 @@ function deleteSelected() {
       state.selectedId = null;
       document.getElementById('act-detail').style.display = 'none';
       document.getElementById('no-selection').style.display = 'flex';
+      const _wxp = document.getElementById('wx-panel'); if (_wxp) _wxp.style.display = 'none';
+      const _ctb = document.getElementById('chart-toolbar'); if (_ctb) _ctb.classList.remove('visible');
       clearMap();
     }
     applyFilterAndSort();
@@ -2287,6 +2335,7 @@ async function selectActivity(id) {
   const det=document.getElementById('act-detail');
   det.style.display='block';
   det.innerHTML='<div style="color:var(--muted);padding:.5rem">Loading…</div>';
+  const _ctb = document.getElementById('chart-toolbar'); if (_ctb) _ctb.classList.add('visible');
   document.getElementById('mapPlaceholder').style.display='flex';
   clearMap();
 
@@ -2322,7 +2371,7 @@ async function selectActivity(id) {
     const type = (act.activity_type || '').toLowerCase();
     const isIndoor = type.includes('zwift') || type.includes('virtual') || type.includes('indoor');
 
-    if (isIndoor) {
+    if (isIndoor && !act.strava_activity_id) {
       document.getElementById('mapPlaceholder').innerHTML = '🖥 Virtual / indoor activity';
       document.getElementById('mapPlaceholder').style.display = 'flex';
     } else if (act.strava_activity_id) {
@@ -2419,21 +2468,45 @@ function buildDetailHTML(a) {
   const resyncBtn = a.strava_activity_id
     ? `<button class="resync-btn" id="resync-btn" onclick="resyncActivity(${a.id})" title="Re-sync metadata from Strava"><span class="resync-icon">↻</span> Sync</button>`
     : '';
+
+  // pace string helper: mph → "M:SS/mi" or "M:SS/km"
+  function altPaceStr(mph, perMile) {
+    if (!mph || mph <= 0) return null;
+    const mins = perMile ? 60 / mph : 60 / (mph * 1.60934);
+    const m = Math.floor(mins);
+    const s = Math.round((mins - m) * 60);
+    return `${m}:${String(s).padStart(2,'0')}/${perMile ? 'mi' : 'km'}`;
+  }
+
+  // chips: [label, primaryVal, secondaryVal|null]
+  // secondaryVal is the alternate-unit line shown smaller below
   const chips = [
-    ['Distance',  a.distance_mi       ? U.distS(a.distance_mi)                                          : null],
-    ['MovTime',   a.active_time        ? fmtHMS(a.active_time)                                           : null],
-    ['Duration',  a.duration           ? fmtHMS(a.duration)                                              : null],
-    ['Climb',     a.total_climb_ft     ? U.climbS(a.total_climb_ft)                                      : null],
-    ['Descent',   a.total_descent_ft   ? U.climbS(a.total_descent_ft)                                    : null],
-    ['MovSpd',    a.avg_speed_mph      ? U.speedS(a.avg_speed_mph)                                       : null],
-    ['AvgSpd',    (a.duration&&a.distance_mi) ? U.speedS(+(a.distance_mi/(a.duration/3600)).toFixed(1))  : null],
-    ['Avg Pace',  a.avg_pace||null],
-    ['Avg HR',    a.avg_heartrate      ? Math.round(a.avg_heartrate)+' bpm'                              : null],
-    ['Max HR',    a.max_heartrate      ? Math.round(a.max_heartrate)+' bpm'                              : null],
-    ['Cadence',   a.avg_cadence        ? Math.round(a.avg_cadence)+' rpm'                                : null],
-    ['Power',     a.avg_power          ? Math.round(a.avg_power)+' W'                                    : null],
-    ['Calories',  a.calories           ? Math.round(a.calories)+''                                       : null],
-    ['Suffer',    a.suffer_score       ? Math.round(a.suffer_score)+''                                   : null],
+    ['Distance',  a.distance_mi       ? U.distS(a.distance_mi)                                         : null,
+                  a.distance_mi       ? (U.metric ? (+a.distance_mi.toFixed(2))+' mi'
+                                                  : (+(a.distance_mi*1.60934).toFixed(2))+' km') : null],
+    ['Mov Time',  a.active_time       ? fmtHMS(a.active_time)                                          : null, null],
+    ['Duration',  a.duration          ? fmtHMS(a.duration)                                             : null, null],
+    ['Climb',     a.total_climb_ft    ? U.climbS(a.total_climb_ft)                                     : null,
+                  a.total_climb_ft    ? (U.metric ? Math.round(a.total_climb_ft)+' ft'
+                                                  : Math.round(a.total_climb_ft*0.3048)+' m') : null],
+    ['Descent',   a.total_descent_ft  ? U.climbS(a.total_descent_ft)                                   : null,
+                  a.total_descent_ft  ? (U.metric ? Math.round(a.total_descent_ft)+' ft'
+                                                  : Math.round(a.total_descent_ft*0.3048)+' m') : null],
+    ['Mov Spd',   a.avg_speed_mph     ? U.speedS(a.avg_speed_mph)                                      : null,
+                  a.avg_speed_mph     ? (U.metric ? (+a.avg_speed_mph.toFixed(1))+' mph'
+                                                  : (+(a.avg_speed_mph*1.60934).toFixed(1))+' km/h') : null],
+    ['Avg Spd',   (a.duration&&a.distance_mi) ? U.speedS(+(a.distance_mi/(a.duration/3600)).toFixed(1)) : null,
+                  (a.duration&&a.distance_mi) ? (()=>{ const mph=+(a.distance_mi/(a.duration/3600)).toFixed(1);
+                                                        return U.metric ? mph+' mph' : (+(mph*1.60934).toFixed(1))+' km/h'; })() : null],
+    ['Avg Pace',  a.avg_speed_mph     ? altPaceStr(a.avg_speed_mph, !U.metric)                         : null,
+                  a.avg_speed_mph     ? altPaceStr(a.avg_speed_mph,  U.metric)                         : null],
+    ['Avg HR',    a.avg_heartrate     ? Math.round(a.avg_heartrate)+' bpm'                             : null, null],
+    ['Max HR',    a.max_heartrate     ? Math.round(a.max_heartrate)+' bpm'                             : null, null],
+    ['Cadence',   a.avg_cadence       ? Math.round(a.avg_cadence)+' rpm'                               : null, null],
+    ['Avg Pwr',   a.avg_power         ? Math.round(a.avg_power)+' W'                                   : null, null],
+    ['Suffer',    a.suffer_score      ? Math.round(a.suffer_score)+''                                  : null, null],
+    ['Type',      a.activity_type    ? escHtml(a.activity_type)                                        : null, null],
+    ['Equipment', a.equipment        ? escHtml(a.equipment)                                            : null, null],
   ].filter(([,v])=>v);
 
   const meta = [
@@ -2444,17 +2517,15 @@ function buildDetailHTML(a) {
   return `
     <div class="act-title-bar">
       <div class="act-title">${escHtml(a.name||'(unnamed)')}</div>
-      <div class="act-title-links"><button class="zones-btn" id="compare-btn" onclick="openCompare()">Compare…</button><button class="zones-btn" onclick="openZones()">Zones</button>${resyncBtn}${stravaLink}</div>
+      <div class="act-title-links"><button class="zones-btn" onclick="openZones()">Zones</button>${resyncBtn}${stravaLink}</div>
     </div>
-    <div style="font-size:11.5px;color:var(--muted);margin-bottom:10px">${fmtDate(a.start_time)}</div>
-    <div class="stats-row">${chips.map(([l,v])=>`<div class="stat-chip"><div class="sc-label">${l}</div><div class="sc-val">${v}</div></div>`).join('')}</div>
-    ${a.notes?`<div class="act-notes">${escHtml(a.notes)}</div>`:''}
-    <div id="wx-panel" style="display:none;font-size:12.5px;color:var(--text);line-height:1.6;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:10px;"></div>
-    <div class="meta-row" style="margin-top:4px">
-      ${a.activity_type?`<div class="meta-field"><div class="mf-label">Type</div><div class="mf-val">${escHtml(a.activity_type)}</div></div>`:''}
-      ${a.equipment?`<div class="meta-field"><div class="mf-label">Equipment</div><div class="mf-val">${escHtml(a.equipment)}</div></div>`:''}
-      ${meta.map(([l,v])=>`<div class="meta-field"><div class="mf-label">${l}</div><div class="mf-val">${escHtml(String(v))}</div></div>`).join('')}
+    <div style="font-size:11.5px;color:var(--muted);margin-bottom:8px">${fmtDate(a.start_time)}</div>
+    ${a.notes?`<div class="act-notes" style="margin-bottom:8px">${escHtml(a.notes)}</div>`:''}
+    <div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:8px;max-width:100%;overflow:hidden">
+      <div class="stats-grid">${chips.map(([l,v,sub])=>{const span=l==='Equipment'?Math.min(6,Math.max(1,Math.ceil(v.length/14))):1;const s=span>1?` style="grid-column:span ${span}"`:'';;return`<div class="stat-chip"${s}><div class="sc-label">${l}</div><div class="sc-val">${v}</div><div class="sc-sub">${sub||''}</div></div>`}).join('')}</div>
+      <div id="wx-panel"></div>
     </div>
+    ${meta.length?`<div class="meta-row" style="margin-top:4px">${meta.map(([l,v])=>`<div class="meta-field"><div class="mf-label">${l}</div><div class="mf-val">${escHtml(String(v))}</div></div>`).join('')}</div>`:''}
   `;
 }
 
@@ -2570,6 +2641,23 @@ addDrag(handle, 'x',
   () => { rsW = sidebar.offsetWidth; }
 );
 
+// Photo panel horizontal resize
+(function() {
+  const photoDragHandle = document.getElementById('photo-drag-handle');
+  const infoRight = document.getElementById('info-right');
+  if (!photoDragHandle || !infoRight) return;
+  let _startW = 0;
+  addDrag(photoDragHandle, 'x',
+    delta => {
+      // dragging left makes panel wider (delta is negative when dragging left)
+      const newW = Math.max(80, Math.min(window.innerWidth * 0.5, _startW - delta));
+      infoRight.style.width = newW + 'px';
+    },
+    () => { savePaneSizes({photoW: infoRight.offsetWidth}); },
+    () => { _startW = infoRight.getBoundingClientRect().width; }
+  );
+})();
+
 // ── KEYBOARD NAV ──────────────────────────────────────────────────────────────
 document.addEventListener('keydown',e=>{
   if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA') return;
@@ -2669,7 +2757,7 @@ function showPhoto(idx) {
   if (item.type === 'video' && item.hls_url) {
     img.style.display = 'none';
     vid.style.display = 'block';
-    const autoplay = localStorage.getItem('ascent-pref-autoplay-videos') !== '0';
+    const autoplay = cachedProfile?.autoplay_videos !== false;
     if (autoplay) _attachHls(vid, item.hls_url);
     else { vid.poster = item.url; }  // show thumbnail without playing
   } else {
@@ -2754,36 +2842,35 @@ document.addEventListener('DOMContentLoaded', () => {
 async function loadWeatherLocation(activityId) {
   const panel = document.getElementById('wx-panel');
   if (!panel) return;
-  panel.innerHTML = '<span style="color:var(--muted);font-size:11px">Fetching weather…</span>';
-  panel.style.display = 'block';
-  panel.style.display = 'flex';
-  panel.style.flexDirection = 'column';
+  panel.innerHTML = '';
+  panel.style.display = 'none';
 
   try {
     const r = await fetch(`/api/activities/${activityId}/weather-location`);
-    if (!r.ok) { panel.style.display = 'none'; return; }
+    if (!r.ok) return;
     const d = await r.json();
 
-    let html = '';
+    let chipsHtml = '';
     if (d.weather?.description) {
       const w = d.weather;
-      let wstr = `<strong>Weather</strong><br>${w.description}`;
       const details = [];
       if (w.avg_temp_f  != null) details.push(U.tempS(w.avg_temp_f));
       if (w.avg_wind_kph != null) details.push(`Wind ${Math.round(w.avg_wind_kph)} km/h`);
       if (w.avg_humidity != null) details.push(`${Math.round(w.avg_humidity)}% humidity`);
       if (w.precip_mm > 0)        details.push(`${w.precip_mm}mm precip`);
-      if (details.length) wstr += `<br><span style="color:var(--muted);font-size:11px">${details.join(' · ')}</span>`;
-      html += `<div style="margin-bottom:8px">${wstr}</div>`;
+      const wval = [w.description, ...details].join(' · ');
+      chipsHtml += `<div class="wx-chip"><div class="sc-label">Weather</div><div class="wx-scroll-val">${escHtml(wval)}</div><div class="sc-sub"></div></div>`;
     }
     if (d.locations) {
-      html += `<div><strong>Locations</strong><br>${d.locations}</div>`;
+      const locLabel = d.locations.includes(' → ') ? 'Trajectory' : 'Location';
+      chipsHtml += `<div class="wx-chip"><div class="sc-label">${locLabel}</div><div class="wx-scroll-val">${escHtml(d.locations)}</div><div class="sc-sub"></div></div>`;
     }
-    if (html) {
-      panel.innerHTML = html;
-      panel.style.display = 'block';
-    } else {
-      panel.style.display = 'none';
+    if (chipsHtml) {
+      panel.innerHTML = chipsHtml;
+      const chip = document.querySelector('.stat-chip');
+      if (chip && chip.offsetWidth > 0) panel.style.maxWidth = (chip.offsetWidth * 3 + 12) + 'px';
+      else panel.style.maxWidth = '';
+      panel.style.display = 'flex';
     }
   } catch(e) {
     panel.style.display = 'none';
@@ -2829,9 +2916,7 @@ function animInit(chartsData, geojson) {
   anim.playing = false;
   anim.speed = 1;
 
-  // Show transport bar
   const _tbar = document.getElementById('transport-bar');
-  _tbar.style.display = 'flex';
   document.getElementById('t-scrub').value = 0;
   document.getElementById('t-speed').value = '1';
   // Default state: stopped
@@ -3005,10 +3090,8 @@ function animReset() {
   if (anim.mapDot && leafMap) { leafMap.removeLayer(anim.mapDot); anim.mapDot = null; }
   const dot = document.getElementById('elev-anim-dot');
   if (dot) dot.style.display = 'none';
-  const bar = document.getElementById('transport-bar');
-  if (bar) bar.style.display = 'none';
   // Reset button states
-  ['t-play','t-rev','t-fwd','t-rew'].forEach(id => {
+  ['t-play','t-rev'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.classList.remove('active');
   });
@@ -3100,6 +3183,32 @@ function loadPaneSizes() {
   try { return JSON.parse(localStorage.getItem('ascent-pane-sizes') || '{}'); } catch(e) { return {}; }
 }
 
+const STATS_TITLE_H = 28;
+function toggleStats() {
+  const panel   = document.getElementById('info-panel');
+  const btn     = document.getElementById('stats-disclose');
+  const content = panel.querySelector('.stats-content');
+  const titlebar = document.getElementById('stats-titlebar');
+  if (!panel || !btn) return;
+  const isOpen = !btn.classList.contains('collapsed');
+  if (isOpen) {
+    savePaneSizes({infoH: panel.offsetHeight});
+    panel.style.height = STATS_TITLE_H + 'px';
+    if (content) content.style.display = 'none';
+    btn.classList.add('collapsed');
+    if (titlebar) titlebar.style.cursor = 'default';
+  } else {
+    const ps = loadPaneSizes();
+    const h = Math.max(STATS_TITLE_H + 60, ps.infoH || 200);
+    panel.style.height = h + 'px';
+    if (content) content.style.display = '';
+    btn.classList.remove('collapsed');
+    if (titlebar) titlebar.style.cursor = 'row-resize';
+  }
+  if (leafMap) setTimeout(() => leafMap.invalidateSize(), 220);
+  try { localStorage.setItem('ascent-stats-open', isOpen ? '0' : '1'); } catch(e) {}
+}
+
 // ── RESIZE HANDLES ───────────────────────────────────────────────────────────
 (function() {
   function initDrag(handleId, topPaneId, storageKey, onDone) {
@@ -3124,32 +3233,142 @@ function loadPaneSizes() {
     );
   }
 
-  // Map ↔ Info handle — invalidate map after resize
-  initDrag('drag-map-info', 'map-wrap', 'mapH', () => {
-    if (leafMap) leafMap.invalidateSize();
-  });
+  // Stats titlebar — drag to resize; button clicks pass through
+  (function(){
+    const titlebar  = document.getElementById('stats-titlebar');
+    const infoPanel = document.getElementById('info-panel');
+    const rootEl    = document.getElementById('root');
+    if (!titlebar || !infoPanel) return;
+
+    function isBtn(e) { return !!e.target.closest('#stats-disclose'); }
+    function isCollapsed() {
+      const b = document.getElementById('stats-disclose');
+      return b && b.classList.contains('collapsed');
+    }
+    function applyDelta(startH, delta) {
+      if (isCollapsed()) {
+        if (delta < -10) toggleStats(); // drag up while collapsed → expand
+        return;
+      }
+      const rootH = rootEl.getBoundingClientRect().height;
+      infoPanel.style.height = Math.max(48, Math.min(rootH - 120, startH - delta)) + 'px';
+      if (leafMap) leafMap.invalidateSize();
+    }
+    function onDragEnd() {
+      if (leafMap) leafMap.invalidateSize();
+      if (!isCollapsed()) savePaneSizes({infoH: infoPanel.offsetHeight});
+    }
+
+    let touchActive = false;
+    titlebar.addEventListener('touchstart', e => {
+      if (isBtn(e)) return;
+      e.preventDefault();
+      touchActive = true;
+      const startH = infoPanel.getBoundingClientRect().height;
+      const startY = e.touches[0].clientY;
+      function tm(ev) { ev.preventDefault(); if (ev.touches[0]) applyDelta(startH, ev.touches[0].clientY - startY); }
+      function tu() { touchActive = false; onDragEnd(); document.removeEventListener('touchmove', tm); document.removeEventListener('touchend', tu); document.removeEventListener('touchcancel', tu); }
+      document.addEventListener('touchmove', tm, {passive: false});
+      document.addEventListener('touchend', tu);
+      document.addEventListener('touchcancel', tu);
+    }, {passive: false});
+
+    titlebar.addEventListener('pointerdown', e => {
+      if (touchActive || isBtn(e)) return;
+      if (e.button !== undefined && e.button !== 0) return;
+      e.preventDefault();
+      const startH = infoPanel.getBoundingClientRect().height;
+      const startY = e.clientY;
+      try { titlebar.setPointerCapture(e.pointerId); } catch(_) {}
+      function pm(ev) { applyDelta(startH, ev.clientY - startY); }
+      function pu(ev) { try { titlebar.releasePointerCapture(ev.pointerId); } catch(_) {} onDragEnd(); titlebar.removeEventListener('pointermove', pm); titlebar.removeEventListener('pointerup', pu); titlebar.removeEventListener('pointercancel', pu); }
+      titlebar.addEventListener('pointermove', pm);
+      titlebar.addEventListener('pointerup', pu);
+      titlebar.addEventListener('pointercancel', pu);
+    });
+  })();
 })();
 
-// Bottom chart drag — drag up grows chart, drag down shrinks it
+// Analysis titlebar — toggle collapse + drag to resize chart
+const ANALYSIS_TITLE_H = 28;
+function toggleAnalysis() {
+  const wrap = document.getElementById('chart-wrap');
+  const btn  = document.getElementById('analysis-disclose');
+  const tb   = document.getElementById('analysis-titlebar');
+  if (!wrap || !btn) return;
+  const isOpen = !btn.classList.contains('collapsed');
+  if (isOpen) {
+    savePaneSizes({chartH: wrap.offsetHeight});
+    wrap.style.height = ANALYSIS_TITLE_H + 'px';
+    btn.classList.add('collapsed');
+    if (tb) tb.style.cursor = 'default';
+  } else {
+    const ps = loadPaneSizes();
+    const h = Math.max(ANALYSIS_TITLE_H + 60, ps.chartH || 200);
+    wrap.style.height = h + 'px';
+    btn.classList.remove('collapsed');
+    if (tb) tb.style.cursor = 'row-resize';
+    setTimeout(() => {
+      if (elevChart) elevChart.resize();
+      // Re-measure wx-panel max-width now that chips are visible
+      const chip = document.querySelector('.stat-chip');
+      const panel = document.getElementById('wx-panel');
+      if (chip && panel && panel.style.display !== 'none' && chip.offsetWidth > 0) {
+        panel.style.maxWidth = (chip.offsetWidth * 3 + 12) + 'px';
+      }
+    }, 220);
+  }
+  try { localStorage.setItem('ascent-analysis-open', isOpen ? '0' : '1'); } catch(e) {}
+}
+
 (function(){
-  const handle = document.getElementById('drag-bottom-chart');
+  const titlebar  = document.getElementById('analysis-titlebar');
   const chartWrap = document.getElementById('chart-wrap');
-  const root = document.getElementById('root');
-  if (!handle || !chartWrap) return;
-  let _startH = 0;
-  addDrag(handle, 'y',
-    delta => {
-      const rootH = root.getBoundingClientRect().height;
-      const newH = Math.max(40, Math.min(rootH - 120, _startH - delta));
-      chartWrap.style.height = newH + 'px';
-      if (elevChart) elevChart.resize();
-    },
-    () => {
-      if (elevChart) elevChart.resize();
-      savePaneSizes({chartH: chartWrap.offsetHeight});
-    },
-    () => { _startH = chartWrap.getBoundingClientRect().height; }
-  );
+  const root      = document.getElementById('root');
+  if (!titlebar || !chartWrap) return;
+
+  function isBtn(e) { return !!e.target.closest('#analysis-disclose') || !!e.target.closest('.sp-tb-btn'); }
+  function isCollapsed() { const b = document.getElementById('analysis-disclose'); return b && b.classList.contains('collapsed'); }
+  function applyDelta(startH, delta) {
+    if (isCollapsed()) { if (delta < -10) toggleAnalysis(); return; }
+    const rootH = root.getBoundingClientRect().height;
+    chartWrap.style.height = Math.max(ANALYSIS_TITLE_H + 20, Math.min(rootH - 120, startH - delta)) + 'px';
+    if (elevChart) elevChart.resize();
+    if (leafMap) leafMap.invalidateSize();
+  }
+  function onDragEnd() {
+    if (elevChart) elevChart.resize();
+    if (leafMap) leafMap.invalidateSize();
+    if (!isCollapsed()) savePaneSizes({chartH: chartWrap.offsetHeight});
+  }
+
+  let touchActive = false;
+  titlebar.addEventListener('touchstart', e => {
+    if (isBtn(e)) return;
+    e.preventDefault();
+    touchActive = true;
+    const startH = chartWrap.getBoundingClientRect().height;
+    const startY = e.touches[0].clientY;
+    function tm(ev) { ev.preventDefault(); if (ev.touches[0]) applyDelta(startH, ev.touches[0].clientY - startY); }
+    function tu() { touchActive = false; onDragEnd(); document.removeEventListener('touchmove', tm); document.removeEventListener('touchend', tu); document.removeEventListener('touchcancel', tu); }
+    document.addEventListener('touchmove', tm, {passive: false});
+    document.addEventListener('touchend', tu);
+    document.addEventListener('touchcancel', tu);
+  }, {passive: false});
+
+  titlebar.addEventListener('pointerdown', e => {
+    if (touchActive || isBtn(e)) return;
+    if (e.button !== undefined && e.button !== 0) return;
+    e.preventDefault();
+    const startH = chartWrap.getBoundingClientRect().height;
+    const startY = e.clientY;
+    try { titlebar.setPointerCapture(e.pointerId); } catch(_) {}
+    function pm(ev) { applyDelta(startH, ev.clientY - startY); }
+    function pu(ev) { try { titlebar.releasePointerCapture(ev.pointerId); } catch(_) {} onDragEnd(); titlebar.removeEventListener('pointermove', pm); titlebar.removeEventListener('pointerup', pu); titlebar.removeEventListener('pointercancel', pu); }
+    titlebar.addEventListener('pointermove', pm);
+    titlebar.addEventListener('pointerup', pu);
+    titlebar.addEventListener('pointercancel', pu);
+  });
 })();
 
 // ── COLUMN TOUCH DRAG-TO-REORDER ─────────────────────────────────────────────
@@ -3987,8 +4206,12 @@ async function resyncActivity(activityId) {
     if (fidx >= 0) state.filtered[fidx] = updated;
 
     // Re-render the detail panel and list row
-    const infoDiv = document.getElementById('act-info');
-    if (infoDiv) infoDiv.innerHTML = buildDetailHTML(updated);
+    currentAct = updated;
+    const infoDiv = document.getElementById('act-detail');
+    if (infoDiv) {
+      infoDiv.innerHTML = buildDetailHTML(updated);
+      loadWeatherLocation(activityId);
+    }
     renderVirtualList();
 
     // Flash the new button green briefly to confirm
@@ -4783,6 +5006,9 @@ function initCompareProfile() {
     },
   });
 
+  // Store profile for altitude lookup during animation
+  cmp.profilePts = profilePts;
+
   // Initialize dots at start (null for missing entries — not drawn)
   cmp.profileDots = cmp.matches.map((m) => (!m.missing && profilePts[0]) ? {...profilePts[0]} : null);
 }
@@ -4862,10 +5088,23 @@ function cmpUpdateUI(wallT) {
       sumLat += mapPos.lat; sumLon += mapPos.lon; zoomCount++;
     }
 
-    // Profile dot using dist_m from the point data
+    // Profile dot: x = rider's current distance, y = reference activity's altitude at that distance
     if (cmp.profileChart) {
       const distX = U.metric ? (d.dist_m||0)/1000 : (d.dist_m||0)/1609.344;
-      cmp.profileDots[i] = { x: distX, y: U.alt(d.alt_ft||0) };
+      const refY = (() => {
+        const pts = cmp.profilePts;
+        if (!pts || pts.length === 0) return U.alt(d.alt_ft||0);
+        if (distX <= pts[0].x) return pts[0].y;
+        if (distX >= pts[pts.length-1].x) return pts[pts.length-1].y;
+        for (let j = 1; j < pts.length; j++) {
+          if (pts[j].x >= distX) {
+            const t = (distX - pts[j-1].x) / (pts[j].x - pts[j-1].x);
+            return pts[j-1].y + t * (pts[j].y - pts[j-1].y);
+          }
+        }
+        return pts[pts.length-1].y;
+      })();
+      cmp.profileDots[i] = { x: distX, y: refY };
     }
 
     // Delta: estimate time ahead/behind reference using distance gap + current speeds
@@ -5467,8 +5706,34 @@ document.addEventListener('DOMContentLoaded', () => {
   // Restore pane sizes
   const ps = loadPaneSizes();
   if (ps.sidebarW) { const sb = document.getElementById('sidebar'); if (sb) sb.style.width = ps.sidebarW + 'px'; }
-  if (ps.mapH)     { const el = document.getElementById('map-wrap');   if (el) el.style.height = ps.mapH   + 'px'; }
+  if (ps.infoH)    { const el = document.getElementById('info-panel'); if (el) el.style.height = ps.infoH + 'px'; }
   if (ps.chartH)   { const el = document.getElementById('chart-wrap'); if (el) el.style.height = ps.chartH + 'px'; }
+  if (ps.photoW)   { const el = document.getElementById('info-right'); if (el) el.style.width = ps.photoW + 'px'; }
+  // Restore stats open/closed state
+  try {
+    if (localStorage.getItem('ascent-stats-open') === '0') {
+      const panel    = document.getElementById('info-panel');
+      const btn      = document.getElementById('stats-disclose');
+      const content  = panel && panel.querySelector('.stats-content');
+      if (panel) panel.style.height = STATS_TITLE_H + 'px';
+      if (content) content.style.display = 'none';
+      if (btn) btn.classList.add('collapsed');
+    } else {
+      const titlebar = document.getElementById('stats-titlebar');
+      if (titlebar) titlebar.style.cursor = 'row-resize';
+    }
+  } catch(e) {}
+  // Restore analysis open/closed state
+  try {
+    if (localStorage.getItem('ascent-analysis-open') === '0') {
+      const wrap = document.getElementById('chart-wrap');
+      const btn  = document.getElementById('analysis-disclose');
+      const tb   = document.getElementById('analysis-titlebar');
+      if (wrap) wrap.style.height = ANALYSIS_TITLE_H + 'px';
+      if (btn) btn.classList.add('collapsed');
+      if (tb) tb.style.cursor = 'default';
+    }
+  } catch(e) {}
   // Auto-select activity from ?select= param
   const sel = new URLSearchParams(location.search).get('select');
   if (sel) selectActivity(parseInt(sel));

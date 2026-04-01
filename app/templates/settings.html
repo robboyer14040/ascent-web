@@ -103,47 +103,6 @@ input[readonly]{color:#8e8e93;cursor:default}
 
 <div class="container">
 
-  <!-- ── Database ──────────────────────────────────────────────────────────── -->
-  <div class="card">
-    <h1>Database</h1>
-    <p>The current database file in use:</p>
-    <div class="current-db">{{ db_path }}</div>
-    <p style="margin-top:.75rem">Activities: <strong>{{ activity_count }}</strong></p>
-  </div>
-
-  <div class="card">
-    <h2>Create New Database</h2>
-    <p>Creates a fresh empty Ascent database at the path you specify. The app will switch to it immediately. Use Strava Sync to populate it with your activities.</p>
-    <label for="newDbPath">Full path for new database file</label>
-    <input type="text" id="newDbPath"
-           placeholder="/Users/you/Desktop/ascent_new.ascentdb"
-           value="/Users/{{ username }}/Desktop/ascent_new.ascentdb">
-    <div class="btn-row">
-      <button class="btn btn-primary" onclick="createDb()">Create New Database</button>
-    </div>
-    <div class="result" id="createResult"></div>
-  </div>
-
-  <div class="card">
-    <h2>Switch Database</h2>
-    <p>Choose an existing Ascent database file to use.</p>
-    <input type="file" id="switchDbFile" accept=".ascentdb,.db"
-           style="display:none" onchange="onFileChosen(this)">
-    <div id="chosenPath" style="display:none;margin-bottom:1rem">
-      <label>Selected file:</label>
-      <div class="current-db" id="chosenPathText"></div>
-    </div>
-    <div class="btn-row">
-      <button class="btn btn-ghost" onclick="document.getElementById('switchDbFile').click()">
-        📂 Choose File…
-      </button>
-      <button class="btn btn-primary" id="switchBtn" onclick="switchDb()" disabled>
-        Switch to This Database
-      </button>
-    </div>
-    <div class="result" id="switchResult"></div>
-  </div>
-
   <!-- ── API Keys ──────────────────────────────────────────────────────────── -->
 
   <div class="card">
@@ -319,7 +278,7 @@ input[readonly]{color:#8e8e93;cursor:default}
 </div><!-- /container -->
 
 <div style="text-align:center;padding:1.5rem 0 2rem;color:#636366;font-size:11px;letter-spacing:.04em">
-  Ascent v0.1.29
+  Ascent {{ app_version }}
 </div>
 
 
@@ -411,57 +370,6 @@ input[readonly]{color:#8e8e93;cursor:default}
 
 
 <script>
-// ── DB helpers ────────────────────────────────────────────────────────────────
-async function createDb() {
-  const path = document.getElementById('newDbPath').value.trim();
-  if (!path) return;
-  const btn = event.target;
-  btn.disabled = true; btn.textContent = 'Creating…';
-  const res = document.getElementById('createResult');
-  try {
-    const r = await fetch('/api/db/create', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({path}),
-    });
-    const d = await r.json();
-    show(res, r.ok ? 'ok' : 'err', r.ok ? `✓ Created and switched to: ${d.path}` : `✗ ${d.detail||'Unknown error'}`);
-    if (r.ok) setTimeout(() => window.location.reload(), 1500);
-  } catch(e) { show(res, 'err', `✗ ${e.message}`); }
-  btn.disabled = false; btn.textContent = 'Create New Database';
-}
-
-let chosenFilePath = null;
-function onFileChosen(input) {
-  const file = input.files[0];
-  if (!file) return;
-  chosenFilePath = file.path || null;
-  document.getElementById('chosenPathText').textContent = file.path || file.name;
-  document.getElementById('chosenPath').style.display = 'block';
-  document.getElementById('switchBtn').disabled = false;
-}
-
-async function switchDb() {
-  const res = document.getElementById('switchResult');
-  const btn = document.getElementById('switchBtn');
-  let filePath = chosenFilePath;
-  if (!filePath) {
-    filePath = prompt('Enter the full path to your .ascentdb file:');
-    if (!filePath) return;
-  }
-  btn.disabled = true; res.style.display = 'none';
-  try {
-    const r = await fetch('/api/db/switch', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({path: filePath}),
-    });
-    const d = await r.json();
-    show(res, r.ok ? 'ok' : 'err',
-      r.ok ? `✓ Switched to: ${d.path} (${d.activity_count} activities)` : `✗ ${d.detail||'Unknown error'}`);
-    if (r.ok) setTimeout(() => window.location.href = '/activities', 1500);
-  } catch(e) { show(res, 'err', `✗ ${e.message}`); }
-  btn.disabled = false;
-}
-
 // ── Anthropic key ─────────────────────────────────────────────────────────────
 function showAnthropicEdit() {
   document.getElementById('anthropic-display').style.display = 'none';
@@ -643,14 +551,26 @@ async function saveSharing() {
 
 document.addEventListener('DOMContentLoaded', loadSharing);
 
-// ── App Preferences (localStorage) ──────────────────────────────────────────
-function savePref(key, value) {
-  localStorage.setItem('ascent-pref-' + key, value ? '1' : '0');
+// ── App Preferences (per-user, stored in DB) ─────────────────────────────────
+async function savePref(key, value) {
+  const dbKey = key.replace(/-/g, '_');
+  try {
+    await fetch('/api/settings/training-zones', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({[dbKey]: value}),
+    });
+  } catch(e) {}
 }
-function loadPrefs() {
-  const autoplay = localStorage.getItem('ascent-pref-autoplay-videos');
-  // Default ON if never set
-  document.getElementById('pref-autoplay-videos').checked = autoplay !== '0';
+async function loadPrefs() {
+  try {
+    const r = await fetch('/api/settings/training-zones');
+    if (!r.ok) return;
+    const d = await r.json();
+    document.getElementById('pref-autoplay-videos').checked = d.autoplay_videos !== false;
+  } catch(e) {
+    document.getElementById('pref-autoplay-videos').checked = true;
+  }
 }
 document.addEventListener('DOMContentLoaded', loadPrefs);
 </script>

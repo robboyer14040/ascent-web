@@ -43,6 +43,13 @@ td{padding:.5rem;border-bottom:1px solid #2a2a2c;vertical-align:middle}
 .copy-btn{background:#3a3a3c;color:#f2f2f7;border:none;border-radius:6px;
   padding:.3rem .6rem;font-size:11px;cursor:pointer;margin-left:.5rem;font-family:inherit}
 .copy-btn:hover{background:#4a4a4e}
+.btn-primary{background:#f97316;color:#fff}.btn-primary:hover{background:#ea6c0a}
+.btn-ghost{background:#3a3a3c;color:#f2f2f7}.btn-ghost:hover{background:#48484a}
+.btn-row{display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;margin-top:1rem}
+.current-db{font-family:"SF Mono","Fira Code",monospace;font-size:.8rem;color:#f97316;background:#1c1c1e;border:1px solid #3a3a3c;border-radius:6px;padding:.4rem .7rem;word-break:break-all}
+.result{margin-top:.75rem;padding:.65rem .9rem;border-radius:8px;font-size:.875rem;display:none}
+.result-ok{background:rgba(48,209,88,.12);border:1px solid rgba(48,209,88,.3);color:#30d158}
+.result-err{background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);color:#ef4444}
 </style>
 </head>
 <body>
@@ -56,6 +63,52 @@ td{padding:.5rem;border-bottom:1px solid #2a2a2c;vertical-align:middle}
 <div class="container">
   <h1>Admin — Invites & Users</h1>
 
+  {% if current_user and current_user.is_admin %}
+
+  <!-- ── Database ──────────────────────────────────────────────────────────── -->
+  <div class="card">
+    <h2>Database</h2>
+    <p>The current database file in use:</p>
+    <div class="current-db">{{ db_path }}</div>
+    <p style="margin-top:.75rem">Activities: <strong>{{ activity_count }}</strong></p>
+  </div>
+
+  <div class="card">
+    <h2>Create New Database</h2>
+    <p>Creates a fresh empty Ascent database at the path you specify. The app will switch to it immediately. Use Strava Sync to populate it with your activities.</p>
+    <label for="newDbPath">Full path for new database file</label>
+    <input type="text" id="newDbPath"
+           placeholder="/Users/you/Desktop/ascent_new.ascentdb"
+           value="/Users/{{ username }}/Desktop/ascent_new.ascentdb"
+           style="width:100%;background:#1c1c1e;border:1px solid #3a3a3c;border-radius:8px;color:#f2f2f7;padding:.5rem .75rem;font-size:13px;font-family:inherit;outline:none;margin-top:.5rem">
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="createDb()">Create New Database</button>
+    </div>
+    <div class="result" id="createResult"></div>
+  </div>
+
+  <div class="card">
+    <h2>Switch Database</h2>
+    <p>Choose an existing Ascent database file to use.</p>
+    <input type="file" id="switchDbFile" accept=".ascentdb,.db"
+           style="display:none" onchange="onFileChosen(this)">
+    <div id="chosenPath" style="display:none;margin-bottom:1rem">
+      <label>Selected file:</label>
+      <div class="current-db" id="chosenPathText"></div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="document.getElementById('switchDbFile').click()">
+        📂 Choose File…
+      </button>
+      <button class="btn btn-primary" id="switchBtn" onclick="switchDb()" disabled>
+        Switch to This Database
+      </button>
+    </div>
+    <div class="result" id="switchResult"></div>
+  </div>
+
+  {% endif %}
+
   {% if new_invite_url %}
   <div class="card" style="border-color:#f97316">
     <div style="font-size:12px;color:#f97316;font-weight:600;margin-bottom:.5rem">✓ Invite link created</div>
@@ -64,6 +117,7 @@ td{padding:.5rem;border-bottom:1px solid #2a2a2c;vertical-align:middle}
   </div>
   {% endif %}
 
+  {% if current_user and current_user.is_admin %}
   <div class="card">
     <h2>Create Invite</h2>
     <form method="post" action="/admin/invites/create">
@@ -73,6 +127,7 @@ td{padding:.5rem;border-bottom:1px solid #2a2a2c;vertical-align:middle}
       </div>
     </form>
   </div>
+  {% endif %}
 
   <div class="card">
     <h2>Pending Invites</h2>
@@ -120,6 +175,7 @@ td{padding:.5rem;border-bottom:1px solid #2a2a2c;vertical-align:middle}
         </td>
         <td style="color:#8e8e93">{{ u.created_at | fmt_date }}</td>
         <td style="display:flex;gap:.4rem;justify-content:flex-end">
+          {% if current_user and current_user.is_admin %}
           {% if not u.is_admin %}
           <form method="post" action="/admin/users/toggle-admin" style="display:inline">
             <input type="hidden" name="user_id" value="{{ u.id }}">
@@ -137,6 +193,7 @@ td{padding:.5rem;border-bottom:1px solid #2a2a2c;vertical-align:middle}
             <button type="submit" class="btn" style="font-size:11px;padding:.25rem .6rem;background:#2a1a1a;color:#f87171;border:1px solid #5f1e1e" onclick="return confirm('Remove admin from {{ u.username }}?')">Remove Admin</button>
           </form>
           {% endif %}
+          {% endif %}
         </td>
       </tr>
       {% endfor %}
@@ -146,5 +203,63 @@ td{padding:.5rem;border-bottom:1px solid #2a2a2c;vertical-align:middle}
     {% endif %}
   </div>
 </div>
+
+<script>
+function show(el, type, msg) {
+  el.className = `result result-${type}`;
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+async function createDb() {
+  const path = document.getElementById('newDbPath').value.trim();
+  if (!path) return;
+  const btn = event.target;
+  btn.disabled = true; btn.textContent = 'Creating…';
+  const res = document.getElementById('createResult');
+  try {
+    const r = await fetch('/api/db/create', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({path}),
+    });
+    const d = await r.json();
+    show(res, r.ok ? 'ok' : 'err', r.ok ? `✓ Created and switched to: ${d.path}` : `✗ ${d.detail||'Unknown error'}`);
+    if (r.ok) setTimeout(() => window.location.reload(), 1500);
+  } catch(e) { show(res, 'err', `✗ ${e.message}`); }
+  btn.disabled = false; btn.textContent = 'Create New Database';
+}
+
+let chosenFilePath = null;
+function onFileChosen(input) {
+  const file = input.files[0];
+  if (!file) return;
+  chosenFilePath = file.path || null;
+  document.getElementById('chosenPathText').textContent = file.path || file.name;
+  document.getElementById('chosenPath').style.display = 'block';
+  document.getElementById('switchBtn').disabled = false;
+}
+
+async function switchDb() {
+  const res = document.getElementById('switchResult');
+  const btn = document.getElementById('switchBtn');
+  let filePath = chosenFilePath;
+  if (!filePath) {
+    filePath = prompt('Enter the full path to your .ascentdb file:');
+    if (!filePath) return;
+  }
+  btn.disabled = true; res.style.display = 'none';
+  try {
+    const r = await fetch('/api/db/switch', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({path: filePath}),
+    });
+    const d = await r.json();
+    show(res, r.ok ? 'ok' : 'err',
+      r.ok ? `✓ Switched to: ${d.path} (${d.activity_count} activities)` : `✗ ${d.detail||'Unknown error'}`);
+    if (r.ok) setTimeout(() => window.location.href = '/', 1500);
+  } catch(e) { show(res, 'err', `✗ ${e.message}`); }
+  btn.disabled = false;
+}
+</script>
 </body>
 </html>

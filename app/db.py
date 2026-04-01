@@ -818,55 +818,79 @@ class AscentDB:
     # ── user profile ──────────────────────────────────────────────────────────
 
     def _ensure_user_profile_table(self):
+        # Per-user profile table (user_profile_v2 supersedes the old single-row user_profile)
         self._con.execute("""
-            CREATE TABLE IF NOT EXISTS user_profile (
-                id         INTEGER PRIMARY KEY CHECK(id=1),
-                max_hr     INTEGER,
-                ftp_watts  INTEGER,
-                age        INTEGER,
-                weight_lb  REAL,
-                use_metric INTEGER DEFAULT 0
+            CREATE TABLE IF NOT EXISTS user_profile_v2 (
+                user_id         INTEGER PRIMARY KEY,
+                max_hr          INTEGER,
+                ftp_watts       INTEGER,
+                age             INTEGER,
+                weight_lb       REAL,
+                use_metric      INTEGER DEFAULT 0,
+                autoplay_videos INTEGER DEFAULT 1
             )
         """)
-        self._con.execute(
-            "INSERT OR IGNORE INTO user_profile (id) VALUES (1)"
-        )
-        # Migration: add use_metric column if missing (existing databases)
+        # Add columns introduced after initial table creation (existing DBs)
+        for col, defn in [("autoplay_videos", "INTEGER DEFAULT 1")]:
+            try:
+                self._con.execute(f"ALTER TABLE user_profile_v2 ADD COLUMN {col} {defn}")
+            except Exception:
+                pass  # column already exists
+        # One-time migration: copy the old single-row table into v2 for user_id=1
         try:
-            self._con.execute("ALTER TABLE user_profile ADD COLUMN use_metric INTEGER DEFAULT 0")
+            old = self._con.execute(
+                "SELECT max_hr, ftp_watts, age, weight_lb, use_metric FROM user_profile WHERE id=1"
+            ).fetchone()
+            if old:
+                self._con.execute("""
+                    INSERT OR IGNORE INTO user_profile_v2
+                        (user_id, max_hr, ftp_watts, age, weight_lb, use_metric)
+                    VALUES (1, ?, ?, ?, ?, ?)
+                """, old)
         except Exception:
-            pass  # column already exists
+            pass  # old table absent or already migrated
         self._con.commit()
 
-    def get_user_profile(self) -> dict:
+    def get_user_profile(self, user_id: int) -> dict:
         self._ensure_user_profile_table()
         row = self._con.execute(
-            "SELECT max_hr, ftp_watts, age, weight_lb, use_metric FROM user_profile WHERE id=1"
+            "SELECT max_hr, ftp_watts, age, weight_lb, use_metric, autoplay_videos FROM user_profile_v2 WHERE user_id=?",
+            (user_id,)
         ).fetchone()
         if row:
             return {
-                "max_hr":     row[0],
-                "ftp_watts":  row[1],
-                "age":        row[2],
-                "weight_lb":  row[3],
-                "use_metric": bool(row[4]),
+                "max_hr":          row[0],
+                "ftp_watts":       row[1],
+                "age":             row[2],
+                "weight_lb":       row[3],
+                "use_metric":      bool(row[4]),
+                "autoplay_videos": bool(row[5]) if row[5] is not None else True,
             }
-        return {"max_hr": None, "ftp_watts": None, "age": None, "weight_lb": None, "use_metric": False}
+        return {"max_hr": None, "ftp_watts": None, "age": None, "weight_lb": None,
+                "use_metric": False, "autoplay_videos": True}
 
-    def set_user_profile(self, max_hr=None, ftp_watts=None, age=None, weight_lb=None, use_metric=None):
+    def set_user_profile(self, user_id: int, max_hr=None, ftp_watts=None, age=None,
+                         weight_lb=None, use_metric=None, autoplay_videos=None):
         self._ensure_user_profile_table()
         con = sqlite3.connect(self.path, timeout=30)
         try:
             con.execute("PRAGMA journal_mode=WAL")
+            con.execute(
+                "INSERT OR IGNORE INTO user_profile_v2 (user_id) VALUES (?)", (user_id,)
+            )
             con.execute("""
-                UPDATE user_profile SET
-                    max_hr     = COALESCE(?, max_hr),
-                    ftp_watts  = COALESCE(?, ftp_watts),
-                    age        = COALESCE(?, age),
-                    weight_lb  = COALESCE(?, weight_lb),
-                    use_metric = CASE WHEN ? IS NOT NULL THEN ? ELSE use_metric END
-                WHERE id=1
-            """, (max_hr, ftp_watts, age, weight_lb, use_metric, use_metric))
+                UPDATE user_profile_v2 SET
+                    max_hr          = COALESCE(?, max_hr),
+                    ftp_watts       = COALESCE(?, ftp_watts),
+                    age             = COALESCE(?, age),
+                    weight_lb       = COALESCE(?, weight_lb),
+                    use_metric      = CASE WHEN ? IS NOT NULL THEN ? ELSE use_metric END,
+                    autoplay_videos = CASE WHEN ? IS NOT NULL THEN ? ELSE autoplay_videos END
+                WHERE user_id=?
+            """, (max_hr, ftp_watts, age, weight_lb,
+                  use_metric, use_metric,
+                  autoplay_videos, autoplay_videos,
+                  user_id))
             con.commit()
         finally:
             con.close()

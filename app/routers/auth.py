@@ -210,13 +210,23 @@ async def admin_invites(request: Request):
             "message": "Admin access required.",
         })
 
+    import getpass
     invites = db.list_invites()
     users   = db.list_users()
+    try:
+        db_path        = db.path
+        activity_count = db.count_activities()
+    except Exception:
+        db_path        = "Not connected"
+        activity_count = 0
     return templates.TemplateResponse("admin_invites.html", {
-        "request": request,
-        "invites": invites,
-        "users":   users,
-        "current_user": user,
+        "request":        request,
+        "invites":        invites,
+        "users":          users,
+        "current_user":   user,
+        "db_path":        db_path,
+        "activity_count": activity_count,
+        "username":       getpass.getuser(),
     })
 
 @router.post("/admin/invites/create")
@@ -240,12 +250,22 @@ async def admin_create_invite(
     base = str(request.base_url).rstrip("/")
     invite_url = f"{base}/register?token={token}"
 
+    import getpass
+    try:
+        db_path        = db.path
+        activity_count = db.count_activities()
+    except Exception:
+        db_path        = "Not connected"
+        activity_count = 0
     return templates.TemplateResponse("admin_invites.html", {
-        "request":    request,
-        "invites":    db.list_invites(),
-        "users":      db.list_users(),
-        "current_user": user,
+        "request":        request,
+        "invites":        db.list_invites(),
+        "users":          db.list_users(),
+        "current_user":   user,
         "new_invite_url": invite_url,
+        "db_path":        db_path,
+        "activity_count": activity_count,
+        "username":       getpass.getuser(),
     })
 
 @router.post("/admin/users/delete")

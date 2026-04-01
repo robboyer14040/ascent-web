@@ -226,18 +226,25 @@ async def save_strava_keys(req: dict, request: Request):
 
 
 @router.get("/api/settings/training-zones")
-async def get_training_zones():
+async def get_training_zones(request: Request):
     """Return the user profile (max HR, FTP, age, weight) from the database."""
+    uid = get_session_user_id(request)
+    if uid is None:
+        raise HTTPException(401, "Not authenticated")
     try:
-        profile = db_getter().get_user_profile()
+        profile = db_getter().get_user_profile(uid)
         return {"status": "ok", **profile}
     except Exception as e:
         raise HTTPException(500, str(e))
 
 
 @router.post("/api/settings/training-zones")
-async def save_training_zones(req: dict):
+async def save_training_zones(request: Request, req: dict):
     """Save user profile fields to the database."""
+    uid = get_session_user_id(request)
+    if uid is None:
+        raise HTTPException(401, "Not authenticated")
+
     def to_int(v):
         try: return int(v) if v not in (None, "", "null") else None
         except: return None
@@ -250,18 +257,23 @@ async def save_training_zones(req: dict):
     age       = to_int(req.get("age"))
     weight_lb = to_float(req.get("weight_lb"))
 
-    use_metric_raw = req.get("use_metric")
-    use_metric = None
-    if use_metric_raw is not None:
-        use_metric = 1 if use_metric_raw in (True, 1, "true", "1") else 0
+    def to_bool_int(v):
+        if v is None: return None
+        return 1 if v in (True, 1, "true", "1") else 0
+
+    use_metric      = to_bool_int(req.get("use_metric"))
+    autoplay_videos = to_bool_int(req.get("autoplay_videos"))
 
     try:
         db_getter().set_user_profile(
+            user_id=uid,
             max_hr=max_hr, ftp_watts=ftp_watts, age=age, weight_lb=weight_lb,
-            use_metric=use_metric
+            use_metric=use_metric, autoplay_videos=autoplay_videos
         )
         return {"status": "ok", "max_hr": max_hr, "ftp_watts": ftp_watts,
-                "age": age, "weight_lb": weight_lb, "use_metric": bool(use_metric)}
+                "age": age, "weight_lb": weight_lb,
+                "use_metric": bool(use_metric) if use_metric is not None else None,
+                "autoplay_videos": bool(autoplay_videos) if autoplay_videos is not None else None}
     except Exception as e:
         raise HTTPException(500, str(e))
 

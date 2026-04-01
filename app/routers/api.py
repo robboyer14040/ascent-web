@@ -214,7 +214,9 @@ async def resync_activity(activity_id: int, request: Request):
         sa = resp.json()
 
     # Build updated fields using the same logic as insert_activity_summary
-    attrs_json      = build_attributes_json(sa)
+    # Full activity detail includes a `gear` object with the name directly
+    gear_name  = (sa.get("gear") or {}).get("name") or None
+    attrs_json = build_attributes_json(sa, gear_name=gear_name)
     dist_mi         = _f(sa.get("distance"), 0) * M_TO_MI
     start_unix      = iso_to_unix(sa.get("start_date"))
     src_max_speed   = _f(sa.get("max_speed"),    0) * MPS_TO_MPH
