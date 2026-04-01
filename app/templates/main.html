@@ -604,53 +604,23 @@ input,select{font:inherit}
   box-shadow: 0 1px 3px rgba(0,0,0,.6), inset 0 -1px 2px rgba(0,0,0,.2);
   pointer-events:none;transform:translate(-50%,-50%);display:none;z-index:10}
 
-/* ── Splits pane ─────────────────────────────────────────────────────────── */
-#splits-pane{flex:none;height:220px;
-  display:flex;flex-direction:column;border-top:1px solid var(--border);
-  background:var(--bg);overflow:hidden}
-#splits-pane.collapsed{height:28px!important;flex-shrink:0}
-#splits-titlebar{display:flex;align-items:center;gap:6px;padding:0 8px;
-  height:28px;flex-shrink:0;background:var(--surface);border-bottom:1px solid var(--border)}
 @media (pointer:coarse){
   /* On iPad: sidebar is full-width stacked layout.
      act-list must flex-shrink so splits titlebar is always visible at the bottom */
   #act-list{ flex:1;min-height:80px;overflow-y:auto; }
-  #splits-pane{ flex-shrink:0; }
-
-  /* Bigger touch targets on splits titlebar */
-  #splits-titlebar{ height:40px; align-items:center; }
-  /* Collapsed height must match the taller touch titlebar */
-  #splits-pane.collapsed{ height:40px !important; }
-  #splits-title{ font-size:12px; }
-  .sp-tb-btn{ font-size:20px !important; padding:6px 10px !important; }
   /* Make transport bar buttons taller on touch */
   .t-btn{ width:38px; height:38px; font-size:16px; }
   #transport-bar{ padding:8px 12px; }
 }
-#splits-title{font-size:11px;font-weight:600;text-transform:uppercase;
-  letter-spacing:.06em;color:var(--muted);flex:1}
 .sp-tb-btn{background:none;border:none;color:var(--muted);cursor:pointer;
   padding:2px 5px;border-radius:4px;font-size:13px;line-height:1}
 .sp-tb-btn:hover{background:var(--surface2);color:var(--text)}
-#splits-settings{display:none;flex-shrink:0;padding:4px 10px;
-  background:var(--surface);border-bottom:1px solid var(--border);
-  gap:8px;flex-wrap:wrap;align-items:center}
-#splits-settings.open{display:flex}
-.ss-group{display:flex;flex-direction:column;gap:3px}
-.ss-label{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
-.ss-radios{display:flex;flex-wrap:wrap;gap:4px}
-.ss-radio{display:flex;align-items:center;gap:3px;font-size:11px;color:var(--text);
-  cursor:pointer;padding:1px 5px;border-radius:4px;border:1px solid var(--border2)}
-.ss-radio:hover{background:var(--surface2)}
-.ss-radio input{accent-color:#f97316;cursor:pointer}
-#splits-canvas-wrap{flex:1;position:relative;overflow:hidden;min-height:60px}
-#splits-canvas{display:block;width:100%;height:100%}
 </style>
 </head>
 <body>
 
 <div id="toolbar">
-  <span class="tb-title">⛰ Ascent <span style="font-size:10px;font-weight:400;color:var(--muted);letter-spacing:.02em">v0.1.18</span></span><span id="viewing-user-badge" onclick="openUserPicker()" title="Switch user" style="margin-left:8px;font-size:11px;font-weight:500;color:#f97316;cursor:pointer;padding:2px 7px;border:1px solid #f97316;border-radius:10px;opacity:.85;user-select:none"></span>
+  <span class="tb-title">⛰ Ascent <span style="font-size:10px;font-weight:400;color:var(--muted);letter-spacing:.02em">v0.1.21</span></span><span id="viewing-user-badge" onclick="openUserPicker()" title="Switch user" style="margin-left:8px;font-size:11px;font-weight:500;color:#f97316;cursor:pointer;padding:2px 7px;border:1px solid #f97316;border-radius:10px;opacity:.85;user-select:none"></span>
   <div style="flex:1"></div>
   <div class="tb-search">
     <span class="tb-icon">⌕</span>
@@ -698,50 +668,6 @@ input,select{font:inherit}
     <div id="hscroll-track"><div id="hscroll-thumb"></div></div>
     <div id="vscroll-track"><div id="vscroll-thumb"></div></div>
 
-    <div id="splits-drag"></div>
-
-    <div id="splits-pane" class="collapsed">
-      <div id="splits-titlebar">
-        <span id="splits-title">Splits</span>
-        <button class="sp-tb-btn" onclick="toggleSplitsSettings()" title="Settings" style="font-size:20px;padding:2px 6px;line-height:1">⚙</button>
-        <button class="sp-tb-btn" onclick="toggleSplitsPane()" id="splits-collapse-btn" title="Collapse/Expand" style="font-size:16px;padding:2px 6px;line-height:1">▲</button>
-      </div>
-      <div id="splits-settings">
-        <div class="ss-group">
-          <div class="ss-label">Metric</div>
-          <div class="ss-radios" id="sp-metric-radios">
-            <label class="ss-radio"><input type="radio" name="sp-metric" value="speed" checked> Speed</label>
-            <label class="ss-radio"><input type="radio" name="sp-metric" value="power"> Power</label>
-            <label class="ss-radio"><input type="radio" name="sp-metric" value="hr"> Heart Rate</label>
-            <label class="ss-radio"><input type="radio" name="sp-metric" value="climb"> Climb</label>
-            <label class="ss-radio"><input type="radio" name="sp-metric" value="pace"> Pace</label>
-            <label class="ss-radio"><input type="radio" name="sp-metric" value="cadence"> Cadence</label>
-          </div>
-        </div>
-        <div class="ss-group">
-          <div class="ss-label">Aggregation</div>
-          <div class="ss-radios" id="sp-agg-radios">
-            <label class="ss-radio"><input type="radio" name="sp-agg" value="avg" checked> Average</label>
-            <label class="ss-radio"><input type="radio" name="sp-agg" value="max"> Maximum</label>
-          </div>
-        </div>
-        <div class="ss-group">
-          <div class="ss-label">Split Length</div>
-          <div class="ss-radios" id="sp-len-radios">
-            <label class="ss-radio" id="sp-len-lbl-01"><input type="radio" name="sp-len" value="0.1"> 1/10 mi</label>
-            <label class="ss-radio" id="sp-len-lbl-025"><input type="radio" name="sp-len" value="0.25"> ¼ mi</label>
-            <label class="ss-radio" id="sp-len-lbl-05"><input type="radio" name="sp-len" value="0.5"> ½ mi</label>
-            <label class="ss-radio" id="sp-len-lbl-1"><input type="radio" name="sp-len" value="1" checked> 1 mi</label>
-            <label class="ss-radio" id="sp-len-lbl-2"><input type="radio" name="sp-len" value="2"> 2 mi</label>
-            <label class="ss-radio" id="sp-len-lbl-5"><input type="radio" name="sp-len" value="5"> 5 mi</label>
-            <label class="ss-radio" id="sp-len-lbl-10"><input type="radio" name="sp-len" value="10"> 10 mi</label>
-          </div>
-        </div>
-      </div>
-      <div id="splits-canvas-wrap">
-        <canvas id="splits-canvas"></canvas>
-      </div>
-    </div>
   </div>
 
   <div id="resize-handle"></div>
@@ -767,26 +693,69 @@ input,select{font:inherit}
         <button class="sp-tb-btn" onclick="elevZoomStep(1)" title="Zoom in" style="pointer-events:all;font-size:13px;padding:1px 6px;line-height:1.4">+</button>
         <button class="sp-tb-btn" onclick="toggleChartSettings(event)" title="Chart overlays" style="pointer-events:all;font-size:20px;padding:2px 6px;line-height:1;user-select:none;-webkit-user-select:none;touch-action:manipulation">⚙</button>
       </div>
-      <div id="chart-settings" style="display:none;position:absolute;top:20px;right:4px;z-index:20;background:var(--surface);border:1px solid var(--border2);border-radius:8px;padding:8px 10px;box-shadow:0 4px 16px rgba(0,0,0,.5);min-width:200px">
-        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:6px">Overlay 1</div>
-        <select id="overlay1-sel" style="width:100%;background:var(--surface2);border:1px solid var(--border2);color:var(--text);border-radius:5px;padding:3px 6px;font-size:12px;margin-bottom:8px" onchange="redrawElevWithOverlays()">
-          <option value="">None</option>
-          <option value="hr">Heart Rate</option>
-          <option value="speed">Speed</option>
-          <option value="power">Power</option>
-          <option value="cadence">Cadence</option>
-        </select>
-        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:6px">Overlay 2</div>
-        <select id="overlay2-sel" style="width:100%;background:var(--surface2);border:1px solid var(--border2);color:var(--text);border-radius:5px;padding:3px 6px;font-size:12px;margin-bottom:8px" onchange="redrawElevWithOverlays()">
-          <option value="">None</option>
-          <option value="hr">Heart Rate</option>
-          <option value="speed">Speed</option>
-          <option value="power">Power</option>
-          <option value="cadence">Cadence</option>
-        </select>
-        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text);cursor:pointer">
-          <input type="checkbox" id="show-peaks" checked onchange="redrawElevWithOverlays()" style="accent-color:#f97316"> Show altitude peaks
-        </label>
+      <div id="chart-settings" style="display:none;position:absolute;top:20px;right:4px;z-index:20;background:var(--surface);border:1px solid var(--border2);border-radius:8px;padding:8px 10px;box-shadow:0 4px 16px rgba(0,0,0,.5)">
+        <div style="display:flex;gap:14px;align-items:flex-start">
+          <!-- Overlay column -->
+          <div style="min-width:120px">
+            <div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:4px">Overlay</div>
+            <select id="overlay1-sel" style="width:100%;background:var(--surface2);border:1px solid var(--border2);color:var(--text);border-radius:5px;padding:3px 6px;font-size:12px;margin-bottom:4px" onchange="redrawElevWithOverlays()">
+              <option value="">None</option>
+              <option value="hr">Heart Rate</option>
+              <option value="speed">Speed</option>
+              <option value="power">Power</option>
+              <option value="cadence">Cadence</option>
+            </select>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text);cursor:pointer">
+              <input type="checkbox" id="overlay1-zones" onchange="redrawElevWithOverlays()" style="accent-color:#f97316"> Color-code Zones
+            </label>
+          </div>
+          <!-- Splits column -->
+          <div style="min-width:150px">
+            <div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:4px">Splits</div>
+            <select id="split-metric-sel" style="width:100%;background:var(--surface2);border:1px solid var(--border2);color:var(--text);border-radius:5px;padding:3px 6px;font-size:12px;margin-bottom:4px" onchange="onSplitMetricChange()">
+              <option value="">None</option>
+              <option value="speed">Speed</option>
+              <option value="power">Power</option>
+              <option value="hr">Heart Rate</option>
+              <option value="climb">Climb</option>
+              <option value="pace">Pace</option>
+              <option value="cadence">Cadence</option>
+            </select>
+            <div id="split-detail-controls" style="display:none;margin-bottom:4px">
+              <div style="display:flex;gap:6px">
+                <div style="flex:1">
+                  <div style="font-size:9px;color:var(--muted);margin-bottom:2px">Length</div>
+                  <select id="split-len-sel" style="width:100%;background:var(--surface2);border:1px solid var(--border2);color:var(--text);border-radius:5px;padding:2px 4px;font-size:11px" onchange="redrawElevWithOverlays()">
+                    <option value="0.1">1/10 mi</option>
+                    <option value="0.25">¼ mi</option>
+                    <option value="0.5">½ mi</option>
+                    <option value="1" selected>1 mi</option>
+                    <option value="2">2 mi</option>
+                    <option value="5">5 mi</option>
+                    <option value="10">10 mi</option>
+                  </select>
+                </div>
+                <div style="flex:1">
+                  <div style="font-size:9px;color:var(--muted);margin-bottom:2px">Aggregation</div>
+                  <select id="split-agg-sel" style="width:100%;background:var(--surface2);border:1px solid var(--border2);color:var(--text);border-radius:5px;padding:2px 4px;font-size:11px" onchange="redrawElevWithOverlays()">
+                    <option value="avg">Average</option>
+                    <option value="max">Maximum</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text);cursor:pointer">
+              <input type="checkbox" id="split-zones" onchange="redrawElevWithOverlays()" style="accent-color:#f97316"> Color-code Zones
+            </label>
+          </div>
+          <!-- Peaks column -->
+          <div>
+            <div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:4px">Peaks</div>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text);cursor:pointer">
+              <input type="checkbox" id="show-peaks" checked onchange="redrawElevWithOverlays()" style="accent-color:#f97316"> Show
+            </label>
+          </div>
+        </div>
       </div>
       <div id="elev-canvas-area">
         <canvas id="elevChart"></canvas>
@@ -914,9 +883,6 @@ const U = {
     }
     // Elevation chart — redraw with new axis units
     if (elevChartData) drawElevation(elevChartData);
-    // Splits — redraw
-    updateSplitLenLabels();
-    renderSplits();
     // Transport bar labels
     const altLbl = document.getElementById('as-alt-lbl');
     const dstLbl = document.getElementById('as-dst-lbl');
@@ -924,9 +890,6 @@ const U = {
     if (altLbl) altLbl.textContent = U.altUnit();
     if (dstLbl) dstLbl.textContent = U.distUnit();
     if (spdLbl) spdLbl.textContent = U.speedUnit();
-    // METRIC_UNITS for splits y-axis
-    METRIC_UNITS.speed = U.speedUnit();
-    METRIC_UNITS.climb = U.climbUnit();
   },
 };
 
@@ -1428,21 +1391,63 @@ function toggleChartSettings(e) {
 function loadChartPrefs() {
   try {
     const p = JSON.parse(localStorage.getItem('ascent-chart-overlays') || 'null');
-    if (!p) return;
-    const o1 = document.getElementById('overlay1-sel');
-    const o2 = document.getElementById('overlay2-sel');
-    const pk = document.getElementById('show-peaks');
-    if (o1 && p.o1 !== undefined) o1.value = p.o1;
-    if (o2 && p.o2 !== undefined) o2.value = p.o2;
-    if (pk && p.peaks !== undefined) pk.checked = p.peaks;
+    if (p) {
+      const o1 = document.getElementById('overlay1-sel');
+      const o1z = document.getElementById('overlay1-zones');
+      const pk = document.getElementById('show-peaks');
+      const sm = document.getElementById('split-metric-sel');
+      const sl = document.getElementById('split-len-sel');
+      const sa = document.getElementById('split-agg-sel');
+      const sz = document.getElementById('split-zones');
+      if (o1 && p.o1 !== undefined) o1.value = p.o1;
+      if (o1z && p.o1Zones !== undefined) o1z.checked = p.o1Zones;
+      if (pk && p.peaks !== undefined) pk.checked = p.peaks;
+      if (sm && p.splitMetric !== undefined) sm.value = p.splitMetric;
+      if (sl && p.splitLen !== undefined) sl.value = p.splitLen;
+      if (sa && p.splitAgg !== undefined) sa.value = p.splitAgg;
+      if (sz && p.splitZones !== undefined) sz.checked = p.splitZones;
+      if (sm && sm.value) {
+        const dc = document.getElementById('split-detail-controls');
+        if (dc) dc.style.display = 'block';
+      }
+    }
+    // Migrate from old ascent-splits key if no chart prefs saved yet
+    if (!p || p.splitMetric === undefined) {
+      try {
+        const old = JSON.parse(localStorage.getItem('ascent-splits') || 'null');
+        if (old) {
+          const sm = document.getElementById('split-metric-sel');
+          const sl = document.getElementById('split-len-sel');
+          const sa = document.getElementById('split-agg-sel');
+          if (sm && old.metric) { sm.value = old.metric; }
+          if (sl && old.len)    { sl.value = old.len; }
+          if (sa && old.agg)    { sa.value = old.agg; }
+          if (sm && sm.value) {
+            const dc = document.getElementById('split-detail-controls');
+            if (dc) dc.style.display = 'block';
+          }
+        }
+      } catch(e2) {}
+    }
   } catch(e) {}
 }
 function saveChartPrefs() {
   localStorage.setItem('ascent-chart-overlays', JSON.stringify({
-    o1:    document.getElementById('overlay1-sel')?.value || '',
-    o2:    document.getElementById('overlay2-sel')?.value || '',
-    peaks: document.getElementById('show-peaks')?.checked ?? true,
+    o1:          document.getElementById('overlay1-sel')?.value || '',
+    o1Zones:     document.getElementById('overlay1-zones')?.checked ?? false,
+    peaks:       document.getElementById('show-peaks')?.checked ?? true,
+    splitMetric: document.getElementById('split-metric-sel')?.value || '',
+    splitLen:    document.getElementById('split-len-sel')?.value || '1',
+    splitAgg:    document.getElementById('split-agg-sel')?.value || 'avg',
+    splitZones:  document.getElementById('split-zones')?.checked ?? false,
   }));
+}
+
+function onSplitMetricChange() {
+  const metric = document.getElementById('split-metric-sel')?.value || '';
+  const dc = document.getElementById('split-detail-controls');
+  if (dc) dc.style.display = metric ? 'block' : 'none';
+  redrawElevWithOverlays();
 }
 
 function redrawElevWithOverlays() {
@@ -1487,6 +1492,29 @@ if (typeof window !== 'undefined' && window.Chart && window.ChartAnnotation) {
   Chart.register(window.ChartAnnotation);
 }
 
+function _heatColor(frac) {
+  // Blue→green→yellow→red gradient
+  const stops = [[0,59,130,246],[0.33,34,197,94],[0.67,234,179,8],[1,239,68,68]];
+  for (let i = 0; i < stops.length - 1; i++) {
+    const [t0,r0,g0,b0] = stops[i], [t1,r1,g1,b1] = stops[i+1];
+    if (frac <= t1) {
+      const t = (frac - t0) / (t1 - t0);
+      return `rgb(${Math.round(r0+(r1-r0)*t)},${Math.round(g0+(g1-g0)*t)},${Math.round(b0+(b1-b0)*t)})`;
+    }
+  }
+  return 'rgb(239,68,68)';
+}
+
+function _fmtSplitVal(value, metric) {
+  if (metric === 'speed') return (U.metric ? (value * 1.60934).toFixed(1) : value.toFixed(1));
+  if (metric === 'climb') return Math.round(U.metric ? value * 0.3048 : value);
+  if (metric === 'pace') {
+    const secs = value * 60;
+    return `${Math.floor(secs / 60)}:${String(Math.round(secs % 60)).padStart(2, '0')}`;
+  }
+  return Math.round(value);
+}
+
 async function drawElevation(data, version) {
   const label = document.querySelector('.chart-label');
   if (label) label.textContent = 'Elevation';
@@ -1526,14 +1554,23 @@ async function drawElevation(data, version) {
   const totalMi = points[points.length - 1].x;  // actually total in current unit
 
   // Overlay settings
-  const o1key = document.getElementById('overlay1-sel')?.value || '';
-  const o2key = document.getElementById('overlay2-sel')?.value || '';
-  const showPeaks = document.getElementById('show-peaks')?.checked ?? true;
+  const o1key      = document.getElementById('overlay1-sel')?.value || '';
+  const o1Zones    = document.getElementById('overlay1-zones')?.checked ?? false;
+  const showPeaks  = document.getElementById('show-peaks')?.checked ?? true;
+  const splitMetric = document.getElementById('split-metric-sel')?.value || '';
+  const splitLenMi  = parseFloat(document.getElementById('split-len-sel')?.value || '1') || 1;
+  const splitAgg    = document.getElementById('split-agg-sel')?.value || 'avg';
+  const splitZones  = document.getElementById('split-zones')?.checked ?? false;
+
+  // Single (non-zone) colors for each metric
+  const METRIC_COLORS = {
+    hr: '#ef4444', power: '#22c55e', speed: '#f97316',
+    cadence: '#a855f7', climb: '#f59e0b', pace: '#06b6d4',
+  };
 
   const overlayArrs   = { hr, speed, power, cadence };
   const overlayUnits  = { hr: 'bpm', speed: U.speedUnit(), power: 'W', cadence: 'rpm' };
   const overlayLabels = { hr: 'Heart Rate', speed: 'Speed', power: 'Power', cadence: 'Cadence' };
-  const overlayColors = { hr: '#ef4444', speed: '#22c55e', power: '#eab308', cadence: '#a855f7' };
 
   function makeOverlayPoints(key) {
     const arr = overlayArrs[key];
@@ -1548,14 +1585,16 @@ async function drawElevation(data, version) {
 
   function makeSegmentColor(key, pts) {
     // Returns a segment.borderColor function for Chart.js that colors by zone
+    if (!o1Zones) return null;
     if (key !== 'hr' && key !== 'power') return null;
     const _p = cachedProfile || {};
     const bounds = key === 'hr' ? hrBoundsFor(_p, currentAct) : pwrBoundsFor(_p, currentAct);
     if (!bounds) return null;
+    const flat = METRIC_COLORS[key];
     return (ctx) => {
       const pt = pts[ctx.p0DataIndex];
-      if (!pt) return overlayColors[key];
-      return zoneColorFor(pt._raw, bounds) || overlayColors[key];
+      if (!pt) return flat;
+      return zoneColorFor(pt._raw, bounds) || flat;
     };
   }
 
@@ -1583,11 +1622,11 @@ async function drawElevation(data, version) {
   if (o1key) {
     const o1pts = makeOverlayPoints(o1key);
     if (o1pts.length) {
-      const c1 = overlayColors[o1key] || '#22d3ee';
+      const c1 = METRIC_COLORS[o1key] || '#22d3ee';
       const seg1 = makeSegmentColor(o1key, o1pts);
       datasets.push({
         data: o1pts, fill: false,
-        borderColor: seg1 ? c1 : c1,
+        borderColor: c1,
         ...(seg1 ? {segment:{borderColor:seg1}} : {}),
         backgroundColor: 'transparent',
         borderWidth: 1.5, pointRadius: 0, tension: 0.3, order: 2,
@@ -1602,24 +1641,90 @@ async function drawElevation(data, version) {
     }
   }
 
-  if (o2key) {
-    const o2pts = makeOverlayPoints(o2key);
-    if (o2pts.length) {
-      const c2 = overlayColors[o2key] || '#f97316';
-      const seg2 = makeSegmentColor(o2key, o2pts);
-      datasets.push({
-        data: o2pts, fill: false,
-        borderColor: seg2 ? c2 : c2,
-        ...(seg2 ? {segment:{borderColor:seg2}} : {}),
-        backgroundColor: 'transparent',
-        borderWidth: 1.5, pointRadius: 0, tension: 0.3, order: 1,
-        yAxisID: 'yRight',
-      });
-      scales.yRight = {
-        position: 'right',
-        ticks: { color: c2, font: { size: 9 }, maxTicksLimit: 5, callback: v => `${v}` },
-        grid: { display: false },
-        title: { display: true, text: overlayUnits[o2key], color: c2, font: { size: 9 } },
+  // ── Splits overlay plugin ─────────────────────────────────────────────────
+  let splitsPlugin = null;
+  if (splitMetric && data.dist_m && data.dist_m.length > 1) {
+    const _splits = computeSplits(data, splitLenMi, splitMetric, splitAgg);
+    if (_splits.length) {
+      // When overlay and splits share the same metric, reuse the left axis
+      const _sharedAxis = splitMetric === o1key && !!o1key && !!scales.yLeft;
+
+      // Convert raw split values to display units (speed mph→km/h, climb ft→m if metric)
+      // Skip conversion when sharing yLeft — overlay uses raw values on that axis
+      function _toDisplayVal(v) {
+        if (_sharedAxis) return v;
+        if (splitMetric === 'speed' && U.metric) return v * 1.60934;
+        if (splitMetric === 'climb' && U.metric) return v * 0.3048;
+        return v;
+      }
+      const _vals = _splits.map(s => _toDisplayVal(s.value)).filter(v => v > 0);
+      const _minV = Math.min(..._vals), _maxV = Math.max(..._vals);
+      const _p = cachedProfile || {};
+      const _bounds = splitZones && splitMetric === 'hr' ? hrBoundsFor(_p, currentAct)
+                    : splitZones && splitMetric === 'power' ? pwrBoundsFor(_p, currentAct) : null;
+      const _splitAxisColor = METRIC_COLORS[splitMetric] || '#94a3b8';
+      const _splitUnit = { speed: U.speedUnit(), power: 'W', hr: 'bpm', cadence: 'rpm',
+                           climb: U.climbUnit(), pace: U.metric ? 'min/km' : 'min/mi' }[splitMetric] || '';
+      if (!_sharedAxis) {
+        scales.yRight = {
+          position: 'right',
+          suggestedMin: 0,
+          suggestedMax: _maxV > 0 ? _maxV * 1.15 : 1,
+          ticks: {
+            color: _splitAxisColor, font: { size: 9 }, maxTicksLimit: 5,
+            callback: v => {
+              if (splitMetric === 'pace') {
+                const m = Math.floor(v), s = Math.round((v - m) * 60);
+                return `${m}:${String(s).padStart(2,'0')}`;
+              }
+              return Math.round(v * 10) / 10;
+            },
+          },
+          grid: { display: false },
+          title: { display: !!_splitUnit, text: _splitUnit, color: _splitAxisColor, font: { size: 9 } },
+        };
+      }
+      splitsPlugin = {
+        id: 'splitsOverlay',
+        beforeDatasetsDraw(chart) {
+          const {ctx: cx, chartArea, scales: sc} = chart;
+          const xSc = sc.x;
+          const ySc = _sharedAxis ? sc.yLeft : sc.yRight;
+          if (!xSc || !ySc || !chartArea) return;
+          const {top, bottom} = chartArea;
+          cx.save();
+          _splits.forEach(sp => {
+            const x0 = xSc.getPixelForValue(xConv(sp.startDist));
+            const x1 = xSc.getPixelForValue(xConv(sp.endDist));
+            const w = x1 - x0;
+            if (w <= 0) return;
+            const dv = _toDisplayVal(sp.value);
+            let color;
+            if (_bounds) {
+              color = zoneColorFor(sp.value, _bounds) || METRIC_COLORS[splitMetric];
+            } else if (splitZones) {
+              const frac = _maxV > _minV ? (dv - _minV) / (_maxV - _minV) : 0.5;
+              color = _heatColor(frac);
+            } else {
+              color = METRIC_COLORS[splitMetric] || '#3b82f6';
+            }
+            const barTop = Math.min(ySc.getPixelForValue(dv), bottom - 1);
+            const barH = bottom - barTop;
+            cx.globalAlpha = 0.32;
+            cx.fillStyle = color;
+            cx.fillRect(x0, barTop, w, barH);
+            if (w > 32) {
+              cx.globalAlpha = 0.9;
+              cx.fillStyle = 'rgba(255,255,255,0.9)';
+              cx.font = 'bold 9px -apple-system,sans-serif';
+              cx.textAlign = 'center';
+              cx.textBaseline = 'bottom';
+              cx.fillText(_fmtSplitVal(sp.value, splitMetric), x0 + w/2, barTop - 1);
+            }
+          });
+          cx.globalAlpha = 1;
+          cx.restore();
+        }
       };
     }
   }
@@ -1673,10 +1778,10 @@ async function drawElevation(data, version) {
   elevChart = new Chart(ctx, {
     type: 'line',
     data: { datasets },
-    plugins: [peakPlugin],
+    plugins: [peakPlugin, ...(splitsPlugin ? [splitsPlugin] : [])],
     options: {
       responsive: true, maintainAspectRatio: false, animation: false,
-      layout: { padding: { top: peakList.length ? 42 : 4, bottom: 2, right: o2key ? 8 : 2 } },
+      layout: { padding: { top: peakList.length ? 42 : 4, bottom: 2, right: 2 } },
       plugins: {
         legend: { display: false },
         tooltip: {
@@ -1685,8 +1790,7 @@ async function drawElevation(data, version) {
             label: c => {
               const ds = c.datasetIndex;
               if (ds === 0) return `${c.parsed.y} ft`;
-              const key = ds === 1 ? o1key : o2key;
-              return `${c.parsed.y} ${overlayUnits[key]||''}`;
+              return `${c.parsed.y} ${overlayUnits[o1key]||''}`;
             },
           },
           titleFont: { size: 11 }, bodyFont: { size: 11 },
@@ -2150,7 +2254,7 @@ async function selectActivity(id) {
   // Only clear elevation selection if not in multi-select mode
   if (state.selectedIds.size === 0) setElevSelection(null, null);
   elevZoomReset();
-  splitsState.pts = null; splitsState.geo = null; splitsState.selected = new Set(); clearSplitHighlights(); renderSplits();  // stop any running animation
+  splitsState.pts = null; splitsState.geo = null; clearSplitHighlights();
   renderVirtualList(); // re-render to update highlight without scroll reset
 
   document.getElementById('no-selection').style.display='none';
@@ -2243,7 +2347,7 @@ async function selectActivity(id) {
           if (charts2?.alt_ft?.some(v => v > 0)) {
             await drawElevation(charts2, myVersion);
             animInit(charts2, geo2);  // init animation
-            splitsState.pts = charts2; splitsState.geo = geo2; renderSplits();
+            splitsState.pts = charts2; splitsState.geo = geo2;
           } else {
             await drawElevationFromSummary(act, myVersion);
           }
@@ -2269,7 +2373,7 @@ async function selectActivity(id) {
     if (hasAlt) {
       await drawElevation(charts, myVersion);
       animInit(charts, geo);  // init animation with real point data
-  splitsState.pts = charts; splitsState.geo = geo; renderSplits();
+  splitsState.pts = charts; splitsState.geo = geo;
     } else {
       await drawElevationFromSummary(act, myVersion);
     }
@@ -2916,86 +3020,12 @@ document.addEventListener('keydown', e => {
 });
 
 
-// ── SPLITS PANE ───────────────────────────────────────────────────────────────
+// ── SPLITS STATE (used for elevation range selection map highlight) ────────────
 const splitsState = {
-  pts:      null,
-  geo:      null,
-  splits:   [],
-  selected: new Set(),
-  dragging: false,
-  dragStart: null,
-  mapHighlight: null,
+  pts:              null,
+  geo:              null,
+  _elevSelMapLayer: null,
 };
-
-const METRIC_LABELS = {
-  speed:'Speed', power:'Power', hr:'Heart Rate',
-  climb:'Climb', pace:'Pace', cadence:'Cadence'
-};
-function getMetricUnit(m) {
-  if (m === 'speed') return U.speedUnit();
-  if (m === 'climb') return U.climbUnit();
-  if (m === 'pace')  return U.metric ? 'min/km' : 'min/mi';
-  return {power:'W', hr:'bpm', cadence:'rpm'}[m] || '';
-}
-// Keep legacy object for backward compat — updated dynamically via getMetricUnit()
-const METRIC_UNITS = {
-  speed:'mph', power:'W', hr:'bpm',
-  climb:'ft', pace:'min/mi', cadence:'rpm'
-};
-
-function updateSplitLenLabels() {
-  // Static mi→km distances for the split length options
-  const opts = [
-    ['sp-len-lbl-01',  0.1,   '1/10 mi', '0.2 km'],
-    ['sp-len-lbl-025', 0.25,  '¼ mi',  '0.4 km'],
-    ['sp-len-lbl-05',  0.5,   '½ mi',  '1 km'],
-    ['sp-len-lbl-1',   1,     '1 mi',  '2 km'],
-    ['sp-len-lbl-2',   2,     '2 mi',  '3 km'],
-    ['sp-len-lbl-5',   5,     '5 mi',  '8 km'],
-    ['sp-len-lbl-10',  10,    '10 mi', '16 km'],
-  ];
-  opts.forEach(([id,,,]) => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    const inp = el.querySelector('input');
-    const [,, statLabel, metLabel] = opts.find(o => o[0] === id);
-    el.childNodes[el.childNodes.length - 1].textContent = ' ' + (U.metric ? metLabel : statLabel);
-  });
-}
-
-function splitsMetric() { return document.querySelector('input[name="sp-metric"]:checked')?.value || 'speed'; }
-function splitsAgg()    { return document.querySelector('input[name="sp-agg"]:checked')?.value || 'avg'; }
-function splitsLenMi()  {
-  const v = document.querySelector('input[name="sp-len"]:checked')?.value || '1';
-  return parseFloat(v) || 1;
-}
-
-function toggleSplitsSettings() {
-  const pane = document.getElementById('splits-pane');
-  // Expand the pane first if collapsed so settings are visible
-  if (pane.classList.contains('collapsed')) {
-    const btn = document.getElementById('splits-collapse-btn');
-    pane.classList.remove('collapsed');
-    btn.textContent = '▼';
-    localStorage.setItem('ascent-splits-open', '1');
-    requestAnimationFrame(renderSplits);
-  }
-  document.getElementById('splits-settings').classList.toggle('open');
-  // Clear explicit height so renderSplits recalculates from pane dimensions
-  const wrap = document.getElementById('splits-canvas-wrap');
-  if (wrap) wrap.style.height = '';
-  // Two rAF frames: first lets DOM reflow, second reads correct sizes
-  requestAnimationFrame(() => requestAnimationFrame(renderSplits));
-}
-
-function toggleSplitsPane() {
-  const pane = document.getElementById('splits-pane');
-  const btn  = document.getElementById('splits-collapse-btn');
-  const collapsed = pane.classList.toggle('collapsed');
-  btn.textContent = collapsed ? '▲' : '▼';
-  localStorage.setItem('ascent-splits-open', collapsed ? '0' : '1');
-  if (!collapsed) requestAnimationFrame(renderSplits);
-}
 
 function computeSplits(pts, lenMi, metric, agg) {
   if (!pts?.dist_m?.length) return [];
@@ -3036,402 +3066,16 @@ function computeSplits(pts, lenMi, metric, agg) {
   return splits;
 }
 
-function renderSplits() {
-  const pane = document.getElementById('splits-pane');
-  if (!pane || pane.classList.contains('collapsed')) return;
-
-  const canvas = document.getElementById('splits-canvas');
-  if (!canvas) return;
-
-  const wrap = document.getElementById('splits-canvas-wrap');
-  const wRect = wrap.getBoundingClientRect();
-  if (wRect.width < 10) { requestAnimationFrame(renderSplits); return; }
-
-  const W = wRect.width;
-  // Use getBoundingClientRect height; fallback to pane height minus titlebar/settings
-  let H = wRect.height;
-  if (H < 40) {
-    const pane = document.getElementById('splits-pane');
-    const tb   = document.getElementById('splits-titlebar');
-    const ss   = document.getElementById('splits-settings');
-    H = pane.getBoundingClientRect().height
-        - tb.getBoundingClientRect().height
-        - (ss.classList.contains('open') ? ss.getBoundingClientRect().height : 0);
-  }
-  H = Math.max(60, H);
-  canvas.width  = W * devicePixelRatio;
-  canvas.height = H * devicePixelRatio;
-  canvas.style.width  = W + 'px';
-  canvas.style.height = H + 'px';
-  wrap.style.height   = H + 'px';
-
-  const ctx = canvas.getContext('2d');
-  ctx.scale(devicePixelRatio, devicePixelRatio);
-
-  const metric = splitsMetric();
-  const agg    = splitsAgg();
-  const lenMi  = splitsLenMi();
-  const splits = computeSplits(splitsState.pts, lenMi, metric, agg);
-  splitsState.splits = splits;
-
-  // Layout margins
-  const PAD_L = 44, PAD_R = 12, PAD_T = 18, PAD_B = 22;
-  const chartW = W - PAD_L - PAD_R;
-  const chartH = H - PAD_T - PAD_B;
-
-  const bg      = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim() || '#1c1c1e';
-  const surface = getComputedStyle(document.documentElement).getPropertyValue('--surface').trim() || '#2c2c2e';
-  const muted   = '#636366';
-  const text    = '#ebebf0';
-  const accent  = '#3b82f6';
-  const green   = '#4ade80';
-
-  ctx.fillStyle = bg;
-  ctx.fillRect(0, 0, W, H);
-
-  if (!splits.length) {
-    ctx.fillStyle = muted;
-    ctx.font = '12px -apple-system, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('Select an activity', W/2, H/2);
-    return;
-  }
-
-  // Convert split values for display if metric
-  const displaySplits = splits.map(s => {
-    let v = s.value;
-    if (metric === 'climb' && U.metric) v = Math.round(v * 0.3048);
-    if (metric === 'speed' && U.metric) v = Math.round(v * 1.60934 * 10) / 10;
-    return {...s, displayVal: v};
-  });
-  const maxVal  = Math.max(...displaySplits.map(s => s.displayVal), 0.001);
-  const totalMi = splits[splits.length-1].endMi;
-
-  // Nice y-axis ticks
-  function niceMax(v) {
-    const exp  = Math.floor(Math.log10(v));
-    const frac = v / Math.pow(10, exp);
-    const nice = frac < 1.5 ? 1.5 : frac < 3 ? 3 : frac < 7 ? 5 : 10;
-    return nice * Math.pow(10, exp);
-  }
-  const yMax    = niceMax(maxVal);
-  const yTicks  = 5;
-  const yStep   = yMax / yTicks;
-
-  // Grid + y-axis
-  ctx.strokeStyle = 'rgba(255,255,255,0.06)';
-  ctx.lineWidth   = 1;
-  ctx.font        = '9px -apple-system, sans-serif';
-  ctx.fillStyle   = muted;
-  ctx.textAlign   = 'right';
-  for (let i = 0; i <= yTicks; i++) {
-    const val = i * yStep;
-    const y   = PAD_T + chartH - (val / yMax) * chartH;
-    ctx.beginPath();
-    ctx.moveTo(PAD_L, y);
-    ctx.lineTo(PAD_L + chartW, y);
-    ctx.stroke();
-    ctx.fillText(Math.round(val * 10) / 10, PAD_L - 4, y + 3);
-  }
-
-  // Bars
-  const barGap  = 1;
-  const barW    = Math.max(2, (chartW / splits.length) - barGap);
-  const _sp = cachedProfile || {};
-  const _hrB  = (metric === 'hr')    ? hrBoundsFor(_sp, currentAct)  : null;
-  const _pwrB = (metric === 'power') ? pwrBoundsFor(_sp, currentAct) : null;
-  splits.forEach((sp, i) => {
-    const x    = PAD_L + (sp.startMi / totalMi) * chartW;
-    const barH = (displaySplits[i].displayVal / yMax) * chartH;
-    const y    = PAD_T + chartH - barH;
-    let barColor = accent;
-    if (splitsState.selected.has(i)) {
-      barColor = green;
-    } else if (_hrB) {
-      barColor = zoneColorFor(sp.value, _hrB) || accent;
-    } else if (_pwrB) {
-      barColor = zoneColorFor(sp.value, _pwrB) || accent;
-    }
-    ctx.fillStyle = barColor;
-    ctx.fillRect(x + barGap/2, y, barW, barH);
-  });
-
-  // X-axis — distance ticks
-  ctx.fillStyle  = muted;
-  ctx.textAlign  = 'center';
-  ctx.font       = '9px -apple-system, sans-serif';
-  // Choose tick interval
-  const tickIntervals = [1, 2, 5, 10, 20, 25, 50];
-  const targetTicks   = Math.floor(chartW / 50);
-  const rawInterval   = totalMi / targetTicks;
-  const xInterval     = tickIntervals.find(t => t >= rawInterval) || 50;
-  for (let mi = 0; mi <= totalMi; mi += xInterval) {
-    const x = PAD_L + (mi / totalMi) * chartW;
-    ctx.beginPath();
-    ctx.strokeStyle = muted;
-    ctx.lineWidth = 1;
-    ctx.moveTo(x, PAD_T + chartH);
-    ctx.lineTo(x, PAD_T + chartH + 4);
-    ctx.stroke();
-    ctx.fillText(U.metric ? (mi*1.60934).toFixed(0) : mi, x, PAD_T + chartH + 13);
-  }
-
-  // X-axis line
-  ctx.strokeStyle = muted;
-  ctx.lineWidth   = 1;
-  ctx.beginPath();
-  ctx.moveTo(PAD_L, PAD_T + chartH);
-  ctx.lineTo(PAD_L + chartW, PAD_T + chartH);
-  ctx.stroke();
-
-  // Y-axis label (rotated, left side)
-  ctx.save();
-  ctx.translate(10, PAD_T + chartH / 2);
-  ctx.rotate(-Math.PI / 2);
-  ctx.fillStyle  = muted;
-  ctx.textAlign  = 'center';
-  ctx.font       = '9px -apple-system, sans-serif';
-  ctx.fillText(getMetricUnit(metric), 0, 0);
-  ctx.restore();
-
-  // Metric label top-right
-  ctx.fillStyle  = muted;
-  ctx.textAlign  = 'right';
-  ctx.font       = '10px -apple-system, sans-serif';
-  const metricUnit = getMetricUnit(metric);
-  const unitStr = metricUnit ? ` (${metricUnit})` : '';
-  ctx.fillText((agg === 'max' ? 'Maximum ' : 'Average ') + METRIC_LABELS[metric] + unitStr, W - PAD_R, PAD_T - 4);
-
-  // X-axis unit label bottom-right
-  ctx.textAlign = 'right';
-  ctx.font      = '9px -apple-system, sans-serif';
-  ctx.fillText(U.distUnit(), W - PAD_R, H - 2);
-}
-
-function toggleSplitSelect(idx, additive) {
-  if (!additive) splitsState.selected.clear();
-  if (splitsState.selected.has(idx)) splitsState.selected.delete(idx);
-  else splitsState.selected.add(idx);
-  renderSplits();
-  applySplitHighlights();
-}
-
-function extendSplitDrag(idx) {
-  const lo = Math.min(splitsState.dragStart, idx);
-  const hi = Math.max(splitsState.dragStart, idx);
-  splitsState.selected.clear();
-  for (let i = lo; i <= hi; i++) splitsState.selected.add(i);
-  renderSplits();
-  applySplitHighlights();
-}
-
-function onSplitDragEnd() { splitsState.dragging = false; }
-
-function applySplitHighlights() {
-  highlightSplitsOnMap();
-  highlightSplitsOnChart();
-}
-
 function clearSplitHighlights() {
-  if (splitsState.mapHighlight && leafMap) {
-    leafMap.removeLayer(splitsState.mapHighlight);
-    splitsState.mapHighlight = null;
-  }
   if (splitsState._elevSelMapLayer && leafMap) {
     leafMap.removeLayer(splitsState._elevSelMapLayer);
     splitsState._elevSelMapLayer = null;
   }
   if (elevChart) {
-    elevChart.data.datasets = elevChart.data.datasets.filter(d => !d._splitHighlight && !d._elevSel);
+    elevChart.data.datasets = elevChart.data.datasets.filter(d => !d._elevSel);
     elevChart.update('none');
   }
 }
-
-function highlightSplitsOnMap() {
-  if (splitsState.mapHighlight && leafMap) { leafMap.removeLayer(splitsState.mapHighlight); splitsState.mapHighlight = null; }
-  if (!splitsState.selected.size || !splitsState.geo || !leafMap) return;
-  const coords = splitsState.geo?.geometry?.coordinates || [];
-  const pts    = splitsState.pts;
-  const splits = splitsState.splits;
-  if (!coords.length || !pts) return;
-  const n = pts.dist_m.length;
-  const allLL = [];
-  splitsState.selected.forEach(si => {
-    const sp = splits[si]; if (!sp) return;
-    const ci1 = Math.floor((sp.startIdx / (n-1)) * (coords.length-1));
-    const ci2 = Math.ceil( (sp.endIdx   / (n-1)) * (coords.length-1));
-    coords.slice(ci1, ci2+1).forEach(c => allLL.push([c[1], c[0]]));
-  });
-  if (allLL.length > 1) {
-    splitsState.mapHighlight = L.polyline(allLL, {color:'#4ade80', weight:5, opacity:.85}).addTo(leafMap);
-  }
-}
-
-function highlightSplitsOnChart() {
-  if (!elevChart) return;
-  elevChart.data.datasets = elevChart.data.datasets.filter(d => !d._splitHighlight);
-  if (!splitsState.selected.size || !splitsState.pts) { elevChart.update('none'); return; }
-  const pts = splitsState.pts;
-  splitsState.selected.forEach(si => {
-    const sp = splitsState.splits[si]; if (!sp) return;
-    const slice = pts.dist_m.slice(sp.startIdx, sp.endIdx+1).map((d,j) => ({
-      x: U.metric ? d/1000 : d/1609.344, y: U.alt(pts.alt_ft[sp.startIdx+j] || 0)
-    }));
-    elevChart.data.datasets.push({
-      _splitHighlight: true, data: slice,
-      borderColor: 'rgba(74,222,128,0)', backgroundColor: 'rgba(74,222,128,0.35)',
-      fill: true, pointRadius: 0, tension: 0, order: 0,
-    });
-  });
-  elevChart.update('none');
-}
-
-// Canvas mouse: click/drag to select splits
-(function() {
-  function setup() {
-    const canvas = document.getElementById('splits-canvas');
-    if (!canvas) return;
-    canvas.addEventListener('mousedown', e => {
-      const rect   = canvas.getBoundingClientRect();
-      const idx    = hitTestSplit(e.clientX - rect.left, e.clientY - rect.top);
-      if (idx < 0) return;
-      splitsState.dragging  = true;
-      splitsState.dragStart = idx;
-      toggleSplitSelect(idx, e.ctrlKey || e.metaKey);
-      document.addEventListener('mouseup', () => { splitsState.dragging = false; }, {once:true});
-    });
-    canvas.addEventListener('mousemove', e => {
-      if (!splitsState.dragging) return;
-      const rect = canvas.getBoundingClientRect();
-      const idx  = hitTestSplit(e.clientX - rect.left, e.clientY - rect.top);
-      if (idx >= 0) extendSplitDrag(idx);
-    });
-  }
-  // Setup after DOM ready
-  document.addEventListener('DOMContentLoaded', setup);
-  setTimeout(setup, 500);
-})();
-
-function hitTestSplit(px, py) {
-  const splits   = splitsState.splits;
-  if (!splits.length) return -1;
-  const wrap     = document.getElementById('splits-canvas-wrap');
-  const W        = wrap.getBoundingClientRect().width;
-  const PAD_L    = 44, PAD_R = 12, PAD_T = 18, PAD_B = 22;
-  const chartW   = W - PAD_L - PAD_R;
-  const totalMi  = splits[splits.length-1].endMi;
-  if (px < PAD_L || px > PAD_L + chartW) return -1;
-  const fracX    = (px - PAD_L) / chartW;
-  const clickMi  = fracX * totalMi;
-  return splits.findIndex((sp, i) => clickMi >= sp.startMi && clickMi < sp.endMi);
-}
-
-// Save and restore splits settings
-function saveSplitsPrefs() {
-  localStorage.setItem('ascent-splits', JSON.stringify({
-    metric: splitsMetric(),
-    agg:    splitsAgg(),
-    len:    document.querySelector('input[name="sp-len"]:checked')?.value || '1',
-  }));
-}
-
-function loadSplitsPrefs() {
-  try {
-    const p = JSON.parse(localStorage.getItem('ascent-splits') || 'null');
-    if (!p) return;
-    const m = document.querySelector(`input[name="sp-metric"][value="${p.metric}"]`);
-    const a = document.querySelector(`input[name="sp-agg"][value="${p.agg}"]`);
-    const l = document.querySelector(`input[name="sp-len"][value="${p.len}"]`);
-    if (m) m.checked = true;
-    if (a) a.checked = true;
-    if (l) l.checked = true;
-  } catch(e) {}
-}
-
-// Settings changes re-render and save
-document.addEventListener('change', e => {
-  if (['sp-metric','sp-agg','sp-len'].includes(e.target.name)) {
-    saveSplitsPrefs();
-    renderSplits();
-  }
-});
-
-// Load prefs on startup
-document.addEventListener('DOMContentLoaded', loadSplitsPrefs);
-
-// Re-render splits when sidebar is resized (horizontal drag)
-(function() {
-  const wrap = document.getElementById('splits-canvas-wrap');
-  if (!wrap || !window.ResizeObserver) return;
-  new ResizeObserver(() => {
-    const pane = document.getElementById('splits-pane');
-    if (pane && !pane.classList.contains('collapsed')) renderSplits();
-  }).observe(wrap);
-})();
-
-// Titlebar drag to resize pane
-(function() {
-  const titlebar = document.getElementById('splits-titlebar');
-  const pane     = document.getElementById('splits-pane');
-  if (!titlebar || !pane) return;
-  let startY = 0, startH = 0;
-  titlebar.addEventListener('mousedown', e => {
-    if (e.target.tagName === 'BUTTON') return;
-    e.preventDefault();
-    if (pane.classList.contains('collapsed')) return;
-    startY = e.clientY; startH = pane.getBoundingClientRect().height;
-    const list = document.getElementById('act-list');
-    document.body.style.cssText = 'cursor:row-resize;user-select:none';
-    function onMove(e) {
-      const newH = Math.max(60, Math.min(500, startH - (e.clientY - startY)));
-      pane.style.height = newH + 'px';
-      list.style.paddingBottom = (newH + 44) + 'px';
-      requestAnimationFrame(renderSplits);
-    }
-    function onUp() {
-      document.body.style.cssText = '';
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
-      savePaneSizes({splitsH: pane.offsetHeight});
-    }
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
-  });
-
-  // Also wire the drag handle above the pane
-  const dragHandle = document.getElementById('splits-drag');
-  if (dragHandle) {
-    dragHandle.addEventListener('mousedown', e => {
-      e.preventDefault();
-      startY = e.clientY;
-      startH = pane.getBoundingClientRect().height;
-      const list = document.getElementById('act-list');
-      dragHandle.classList.add('dragging');
-      document.body.style.cssText = 'cursor:row-resize;user-select:none';
-      function onMove(e) {
-        const newH = Math.max(60, Math.min(500, startH - (e.clientY - startY)));
-        if (newH <= 32) {
-          pane.classList.add('collapsed');
-          pane.style.height = '28px';
-        } else {
-          pane.classList.remove('collapsed');
-          pane.style.height = newH + 'px';
-        }
-        list.style.paddingBottom = (parseInt(pane.style.height) + 44) + 'px';
-        requestAnimationFrame(renderSplits);
-      }
-      function onUp() {
-        dragHandle.classList.remove('dragging');
-        document.body.style.cssText = '';
-        document.removeEventListener('mousemove', onMove);
-        document.removeEventListener('mouseup', onUp);
-        savePaneSizes({splitsH: pane.offsetHeight});
-      }
-      document.addEventListener('mousemove', onMove);
-      document.addEventListener('mouseup', onUp);
-    });
-  }
-})();
 
 
 // ── PANE SIZE PERSISTENCE ────────────────────────────────────────────────────
@@ -5768,7 +5412,6 @@ document.addEventListener('DOMContentLoaded', () => {
 (async()=>{
   initMap();
   await U.load();  // fetch metric pref before first render
-  updateSplitLenLabels();
 
   // Load users first so userMap is ready before activities render
   try {
@@ -5796,26 +5439,11 @@ document.addEventListener('DOMContentLoaded', () => {
   await loadFilterOptions();
   await loadAll();
   loadChartPrefs();
-  // Restore splits pane state
-  loadSplitsPrefs();
-  if (localStorage.getItem('ascent-splits-open') === '1') {
-    const pane = document.getElementById('splits-pane');
-    const btn  = document.getElementById('splits-collapse-btn');
-    if (pane) { pane.classList.remove('collapsed'); btn.textContent = '▼'; }
-  }
   // Restore pane sizes
   const ps = loadPaneSizes();
   if (ps.sidebarW) { const sb = document.getElementById('sidebar'); if (sb) sb.style.width = ps.sidebarW + 'px'; }
   if (ps.mapH)     { const el = document.getElementById('map-wrap');   if (el) el.style.height = ps.mapH   + 'px'; }
   if (ps.chartH)   { const el = document.getElementById('chart-wrap'); if (el) el.style.height = ps.chartH + 'px'; }
-  if (ps.splitsH && ps.splitsH > 32) {
-    const pane = document.getElementById('splits-pane');
-    const btn  = document.getElementById('splits-collapse-btn');
-    const list = document.getElementById('act-list');
-    if (pane) { pane.style.height = ps.splitsH + 'px'; pane.classList.remove('collapsed'); }
-    if (btn)  btn.textContent = '▼';
-    if (list) list.style.paddingBottom = (ps.splitsH + 44) + 'px';
-  }
   // Auto-select activity from ?select= param
   const sel = new URLSearchParams(location.search).get('select');
   if (sel) selectActivity(parseInt(sel));

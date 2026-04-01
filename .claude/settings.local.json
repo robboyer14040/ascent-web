@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(fly deploy:*)"
+      "Bash(fly deploy:*)",
+      "Bash(python3:*)"
     ]
   }
 }
