@@ -68,7 +68,22 @@ ANTHROPIC_API_KEY    # Optional: AI Coach feature
 ASCENT_HTTPS         # Optional: force secure cookies (set true on Fly.io)
 ASCENT_TEMPLATE_DIR  # Optional: override template path (for bundled apps)
 ASCENT_STATIC_DIR    # Optional: override static path (for bundled apps)
+SMTP_HOST            # Optional: SMTP server for invite emails (e.g. smtp.gmail.com)
+SMTP_PORT            # Optional: SMTP port — 587 (STARTTLS, default) or 465 (SSL)
+SMTP_USER            # Optional: SMTP login username
+SMTP_PASSWORD        # Optional: SMTP login password / app password
+SMTP_FROM            # Optional: From address (defaults to SMTP_USER)
 ```
+
+## Versioning
+
+After every fix or feature, bump the patch version in `app/main.py`:
+
+```python
+templates.env.globals["app_version"] = "v0.1.X"
+```
+
+Increment the third number (e.g. `v0.1.96` → `v0.1.97`). This is the single source of truth for the version displayed in the UI.
 
 ## Deployment
 

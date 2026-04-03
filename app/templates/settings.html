@@ -147,47 +147,6 @@ input[readonly]{color:#8e8e93;cursor:default}
       ⚠️ Restart Ascent to activate the new key — the AI Coach will use it immediately after restart.
     </div>
 
-    <hr class="divider">
-
-    <!-- Strava -->
-    <h2 style="margin-bottom:.5rem">
-      🟠 Strava API Keys
-      <span id="strava-badge" class="status-badge {% if strava_id_set %}badge-set{% else %}badge-unset{% endif %}" style="margin-left:.5rem;vertical-align:middle">
-        {% if strava_id_set %}✓ Set{% else %}Not set{% endif %}
-      </span>
-      <button class="help-btn" style="margin-left:.5rem" onclick="openModal('modal-strava')">? How to get these</button>
-    </h2>
-    <p>Required to sync activities from Strava. You'll need to create a free Strava API app to get these — it takes about 5 minutes.</p>
-
-    <div id="strava-display" style="{% if not strava_id_set %}display:none{% endif %}">
-      <label>Client ID</label>
-      <div class="key-display">
-        <span class="key-mono" id="strava-id-display">{{ strava_id_value or '' }}</span>
-        <button class="btn btn-ghost btn-sm" onclick="showStravaEdit()">Change</button>
-      </div>
-      <label style="margin-top:.5rem">Client Secret</label>
-      <div class="key-display">
-        <span class="key-mono" id="strava-secret-display">{{ strava_secret_masked }}</span>
-      </div>
-    </div>
-
-    <div id="strava-edit" style="{% if strava_id_set %}display:none{% endif %}">
-      <label for="strava-id-input">Client ID <span style="color:#636366;font-weight:400">(numeric, e.g. 12345)</span></label>
-      <input type="text" id="strava-id-input" placeholder="12345" autocomplete="off">
-      <label for="strava-secret-input">Client Secret</label>
-      <input type="password" id="strava-secret-input" placeholder="abc123def456…" autocomplete="off">
-      <div class="btn-row">
-        <button class="btn btn-primary" onclick="saveStravaKeys()">Save Strava Keys</button>
-        {% if strava_id_set %}
-        <button class="btn btn-ghost" onclick="hideStravaEdit()">Cancel</button>
-        {% endif %}
-      </div>
-    </div>
-
-    <div class="result" id="strava-result"></div>
-    <div class="restart-notice" id="strava-restart">
-      ⚠️ Restart Ascent to activate the new Strava keys, then go to Strava Sync to connect your account.
-    </div>
   </div>
 
 
@@ -324,50 +283,6 @@ input[readonly]{color:#8e8e93;cursor:default}
 </div>
 
 
-<!-- ── Help modal: Strava ────────────────────────────────────────────────────── -->
-<div class="modal-overlay" id="modal-strava" onclick="modalOverlayClick(event,'modal-strava')">
-  <div class="modal">
-    <div class="modal-header">
-      <h2>🟠 How to get Strava API Keys</h2>
-      <button class="modal-close" onclick="closeModal('modal-strava')">✕</button>
-    </div>
-    <div class="modal-body">
-      <div class="modal-tip">Strava API access is free. You just need to create a Strava API "application" (takes about 5 minutes) to get your Client ID and Secret.</div>
-
-      <h3>Step 1 — Log in to Strava</h3>
-      <p>Go to <a href="https://www.strava.com/settings/api" target="_blank">strava.com/settings/api</a> and log in with your Strava account.</p>
-
-      <h3>Step 2 — Create a Strava API Application</h3>
-      <ol>
-        <li>Fill in the form with any reasonable values:
-          <ul>
-            <li><strong>Application Name:</strong> Ascent (or anything you like)</li>
-            <li><strong>Category:</strong> Data Importer</li>
-            <li><strong>Club:</strong> leave blank</li>
-            <li><strong>Website:</strong> <code>https://ascent-web.fly.dev</code></li>
-            <li><strong>Authorization Callback Domain:</strong> <code>ascent-web.fly.dev</code></li>
-          </ul>
-        </li>
-        <li>Check the box to agree to Strava's API agreement</li>
-        <li>Click <strong>Create</strong></li>
-      </ol>
-
-      <h3>Step 3 — Copy your keys</h3>
-      <p>After creating the app, Strava shows you:</p>
-      <ul>
-        <li><strong>Client ID</strong> — a short number (e.g. 12345)</li>
-        <li><strong>Client Secret</strong> — a long hex string</li>
-      </ul>
-      <p>Copy both and paste them into the fields above, then click <strong>Save Strava Keys</strong>.</p>
-
-      <h3>Step 4 — Connect your account</h3>
-      <p>After saving and restarting Ascent, go to <strong>Strava Sync</strong> in the top navigation to authorise Ascent to access your activities. You'll be redirected to Strava to approve it, then brought back to start syncing.</p>
-
-      <div class="modal-warn">Each Strava user who wants to use Ascent needs their own API keys — you can't share yours with someone else's Strava account.</div>
-    </div>
-  </div>
-</div>
-
 
 <script>
 // ── Anthropic key ─────────────────────────────────────────────────────────────
@@ -409,60 +324,6 @@ async function saveAnthropicKey() {
   btn.disabled = false; btn.textContent = 'Save Key';
 }
 
-// ── Strava keys ───────────────────────────────────────────────────────────────
-function showStravaEdit() {
-  document.getElementById('strava-display').style.display = 'none';
-  document.getElementById('strava-edit').style.display = 'block';
-  document.getElementById('strava-id-input').focus();
-}
-function hideStravaEdit() {
-  document.getElementById('strava-edit').style.display = 'none';
-  document.getElementById('strava-display').style.display = 'block';
-}
-
-async function saveStravaKeys() {
-  const client_id     = document.getElementById('strava-id-input').value.trim();
-  const client_secret = document.getElementById('strava-secret-input').value.trim();
-  const res = document.getElementById('strava-result');
-  if (!client_id || !client_secret) {
-    show(res, 'err', '✗ Both Client ID and Client Secret are required'); return;
-  }
-  const btn = event.target;
-  btn.disabled = true; btn.textContent = 'Saving…';
-  try {
-    const r = await fetch('/api/settings/strava-keys', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({client_id, client_secret}),
-    });
-    const d = await r.json();
-    if (r.ok) {
-      show(res, 'ok', '✓ Strava keys saved');
-      document.getElementById('strava-id-display').textContent = d.client_id;
-      document.getElementById('strava-secret-display').textContent = d.masked_secret;
-      document.getElementById('strava-badge').className = 'status-badge badge-set';
-      document.getElementById('strava-badge').textContent = '✓ Set';
-      document.getElementById('strava-id-input').value = '';
-      document.getElementById('strava-secret-input').value = '';
-      hideStravaEdit();
-      document.getElementById('strava-display').style.display = 'block';
-      document.getElementById('strava-restart').classList.add('visible');
-    } else {
-      show(res, 'err', `✗ ${d.detail||'Unknown error'}`);
-    }
-  } catch(e) { show(res, 'err', `✗ ${e.message}`); }
-  btn.disabled = false; btn.textContent = 'Save Strava Keys';
-}
-
-// ── Load current Strava ID for display (not sent in template for security) ────
-(async () => {
-  try {
-    const r = await fetch('/api/settings/keys');
-    const d = await r.json();
-    if (d.strava_id.set) {
-      document.getElementById('strava-id-display').textContent = d.strava_id.value;
-    }
-  } catch(e) {}
-})();
 
 // ── Modals ────────────────────────────────────────────────────────────────────
 function openModal(id) {

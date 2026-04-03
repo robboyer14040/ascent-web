@@ -1061,6 +1061,13 @@ class AscentDB:
         row = self._con.execute("SELECT * FROM users WHERE email=?", (email.lower(),)).fetchone()
         return dict(row) if row else None
 
+    def get_user_by_username(self, username: str) -> Optional[dict]:
+        self._ensure_users_tables()
+        row = self._con.execute(
+            "SELECT * FROM users WHERE LOWER(username)=?", (username.strip().lower(),)
+        ).fetchone()
+        return dict(row) if row else None
+
     def get_user_by_strava_athlete_id(self, athlete_id: str) -> Optional[dict]:
         self._ensure_users_tables()
         row = self._con.execute(

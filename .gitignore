@@ -10,3 +10,4 @@ build/
 *.zip
 *.log
 .DS_Store
+scripts/set_fly_secrets.sh

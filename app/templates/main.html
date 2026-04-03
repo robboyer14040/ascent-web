@@ -634,9 +634,28 @@ input,select{font:inherit}
 .sp-tb-btn{background:none;border:none;color:var(--muted);cursor:pointer;
   padding:2px 5px;border-radius:4px;font-size:13px;line-height:1}
 .sp-tb-btn:hover{background:var(--surface2);color:var(--text)}
+/* auto-sync toast */
+#autosync-toast{
+  position:fixed;bottom:18px;right:18px;z-index:9000;
+  background:#2c2c2e;border:1px solid #3a3a3c;border-radius:10px;
+  padding:9px 14px;font-size:12.5px;color:#f2f2f7;
+  display:flex;align-items:center;gap:8px;
+  box-shadow:0 4px 16px rgba(0,0,0,.5);
+  opacity:0;transform:translateY(6px);pointer-events:none;
+  transition:opacity .25s,transform .25s;
+}
+#autosync-toast.visible{opacity:1;transform:translateY(0)}
+#autosync-toast .toast-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+#autosync-toast .dot-spin{
+  border:2px solid #48484a;border-top-color:#f97316;
+  border-radius:50%;width:12px;height:12px;
+  animation:toastSpin .7s linear infinite;flex-shrink:0;
+}
+@keyframes toastSpin{to{transform:rotate(360deg)}}
 </style>
 </head>
 <body>
+<div id="autosync-toast"></div>
 
 <div id="toolbar">
   <span class="tb-title">⛰ Ascent <span style="font-size:10px;font-weight:400;color:var(--muted);letter-spacing:.02em">{{ app_version }}</span></span><span id="viewing-user-badge" onclick="openUserPicker()" title="Switch user" style="margin-left:8px;font-size:11px;font-weight:500;color:#f97316;cursor:pointer;padding:2px 7px;border:1px solid #f97316;border-radius:10px;opacity:.85;user-select:none"></span>
@@ -796,15 +815,25 @@ input,select{font:inherit}
             <div id="split-detail-controls" style="display:none;margin-bottom:4px">
               <div style="display:flex;gap:6px">
                 <div style="flex:1">
-                  <div style="font-size:9px;color:var(--muted);margin-bottom:2px">Length</div>
+                  <div style="font-size:9px;color:var(--muted);margin-bottom:2px">Interval</div>
                   <select id="split-len-sel" style="width:100%;background:var(--surface2);border:1px solid var(--border2);color:var(--text);border-radius:5px;padding:2px 4px;font-size:11px" onchange="redrawElevWithOverlays()">
-                    <option value="0.1">1/10 mi</option>
-                    <option value="0.25">¼ mi</option>
-                    <option value="0.5">½ mi</option>
-                    <option value="1" selected>1 mi</option>
-                    <option value="2">2 mi</option>
-                    <option value="5">5 mi</option>
-                    <option value="10">10 mi</option>
+                    <optgroup label="Time">
+                      <option value="t:1">1 sec</option>
+                      <option value="t:3">3 sec</option>
+                      <option value="t:5">5 sec</option>
+                      <option value="t:10">10 sec</option>
+                      <option value="t:30">30 sec</option>
+                      <option value="t:60">1 min</option>
+                    </optgroup>
+                    <optgroup label="Distance">
+                      <option value="0.1">1/10 mi</option>
+                      <option value="0.25">¼ mi</option>
+                      <option value="0.5">½ mi</option>
+                      <option value="1" selected>1 mi</option>
+                      <option value="2">2 mi</option>
+                      <option value="5">5 mi</option>
+                      <option value="10">10 mi</option>
+                    </optgroup>
                   </select>
                 </div>
                 <div style="flex:1">
@@ -825,6 +854,13 @@ input,select{font:inherit}
             <div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:4px">Peaks</div>
             <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text);cursor:pointer">
               <input type="checkbox" id="show-peaks" checked onchange="redrawElevWithOverlays()" style="accent-color:#f97316"> Show
+            </label>
+          </div>
+          <!-- X-Axis column -->
+          <div>
+            <div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:4px">X-Axis</div>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text);cursor:pointer">
+              <input type="checkbox" id="xaxis-time" onchange="redrawElevWithOverlays()" style="accent-color:#f97316"> Time
             </label>
           </div>
         </div>
@@ -1205,6 +1241,12 @@ async function loadAll() {
 // ── MAP ───────────────────────────────────────────────────────────────────────
 let leafMap=null, trackLayer=null, startMark=null, endMark=null, tileLayer=null;
 
+function refitMap() {
+  if (!leafMap) return;
+  leafMap.invalidateSize({animate: false});
+  if (trackLayer) leafMap.fitBounds(trackLayer.getBounds(), {padding:[20,20]});
+}
+
 const MAP_STYLES = {
   'osm':        { label: 'Street',    url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',                                          attr: '© OpenStreetMap' },
   'cycle':      { label: 'Cycling',   url: 'https://tile.waymarkedtrails.org/cycling/{z}/{x}/{y}.png',                                attr: '© OpenStreetMap, © Waymarked Trails' },
@@ -1273,6 +1315,7 @@ function drawTrack(geojson) {
   const valid = coords.filter(c=>Math.abs(c[1])<90&&Math.abs(c[0])<180&&!(c[0]===0&&c[1]===0));
   if (valid.length<2) return;
   const ll = valid.map(c=>[c[1],c[0]]);
+  leafMap.invalidateSize({animate: false});
   trackLayer = L.polyline(ll,{color:'#ef4444',weight:3,opacity:.9,smoothFactor:1.5}).addTo(leafMap);
 
   // Green start flag SVG
@@ -1458,6 +1501,8 @@ function loadChartPrefs() {
       if (sl && p.splitLen !== undefined) sl.value = p.splitLen;
       if (sa && p.splitAgg !== undefined) sa.value = p.splitAgg;
       if (sz && p.splitZones !== undefined) sz.checked = p.splitZones;
+      const xt = document.getElementById('xaxis-time');
+      if (xt && p.xAxisTime !== undefined) xt.checked = p.xAxisTime;
       if (sm && sm.value) {
         const dc = document.getElementById('split-detail-controls');
         if (dc) dc.style.display = 'block';
@@ -1492,6 +1537,7 @@ function saveChartPrefs() {
     splitLen:    document.getElementById('split-len-sel')?.value || '1',
     splitAgg:    document.getElementById('split-agg-sel')?.value || 'avg',
     splitZones:  document.getElementById('split-zones')?.checked ?? false,
+    xAxisTime:   document.getElementById('xaxis-time')?.checked ?? false,
   }));
 }
 
@@ -1567,6 +1613,14 @@ function _fmtSplitVal(value, metric) {
   return Math.round(value);
 }
 
+function fmtChartTime(sec) {
+  const s = Math.round(sec);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const r = s % 60;
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(r).padStart(2,'0')}`;
+}
+
 async function drawElevation(data, version) {
   const label = document.querySelector('.chart-label');
   if (label) label.textContent = 'Elevation';
@@ -1574,14 +1628,19 @@ async function drawElevation(data, version) {
   if (version !== undefined && version !== elevRenderVersion) return; // stale
 
   elevChartData = data;
-  const { dist_m, alt_ft, hr, speed, power, cadence } = data;
+  const { dist_m, alt_ft, hr, speed, power, cadence, time: timeArr } = data;
   if (!alt_ft || alt_ft.every(v => v === 0)) return;
 
-  // Full-resolution points for accurate peak detection (before downsampling)
   const xConv = U.metric ? (m => m/1000)        : (m => m/1609.344);
   const yConv = U.metric ? (ft => Math.round(ft*0.3048)) : (ft => Math.round(ft));
   const xUnit = U.metric ? 'km'  : 'mi';
 
+  const xAxisTime = (document.getElementById('xaxis-time')?.checked ?? false)
+                    && timeArr && timeArr.length === dist_m.length;
+  // ptX(i) returns the x-axis value for data point index i
+  const ptX = xAxisTime ? (i => timeArr[i]) : (i => xConv(dist_m[i]));
+
+  // Full-resolution points always use distance (findPeaks needs consistent spacing)
   const fullPoints = [];
   for (let i = 0; i < dist_m.length; i++) {
     fullPoints.push({ x: xConv(dist_m[i]), y: yConv(alt_ft[i]) });
@@ -1592,19 +1651,21 @@ async function drawElevation(data, version) {
   const step  = Math.max(1, Math.floor(total / 600));
   const points = [];
   for (let i = 0; i < total; i += step) {
-    const x = xConv(dist_m[i]);
-    points.push({ x, y: yConv(alt_ft[i]) });
+    points.push({ x: ptX(i), y: yConv(alt_ft[i]) });
   }
   if (!points.length) return;
-  const totalMi = points[points.length - 1].x;  // actually total in current unit
+  const totalX = ptX(total - 1);
 
   // Overlay settings
   const o1key      = document.getElementById('overlay1-sel')?.value || '';
   const o1Zones    = document.getElementById('overlay1-zones')?.checked ?? false;
   const showPeaks  = document.getElementById('show-peaks')?.checked ?? true;
-  const splitMetric = document.getElementById('split-metric-sel')?.value || '';
-  const splitLenMi  = parseFloat(document.getElementById('split-len-sel')?.value || '1') || 1;
-  const splitAgg    = document.getElementById('split-agg-sel')?.value || 'avg';
+  const splitMetric  = document.getElementById('split-metric-sel')?.value || '';
+  const splitLenRaw  = document.getElementById('split-len-sel')?.value || '1';
+  const splitIsTime  = splitLenRaw.startsWith('t:');
+  const splitLenMi   = splitIsTime ? 1 : (parseFloat(splitLenRaw) || 1);
+  const splitDurSec  = splitIsTime ? (parseInt(splitLenRaw.slice(2)) || 10) : 0;
+  const splitAgg     = document.getElementById('split-agg-sel')?.value || 'avg';
   const splitZones  = document.getElementById('split-zones')?.checked ?? false;
 
   // Single (non-zone) colors for each metric
@@ -1623,7 +1684,7 @@ async function drawElevation(data, version) {
     const pts = [];
     for (let i = 0; i < total; i += step) {
       const v = arr[i];
-      if (v != null) pts.push({ x: xConv(dist_m[i]), y: Math.round(v * 10) / 10, _raw: v });
+      if (v != null) pts.push({ x: ptX(i), y: Math.round(v * 10) / 10, _raw: v });
     }
     return pts;
   }
@@ -1676,8 +1737,11 @@ async function drawElevation(data, version) {
 
   const scales = {
     x: {
-      type: 'linear', display: true, min: 0, max: totalMi,
-      ticks: { color: '#64748b', font: { size: 9 }, maxTicksLimit: 10, callback: v => `${v.toFixed(1)}${xUnit}` },
+      type: 'linear', display: true, min: 0, max: totalX,
+      ticks: {
+        color: '#64748b', font: { size: 9 }, maxTicksLimit: 10,
+        callback: xAxisTime ? (v => fmtChartTime(v)) : (v => `${v.toFixed(1)}${xUnit}`),
+      },
       grid: { color: 'rgba(255,255,255,.04)' },
     },
     yElev: {
@@ -1715,7 +1779,9 @@ async function drawElevation(data, version) {
   // ── Splits overlay plugin ─────────────────────────────────────────────────
   let splitsPlugin = null;
   if (splitMetric && data.dist_m && data.dist_m.length > 1) {
-    const _splits = computeSplits(data, splitLenMi, splitMetric, splitAgg);
+    const _splits = splitIsTime
+      ? computeSplitsByTime(data, splitDurSec, splitMetric, splitAgg)
+      : computeSplits(data, splitLenMi, splitMetric, splitAgg);
     if (_splits.length) {
       // When overlay and splits share the same metric, reuse the left axis
       const _sharedAxis = splitMetric === o1key && !!o1key && !!scales.yLeft;
@@ -1765,8 +1831,8 @@ async function drawElevation(data, version) {
           const {top, bottom} = chartArea;
           cx.save();
           _splits.forEach(sp => {
-            const x0 = xSc.getPixelForValue(xConv(sp.startDist));
-            const x1 = xSc.getPixelForValue(xConv(sp.endDist));
+            const x0 = xSc.getPixelForValue(xAxisTime ? ptX(sp.startIdx) : xConv(sp.startDist));
+            const x1 = xSc.getPixelForValue(xAxisTime ? ptX(sp.endIdx)   : xConv(sp.endDist));
             const w = x1 - x0;
             if (w <= 0) return;
             const dv = _toDisplayVal(sp.value);
@@ -1814,7 +1880,7 @@ async function drawElevation(data, version) {
       if (!xSc || !ySc) return;
       cx.save();
       peakList.forEach(pk => {
-        const px = xSc.getPixelForValue(pk.x);
+        const px = xSc.getPixelForValue(xAxisTime ? ptX(pk.idx) : pk.x);
         const py = ySc.getPixelForValue(pk.y);
         const label = U.alt(pk.y) + ' ' + U.altUnit();
         // Stem line
@@ -1858,7 +1924,7 @@ async function drawElevation(data, version) {
         legend: { display: false },
         tooltip: {
           callbacks: {
-            title: items => `${Number(items[0].parsed.x).toFixed(1)} mi`,
+            title: items => xAxisTime ? fmtChartTime(items[0].parsed.x) : `${Number(items[0].parsed.x).toFixed(1)} ${xUnit}`,
             label: c => {
               const ds = c.datasetIndex;
               if (ds === 0) return `${c.parsed.y} ft`;
@@ -1913,16 +1979,22 @@ async function drawElevation(data, version) {
       if (!ca || px < ca.left || px > ca.right) { panel.style.display='none'; cross.style.display='none'; return; }
 
       const xScale = elevChart.scales.x;
-      const xMi    = xScale.getValueForPixel(px);
+      const xVal   = xScale.getValueForPixel(px);
 
-      // Map xMi → data index
+      // Map x-axis value → data index
       const data = elevChartData;
       const n    = data.dist_m.length;
-      const xM   = U.metric ? xMi * 1000 : xMi * 1609.344;  // chart x is km or mi
-      // Binary search for closest index
-      let lo=0, hi=n-1;
-      while (lo < hi-1) { const mid=Math.floor((lo+hi)/2); if (data.dist_m[mid] < xM) lo=mid; else hi=mid; }
-      const idx = lo + (xM - data.dist_m[lo]) / Math.max(1, data.dist_m[hi] - data.dist_m[lo]);
+      const useTimeAxis = (document.getElementById('xaxis-time')?.checked ?? false)
+                          && data.time && data.time.length === n;
+      let lo=0, hi=n-1, idx;
+      if (useTimeAxis) {
+        while (lo < hi-1) { const mid=Math.floor((lo+hi)/2); if (data.time[mid] < xVal) lo=mid; else hi=mid; }
+        idx = lo + (xVal - data.time[lo]) / Math.max(1, data.time[hi] - data.time[lo]);
+      } else {
+        const xM = U.metric ? xVal * 1000 : xVal * 1609.344;
+        while (lo < hi-1) { const mid=Math.floor((lo+hi)/2); if (data.dist_m[mid] < xM) lo=mid; else hi=mid; }
+        idx = lo + (xM - data.dist_m[lo]) / Math.max(1, data.dist_m[hi] - data.dist_m[lo]);
+      }
 
       // Crosshair
       cross.style.display = 'block';
@@ -2363,6 +2435,10 @@ async function selectActivity(id) {
   loadPhotos(id); // async
   loadWeatherLocation(id); // async
 
+  // Wait for layout to settle after DOM changes before any rendering
+  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+  if (myVersion !== elevRenderVersion) return;
+
   // Map
   const coords = geo?.geometry?.coordinates;
   if (coords && coords.length > 1) {
@@ -2385,26 +2461,30 @@ async function selectActivity(id) {
         if (myVersion !== elevRenderVersion) return; // user moved on during GPS fetch
         if (fr.ok) {
           const fd = await fr.json();
-          // Re-fetch geo and charts now that points are stored
-          const [gR2, cR2] = await Promise.all([
+          // Re-fetch activity (description may now be saved), geo, and charts
+          const [aR2, gR2, cR2] = await Promise.all([
+            fetch(`/activities/${id}/json`),
             fetch(`/api/activities/${id}/geojson`),
             fetch(`/api/activities/${id}/charts`),
           ]);
           if (myVersion !== elevRenderVersion) return; // user moved on during refetch
+          if (aR2.ok) { const act2 = await aR2.json(); Object.assign(act, act2); currentAct = act; }
           const geo2    = gR2.ok ? await gR2.json() : null;
           const charts2 = cR2.ok ? await cR2.json() : null;
 
+          // Rebuild detail HTML now that act may have description
+          det.innerHTML = buildDetailHTML(act);
+
           // Hide placeholder, invalidate map size
           document.getElementById('mapPlaceholder').style.display = 'none';
-          if (leafMap) leafMap.invalidateSize();
+          if (leafMap) leafMap.invalidateSize({animate: false});
 
           // Replace canvas to clear any stale Chart.js state
           if (elevChart) { elevChart.destroy(); elevChart = null; }
-          const chartWrap = document.getElementById('chart-wrap');
           const oldCanvas = document.getElementById('elevChart');
           const newCanvas = document.createElement('canvas');
           newCanvas.id = 'elevChart';
-          chartWrap.replaceChild(newCanvas, oldCanvas);
+          oldCanvas.parentNode.replaceChild(newCanvas, oldCanvas);
           const cl = document.querySelector('.chart-label');
           if (cl) cl.textContent = 'Elevation';
 
@@ -3160,6 +3240,43 @@ function computeSplits(pts, lenMi, metric, agg) {
   return splits;
 }
 
+function computeSplitsByTime(pts, durSec, metric, agg) {
+  if (!pts?.time?.length || !pts?.dist_m?.length) return [];
+  const n = pts.time.length;
+  const splits = [];
+  let si = 0;
+
+  const getArr = m => ({ speed: pts.speed, power: pts.power, hr: pts.hr,
+    cadence: pts.cadence, climb: pts.alt_ft, pace: pts.speed })[m] || pts.speed;
+  const arr = getArr(metric);
+
+  for (let i = 1; i < n; i++) {
+    if ((pts.time[i] - pts.time[si]) >= durSec || i === n - 1) {
+      const slice = arr.slice(si, i + 1).filter(v => v > 0);
+      let value = 0;
+      if (slice.length) {
+        value = agg === 'max' ? Math.max(...slice) : slice.reduce((a,b)=>a+b,0)/slice.length;
+      }
+      if (metric === 'climb') {
+        const alt = pts.alt_ft.slice(si, i + 1);
+        value = 0;
+        for (let j = 1; j < alt.length; j++) if (alt[j] > alt[j-1]) value += alt[j] - alt[j-1];
+      }
+      if (metric === 'pace' && value > 0) value = U.metric ? 60 / (value * 1.60934) : 60 / value;
+
+      splits.push({
+        startIdx: si, endIdx: i,
+        startDist: pts.dist_m[si], endDist: pts.dist_m[i],
+        startMi: pts.dist_m[si] / 1609.344,
+        endMi:   pts.dist_m[i]  / 1609.344,
+        value: Math.round(value * 10) / 10,
+      });
+      si = i;
+    }
+  }
+  return splits;
+}
+
 function clearSplitHighlights() {
   if (splitsState._elevSelMapLayer && leafMap) {
     leafMap.removeLayer(splitsState._elevSelMapLayer);
@@ -3205,7 +3322,11 @@ function toggleStats() {
     btn.classList.remove('collapsed');
     if (titlebar) titlebar.style.cursor = 'row-resize';
   }
-  if (leafMap) setTimeout(() => leafMap.invalidateSize(), 220);
+  setTimeout(() => {
+    refitMap();
+    const al = document.getElementById('act-list');
+    if (al) al.dispatchEvent(new Event('scroll'));
+  }, 220);
   try { localStorage.setItem('ascent-stats-open', isOpen ? '0' : '1'); } catch(e) {}
 }
 
@@ -3255,7 +3376,7 @@ function toggleStats() {
       if (leafMap) leafMap.invalidateSize();
     }
     function onDragEnd() {
-      if (leafMap) leafMap.invalidateSize();
+      refitMap();
       if (!isCollapsed()) savePaneSizes({infoH: infoPanel.offsetHeight});
     }
 
@@ -3297,11 +3418,16 @@ function toggleAnalysis() {
   const tb   = document.getElementById('analysis-titlebar');
   if (!wrap || !btn) return;
   const isOpen = !btn.classList.contains('collapsed');
+  const _repaintList = () => {
+    const al = document.getElementById('act-list');
+    if (al) al.dispatchEvent(new Event('scroll'));
+  };
   if (isOpen) {
     savePaneSizes({chartH: wrap.offsetHeight});
     wrap.style.height = ANALYSIS_TITLE_H + 'px';
     btn.classList.add('collapsed');
     if (tb) tb.style.cursor = 'default';
+    setTimeout(() => { refitMap(); _repaintList(); }, 220);
   } else {
     const ps = loadPaneSizes();
     const h = Math.max(ANALYSIS_TITLE_H + 60, ps.chartH || 200);
@@ -3316,6 +3442,8 @@ function toggleAnalysis() {
       if (chip && panel && panel.style.display !== 'none' && chip.offsetWidth > 0) {
         panel.style.maxWidth = (chip.offsetWidth * 3 + 12) + 'px';
       }
+      refitMap();
+      _repaintList();
     }, 220);
   }
   try { localStorage.setItem('ascent-analysis-open', isOpen ? '0' : '1'); } catch(e) {}
@@ -3338,7 +3466,7 @@ function toggleAnalysis() {
   }
   function onDragEnd() {
     if (elevChart) elevChart.resize();
-    if (leafMap) leafMap.invalidateSize();
+    refitMap();
     if (!isCollapsed()) savePaneSizes({chartH: chartWrap.offsetHeight});
   }
 
@@ -5820,6 +5948,87 @@ async function applyUserSelection() {
   await loadFilterOptions();
   await loadAll();
 }
+
+// ── AUTO STRAVA SYNC ON RETURN ────────────────────────────────────────────────
+(function() {
+  const THRESHOLD_MS = 30 * 60 * 1000;  // 30 minutes away triggers a sync
+  const STORAGE_KEY  = 'ascent-hidden-at';
+  let syncRunning    = false;
+  let toastTimer     = null;
+
+  function saveHiddenTime() {
+    localStorage.setItem(STORAGE_KEY, Date.now());
+  }
+
+  function showToast(html, autoHideMs) {
+    const el = document.getElementById('autosync-toast');
+    if (!el) return;
+    el.innerHTML = html;
+    el.classList.add('visible');
+    clearTimeout(toastTimer);
+    if (autoHideMs) toastTimer = setTimeout(() => el.classList.remove('visible'), autoHideMs);
+  }
+
+  async function runAutoSync() {
+    if (syncRunning) return;
+    try {
+      const r = await fetch('/strava/status');
+      if (!r.ok) return;
+      const s = await r.json();
+      if (!s.authorized) return;
+    } catch(e) { return; }
+
+    syncRunning = true;
+    showToast('<div class="dot-spin"></div> Checking for new Strava activities…', 0);
+
+    let imported = 0;
+    try {
+      const es = new EventSource('/strava/run-sync?mode=recent');
+      await new Promise(resolve => {
+        const guard = setTimeout(() => { es.close(); resolve(); }, 90000);
+        es.onmessage = e => {
+          const ev = JSON.parse(e.data);
+          if (ev.type === 'imported') imported = ev.imported || imported;
+          if (ev.type === 'done')     { imported = ev.imported || imported; clearTimeout(guard); es.close(); resolve(); }
+          if (ev.type === 'error')    { clearTimeout(guard); es.close(); resolve(); }
+        };
+        es.onerror = () => { clearTimeout(guard); es.close(); resolve(); };
+      });
+    } catch(e) {}
+
+    syncRunning = false;
+    localStorage.removeItem(STORAGE_KEY);  // reset after every sync attempt
+
+    if (imported > 0) {
+      showToast(
+        `<div class="toast-dot" style="background:#30d158"></div> ${imported} new activit${imported===1?'y':'ies'} synced`,
+        5000
+      );
+      await loadAll();
+    } else {
+      document.getElementById('autosync-toast')?.classList.remove('visible');
+    }
+  }
+
+  // force=true skips the threshold check (used on page load / refresh)
+  function checkAndSync(force = false) {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (force || (stored && (Date.now() - parseInt(stored, 10)) >= THRESHOLD_MS)) {
+      localStorage.removeItem(STORAGE_KEY);
+      runAutoSync();
+    }
+  }
+
+  // Save timestamp when tab hides or page unloads (refresh/close)
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) saveHiddenTime();
+    else checkAndSync();          // tab return: respects 30-min threshold
+  });
+  window.addEventListener('pagehide', saveHiddenTime);
+
+  // Page load / refresh: always sync
+  checkAndSync(true);
+})();
 </script>
 <!-- ── Compare Panel ─────────────────────────────────────────────────────── -->
 <div id="compare-overlay">

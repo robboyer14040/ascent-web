@@ -112,6 +112,13 @@ td{padding:.5rem;border-bottom:1px solid #2a2a2c;vertical-align:middle}
   {% if new_invite_url %}
   <div class="card" style="border-color:#f97316">
     <div style="font-size:12px;color:#f97316;font-weight:600;margin-bottom:.5rem">✓ Invite link created</div>
+    {% if email_status == "sent" %}
+    <div style="font-size:12px;color:#30d158;margin-bottom:.75rem">✉ Invite email sent to {{ invite_email }}</div>
+    {% elif email_status == "not_configured" %}
+    <div style="font-size:12px;color:#fbbf24;margin-bottom:.75rem">⚠ SMTP not configured — copy the link below to send manually</div>
+    {% elif email_status and email_status.startswith("failed") %}
+    <div style="font-size:12px;color:#f87171;margin-bottom:.75rem">✗ Email failed to send ({{ email_status[8:] }}) — copy the link below</div>
+    {% endif %}
     <div class="invite-url" id="invite-url">{{ new_invite_url }}</div>
     <button class="copy-btn" onclick="navigator.clipboard.writeText(document.getElementById('invite-url').textContent);this.textContent='Copied!'">Copy</button>
   </div>

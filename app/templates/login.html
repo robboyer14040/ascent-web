@@ -38,8 +38,8 @@ input:focus{border-color:#f97316}
 
   <form method="post" action="/login">
     <input type="hidden" name="next" value="{{ next }}">
-    <label>Email</label>
-    <input type="text" inputmode="email" name="email" autocomplete="email" autocorrect="off" autocapitalize="none" spellcheck="false" required autofocus>
+    <label>Username or Email</label>
+    <input type="text" name="email" autocomplete="username" autocorrect="off" autocapitalize="none" spellcheck="false" required autofocus>
     <label>Password</label>
     <input type="password" name="password" autocomplete="current-password" required>
     <button type="submit" class="btn">Sign In</button>

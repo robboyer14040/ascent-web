@@ -97,11 +97,8 @@ async def settings_page(request: Request):
         db_path        = "Not connected"
         activity_count = 0
 
-    # Per-user keys take priority over global env keys
     user = db_getter().get_user(uid) if uid else {}
     anthropic_key = (user or {}).get("anthropic_api_key") or _read_env_key("ANTHROPIC_API_KEY") or ""
-    strava_id     = (user or {}).get("strava_client_id") or _read_env_key("STRAVA_CLIENT_ID") or ""
-    strava_secret = (user or {}).get("strava_client_secret") or _read_env_key("STRAVA_CLIENT_SECRET") or ""
 
     return templates.TemplateResponse("settings.html", {
         "request":         request,
@@ -109,11 +106,7 @@ async def settings_page(request: Request):
         "db_path":         db_path,
         "activity_count":  activity_count,
         "username":        getpass.getuser(),
-        # Pass masked values for display; empty string means "not set"
         "anthropic_key_masked":  _mask_key(anthropic_key) if anthropic_key else "",
-        "strava_id_set":         bool(strava_id),
-        "strava_id_value":       strava_id,
-        "strava_secret_masked":  _mask_key(strava_secret) if strava_secret else "",
     })
 
 
@@ -169,22 +162,11 @@ async def get_keys(request: Request):
     from app.auth import get_session_user_id
     uid  = get_session_user_id(request)
     user = db_getter().get_user(uid) if uid else {}
-    # User's own keys take priority over global env keys
     anthropic_key = (user or {}).get("anthropic_api_key") or _read_env_key("ANTHROPIC_API_KEY") or ""
-    strava_id     = (user or {}).get("strava_client_id") or _read_env_key("STRAVA_CLIENT_ID") or ""
-    strava_secret = (user or {}).get("strava_client_secret") or _read_env_key("STRAVA_CLIENT_SECRET") or ""
     return {
         "anthropic": {
             "set":    bool(anthropic_key),
             "masked": _mask_key(anthropic_key) if anthropic_key else "",
-        },
-        "strava_id": {
-            "set":    bool(strava_id),
-            "value":  strava_id,
-        },
-        "strava_secret": {
-            "set":    bool(strava_secret),
-            "masked": _mask_key(strava_secret) if strava_secret else "",
         },
     }
 
@@ -205,24 +187,6 @@ async def save_anthropic_key(req: ApiKeyRequest, request: Request):
         os.environ["ANTHROPIC_API_KEY"] = key
     return {"status": "ok", "masked": _mask_key(key)}
 
-
-@router.post("/api/settings/strava-keys")
-async def save_strava_keys(req: dict, request: Request):
-    from app.auth import get_session_user_id
-    client_id     = str(req.get("client_id", "")).strip()
-    client_secret = str(req.get("client_secret", "")).strip()
-    if not client_id or not client_secret:
-        raise HTTPException(400, "Both Client ID and Client Secret are required")
-    uid = get_session_user_id(request)
-    if uid:
-        db_getter().update_user_settings(uid,
-            strava_client_id=client_id, strava_client_secret=client_secret)
-    else:
-        _write_env_key("STRAVA_CLIENT_ID",     client_id)
-        _write_env_key("STRAVA_CLIENT_SECRET", client_secret)
-        os.environ["STRAVA_CLIENT_ID"]     = client_id
-        os.environ["STRAVA_CLIENT_SECRET"] = client_secret
-    return {"status": "ok", "client_id": client_id, "masked_secret": _mask_key(client_secret)}
 
 
 @router.get("/api/settings/training-zones")

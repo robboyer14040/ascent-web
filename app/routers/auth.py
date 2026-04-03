@@ -32,14 +32,15 @@ async def login_submit(
 ):
     from app.auth import verify_password, set_session_cookie
 
-    db   = db_getter()
-    user = db.get_user_by_email(email.strip().lower())
+    db      = db_getter()
+    login   = email.strip()
+    user    = db.get_user_by_email(login.lower()) or db.get_user_by_username(login)
 
     if not user or not user.get("password_hash"):
-        return RedirectResponse(f"/login?next={next}&error=Invalid+email+or+password", status_code=303)
+        return RedirectResponse(f"/login?next={next}&error=Invalid+username/email+or+password", status_code=303)
 
     if not verify_password(password, user["password_hash"]):
-        return RedirectResponse(f"/login?next={next}&error=Invalid+email+or+password", status_code=303)
+        return RedirectResponse(f"/login?next={next}&error=Invalid+username/email+or+password", status_code=303)
 
     response = RedirectResponse(next or "/", status_code=303)
     set_session_cookie(response, user["id"])
@@ -94,13 +95,19 @@ async def register_submit(
     if len(password) < 8:
         return RedirectResponse(f"/register?token={token}&error=Password+must+be+at+least+8+characters", status_code=303)
 
+    username = username.strip()
+    if not username:
+        return RedirectResponse(f"/register?token={token}&error=Username+is+required", status_code=303)
+    if db.get_user_by_username(username):
+        return RedirectResponse(f"/register?token={token}&error=Username+already+taken,+please+choose+another", status_code=303)
+
     email = email.strip().lower()
     if db.get_user_by_email(email):
         return RedirectResponse(f"/register?token={token}&error=Email+already+registered", status_code=303)
 
     user_id = db.create_user(
         email=email,
-        username=username.strip(),
+        username=username,
         password_hash=hash_password(password),
         invited_by=invite.get("invited_by_user_id"),
     )
@@ -245,10 +252,27 @@ async def admin_create_invite(
         return RedirectResponse("/", status_code=303)
 
     token = generate_invite_token()
-    db.create_invite(email=email.strip().lower(), invited_by_user_id=uid, token=token)
+    clean_email = email.strip().lower()
+    db.create_invite(email=clean_email, invited_by_user_id=uid, token=token)
 
     base = str(request.base_url).rstrip("/")
     invite_url = f"{base}/register?token={token}"
+
+    email_status = None  # None = not attempted
+    if clean_email:
+        from app.mailer import smtp_configured, send_invite_email
+        if smtp_configured():
+            try:
+                send_invite_email(
+                    to_email=clean_email,
+                    invite_url=invite_url,
+                    invited_by=user.get("username") or "Your Ascent admin",
+                )
+                email_status = "sent"
+            except Exception as exc:
+                email_status = f"failed: {exc}"
+        else:
+            email_status = "not_configured"
 
     import getpass
     try:
@@ -263,6 +287,8 @@ async def admin_create_invite(
         "users":          db.list_users(),
         "current_user":   user,
         "new_invite_url": invite_url,
+        "invite_email":   clean_email,
+        "email_status":   email_status,
         "db_path":        db_path,
         "activity_count": activity_count,
         "username":       getpass.getuser(),

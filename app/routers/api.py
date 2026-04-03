@@ -165,6 +165,24 @@ async def fetch_points_from_strava(activity_id: int, request: Request):
     # patch track_id (build_points_rows uses activity_id directly now)
     count = db.store_points(activity_id, point_rows_raw)
 
+    # If description is missing, fetch full activity detail to save it
+    # (the activities list API doesn't include description, but the detail endpoint does)
+    if not act.get("notes"):
+        try:
+            async with httpx.AsyncClient(timeout=15) as dclient:
+                detail_resp = await dclient.get(
+                    f"https://www.strava.com/api/v3/activities/{strava_id}",
+                    headers={"Authorization": f"Bearer {token}"},
+                    params={"include_all_efforts": "false"},
+                )
+                if detail_resp.status_code == 200:
+                    sa = detail_resp.json()
+                    desc = (sa.get("description") or "").strip()
+                    if desc:
+                        db.update_activity_attrs(activity_id, {"notes": desc})
+        except Exception:
+            pass
+
     return {"status": "ok", "points_stored": count, "activity_id": activity_id}
 
 

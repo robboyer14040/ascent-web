@@ -41,10 +41,11 @@ async def activity_weather_location(activity_id: int):
     cached_weather   = act.get("weather", "")
     cached_location  = act.get("location", "")
 
+    # Fast path: both cached
     if cached_weather and cached_location:
         return {"weather": {"description": cached_weather}, "locations": cached_location}
 
-    # Need GPS points to fetch
+    # Need GPS points to fetch whatever is missing
     pts = db.get_track_points(activity_id)
     valid_pts = [p for p in pts
                  if p["lat"] != 999.0 and p["lon"] != 999.0
@@ -52,7 +53,11 @@ async def activity_weather_location(activity_id: int):
                  and not (p["lat"] == 0 and p["lon"] == 0)]
 
     if not valid_pts:
-        return {"weather": None, "locations": None}
+        # Return whatever we have cached rather than nulling both
+        return {
+            "weather":   {"description": cached_weather} if cached_weather else None,
+            "locations": cached_location or None,
+        }
 
     start_ts   = act.get("start_time")
     duration_s = act.get("duration") or 3600
