@@ -1072,8 +1072,9 @@ class AscentDB:
         """)
         # Add columns introduced after initial table creation (existing DBs)
         for col, defn in [
-            ("autoplay_videos", "INTEGER DEFAULT 1"),
-            ("ui_prefs_json",   "TEXT"),
+            ("autoplay_videos",        "INTEGER DEFAULT 1"),
+            ("ui_prefs_json",          "TEXT"),
+            ("compare_lookback_years", "INTEGER DEFAULT 0"),
         ]:
             try:
                 self._con.execute(f"ALTER TABLE user_profile_v2 ADD COLUMN {col} {defn}")
@@ -1097,23 +1098,25 @@ class AscentDB:
     def get_user_profile(self, user_id: int) -> dict:
         self._ensure_user_profile_table()
         row = self._con.execute(
-            "SELECT max_hr, ftp_watts, age, weight_lb, use_metric, autoplay_videos FROM user_profile_v2 WHERE user_id=?",
+            "SELECT max_hr, ftp_watts, age, weight_lb, use_metric, autoplay_videos, compare_lookback_years FROM user_profile_v2 WHERE user_id=?",
             (user_id,)
         ).fetchone()
         if row:
             return {
-                "max_hr":          row[0],
-                "ftp_watts":       row[1],
-                "age":             row[2],
-                "weight_lb":       row[3],
-                "use_metric":      bool(row[4]),
-                "autoplay_videos": bool(row[5]) if row[5] is not None else True,
+                "max_hr":                  row[0],
+                "ftp_watts":               row[1],
+                "age":                     row[2],
+                "weight_lb":               row[3],
+                "use_metric":              bool(row[4]),
+                "autoplay_videos":         bool(row[5]) if row[5] is not None else True,
+                "compare_lookback_years":  row[6] if row[6] is not None else 0,
             }
         return {"max_hr": None, "ftp_watts": None, "age": None, "weight_lb": None,
-                "use_metric": False, "autoplay_videos": True}
+                "use_metric": False, "autoplay_videos": True, "compare_lookback_years": 0}
 
     def set_user_profile(self, user_id: int, max_hr=None, ftp_watts=None, age=None,
-                         weight_lb=None, use_metric=None, autoplay_videos=None):
+                         weight_lb=None, use_metric=None, autoplay_videos=None,
+                         compare_lookback_years=None):
         self._ensure_user_profile_table()
         con = sqlite3.connect(self.path, timeout=30)
         try:
@@ -1123,16 +1126,18 @@ class AscentDB:
             )
             con.execute("""
                 UPDATE user_profile_v2 SET
-                    max_hr          = COALESCE(?, max_hr),
-                    ftp_watts       = COALESCE(?, ftp_watts),
-                    age             = COALESCE(?, age),
-                    weight_lb       = COALESCE(?, weight_lb),
-                    use_metric      = CASE WHEN ? IS NOT NULL THEN ? ELSE use_metric END,
-                    autoplay_videos = CASE WHEN ? IS NOT NULL THEN ? ELSE autoplay_videos END
+                    max_hr                  = COALESCE(?, max_hr),
+                    ftp_watts               = COALESCE(?, ftp_watts),
+                    age                     = COALESCE(?, age),
+                    weight_lb               = COALESCE(?, weight_lb),
+                    use_metric              = CASE WHEN ? IS NOT NULL THEN ? ELSE use_metric END,
+                    autoplay_videos         = CASE WHEN ? IS NOT NULL THEN ? ELSE autoplay_videos END,
+                    compare_lookback_years  = CASE WHEN ? IS NOT NULL THEN ? ELSE compare_lookback_years END
                 WHERE user_id=?
             """, (max_hr, ftp_watts, age, weight_lb,
                   use_metric, use_metric,
                   autoplay_videos, autoplay_videos,
+                  compare_lookback_years, compare_lookback_years,
                   user_id))
             con.commit()
         finally:

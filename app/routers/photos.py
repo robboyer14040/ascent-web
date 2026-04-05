@@ -76,11 +76,19 @@ def _ensure_video_column():
     finally:
         con.close()
 
+def _safe_title(name: str) -> str:
+    """Return a filesystem-safe version of an activity name for use in download filenames."""
+    import re
+    safe = re.sub(r'[^\w\s\-]', '', name).strip()
+    safe = re.sub(r'\s+', '_', safe)
+    return safe[:60] or "activity"
+
+
 def _get_info(activity_id: int) -> Optional[dict]:
     con = sqlite3.connect(_db_path())
     try:
         row = con.execute(
-            "SELECT strava_activity_id, local_media_items_json, local_video_urls_json, user_id "
+            "SELECT strava_activity_id, local_media_items_json, local_video_urls_json, user_id, name, attributes_json "
             "FROM activities WHERE id=?",
             (activity_id,)).fetchone()
         if not row:
@@ -103,7 +111,19 @@ def _get_info(activity_id: int) -> Optional[dict]:
                         if url:
                             video_map[fname] = url
             except Exception: pass
-        return {"strava_id": row[0], "filenames": filenames, "video_map": video_map, "user_id": row[3]}
+        # Extract activity name from attributes_json (flat key/value array) or name column
+        activity_name = None
+        if row[5]:
+            try:
+                data = json.loads(row[5])
+                if isinstance(data, list) and len(data) >= 2:
+                    attrs = dict(zip(data[::2], data[1::2]))
+                    activity_name = attrs.get("name")
+            except Exception: pass
+        if not activity_name:
+            activity_name = row[4]
+        return {"strava_id": row[0], "filenames": filenames, "video_map": video_map, "user_id": row[3],
+                "activity_name": activity_name or "activity"}
     except sqlite3.OperationalError:
         # Column may not exist yet; fall back
         row = con.execute(
@@ -115,7 +135,8 @@ def _get_info(activity_id: int) -> Optional[dict]:
         if row[1]:
             try: filenames = json.loads(row[1])
             except Exception: pass
-        return {"strava_id": row[0], "filenames": filenames, "video_map": {}, "user_id": None}
+        return {"strava_id": row[0], "filenames": filenames, "video_map": {}, "user_id": None,
+                "activity_name": "activity"}
     finally:
         con.close()
 
@@ -374,8 +395,10 @@ async def download_media(activity_id: int, filename: str):
         elif fn.endswith(".webp"): mt = "image/webp"
         elif fn.endswith(".heic"): mt = "image/heic"
         else:                      mt = "image/jpeg"
+        ext = ('.' + filename.rsplit('.', 1)[1]) if '.' in filename else ''
+        dl_name = f"{_safe_title(info['activity_name'])}{ext}"
         return FileResponse(file_path, media_type=mt,
-                            headers={"Content-Disposition": f'attachment; filename="{filename}"'})
+                            headers={"Content-Disposition": f'attachment; filename="{dl_name}"'})
 
     # Video — fetch HLS from CDN and stream back as MPEG-TS
     async def _stream_hls():
@@ -412,8 +435,7 @@ async def download_media(activity_id: int, filename: str):
                 except Exception as e:
                     log.warning(f"Segment download failed: {e}")
 
-    stem     = filename.rsplit('.', 1)[0]
-    dl_name  = f"{stem}.ts"
+    dl_name  = f"{_safe_title(info['activity_name'])}.ts"
     return StreamingResponse(
         _stream_hls(),
         media_type="video/mp2t",

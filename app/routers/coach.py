@@ -572,6 +572,9 @@ async def coach_today(request: Request, model: str = DEFAULT_MODEL):
             "coords":      coords,
         })
 
+    if activity_cards:
+        advice = advice.rstrip() + "\n\nHere are some examples from your activities that would be a great fit for today:"
+
     return {"advice": advice, "activities": activity_cards}
 
 

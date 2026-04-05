@@ -949,6 +949,21 @@ async def segment_compare(req: SegmentRequest, request: Request):
     # Build user filter for candidate activities
     uid = get_session_user_id(request)
 
+    # Lookback cutoff from user profile (0 = unlimited)
+    import time as _time
+    _lookback_cutoff = None
+    if uid is not None:
+        try:
+            _profile = db.get_user_profile(uid)
+            _lookback_years = _profile.get("compare_lookback_years") or 0
+            if _lookback_years > 0:
+                _lookback_cutoff = _time.time() - _lookback_years * 365.25 * 86400
+        except Exception:
+            pass
+
+    lookback_filter = "AND ts >= ?" if _lookback_cutoff is not None else ""
+    lookback_params = [_lookback_cutoff] if _lookback_cutoff is not None else []
+
     # When explicit candidate_ids are given (user manually selected activities),
     # bypass user/spatial filters entirely — trust the explicit selection.
     if req.candidate_ids:
@@ -997,6 +1012,7 @@ async def segment_compare(req: SegmentRequest, request: Request):
             WHERE id != ?
               {user_filter}
               {ebike_filter}
+              {lookback_filter}
               AND (
                 (points_saved = 1 AND points_count > 0
                  AND (map_min_lat IS NULL
@@ -1008,7 +1024,7 @@ async def segment_compare(req: SegmentRequest, request: Request):
                     AND map_min_lon <= ? AND map_max_lon >= ?)
               )
             ORDER BY ts DESC
-        """, [req.activity_id] + user_params +
+        """, [req.activity_id] + user_params + lookback_params +
              [seg_max_lat, seg_min_lat, seg_max_lon, seg_min_lon,
               seg_max_lat, seg_min_lat, seg_max_lon, seg_min_lon]
         ).fetchall()

@@ -110,8 +110,7 @@ input[readonly]{color:#8e8e93;cursor:default}
       <h1>API Keys</h1>
     </div>
     <p class="section-intro">
-      These keys are saved to your local config file and persist across restarts.
-      They are never transmitted anywhere except directly to Anthropic and Strava.
+      Your Anthropic API key is saved to your account and never transmitted anywhere except directly to Anthropic.
     </p>
 
     <!-- Anthropic -->
@@ -231,6 +230,25 @@ input[readonly]{color:#8e8e93;cursor:default}
         <input type="checkbox" id="pref-autoplay-videos" onchange="savePref('autoplay-videos', this.checked)"
                style="width:18px;height:18px;accent-color:#f97316;cursor:pointer">
       </label>
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:1rem">
+        <div>
+          <div style="font-weight:500">Compare Lookback Interval</div>
+          <div style="color:#8e8e93;font-size:12px;margin-top:.2rem;max-width:360px">
+            Determines how far back the Compare feature will look when searching for fastest activities.
+            Setting a longer lookback interval can result in longer search times.
+          </div>
+        </div>
+        <select id="pref-compare-lookback" onchange="saveLookback(this.value)"
+                style="background:#1c1c1e;border:1px solid #3a3a3c;border-radius:8px;
+                       color:#f2f2f7;font-size:.875rem;padding:.4rem .7rem;
+                       cursor:pointer;outline:none;flex-shrink:0">
+          <option value="1">1 year</option>
+          <option value="3">3 years</option>
+          <option value="5">5 years</option>
+          <option value="10">10 years</option>
+          <option value="0">Unlimited</option>
+        </select>
+      </div>
     </div>
   </div>
 
@@ -423,12 +441,25 @@ async function savePref(key, value) {
     });
   } catch(e) {}
 }
+async function saveLookback(value) {
+  try {
+    await fetch('/api/settings/training-zones', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({compare_lookback_years: parseInt(value, 10)}),
+    });
+  } catch(e) {}
+}
 async function loadPrefs() {
   try {
     const r = await fetch('/api/settings/training-zones');
     if (!r.ok) return;
     const d = await r.json();
     document.getElementById('pref-autoplay-videos').checked = d.autoplay_videos !== false;
+    const lookback = d.compare_lookback_years ?? 0;
+    const sel = document.getElementById('pref-compare-lookback');
+    sel.value = String(lookback);
+    if (!sel.value) sel.value = '0'; // fallback if stored value doesn't match an option
   } catch(e) {
     document.getElementById('pref-autoplay-videos').checked = true;
   }

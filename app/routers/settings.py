@@ -225,19 +225,22 @@ async def save_training_zones(request: Request, req: dict):
         if v is None: return None
         return 1 if v in (True, 1, "true", "1") else 0
 
-    use_metric      = to_bool_int(req.get("use_metric"))
-    autoplay_videos = to_bool_int(req.get("autoplay_videos"))
+    use_metric             = to_bool_int(req.get("use_metric"))
+    autoplay_videos        = to_bool_int(req.get("autoplay_videos"))
+    compare_lookback_years = to_int(req.get("compare_lookback_years"))
 
     try:
         db_getter().set_user_profile(
             user_id=uid,
             max_hr=max_hr, ftp_watts=ftp_watts, age=age, weight_lb=weight_lb,
-            use_metric=use_metric, autoplay_videos=autoplay_videos
+            use_metric=use_metric, autoplay_videos=autoplay_videos,
+            compare_lookback_years=compare_lookback_years
         )
         return {"status": "ok", "max_hr": max_hr, "ftp_watts": ftp_watts,
                 "age": age, "weight_lb": weight_lb,
                 "use_metric": bool(use_metric) if use_metric is not None else None,
-                "autoplay_videos": bool(autoplay_videos) if autoplay_videos is not None else None}
+                "autoplay_videos": bool(autoplay_videos) if autoplay_videos is not None else None,
+                "compare_lookback_years": compare_lookback_years}
     except Exception as e:
         raise HTTPException(500, str(e))
 
