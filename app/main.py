@@ -125,7 +125,7 @@ def type_badge(t):
 
 templates.env.filters["fmt_date"]   = fmt_date
 templates.env.filters["type_badge"] = type_badge
-templates.env.globals["app_version"] = "v0.2.3"
+templates.env.globals["app_version"] = "v0.2.70"
 
 # ── wire routers ──────────────────────────────────────────────────────────────
 activities.db_getter = get_db
@@ -182,10 +182,11 @@ async def dashboard(request: Request):
         years          = db.get_years(user_id=uid)
         activity_types = db.get_activity_types(user_id=uid)
         monthly        = db.get_monthly_totals(user_id=uid)
+        ui_prefs       = db.get_ui_prefs(uid)
         db_ok          = True
         db_error       = None
     except Exception as e:
-        stats = {}; years = []; activity_types = []; monthly = []
+        stats = {}; years = []; activity_types = []; monthly = []; ui_prefs = {}
         db_ok = False; db_error = str(e)
 
     return templates.TemplateResponse("dashboard.html", {
@@ -195,6 +196,7 @@ async def dashboard(request: Request):
         "years":            years,
         "activity_types":   activity_types,
         "monthly":          monthly,
+        "ui_prefs":         ui_prefs,
         "db_ok":            db_ok,
         "db_error":         db_error,
         "strava_client_id": os.environ.get("STRAVA_CLIENT_ID", ""),

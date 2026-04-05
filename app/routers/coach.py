@@ -418,6 +418,163 @@ async def coach_chat(req: ChatRequest, request: Request):
     return {"reply": reply}
 
 
+@router.get("/coach/today")
+async def coach_today(request: Request, model: str = DEFAULT_MODEL):
+    """
+    Generate 'what should I do today?' advice based on recent activities and goal.
+    Returns advice text + up to 3 candidate activity IDs with simplified track coords.
+    """
+    from app.auth import get_session_user_id
+    uid = get_session_user_id(request)
+    if uid is None:
+        raise HTTPException(401, "Not authenticated")
+
+    db  = db_getter()
+    con = _get_con(db)
+    try:
+        goal = _active_goal(con, user_id=uid)
+        goal_text = goal["goal_text"] if goal else None
+    finally:
+        con.close()
+
+    # Get user's API key
+    api_key = ""
+    user = db.get_user(uid)
+    api_key = (user or {}).get("anthropic_api_key") or ""
+    if not api_key:
+        api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        raise HTTPException(503, "No Anthropic API key configured")
+
+    safe_model = model if model in MODELS else DEFAULT_MODEL
+
+    # Fetch recent activities (last 60 days) with IDs and stats
+    cutoff = int(time.time()) - 60 * 86400
+    try:
+        rows = db._con.execute("""
+            SELECT
+                id,
+                COALESCE(creation_time_override_s, creation_time_s) AS ts,
+                distance_mi, src_total_climb, src_moving_time_s,
+                src_avg_heartrate,
+                json_extract(attributes_json, '$.activity')   AS act_type,
+                json_extract(attributes_json, '$.name')       AS name,
+                json_extract(attributes_json, '$.totalClimb') AS climb_attr
+            FROM activities
+            WHERE COALESCE(creation_time_override_s, creation_time_s) >= ?
+              AND user_id = ?
+            ORDER BY ts DESC
+            LIMIT 30
+        """, (cutoff, uid)).fetchall()
+    except Exception:
+        rows = []
+
+    if not rows:
+        raise HTTPException(404, "No recent activities found to base advice on")
+
+    today_str = datetime.now().strftime("%A, %B %d, %Y")
+    goal_section = f"\nATHLETE'S GOAL:\n{goal_text}\n" if goal_text else ""
+
+    act_lines = []
+    for r in rows:
+        ts    = r["ts"] or 0
+        date  = datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%d")
+        atype = r["act_type"] or "Activity"
+        name  = r["name"] or "(unnamed)"
+        dist  = round(r["distance_mi"] or 0, 1)
+        climb = round(r["climb_attr"] or r["src_total_climb"] or 0)
+        moving = r["src_moving_time_s"] or 0
+        hrs   = round(moving / 3600, 1)
+        hr    = round(r["src_avg_heartrate"] or 0)
+        hr_str = f", avg HR {hr}bpm" if hr else ""
+        act_lines.append(
+            f"  id={r['id']}: {date} {atype} \"{name}\" — {dist}mi, {climb}ft climb, {hrs}h{hr_str}"
+        )
+
+    prompt = (
+        f"Today is {today_str}.{goal_section}\n"
+        f"RECENT ACTIVITIES (last 60 days, most recent first):\n"
+        + "\n".join(act_lines) +
+        "\n\nBased on this athlete's recent training load and goal, recommend what they should do TODAY. "
+        "Also, from the list above, identify up to 3 activity IDs that are the best examples or templates "
+        "for what you're recommending — routes or workouts they've done before that fit well.\n\n"
+        "Respond ONLY with valid JSON:\n"
+        '{"advice": "2-3 sentence recommendation referencing their recent training", "activity_ids": [id1, id2]}\n'
+        "activity_ids must be integer IDs from the list. Include fewer than 3 if fewer match."
+    )
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={
+                "x-api-key":         api_key,
+                "anthropic-version": "2023-06-01",
+                "content-type":      "application/json",
+            },
+            json={
+                "model":    safe_model,
+                "max_tokens": 300,
+                "messages": [{"role": "user", "content": prompt}],
+            },
+        )
+
+    if resp.status_code != 200:
+        raise HTTPException(502, f"Claude API error: {resp.status_code}")
+
+    raw = resp.json()["content"][0]["text"].strip()
+
+    # Strip markdown fences if present
+    if raw.startswith("```"):
+        parts = raw.split("```")
+        raw = parts[1] if len(parts) > 1 else raw
+        if raw.startswith("json"):
+            raw = raw[4:]
+        raw = raw.strip()
+
+    try:
+        data = json.loads(raw)
+        advice = str(data.get("advice", "")).strip()
+        activity_ids = [int(i) for i in (data.get("activity_ids") or [])[:3]]
+    except Exception:
+        advice = raw
+        activity_ids = []
+
+    # Fetch simplified track coords for each suggested activity
+    valid_ids = {r["id"] for r in rows}
+    activity_cards = []
+    for act_id in activity_ids:
+        if act_id not in valid_ids:
+            continue
+        act = db.get_activity(act_id)
+        if not act:
+            continue
+        try:
+            pts = db.get_track_points(act_id)
+            coords = [
+                [p["lon"], p["lat"]]
+                for p in pts
+                if p["lat"] != 999.0 and p["lon"] != 999.0
+                and -90.0 <= p["lat"] <= 90.0
+                and -180.0 <= p["lon"] <= 180.0
+                and not (p["lat"] == 0.0 and p["lon"] == 0.0)
+            ]
+            # Downsample to ~120 points max
+            if len(coords) > 120:
+                step = max(1, len(coords) // 120)
+                coords = coords[::step]
+        except Exception:
+            coords = []
+        activity_cards.append({
+            "id":          act_id,
+            "name":        act.get("name", "(unnamed)"),
+            "type":        act.get("activity_type", ""),
+            "distance_mi": act.get("distance_mi"),
+            "coords":      coords,
+        })
+
+    return {"advice": advice, "activities": activity_cards}
+
+
 @router.get("/coach/goals/archived")
 async def archived_goals(request: Request):
     from app.auth import get_session_user_id

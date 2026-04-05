@@ -17,12 +17,18 @@ templates = None
 STRAVA_AUTH_URL  = "https://www.strava.com/oauth/authorize"
 STRAVA_TOKEN_URL = "https://www.strava.com/oauth/token"
 STRAVA_API_BASE  = "https://www.strava.com/api/v3"
-STRAVA_SCOPE     = "read,profile:read_all,activity:read,activity:read_all"
+STRAVA_SCOPE     = "read,profile:read_all,activity:read,activity:read_all,activity:write"
 
 # ── token helpers ─────────────────────────────────────────────────────────────
 
 def _get_strava_creds(user_id: Optional[int] = None) -> tuple[str, str]:
-    """Get Strava client_id and client_secret for user (per-user or global)."""
+    """Get Strava client_id and client_secret.
+
+    Priority:
+      1. Per-user stored credentials (legacy; no longer settable via UI)
+      2. Server env vars STRAVA_CLIENT_ID / STRAVA_CLIENT_SECRET
+      3. Any admin user's stored credentials (migration path while env vars not yet set)
+    """
     if user_id is not None:
         try:
             user = db_getter().get_user(user_id)
@@ -33,9 +39,20 @@ def _get_strava_creds(user_id: Optional[int] = None) -> tuple[str, str]:
                     return cid, sec
         except Exception:
             pass
-    # Fall back to global env
-    return (os.environ.get("STRAVA_CLIENT_ID", ""),
-            os.environ.get("STRAVA_CLIENT_SECRET", ""))
+    # Server-level env vars (preferred)
+    cid = os.environ.get("STRAVA_CLIENT_ID", "")
+    sec = os.environ.get("STRAVA_CLIENT_SECRET", "")
+    if cid and sec:
+        return cid, sec
+    # Migration fallback: use credentials stored in any admin user's record
+    try:
+        for user in db_getter().list_users():
+            u = db_getter().get_user(user["id"])
+            if u and u.get("strava_client_id") and u.get("strava_client_secret"):
+                return u["strava_client_id"], u["strava_client_secret"]
+    except Exception:
+        pass
+    return "", ""
 
 
 def _tokens_path() -> Path:
@@ -44,14 +61,16 @@ def _tokens_path() -> Path:
     return Path(db_path).parent / "strava_tokens.json"
 
 def load_tokens(user_id: Optional[int] = None) -> dict:
-    """Load tokens from DB for user_id, or fall back to legacy file."""
+    """Load tokens from DB for user_id, or fall back to legacy file (single-user mode only)."""
     if user_id is not None:
+        # Multi-user mode: only use DB. Never fall back to legacy file for a known user,
+        # otherwise a user with no Strava connection inherits another user's tokens.
         try:
             tokens = db_getter().get_user_strava_tokens(user_id)
-            if tokens: return tokens
+            return tokens if tokens else {}
         except Exception:
-            pass
-    # Legacy fallback
+            return {}
+    # Legacy fallback: single-user mode (no session / uid=None)
     p = _tokens_path()
     if p.exists():
         try: return json.loads(p.read_text())
@@ -112,9 +131,9 @@ async def strava_connect(request: Request):
     client_id, _ = _get_strava_creds(uid)
     if not client_id:
         return templates.TemplateResponse("error.html",
-            {"request": request, "message": "STRAVA_CLIENT_ID is not set. Add it in Settings."})
+            {"request": request, "message": "Strava is not configured on this server. Set STRAVA_CLIENT_ID and STRAVA_CLIENT_SECRET environment variables."})
     url = (f"{STRAVA_AUTH_URL}?client_id={client_id}&response_type=code"
-           f"&redirect_uri={_callback_uri(request)}&approval_prompt=auto&scope={STRAVA_SCOPE}")
+           f"&redirect_uri={_callback_uri(request)}&approval_prompt=force&scope={STRAVA_SCOPE}")
     return RedirectResponse(url)
 
 @router.get("/callback", response_class=HTMLResponse)
@@ -141,14 +160,17 @@ async def strava_callback(request: Request, code: str = Query(None), error: str 
     tokens = {"access_token": data["access_token"], "refresh_token": data["refresh_token"],
               "expires_at": data["expires_at"], "athlete": data.get("athlete", {})}
     save_tokens(tokens, user_id=uid)
-    # Also link athlete_id to this user
+    # Also link athlete_id to this user (best-effort; ignore UNIQUE conflicts)
     if uid:
         athlete = data.get("athlete", {})
         athlete_id = str(athlete.get("id", "")) if athlete else None
         if athlete_id:
-            db_getter()._con.execute(
-                "UPDATE users SET strava_athlete_id=? WHERE id=?", (athlete_id, uid))
-            db_getter()._con.commit()
+            try:
+                db_getter()._con.execute(
+                    "UPDATE users SET strava_athlete_id=? WHERE id=?", (athlete_id, uid))
+                db_getter()._con.commit()
+            except Exception:
+                pass
     return templates.TemplateResponse("strava_connected.html",
         {"request": request, "athlete": data.get("athlete", {})})
 

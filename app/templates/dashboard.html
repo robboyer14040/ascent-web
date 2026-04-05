@@ -52,6 +52,12 @@ tr:hover td{background:rgba(255,255,255,.03)}
 .ps-val{font-size:1.2rem;font-weight:700}
 .ps-sub{font-size:.7rem;color:var(--muted);margin-top:.1rem}
 select.filter-sel{background:var(--surface2);border:1px solid var(--border2);color:var(--text);border-radius:6px;padding:.3rem .6rem;font-size:.8rem}
+/* zone fetch progress */
+.fetch-progress{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1rem 1.1rem;margin-bottom:.75rem}
+.fetch-progress-label{font-size:.8rem;color:var(--muted);margin-bottom:.5rem}
+.fetch-bar-track{height:6px;background:var(--surface2);border-radius:3px;overflow:hidden}
+.fetch-bar-fill{height:100%;background:var(--accent);border-radius:3px;transition:width .2s ease}
+.fetch-progress-sub{font-size:.72rem;color:var(--muted2);margin-top:.35rem}
 </style>
 </head>
 <body>
@@ -92,7 +98,16 @@ select.filter-sel{background:var(--surface2);border:1px solid var(--border2);col
           <button class="period-btn active" data-period="month" onclick="setPeriod('month')">Month</button>
           <button class="period-btn" data-period="year" onclick="setPeriod('year')">Year</button>
         </div>
-        <select id="yearSel" class="filter-sel" onchange="loadChart()">
+        <select id="weekSel"  class="filter-sel" onchange="onWeekChange()"  style="display:none"></select>
+        <select id="monthSel" class="filter-sel" onchange="onMonthChange()" style="display:none">
+          <option value="1">January</option><option value="2">February</option>
+          <option value="3">March</option><option value="4">April</option>
+          <option value="5">May</option><option value="6">June</option>
+          <option value="7">July</option><option value="8">August</option>
+          <option value="9">September</option><option value="10">October</option>
+          <option value="11">November</option><option value="12">December</option>
+        </select>
+        <select id="yearSel" class="filter-sel" onchange="onYearChange()">
           <option value="">All years</option>
           {% for y in years %}<option value="{{ y }}">{{ y }}</option>{% endfor %}
         </select>
@@ -104,6 +119,35 @@ select.filter-sel{background:var(--surface2);border:1px solid var(--border2);col
 
     <div class="chart-card">
       <div class="chart-wrap"><canvas id="mainChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Zone time charts -->
+  <div class="section" id="zone-section">
+    <div class="section-head">
+      <h2 id="zoneSectionTitle">Time in Zone</h2>
+    </div>
+    <!-- GPS fetch progress (hidden until needed) -->
+    <div id="zoneFetchProgress" class="fetch-progress" style="display:none">
+      <div class="fetch-progress-label" id="zoneFetchLabel">Fetching GPS data…</div>
+      <div class="fetch-bar-track"><div class="fetch-bar-fill" id="zoneFetchBar" style="width:0%"></div></div>
+      <div class="fetch-progress-sub" id="zoneFetchSub"></div>
+    </div>
+    <div id="zoneCharts" style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
+      <div class="chart-card" id="hrZoneCard">
+        <div style="font-size:.75rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:.6rem">Heart Rate Zones</div>
+        <div id="hrZoneNoData" style="display:none;color:var(--muted);font-size:.8rem;padding:.5rem 0">
+          Set your max HR in <a href="/settings">Settings</a> to see HR zones.
+        </div>
+        <div style="position:relative;height:160px"><canvas id="hrZoneChart"></canvas></div>
+      </div>
+      <div class="chart-card" id="pwZoneCard">
+        <div style="font-size:.75rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:.6rem">Power Zones</div>
+        <div id="pwZoneNoData" style="display:none;color:var(--muted);font-size:.8rem;padding:.5rem 0">
+          Set your FTP in <a href="/settings">Settings</a> to see power zones.
+        </div>
+        <div style="position:relative;height:160px"><canvas id="pwZoneChart"></canvas></div>
+      </div>
     </div>
   </div>
 
@@ -131,47 +175,193 @@ let chart = null;
 let currentPeriod = 'month';
 let currentData = [];
 
+// ── UI prefs persistence ──────────────────────────────────────────────────────
+const _uiPrefs = Object.assign({}, {{ ui_prefs | tojson | safe }});
+let _uiPrefsSaveTimer = null;
+function _uiPrefsGet(key, fallback) {
+  if (_uiPrefs[key] !== undefined && _uiPrefs[key] !== null) return _uiPrefs[key];
+  try { const v = localStorage.getItem(key); if (v !== null) return v; } catch(e) {}
+  return (fallback !== undefined) ? fallback : null;
+}
+function _uiPrefsSet(key, val) {
+  _uiPrefs[key] = val;
+  try { localStorage.setItem(key, val); } catch(e) {}
+  clearTimeout(_uiPrefsSaveTimer);
+  _uiPrefsSaveTimer = setTimeout(async () => {
+    try {
+      await fetch('/api/settings/ui-prefs', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({prefs: _uiPrefs}),
+      });
+    } catch(e) {}
+  }, 1500);
+}
+
+// ── Filter / label helpers ────────────────────────────────────────────────────
+const MONTH_NAMES = ['January','February','March','April','May','June',
+                     'July','August','September','October','November','December'];
+const MONTH_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function selVal(id) { return document.getElementById(id)?.value || ''; }
+
+function getFilterParams() {
+  const year  = selVal('yearSel');
+  const month = selVal('monthSel');
+  const week  = selVal('weekSel');
+  if (currentPeriod === 'week' && week)  return `?week_start=${week}`;
+  if (currentPeriod === 'month') {
+    const p = []; if (year) p.push(`year=${year}`); if (month) p.push(`month=${month}`);
+    return p.length ? '?' + p.join('&') : '';
+  }
+  return year ? `?year=${year}` : '';
+}
+
+function getPeriodLabel() {
+  const year  = selVal('yearSel');
+  const month = selVal('monthSel');
+  const week  = selVal('weekSel');
+  if (currentPeriod === 'week' && week) {
+    try {
+      const [y, m, d] = week.split('-').map(Number);
+      const s = new Date(y, m-1, d), e = new Date(y, m-1, d+6);
+      const fmt = dt => dt.toLocaleDateString('en-US', {month:'short', day:'numeric'});
+      return `${fmt(s)} – ${fmt(e)}, ${y}`;
+    } catch(_) { return week; }
+  }
+  if (currentPeriod === 'month' && month && year) return `${MONTH_NAMES[+month-1]} ${year}`;
+  if (currentPeriod === 'month') return year || 'All Time';
+  if (currentPeriod === 'year'  && year) return String(year);
+  return '';
+}
+
+// ── Week selector population ──────────────────────────────────────────────────
+function getWeeksInMonth(year, month) {
+  const weeks = [], end = new Date(year, month, 0); // last day of month
+  let d = new Date(year, month - 1, 1);
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));  // back to Monday
+  while (d <= end) {
+    const we = new Date(d); we.setDate(we.getDate() + 6);
+    const fmt = dt => dt.toLocaleDateString('en-US', {month:'short', day:'numeric'});
+    weeks.push({ value: d.toISOString().slice(0,10), label: `${fmt(d)} – ${fmt(we)}` });
+    d.setDate(d.getDate() + 7);
+  }
+  return weeks;
+}
+
+function populateWeekSel(year, month, preferredWeek) {
+  const sel = document.getElementById('weekSel');
+  if (!sel) return;
+  const weeks = getWeeksInMonth(+year, +month);
+  sel.innerHTML = weeks.map(w => `<option value="${w.value}">${w.label}</option>`).join('');
+  if (preferredWeek && weeks.some(w => w.value === preferredWeek)) {
+    sel.value = preferredWeek;
+  } else {
+    // Default to most recent week that has started
+    const today = new Date().toISOString().slice(0,10);
+    let best = weeks[0]?.value;
+    for (const w of weeks) { if (w.value <= today) best = w.value; }
+    if (best) sel.value = best;
+  }
+}
+
+// ── Selector change handlers ──────────────────────────────────────────────────
+function onYearChange() {
+  _uiPrefsSet('dash-year', selVal('yearSel'));
+  if (currentPeriod === 'week' || currentPeriod === 'month') {
+    const y = selVal('yearSel'), m = selVal('monthSel');
+    if (currentPeriod === 'week' && y && m) populateWeekSel(y, m);
+  }
+  loadChart(false);
+}
+function onMonthChange() {
+  _uiPrefsSet('dash-month', selVal('monthSel'));
+  if (currentPeriod === 'week') {
+    const y = selVal('yearSel'), m = selVal('monthSel');
+    if (y && m) populateWeekSel(y, m);
+  }
+  loadChart(false);
+}
+function onWeekChange() {
+  _uiPrefsSet('dash-week', selVal('weekSel'));
+  loadChart(false);
+}
+
 // ── Period toggle ─────────────────────────────────────────────────────────────
-function setPeriod(p) {
+function setPeriod(p, save = true) {
   currentPeriod = p;
   document.querySelectorAll('.period-btn').forEach(b => b.classList.toggle('active', b.dataset.period === p));
-  // Year filter visible in all period views
-  document.getElementById('yearSel').style.display = '';
-  const titles = {week: 'Distance & Climb by Week', month: 'Distance & Climb by Month', year: 'Distance & Climb by Year'};
-  document.getElementById('chartTitle').textContent = titles[p];
+  document.getElementById('weekSel').style.display  = (p === 'week')  ? '' : 'none';
+  document.getElementById('monthSel').style.display = (p !== 'year')  ? '' : 'none';
+  if (p === 'week') {
+    const y = selVal('yearSel'), m = selVal('monthSel');
+    if (y && m) populateWeekSel(y, m, selVal('weekSel'));
+  }
+  if (save) _uiPrefsSet('dash-period', p);
   loadChart();
 }
 
-// Convert "YYYY-MM-DD" (Monday of week) to "Jan 1" etc.
+// ── Label helpers for chart axes ──────────────────────────────────────────────
 function weekLabel(weekStr) {
   try {
     const [y, m, d] = weekStr.split('-').map(Number);
-    return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  } catch(e) { return weekStr; }
+    return new Date(y, m-1, d).toLocaleDateString('en-US', {month:'short', day:'numeric'});
+  } catch(_) { return weekStr; }
+}
+function monthLabel(mStr) {   // "2026-03" → "Mar"
+  try { const [,m] = mStr.split('-').map(Number); return MONTH_SHORT[m-1]; } catch(_) { return mStr; }
+}
+function dayLabel(dayStr) {   // "2026-03-10" → "Mon 3/10"
+  try {
+    const [y, m, d] = dayStr.split('-').map(Number);
+    return new Date(y, m-1, d).toLocaleDateString('en-US', {weekday:'short', month:'numeric', day:'numeric'});
+  } catch(_) { return dayStr; }
 }
 
-async function loadChart() {
-  const year = document.getElementById('yearSel').value;
-  let data;
-
-  if (currentPeriod === 'month') {
-    const r = await fetch(year ? `/api/stats/monthly?year=${year}` : '/api/stats/monthly');
-    data = await r.json();
-    currentData = data;
-    buildChart(data.map(d => d.month), data);
-  } else if (currentPeriod === 'week') {
-    const r = await fetch(year ? `/api/stats/weekly?year=${year}` : '/api/stats/weekly');
-    data = await r.json();
-    currentData = data;
-    // Format week labels as "Jan 1", "Jan 8" etc (first day of the week)
-    buildChart(data.map(d => weekLabel(d.week)), data);
-  } else {
-    const r = await fetch(year ? `/api/stats/yearly?year=${year}` : '/api/stats/yearly');
-    data = await r.json();
-    currentData = data;
-    buildChart(data.map(d => d.year), data);
+// ── Load chart ────────────────────────────────────────────────────────────────
+async function loadChart(save = true) {
+  if (save) {
+    _uiPrefsSet('dash-year',  selVal('yearSel'));
+    _uiPrefsSet('dash-month', selVal('monthSel'));
+    _uiPrefsSet('dash-week',  selVal('weekSel'));
   }
+
+  const label = getPeriodLabel();
+  let titleBase, data;
+
+  if (currentPeriod === 'week') {
+    titleBase = 'Distance & Climb by Day';
+    const week = selVal('weekSel');
+    if (!week) { buildChart([], []); updatePeriodStats([]); loadZoneCharts(); return; }
+    const r = await fetch(`/api/stats/daily?week_start=${week}`);
+    data = await r.json();
+    buildChart(data.map(d => dayLabel(d.day)), data);
+
+  } else if (currentPeriod === 'month') {
+    titleBase = 'Distance & Climb by Week';
+    const r = await fetch(`/api/stats/weekly${getFilterParams()}`);
+    data = await r.json();
+    buildChart(data.map(d => weekLabel(d.week)), data);
+
+  } else {
+    const year = selVal('yearSel');
+    if (year) {
+      titleBase = `Distance & Climb by Month`;
+      const r = await fetch(`/api/stats/monthly?year=${year}`);
+      data = await r.json();
+      buildChart(data.map(d => monthLabel(d.month)), data);
+    } else {
+      titleBase = 'Distance & Climb by Year';
+      const r = await fetch('/api/stats/yearly');
+      data = await r.json();
+      buildChart(data.map(d => d.year), data);
+    }
+  }
+
+  document.getElementById('chartTitle').textContent = label ? `${titleBase} — ${label}` : titleBase;
+  currentData = data;
   updatePeriodStats(data);
+  loadZoneCharts();
 }
 
 // ── Period summary stats ──────────────────────────────────────────────────────
@@ -187,21 +377,30 @@ function updatePeriodStats(data) {
   const totalActs  = data.reduce((s, d) => s + (d.count    || 0), 0);
   const periods    = data.length;
 
-  const periodLabel = {week: 'wk', month: 'mo', year: 'yr'}[currentPeriod];
-
-  // Current period (last item)
-  const last = data[data.length - 1];
+  const windowLabel = {week: 'This Week', month: 'This Month', year: selVal('yearSel') ? 'This Year' : 'All Time'}[currentPeriod];
+  const avgLabel    = {week: 'Avg / day',  month: 'Avg / wk',   year: 'Avg / mo'}[currentPeriod];
   const avgDist  = totalDist  / periods;
   const avgClimb = totalClimb / periods;
 
+  // Aggregate the three new fields across all period rows
+  const maxClimb = Math.max(...data.map(d => d.max_climb_ft || 0));
+  // Weighted avg HR and power: weight by activity count in each row
+  let hrSum = 0, hrCnt = 0, pwSum = 0, pwCnt = 0;
+  data.forEach(d => {
+    if (d.avg_hr      > 0) { hrSum += d.avg_hr      * d.count; hrCnt += d.count; }
+    if (d.avg_power_w > 0) { pwSum += d.avg_power_w * d.count; pwCnt += d.count; }
+  });
+  const avgHr    = hrCnt > 0 ? Math.round(hrSum / hrCnt) : 0;
+  const avgPower = pwCnt > 0 ? Math.round(pwSum / pwCnt) : 0;
+
   document.getElementById('periodStats').innerHTML = `
     <div class="ps-card">
-      <div class="ps-label">This ${periodLabel === 'wk' ? 'Week' : periodLabel === 'mo' ? 'Month' : 'Year'}</div>
-      <div class="ps-val">${(last.dist_mi||0).toFixed(1)} <span style="font-size:.8rem;font-weight:400;color:var(--muted)">mi</span></div>
-      <div class="ps-sub">${fmt(last.climb_ft||0)} ft climb</div>
+      <div class="ps-label">${windowLabel}</div>
+      <div class="ps-val">${totalDist.toFixed(1)} <span style="font-size:.8rem;font-weight:400;color:var(--muted)">mi</span></div>
+      <div class="ps-sub">${fmt(Math.round(totalClimb))} ft climb</div>
     </div>
     <div class="ps-card">
-      <div class="ps-label">Avg / ${periodLabel}</div>
+      <div class="ps-label">${avgLabel}</div>
       <div class="ps-val">${avgDist.toFixed(1)} <span style="font-size:.8rem;font-weight:400;color:var(--muted)">mi</span></div>
       <div class="ps-sub">${fmt(Math.round(avgClimb))} ft climb</div>
     </div>
@@ -219,6 +418,21 @@ function updatePeriodStats(data) {
       <div class="ps-label">Moving Time</div>
       <div class="ps-val" style="font-size:1rem">${fmtH(totalH)}</div>
       <div class="ps-sub">${totalActs} activities</div>
+    </div>
+    <div class="ps-card">
+      <div class="ps-label">Max Climb</div>
+      <div class="ps-val">${maxClimb > 0 ? fmt(maxClimb) : '—'} <span style="font-size:.8rem;font-weight:400;color:var(--muted)">${maxClimb > 0 ? 'ft' : ''}</span></div>
+      <div class="ps-sub">${maxClimb > 0 ? fmt(Math.round(maxClimb/3.28084)) + ' m' : 'no climb data'}</div>
+    </div>
+    <div class="ps-card">
+      <div class="ps-label">Avg Power</div>
+      <div class="ps-val">${avgPower > 0 ? avgPower : '—'} <span style="font-size:.8rem;font-weight:400;color:var(--muted)">${avgPower > 0 ? 'w' : ''}</span></div>
+      <div class="ps-sub">${avgPower > 0 ? '' : 'no power data'}</div>
+    </div>
+    <div class="ps-card">
+      <div class="ps-label">Avg Heart Rate</div>
+      <div class="ps-val">${avgHr > 0 ? avgHr : '—'} <span style="font-size:.8rem;font-weight:400;color:var(--muted)">${avgHr > 0 ? 'bpm' : ''}</span></div>
+      <div class="ps-sub">${avgHr > 0 ? '' : 'no HR data'}</div>
     </div>
   `;
 }
@@ -267,14 +481,230 @@ function buildChart(labels, data) {
         x: { ticks: { color: '#64748b', maxRotation: 45, maxTicksLimit: 24 }, grid: { color: '#2a2d3a' } },
         y: { ticks: { color: '#94a3b8' }, grid: { color: '#2a2d3a' }, title: { display: true, text: 'Miles', color: '#64748b', font: { size: 11 } } },
         y2: { position: 'right', ticks: { color: '#94a3b8' }, grid: { drawOnChartArea: false }, title: { display: true, text: 'k ft', color: '#64748b', font: { size: 11 } } },
+      },
+      onClick: (evt, elements) => {
+        if (!elements.length) return;
+        const idx = elements[0].index;
+        const d = currentData?.[idx];
+        if (!d) return;
+
+        if (currentPeriod === 'month' && d.week) {
+          // Drill: month view showing weeks → switch to week view for clicked week
+          const weekStr = d.week;
+          const [wy, wm] = weekStr.split('-').map(Number);
+          document.getElementById('yearSel').value  = String(wy);
+          document.getElementById('monthSel').value = String(wm);
+          populateWeekSel(wy, wm, weekStr);
+          setPeriod('week');
+
+        } else if (currentPeriod === 'year' && d.month) {
+          // Drill: year view showing months → switch to month view for clicked month
+          const [, m] = d.month.split('-').map(Number);
+          document.getElementById('monthSel').value = String(m);
+          setPeriod('month');
+
+        } else if (currentPeriod === 'year' && d.year) {
+          // Drill: all-time view showing years → select that year (shows months)
+          document.getElementById('yearSel').value = String(d.year);
+          onYearChange();
+        }
+      },
+      onHover: (evt, elements) => {
+        const canvas = evt.native?.target;
+        if (canvas) canvas.style.cursor = elements.length ? 'pointer' : 'default';
+      },
+    }
+  });
+}
+
+// ── Zone charts ──────────────────────────────────────────────────────────────
+const HR_ZONE_LABELS  = ['Z1 Recovery','Z2 Aerobic','Z3 Tempo','Z4 Threshold','Z5 VO₂ Max'];
+const PW_ZONE_LABELS  = ['Z1 Recovery','Z2 Endurance','Z3 Tempo','Z4 Threshold','Z5 VO₂ Max','Z6 Anaerobic'];
+const ZONE_COLORS     = ['#6b7280','#22c55e','#eab308','#f97316','#ef4444','#a855f7'];
+
+let hrZoneChart = null, pwZoneChart = null;
+
+function buildZoneChart(canvasId, labels, data, colors) {
+  const ctx = document.getElementById(canvasId)?.getContext('2d');
+  if (!ctx) return null;
+  return new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        data,
+        backgroundColor: colors.slice(0, labels.length),
+        borderRadius: 4,
+        borderSkipped: false,
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const min = ctx.parsed.x;
+              if (min < 60) return ` ${min.toFixed(0)} min`;
+              const h = Math.floor(min / 60), m = Math.round(min % 60);
+              return m ? ` ${h}h ${m}m` : ` ${h}h`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          ticks: { color: '#64748b', font: { size: 10 },
+            callback: v => v >= 60 ? Math.floor(v/60)+'h' : v+'m' },
+          grid: { color: '#2a2d3a' },
+          title: { display: true, text: 'Time', color: '#64748b', font: { size: 10 } },
+        },
+        y: { ticks: { color: '#94a3b8', font: { size: 11 } }, grid: { display: false } },
       }
     }
   });
 }
 
+async function loadZoneCharts() {
+  const params = getFilterParams();
+  const label  = getPeriodLabel();
+
+  // ── Step 1: check for activities missing GPS points ───────────────────────
+  const missingUrl = `/api/stats/missing-points${params}`;
+  let missing;
+  try {
+    const r = await fetch(missingUrl);
+    if (!r.ok) { missing = { total: 0, activity_ids: [] }; }
+    else missing = await r.json();
+  } catch(e) { missing = { total: 0, activity_ids: [] }; }
+
+  // ── Step 2: fetch missing points with progress bar ────────────────────────
+  if (missing.total > 0) {
+    const progressEl = document.getElementById('zoneFetchProgress');
+    const labelEl    = document.getElementById('zoneFetchLabel');
+    const barEl      = document.getElementById('zoneFetchBar');
+    const subEl      = document.getElementById('zoneFetchSub');
+    const chartsEl   = document.getElementById('zoneCharts');
+
+    progressEl.style.display = '';
+    chartsEl.style.display   = 'none';
+
+    let done = 0, failed = 0;
+    const total = missing.total;
+
+    function updateBar() {
+      const pct = Math.round((done / total) * 100);
+      barEl.style.width = pct + '%';
+      labelEl.textContent = `Fetching GPS data — ${done} / ${total}`;
+      if (failed) subEl.textContent = `${failed} skipped (no data available)`;
+    }
+    updateBar();
+
+    for (const actId of missing.activity_ids) {
+      try {
+        const r = await fetch(`/api/activities/${actId}/fetch-points`, { method: 'POST' });
+        if (r.status === 401) {
+          // Not connected to Strava — stop fetching
+          subEl.textContent = 'Strava not connected — reconnect to fetch GPS data.';
+          break;
+        }
+        if (!r.ok) failed++;
+      } catch(e) { failed++; }
+      done++;
+      updateBar();
+    }
+
+    barEl.style.width = '100%';
+    labelEl.textContent = `GPS data ready`;
+    subEl.textContent = failed ? `${failed} activities had no GPS data` : '';
+
+    // Brief pause so the completed state is visible, then hide bar and show charts
+    await new Promise(res => setTimeout(res, 600));
+    progressEl.style.display = 'none';
+    chartsEl.style.display   = 'grid';
+  }
+
+  // ── Step 3: build zone charts ─────────────────────────────────────────────
+  let data;
+  try {
+    const r = await fetch(`/api/stats/zones${params}`);
+    if (!r.ok) return;
+    data = await r.json();
+  } catch(e) { return; }
+
+  document.getElementById('zoneSectionTitle').textContent =
+    label ? `Time in Zone — ${label}` : 'Time in Zone';
+
+  // HR zones
+  const hrNoData = document.getElementById('hrZoneNoData');
+  const hrCanvas = document.getElementById('hrZoneChart')?.parentElement;
+  if (!data.max_hr) {
+    if (hrNoData) hrNoData.style.display = '';
+    if (hrCanvas) hrCanvas.style.display = 'none';
+  } else {
+    if (hrNoData) hrNoData.style.display = 'none';
+    if (hrCanvas) hrCanvas.style.display = '';
+    if (hrZoneChart) hrZoneChart.destroy();
+    hrZoneChart = buildZoneChart('hrZoneChart', HR_ZONE_LABELS, data.hr_zones_min, ZONE_COLORS);
+  }
+
+  // Power zones
+  const pwNoData = document.getElementById('pwZoneNoData');
+  const pwCanvas = document.getElementById('pwZoneChart')?.parentElement;
+  if (!data.ftp) {
+    if (pwNoData) pwNoData.style.display = '';
+    if (pwCanvas) pwCanvas.style.display = 'none';
+  } else {
+    if (pwNoData) pwNoData.style.display = 'none';
+    if (pwCanvas) pwCanvas.style.display = '';
+    if (pwZoneChart) pwZoneChart.destroy();
+    pwZoneChart = buildZoneChart('pwZoneChart', PW_ZONE_LABELS, data.power_zones_min, ZONE_COLORS);
+  }
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
-buildChart(monthlyRaw.map(d => d.month), monthlyRaw);
-updatePeriodStats(monthlyRaw);
+(async () => {
+  // Current date defaults
+  const now = new Date();
+  const thisYear  = String(now.getFullYear());
+  const thisMonth = String(now.getMonth() + 1);
+  const thisMon   = new Date(now); thisMon.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+  const thisWeek  = thisMon.toISOString().slice(0, 10);
+
+  // Restore saved prefs, falling back to current-period defaults
+  const savedPeriod = _uiPrefsGet('dash-period', 'week');
+  const savedYear   = _uiPrefsGet('dash-year',   thisYear);
+  const savedMonth  = _uiPrefsGet('dash-month',  thisMonth);
+  const savedWeek   = _uiPrefsGet('dash-week',   thisWeek);
+
+  const yearSel  = document.getElementById('yearSel');
+  const monthSel = document.getElementById('monthSel');
+
+  // Restore year (only if it exists in the select options)
+  if (savedYear && yearSel && [...yearSel.options].some(o => o.value === savedYear))
+    yearSel.value = savedYear;
+
+  // Restore month
+  if (savedMonth && monthSel && [...monthSel.options].some(o => o.value === savedMonth))
+    monthSel.value = savedMonth;
+
+  // Set selector visibility and populate week selector, then load
+  // setPeriod handles visibility + fires loadChart
+  currentPeriod = savedPeriod;  // set before populateWeekSel so getFilterParams works
+  if (savedPeriod === 'week') {
+    monthSel.style.display = '';
+    document.getElementById('weekSel').style.display = '';
+    populateWeekSel(savedYear || thisYear, savedMonth || thisMonth, savedWeek);
+  } else if (savedPeriod === 'month') {
+    monthSel.style.display = '';
+  }
+  document.querySelectorAll('.period-btn').forEach(b => b.classList.toggle('active', b.dataset.period === savedPeriod));
+
+  loadChart(false);
+})();
 
 // ── Recent activities ─────────────────────────────────────────────────────────
 function typeBadge(t) {

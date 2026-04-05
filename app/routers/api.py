@@ -23,14 +23,37 @@ async def monthly_stats(request: Request, year: Optional[int] = Query(None)):
     return db_getter().get_monthly_totals(year=year, user_id=uid)
 
 @router.get("/stats/weekly")
-async def weekly_stats(request: Request, year: Optional[int] = Query(None)):
+async def weekly_stats(request: Request, year: Optional[int] = Query(None), month: Optional[int] = Query(None)):
     uid = get_session_user_id(request)
-    return db_getter().get_weekly_totals(year=year, user_id=uid)
+    return db_getter().get_weekly_totals(year=year, month=month, user_id=uid)
 
 @router.get("/stats/yearly")
 async def yearly_stats(request: Request, year: Optional[int] = Query(None)):
     uid = get_session_user_id(request)
     return db_getter().get_yearly_totals(year=year, user_id=uid)
+
+@router.get("/stats/daily")
+async def daily_stats(request: Request, week_start: str = Query(...)):
+    uid = get_session_user_id(request)
+    if uid is None:
+        raise HTTPException(401, "Not authenticated")
+    return db_getter().get_daily_totals(user_id=uid, week_start=week_start)
+
+@router.get("/stats/zones")
+async def zone_stats(request: Request, year: Optional[int] = Query(None),
+                     month: Optional[int] = Query(None), week_start: Optional[str] = Query(None)):
+    uid = get_session_user_id(request)
+    if uid is None:
+        raise HTTPException(401, "Not authenticated")
+    return db_getter().get_zone_time(user_id=uid, year=year, month=month, week_start=week_start)
+
+@router.get("/stats/missing-points")
+async def missing_points(request: Request, year: Optional[int] = Query(None),
+                         month: Optional[int] = Query(None), week_start: Optional[str] = Query(None)):
+    uid = get_session_user_id(request)
+    if uid is None:
+        raise HTTPException(401, "Not authenticated")
+    return db_getter().get_activities_missing_points(user_id=uid, year=year, month=month, week_start=week_start)
 
 
 @router.get("/activities/{activity_id}/geojson")
@@ -75,7 +98,265 @@ async def me(request: Request):
     user = db_getter().get_user(uid)
     if not user:
         raise HTTPException(404, "User not found")
-    return {"id": user["id"], "username": user.get("username") or user.get("email", "?")}
+    has_key = bool(
+        (user or {}).get("anthropic_api_key") or os.environ.get("ANTHROPIC_API_KEY")
+    )
+    return {
+        "id": user["id"],
+        "username": user.get("username") or user.get("email", "?"),
+        "has_anthropic_key": has_key,
+    }
+
+
+@router.post("/activities/{activity_id}/suggest-title")
+async def suggest_activity_title(activity_id: int, request: Request):
+    """Call Claude to generate a witty/humorous activity title based on stats."""
+    import httpx
+
+    uid = get_session_user_id(request)
+    if uid is None:
+        raise HTTPException(401, "Not authenticated")
+
+    db   = db_getter()
+    act  = db.get_activity(activity_id)
+    if not act:
+        raise HTTPException(404, "Activity not found")
+
+    user    = db.get_user(uid)
+    api_key = (user or {}).get("anthropic_api_key") or ""
+    if not api_key:
+        api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        raise HTTPException(503, "No Anthropic API key configured")
+
+
+    import random
+    seed_word = random.choice([
+        "accordion", "badger", "Ptolemy", "stapler", "fjord", "mayonnaise",
+        "trebuchet", "hamster", "Wellington", "kumquat", "dirigible", "platypus",
+        "Rasputin", "cauliflower", "monocle", "catapult", "brisket", "Vesuvius",
+        "yodeling", "wombat", "saxophone", "turnip", "Machiavelli", "marmalade",
+        "penguin", "obelisk", "fondue", "Charlemagne", "kazoo", "spatula",
+        "narwhal", "crouton", "bureaucracy", "corgi", "Copernicus", "jalapeño",
+    ])
+
+    prompt  = (
+        f"Write a short (2–6 words), absurd, funny activity title. "
+        f"It MUST be about or reference: {seed_word}. "
+        "Nothing to do with exercise, cycling, running, or fitness. "
+        "Be weird and unexpected. Reply with ONLY the title, no quotes, no explanation."
+    )
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={
+                "x-api-key":         api_key,
+                "anthropic-version": "2023-06-01",
+                "content-type":      "application/json",
+            },
+            json={
+                "model":       "claude-haiku-4-5-20251001",
+                "max_tokens":  60,
+                "temperature": 1,
+                "messages":    [{"role": "user", "content": prompt}],
+            },
+        )
+
+    if resp.status_code != 200:
+        raise HTTPException(502, f"Claude API error: {resp.status_code}")
+
+    title = resp.json()["content"][0]["text"].strip().strip('"').strip("'")
+    return {"title": title}
+
+
+_VALID_SUMMARY_MODELS = {
+    "claude-haiku-4-5-20251001",
+    "claude-sonnet-4-5-20250929",
+    "claude-sonnet-4-20250514",
+}
+
+def _ensure_summary_table(con):
+    con.execute("""
+        CREATE TABLE IF NOT EXISTS activity_ai_summaries (
+            activity_id INTEGER PRIMARY KEY,
+            summary     TEXT    NOT NULL,
+            model       TEXT,
+            created_at  INTEGER NOT NULL
+        )
+    """)
+    con.commit()
+
+def _act_stats_str(a: dict) -> str:
+    parts = []
+    if a.get("distance_mi"):
+        parts.append(f"{a['distance_mi']:.2f} miles")
+    if a.get("active_time"):
+        secs = int(a["active_time"])
+        h, rem = divmod(secs, 3600)
+        m = rem // 60
+        parts.append(f"{h}h {m}m moving time" if h else f"{m}m moving time")
+    if a.get("total_climb_ft"):
+        parts.append(f"{int(a['total_climb_ft'])} ft gain")
+    if a.get("avg_heartrate"):
+        parts.append(f"avg HR {int(a['avg_heartrate'])} bpm")
+    if a.get("max_heartrate"):
+        parts.append(f"max HR {int(a['max_heartrate'])} bpm")
+    if a.get("avg_speed_mph"):
+        parts.append(f"avg {a['avg_speed_mph']:.1f} mph")
+    if a.get("avg_power"):
+        parts.append(f"avg power {int(a['avg_power'])} W")
+    if a.get("suffer_score"):
+        parts.append(f"suffer score {int(a['suffer_score'])}")
+    return ", ".join(parts) or "no detailed stats"
+
+@router.get("/activities/{activity_id}/ai-summary")
+async def activity_ai_summary(activity_id: int, request: Request, model: str = "claude-haiku-4-5-20251001", refresh: bool = False):
+    """Return a cached or freshly generated AI summary for an activity."""
+    import httpx, sqlite3, time as _time
+
+    uid = get_session_user_id(request)
+    if uid is None:
+        raise HTTPException(401, "Not authenticated")
+
+    db  = db_getter()
+    act = db.get_activity(activity_id)
+    if not act:
+        raise HTTPException(404, "Activity not found")
+
+    user    = db.get_user(uid)
+    api_key = (user or {}).get("anthropic_api_key") or os.environ.get("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        raise HTTPException(503, "No Anthropic API key configured")
+
+    is_owner   = act.get("user_id") == uid
+    safe_model = model if model in _VALID_SUMMARY_MODELS else "claude-haiku-4-5-20251001"
+
+    # ── Check persistent cache ────────────────────────────────────────────────
+    con = sqlite3.connect(db.path, timeout=10)
+    try:
+        _ensure_summary_table(con)
+        cached = con.execute(
+            "SELECT summary FROM activity_ai_summaries WHERE activity_id = ?",
+            (activity_id,)
+        ).fetchone()
+        if cached and not refresh:
+            con.close()
+            return {"summary": cached[0], "cached": True}
+    except Exception:
+        pass
+
+    # ── Not the owner — return nothing rather than generating ─────────────────
+    if not is_owner:
+        con.close()
+        raise HTTPException(403, "Summary not available")
+
+    # ── Fetch coach goal ──────────────────────────────────────────────────────
+    goal_text = None
+    try:
+        row = con.execute(
+            "SELECT goal_text FROM coach_goals "
+            "WHERE user_id=? AND archived_at IS NULL "
+            "ORDER BY created_at DESC LIMIT 1",
+            (uid,)
+        ).fetchone()
+        if row:
+            goal_text = row[0]
+    except Exception:
+        pass
+
+    # ── Fetch recent past activities of the same type (before this one) ───────
+    act_start = act.get("start_time") or 0
+    act_type  = act.get("activity_type", "")
+    recent_lines = []
+    try:
+        rows = con.execute(
+            """SELECT name, distance_mi, active_time, total_climb_ft, avg_heartrate, avg_speed_mph
+               FROM activities
+               WHERE user_id = ? AND start_time < ? AND activity_type = ?
+               ORDER BY start_time DESC LIMIT 8""",
+            (uid, act_start, act_type)
+        ).fetchall()
+        for r in rows:
+            name, dist, atime, climb, hr, spd = r
+            p = []
+            if dist:   p.append(f"{dist:.1f} mi")
+            if atime:
+                h2, rem2 = divmod(int(atime), 3600); m2 = rem2 // 60
+                p.append(f"{h2}h {m2}m" if h2 else f"{m2}m")
+            if climb:  p.append(f"{int(climb)} ft gain")
+            if hr:     p.append(f"avg HR {int(hr)} bpm")
+            if spd:    p.append(f"{spd:.1f} mph")
+            recent_lines.append(f'  • "{name}": {", ".join(p)}')
+    except Exception:
+        pass
+
+    con.close()
+
+    # ── Build prompt ──────────────────────────────────────────────────────────
+    stats_str = _act_stats_str(act)
+    goal_clause = f"\nAthlete's current training goal: {goal_text}." if goal_text else ""
+    recent_clause = (
+        f"\nFor context, their {len(recent_lines)} most recent prior {act_type} activities:\n"
+        + "\n".join(recent_lines)
+    ) if recent_lines else ""
+
+    # Sport-type context hints so Claude understands what each type implies
+    _TYPE_HINTS = {
+        "GravelRide":      "Gravel rides involve unpaved/rough terrain and are typically harder than equivalent road rides.",
+        "MountainBikeRide":"Mountain biking involves technical off-road terrain and is very demanding.",
+        "TrailRun":        "Trail runs involve varied terrain and elevation and are harder than equivalent road runs.",
+        "VirtualRide":     "This was a virtual/indoor ride (e.g. on a trainer or Zwift).",
+        "VirtualRun":      "This was a virtual/treadmill run.",
+        "Swim":            "Open water or pool swimming.",
+        "Rowing":          "Rowing workout (machine or on water).",
+    }
+    type_hint = _TYPE_HINTS.get(act_type, "")
+    type_hint_clause = f" ({type_hint})" if type_hint else ""
+
+    prompt = (
+        f"Write a 1–2 sentence summary of this {act_type or 'activity'}{type_hint_clause}.\n"
+        f"Name: \"{act.get('name', 'Unnamed')}\". Stats: {stats_str}."
+        f"{goal_clause}{recent_clause}\n"
+        "Be specific and mention any notable stats or how it compares to recent efforts if relevant. "
+        "No emojis. No markdown."
+    )
+
+    # ── Call Claude ───────────────────────────────────────────────────────────
+    async with httpx.AsyncClient(timeout=20) as client:
+        resp = await client.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={
+                "x-api-key":         api_key,
+                "anthropic-version": "2023-06-01",
+                "content-type":      "application/json",
+            },
+            json={
+                "model":      safe_model,
+                "max_tokens": 150,
+                "messages":   [{"role": "user", "content": prompt}],
+            },
+        )
+
+    if resp.status_code != 200:
+        raise HTTPException(502, f"Claude API error: {resp.status_code}")
+
+    summary = resp.json()["content"][0]["text"].strip()
+
+    # ── Persist ───────────────────────────────────────────────────────────────
+    try:
+        con2 = sqlite3.connect(db.path, timeout=10)
+        _ensure_summary_table(con2)
+        con2.execute(
+            "INSERT OR REPLACE INTO activity_ai_summaries (activity_id, summary, model, created_at) VALUES (?,?,?,?)",
+            (activity_id, summary, safe_model, int(_time.time()))
+        )
+        con2.commit()
+        con2.close()
+    except Exception:
+        pass
+
+    return {"summary": summary, "cached": False}
 
 
 @router.get("/users")
@@ -186,6 +467,66 @@ async def fetch_points_from_strava(activity_id: int, request: Request):
     return {"status": "ok", "points_stored": count, "activity_id": activity_id}
 
 
+# ── Local activity edit ───────────────────────────────────────────────────────
+
+@router.post("/activities/{activity_id}/update")
+async def update_activity_local(activity_id: int, req: dict, request: Request):
+    """Save local edits (name, description, sport_type, gear) as pending — pushed to Strava on next resync."""
+    uid = get_session_user_id(request)
+    if uid is None:
+        raise HTTPException(401, "Not authenticated")
+    name        = (req.get("name") or "").strip() or None
+    description = req.get("description")   # empty string is valid (clears description)
+    visibility  = req.get("visibility")
+    sport_type  = (req.get("sport_type") or "").strip() or None
+    update_gear = "gear_id" in req
+    gear_id     = req.get("gear_id")    # "" = clear gear; "bXXX" = set gear
+    gear_name   = req.get("gear_name") or ""
+    if visibility is not None and visibility not in ("everyone", "followers_only", "only_me"):
+        raise HTTPException(400, "visibility must be 'everyone' or 'only_me'")
+    db_inst = db_getter()
+    db_inst.update_activity_local(activity_id, uid,
+                                  name=name, description=description, visibility=visibility,
+                                  sport_type=sport_type, gear_id=gear_id, gear_name=gear_name,
+                                  update_gear=update_gear)
+    return db_inst.get_activity(activity_id)
+
+
+async def _push_activity_to_strava(strava_id: int, token: str,
+                                   name: Optional[str],
+                                   description: Optional[str],
+                                   visibility: Optional[str],
+                                   sport_type: Optional[str] = None,
+                                   gear_id: Optional[str] = None) -> dict:
+    """PUT updated fields to Strava. Only sends fields that were explicitly changed.
+    Returns the Strava response body."""
+    import httpx, logging
+    log = logging.getLogger("uvicorn")
+    payload: dict = {}
+    if name is not None:
+        payload["name"] = name
+    if description is not None:
+        payload["description"] = description
+    if sport_type:
+        payload["sport_type"] = sport_type
+    if gear_id is not None:           # "" clears gear on Strava; "bXXX" sets it
+        payload["gear_id"] = gear_id
+    # visibility intentionally omitted — Strava's API does not support changing it
+    if not payload:
+        return {}
+    log.info(f"[push_strava] PUT activity {strava_id} payload={payload}")
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.put(
+            f"https://www.strava.com/api/v3/activities/{strava_id}",
+            headers={"Authorization": f"Bearer {token}"},
+            json=payload,
+        )
+    log.info(f"[push_strava] response {resp.status_code}: visibility={resp.json().get('visibility') if resp.status_code == 200 else resp.text[:200]}")
+    if resp.status_code not in (200, 201):
+        raise HTTPException(502, f"Strava push failed: {resp.text[:200]}")
+    return resp.json()
+
+
 @router.post("/activities/{activity_id}/resync")
 async def resync_activity(activity_id: int, request: Request):
     """
@@ -217,6 +558,19 @@ async def resync_activity(activity_id: int, request: Request):
     if not tokens_are_fresh(tokens):
         tokens = await refresh_tokens(tokens, user_id=uid)
     token = tokens["access_token"]
+
+    # Push any pending local edits to Strava before re-fetching
+    if act.get("local_edited_at"):
+        await _push_activity_to_strava(
+            strava_id=strava_id,
+            token=token,
+            name=act.get("local_name"),
+            description=act.get("local_description"),
+            visibility=None,
+            sport_type=act.get("local_sport_type"),
+            gear_id=act.get("local_gear_id"),
+        )
+        db.clear_activity_local_edits(activity_id)
 
     async with httpx.AsyncClient(timeout=30) as client:
         resp = await client.get(
@@ -291,7 +645,9 @@ async def resync_activity(activity_id: int, request: Request):
                 map_max_lat             = ?,
                 map_min_lon             = ?,
                 map_max_lon             = ?,
-                local_media_items_json  = NULL
+                strava_visibility       = ?,
+                local_media_items_json  = NULL,
+                local_video_urls_json   = NULL
             WHERE id = ?
         """, (
             sa.get("name", ""),
@@ -308,18 +664,46 @@ async def resync_activity(activity_id: int, request: Request):
             parse_tz_name(sa), parse_tz_offset(sa),
             start_lat, start_lon,
             map_min_lat, map_max_lat, map_min_lon, map_max_lon,
+            sa.get("visibility"),
             activity_id,
         ))
         con.commit()
     finally:
         con.close()
 
-    # Re-fetch photos and videos from Strava (local_media_items_json was cleared above)
-    await resolve_photos(activity_id)
+    # Re-fetch photos and videos from Strava, bypassing any cached filenames
+    await resolve_photos(activity_id, force=True)
 
     # Return the refreshed activity in the same shape the frontend expects
-    updated = db.get_activity(activity_id)
-    return updated
+    return db.get_activity(activity_id)
+
+
+@router.get("/strava/gear")
+async def strava_gear(request: Request):
+    """Return the authenticated user's bikes and shoes from Strava."""
+    import httpx
+    from app.routers.strava import load_tokens, tokens_are_fresh, refresh_tokens
+    uid = get_session_user_id(request)
+    if uid is None:
+        raise HTTPException(401, "Not authenticated")
+    tokens = load_tokens(user_id=uid)
+    if not tokens.get("access_token"):
+        return {"bikes": [], "shoes": []}
+    if not tokens_are_fresh(tokens):
+        tokens = await refresh_tokens(tokens, user_id=uid)
+    async with httpx.AsyncClient(timeout=20) as client:
+        r = await client.get(
+            "https://www.strava.com/api/v3/athlete",
+            headers={"Authorization": f"Bearer {tokens['access_token']}"},
+        )
+    if r.status_code != 200:
+        return {"bikes": [], "shoes": []}
+    athlete = r.json()
+    bikes = [{"id": b["id"], "name": b.get("name") or b["id"]}
+             for b in (athlete.get("bikes") or [])]
+    shoes = [{"id": s["id"], "name": s.get("name") or s["id"]}
+             for s in (athlete.get("shoes") or [])]
+    return {"bikes": bikes, "shoes": shoes}
 
 
 # ── SEGMENT COMPARE ──────────────────────────────────────────────────────────

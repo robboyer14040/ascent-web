@@ -143,7 +143,7 @@ input,select{font:inherit}
   background:var(--muted2);pointer-events:none;
 }
 @media (pointer:coarse){
-  #resize-handle{ width:10px; background:rgba(249,115,22,0.15); }
+  #resize-handle{ width:13px; background:rgba(249,115,22,0.15); }
   #resize-handle::after{ width:3px; height:44px; background:#f97316; opacity:0.6; }
 }
 #resize-handle:hover,#resize-handle.dragging{background:var(--accent)}
@@ -225,10 +225,34 @@ input,select{font:inherit}
 .resync-btn{font-size:11px;font-weight:600;color:var(--text);border:1px solid var(--border2);border-radius:4px;padding:3.5px 8px;background:none;cursor:pointer;line-height:1.4;transition:color .15s,border-color .15s}
 .resync-btn:hover{color:#f97316;border-color:#f97316}
 .resync-btn:disabled{opacity:.4;cursor:default}
+.resync-btn.dirty::after{content:'●';color:#f97316;font-size:7px;vertical-align:super;margin-left:2px}
 @keyframes spin{to{transform:rotate(360deg)}}
 .resync-btn.spinning .resync-icon{display:inline-block;animation:spin .7s linear infinite}
 .zones-btn{font-size:11px;font-weight:600;color:var(--text);border:1px solid var(--border2);border-radius:4px;padding:3.5px 8px;background:none;cursor:pointer;margin:0;line-height:1.4}
 .zones-btn:hover{color:#f97316;border-color:#f97316}
+.edit-btn{font-size:11px;font-weight:600;color:var(--text);border:1px solid var(--border2);border-radius:4px;padding:3.5px 8px;background:none;cursor:pointer;line-height:1.4;transition:color .15s,border-color .15s}
+.edit-btn:hover{color:#f97316;border-color:#f97316}
+#edit-activity-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:3000;align-items:center;justify-content:center}
+#edit-activity-overlay.open{display:flex}
+#edit-activity-modal{background:#2c2c2e;border:1px solid #3a3a3c;border-radius:12px;padding:1.25rem;width:572px;max-width:calc(100vw - 2rem);box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.edit-modal-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem}
+.edit-modal-title{font-size:14px;font-weight:600}
+.edit-modal-close{background:none;border:none;color:var(--muted);cursor:pointer;font-size:18px;padding:0;line-height:1}
+.edit-modal-close:hover{color:var(--text)}
+.edit-modal-field{margin-bottom:.75rem}
+.edit-modal-label{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:3px}
+.edit-act-input{width:100%;background:var(--surface2);border:1px solid var(--border2);border-radius:6px;color:var(--text);padding:5px 8px;font-size:12.5px;font-family:inherit;outline:none;box-sizing:border-box}
+.edit-act-input:focus{border-color:#f97316}
+textarea.edit-act-input{resize:vertical;min-height:52px;line-height:1.4}
+select.edit-act-input{appearance:none;-webkit-appearance:none;cursor:pointer;padding-right:24px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%23888' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center}
+.edit-vis-row{display:flex;gap:5px;margin-top:3px}
+.edit-vis-btn{font-size:11px;font-weight:600;padding:3.5px 12px;border-radius:4px;border:1px solid var(--border2);background:none;color:var(--muted);cursor:pointer;transition:all .12s}
+.edit-vis-btn:hover{border-color:var(--text);color:var(--text)}
+.edit-vis-btn.active{background:#f97316;border-color:#f97316;color:#fff}
+.edit-save-btn{font-size:11px;font-weight:600;padding:4px 12px;border-radius:4px;border:none;background:#f97316;color:#fff;cursor:pointer;font-family:inherit}
+.edit-save-btn:hover{background:#ea6c0a}
+.edit-cancel-btn{font-size:11px;font-weight:600;padding:4px 10px;border-radius:4px;border:1px solid var(--border2);background:none;color:var(--muted);cursor:pointer;font-family:inherit}
+.edit-cancel-btn:hover{color:var(--text);border-color:var(--text)}
 
 .stats-row{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
 .stats-grid{display:grid;grid-template-columns:repeat(6,80px);gap:6px;align-content:start;flex-shrink:0}
@@ -526,6 +550,13 @@ input,select{font:inherit}
 }
 #coach-model-select:focus{border-color:var(--accent)}
 .coach-model-label{font-size:11px;color:var(--muted);white-space:nowrap}
+.coach-today-btn{
+  background:rgba(10,132,255,.12);border:1px solid rgba(10,132,255,.3);
+  border-radius:6px;color:#0a84ff;font:inherit;font-size:11.5px;font-weight:600;
+  padding:3px 10px;cursor:pointer;white-space:nowrap;transition:background .15s;
+}
+.coach-today-btn:hover{background:rgba(10,132,255,.22)}
+.coach-today-btn:disabled{opacity:.4;cursor:default}
 .coach-plan-btn{
   margin-left:auto;background:rgba(48,209,88,.12);border:1px solid rgba(48,209,88,.3);
   border-radius:6px;color:#30d158;font:inherit;font-size:11.5px;font-weight:600;
@@ -533,6 +564,20 @@ input,select{font:inherit}
 }
 .coach-plan-btn:hover{background:rgba(48,209,88,.22)}
 .coach-plan-btn:disabled{opacity:.4;cursor:default}
+
+/* ── Coach "today" activity cards ────────────────────────────────────────── */
+.coach-today-maps{display:flex;gap:8px;padding:4px 0 8px 40px;flex-wrap:wrap}
+.coach-today-card{
+  cursor:pointer;border-radius:8px;overflow:hidden;
+  border:1px solid var(--border2);width:160px;flex-shrink:0;
+  transition:border-color .15s,box-shadow .15s;
+}
+.coach-today-card:hover{border-color:var(--accent);box-shadow:0 2px 12px rgba(0,0,0,.35)}
+.coach-today-map-el{width:160px;height:115px;pointer-events:none}
+.coach-today-map-label{
+  font-size:11px;padding:4px 7px;color:var(--text);background:var(--surface2);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
 
 /* ── Coach usage widget ──────────────────────────────────────────────────── */
 #coach-usage-bar{
@@ -657,6 +702,46 @@ input,select{font:inherit}
 <body>
 <div id="autosync-toast"></div>
 
+<div id="edit-activity-overlay" onclick="if(event.target===this)cancelEditActivity()">
+  <div id="edit-activity-modal">
+    <div class="edit-modal-hdr">
+      <div class="edit-modal-title">Edit Activity</div>
+      <button class="edit-modal-close" onclick="cancelEditActivity()">✕</button>
+    </div>
+    <div class="edit-modal-field">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
+        <span class="edit-modal-label" style="margin-bottom:0">Title</span>
+        <button id="suggest-title-btn" onclick="suggestTitle()" style="font-size:10px;padding:2px 8px;border-radius:4px;border:1px solid #48484a;background:#3a3a3c;color:var(--text);cursor:pointer;line-height:1.5">✨ Suggest</button>
+        <button onclick="toggleSuggestHelp(event)" title="How does this work?" style="font-size:10px;width:16px;height:16px;border-radius:50%;border:1px solid #636366;background:none;color:#636366;cursor:pointer;line-height:1;padding:0;flex-shrink:0">?</button>
+      </div>
+      <div id="suggest-help-text" style="display:none;font-size:11px;color:var(--muted);background:#3a3a3c;border-radius:6px;padding:6px 8px;margin-bottom:6px;line-height:1.5">
+        <strong style="color:var(--text)">✨ AI Title Suggestion</strong> uses Anthropic Claude to generate a witty title based on your activity stats.<br>
+        Requires an Anthropic API key — add yours in <strong>Settings → Anthropic API Key</strong>.
+      </div>
+      <input id="edit-act-name" type="text" class="edit-act-input">
+    </div>
+    <div class="edit-modal-field">
+      <div class="edit-modal-label">Description</div>
+      <textarea id="edit-act-textarea" class="edit-act-input" rows="6"></textarea>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:.75rem">
+      <div>
+        <div class="edit-modal-label">Activity Type</div>
+        <select id="edit-act-type" class="edit-act-input"></select>
+      </div>
+      <div>
+        <div class="edit-modal-label">Equipment</div>
+        <select id="edit-act-gear" class="edit-act-input"><option value="__keep__">Loading…</option></select>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:1rem">
+      <button class="edit-save-btn"   id="edit-save-btn"   onclick="saveEditActivity()">Save</button>
+      <button class="edit-cancel-btn" onclick="cancelEditActivity()">Cancel</button>
+      <span id="edit-act-status" style="font-size:11px;color:var(--muted)"></span>
+    </div>
+  </div>
+</div>
+
 <div id="toolbar">
   <span class="tb-title">⛰ Ascent <span style="font-size:10px;font-weight:400;color:var(--muted);letter-spacing:.02em">{{ app_version }}</span></span><span id="viewing-user-badge" onclick="openUserPicker()" title="Switch user" style="margin-left:8px;font-size:11px;font-weight:500;color:#f97316;cursor:pointer;padding:2px 7px;border:1px solid #f97316;border-radius:10px;opacity:.85;user-select:none"></span>
   <div style="flex:1"></div>
@@ -741,13 +826,14 @@ input,select{font:inherit}
       <div id="info-right">
         <div id="photo-panel" style="width:100%;height:100%;position:relative;background:#111;display:flex;align-items:center;justify-content:center;cursor:pointer" onclick="photoClick()">
           <div id="photo-placeholder" style="color:#636366;font-size:12px">No photo</div>
-          <img id="photo-img" alt="" style="display:none;width:100%;height:100%;object-fit:cover">
-          <video id="photo-vid" muted loop playsinline style="display:none;width:100%;height:100%;object-fit:cover"></video>
+          <img id="photo-img" alt="" style="display:none;max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain">
+          <video id="photo-vid" muted loop playsinline style="display:none;max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain"></video>
           <div id="photo-nav" style="display:none;position:absolute;top:0;left:0;right:0;align-items:center;justify-content:space-between;padding:4px 6px;background:rgba(0,0,0,.55)">
             <button onclick="event.stopPropagation();photoNav(-1)" style="background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:14px">‹</button>
             <span id="photo-count" style="color:#fff;font-size:11px"></span>
             <button onclick="event.stopPropagation();photoNav(1)" style="background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:14px">›</button>
           </div>
+          <button id="photo-dl-btn" onclick="event.stopPropagation();downloadCurrentMedia()" style="display:none;position:absolute;bottom:6px;right:6px;background:rgba(0,0,0,.55);border:none;color:#fff;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:13px;line-height:1.4" title="Download">···</button>
         </div>
       </div>
       </div><!-- .stats-content -->
@@ -770,6 +856,9 @@ input,select{font:inherit}
           <span id="lb-count" style="color:#aaa;font-size:13px"></span>
           <button onclick="event.stopPropagation();photoNav(1,true)" style="background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:6px;padding:6px 18px;cursor:pointer;font-size:18px">›</button>
         </div>
+        <div style="display:flex;align-items:center;gap:1rem;margin-top:8px">
+          <button onclick="event.stopPropagation();downloadCurrentMedia()" style="background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:6px;padding:5px 18px;cursor:pointer;font-size:13px">Download</button>
+        </div>
         <div style="color:#666;font-size:11px;margin-top:6px">Press Esc or click background to close · ← → to navigate</div>
       </div>
   </div>
@@ -782,6 +871,7 @@ input,select{font:inherit}
         <button id="analysis-disclose" onclick="toggleAnalysis()" title="Collapse/expand analysis"><span class="arr">▾</span></button>
       </div>
       <div id="chart-toolbar">
+        <button class="zones-btn" onclick="openZones()" style="margin-top:2px">Zones…</button>
         <button class="zones-btn" id="compare-btn" onclick="openCompare()" style="margin-top:2px">Compare…</button>
       </div>
       <div id="chart-settings" style="display:none;position:absolute;top:28px;right:4px;z-index:20;background:var(--surface);border:1px solid var(--border2);border-radius:8px;padding:8px 10px;box-shadow:0 4px 16px rgba(0,0,0,.5)">
@@ -915,11 +1005,68 @@ input,select{font:inherit}
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.15/dist/hls.min.js"></script>
 <script>
+// ── UI PREFS (server-seeded, persisted per user) ──────────────────────────────
+const _INIT_PREFS = {{ ui_prefs | tojson | safe }};
+const _uiPrefs = Object.assign({}, _INIT_PREFS);
+let _uiPrefsSaveTimer = null;
+function _uiPrefsGet(key, fallback) {
+  if (_uiPrefs[key] !== undefined && _uiPrefs[key] !== null) return _uiPrefs[key];
+  try { const v = localStorage.getItem(key); if (v !== null) return v; } catch(e) {}
+  return (fallback !== undefined) ? fallback : null;
+}
+function _uiPrefsSet(key, val) {
+  _uiPrefs[key] = val;
+  try { localStorage.setItem(key, val); } catch(e) {}
+  clearTimeout(_uiPrefsSaveTimer);
+  _uiPrefsSaveTimer = setTimeout(_uiPrefsSaveToServer, 1500);
+}
+async function _uiPrefsSaveToServer() {
+  try {
+    await fetch('/api/settings/ui-prefs', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({prefs: _uiPrefs}),
+    });
+  } catch(e) {}
+}
+
 // ── STATE ────────────────────────────────────────────────────────────────────
 let elevRenderVersion = 0; // incremented each selectActivity call to cancel stale renders
 let currentAct    = null;  // last selected activity object
 let currentCharts = null;  // last fetched chart data
-let cachedProfile = null;  // user profile (max_hr, ftp_watts) — fetched once per activity
+let cachedProfile    = null;  // user profile (max_hr, ftp_watts) — fetched once per activity
+let _hasAnthropicKey = false; // set from /api/me at init
+let _cachedGear = null;       // { bikes:[{id,name}], shoes:[{id,name}] } — loaded once per session
+
+// Strava sport_type enum (grouped for readability in the dropdown)
+const STRAVA_SPORT_TYPES = [
+  'EBikeRide','EMountainBikeRide','GravelRide','Handcycle','MountainBikeRide','Ride','RollerSki','Velomobile','VirtualRide',
+  'Run','TrailRun','VirtualRun',
+  'Hike','Walk',
+  'Canoeing','Kayaking','Kitesurf','Rowing','Sail','StandUpPaddling','Surfing','Swim','VirtualRow','Windsurf',
+  'AlpineSki','BackcountrySki','IceSkate','InlineSkate','NordicSki','Skateboard','Snowboard','Snowshoe',
+  'Crossfit','Elliptical','HighIntensityIntervalTraining','Pilates','StairStepper','WeightTraining','Wheelchair','Workout','Yoga',
+  'Badminton','Golf','Pickleball','Racquetball','RockClimbing','Soccer','Squash','TableTennis','Tennis',
+];
+
+async function fetchGear() {
+  if (_cachedGear) return _cachedGear;
+  try {
+    const stored = localStorage.getItem('ascent-strava-gear');
+    if (stored) {
+      const { data, ts } = JSON.parse(stored);
+      if (Date.now() - ts < 86400000) { _cachedGear = data; return _cachedGear; }
+    }
+  } catch(e) {}
+  try {
+    const r = await fetch('/api/strava/gear');
+    if (r.ok) {
+      _cachedGear = await r.json();
+      localStorage.setItem('ascent-strava-gear', JSON.stringify({ data: _cachedGear, ts: Date.now() }));
+    }
+  } catch(e) {}
+  return _cachedGear || { bikes: [], shoes: [] };
+}
 
 async function ensureProfile() {
   if (cachedProfile) return cachedProfile;
@@ -1047,7 +1194,7 @@ const DEFAULT_COL_IDS = ['date','user','name','dist','active','climb','mvspd','h
 
 function loadColPrefs() {
   try {
-    const saved = JSON.parse(localStorage.getItem('ascent-cols') || 'null');
+    const saved = JSON.parse(_uiPrefsGet('ascent-cols') || 'null');
     if (saved && Array.isArray(saved) && saved.length >= 2) {
       // Migrate: ensure 'user' sits immediately after 'date' whenever both are present
       const ui = saved.indexOf('user'), di = saved.indexOf('date');
@@ -1061,7 +1208,7 @@ function loadColPrefs() {
   } catch(e) {}
   return DEFAULT_COL_IDS;
 }
-function saveColPrefs(ids) { localStorage.setItem('ascent-cols', JSON.stringify(ids)); }
+function saveColPrefs(ids) { _uiPrefsSet('ascent-cols', JSON.stringify(ids)); }
 
 let activeColIds = loadColPrefs();
 
@@ -1071,8 +1218,8 @@ function getActiveCols() {
 
 // Per-column width overrides (set by dragging separators)
 let colWidthOverrides = {};
-try { colWidthOverrides = JSON.parse(localStorage.getItem('ascent-col-widths') || '{}'); } catch(e) {}
-function saveColWidths() { localStorage.setItem('ascent-col-widths', JSON.stringify(colWidthOverrides)); }
+try { colWidthOverrides = JSON.parse(_uiPrefsGet('ascent-col-widths') || '{}'); } catch(e) {}
+function saveColWidths() { _uiPrefsSet('ascent-col-widths', JSON.stringify(colWidthOverrides)); }
 
 function getColW(col) {
   return colWidthOverrides[col.id] || col.w;
@@ -1116,7 +1263,8 @@ function fmtHMS(s) {
 function fmtN(n,d=1){return (n&&Number(n)!==0)?Number(n).toFixed(d):'—'}
 
 // ── VIRTUAL SCROLL ────────────────────────────────────────────────────────────
-let vsScrollHandler = null;
+let vsScrollHandler  = null;
+let vsResizeObserver = null;
 
 function renderVirtualList() {
   const container = document.getElementById('act-list');
@@ -1153,6 +1301,15 @@ function renderVirtualList() {
   if (vsScrollHandler) container.removeEventListener('scroll', vsScrollHandler);
   vsScrollHandler = paint;
   container.addEventListener('scroll', paint, {passive:true});
+
+  // Repaint when the container is resized (handles iPad where clientHeight
+  // may be 0 on first paint because the flex layout hasn't settled yet).
+  if (vsResizeObserver) vsResizeObserver.disconnect();
+  if (window.ResizeObserver) {
+    vsResizeObserver = new ResizeObserver(paint);
+    vsResizeObserver.observe(container);
+  }
+
   paint();
 
   document.getElementById('actCount').textContent =
@@ -1256,7 +1413,7 @@ const MAP_STYLES = {
   'esri-sat':   { label: 'Satellite', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', attr: '© Esri' },
 };
 
-const DEFAULT_STYLE = localStorage.getItem('ascent-map-style') || 'osm';
+const DEFAULT_STYLE = _uiPrefsGet('ascent-map-style') || 'osm';
 
 function initMap() {
   leafMap = L.map('map',{zoomControl:true,attributionControl:false});
@@ -1268,7 +1425,7 @@ function setMapStyle(styleKey, save=true) {
   if (tileLayer) leafMap.removeLayer(tileLayer);
   tileLayer = L.tileLayer(style.url, { maxZoom: 19, attribution: style.attr });
   tileLayer.addTo(leafMap);
-  if (save) localStorage.setItem('ascent-map-style', styleKey);
+  if (save) _uiPrefsSet('ascent-map-style', styleKey);
   // Update selector UI
   document.querySelectorAll('.map-style-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.style === styleKey);
@@ -1276,7 +1433,7 @@ function setMapStyle(styleKey, save=true) {
 }
 function setCmpMapStyle(styleKey) {
   const style = MAP_STYLES[styleKey] || MAP_STYLES['osm'];
-  localStorage.setItem('ascent-map-style', styleKey);  // shared key with main map
+  _uiPrefsSet('ascent-map-style', styleKey);  // shared key with main map
 
   // Update main map too
   if (tileLayer && leafMap) {
@@ -1485,7 +1642,7 @@ function toggleChartSettings(e) {
 
 function loadChartPrefs() {
   try {
-    const p = JSON.parse(localStorage.getItem('ascent-chart-overlays') || 'null');
+    const p = JSON.parse(_uiPrefsGet('ascent-chart-overlays') || 'null');
     if (p) {
       const o1 = document.getElementById('overlay1-sel');
       const o1z = document.getElementById('overlay1-zones');
@@ -1511,7 +1668,7 @@ function loadChartPrefs() {
     // Migrate from old ascent-splits key if no chart prefs saved yet
     if (!p || p.splitMetric === undefined) {
       try {
-        const old = JSON.parse(localStorage.getItem('ascent-splits') || 'null');
+        const old = JSON.parse(_uiPrefsGet('ascent-splits') || 'null');
         if (old) {
           const sm = document.getElementById('split-metric-sel');
           const sl = document.getElementById('split-len-sel');
@@ -1529,7 +1686,7 @@ function loadChartPrefs() {
   } catch(e) {}
 }
 function saveChartPrefs() {
-  localStorage.setItem('ascent-chart-overlays', JSON.stringify({
+  _uiPrefsSet('ascent-chart-overlays', JSON.stringify({
     o1:          document.getElementById('overlay1-sel')?.value || '',
     o1Zones:     document.getElementById('overlay1-zones')?.checked ?? false,
     peaks:       document.getElementById('show-peaks')?.checked ?? true,
@@ -2384,7 +2541,7 @@ function deleteSelected() {
       state.selectedId = null;
       document.getElementById('act-detail').style.display = 'none';
       document.getElementById('no-selection').style.display = 'flex';
-      const _wxp = document.getElementById('wx-panel'); if (_wxp) _wxp.style.display = 'none';
+
       const _ctb = document.getElementById('chart-toolbar'); if (_ctb) _ctb.classList.remove('visible');
       clearMap();
     }
@@ -2434,10 +2591,12 @@ async function selectActivity(id) {
   det.innerHTML = buildDetailHTML(act);
   loadPhotos(id); // async
   loadWeatherLocation(id); // async
+  loadAISummary(id); // async
 
   // Wait for layout to settle after DOM changes before any rendering
   await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
   if (myVersion !== elevRenderVersion) return;
+  _resizeAIChip();
 
   // Map
   const coords = geo?.geometry?.coordinates;
@@ -2474,6 +2633,7 @@ async function selectActivity(id) {
 
           // Rebuild detail HTML now that act may have description
           det.innerHTML = buildDetailHTML(act);
+          loadPhotos(id); // re-load after panel rebuild
 
           // Hide placeholder, invalidate map size
           document.getElementById('mapPlaceholder').style.display = 'none';
@@ -2545,8 +2705,13 @@ function buildDetailHTML(a) {
   const stravaLink = a.strava_activity_id
     ? `<a href="https://www.strava.com/activities/${a.strava_activity_id}" target="_blank" class="strava">View on Strava ↗</a>`
     : '';
-  const resyncBtn = a.strava_activity_id
-    ? `<button class="resync-btn" id="resync-btn" onclick="resyncActivity(${a.id})" title="Re-sync metadata from Strava"><span class="resync-icon">↻</span> Sync</button>`
+  const isDirty  = Boolean(a.local_edited_at);
+  const isOwner  = a.user_id === viewState.myId;
+  const resyncBtn = (a.strava_activity_id && isOwner)
+    ? `<button class="resync-btn${isDirty ? ' dirty' : ''}" id="resync-btn" onclick="resyncActivity(${a.id})" title="${isDirty ? 'Push local edits then re-sync from Strava' : 'Re-sync metadata from Strava'}"><span class="resync-icon">↻</span> Sync</button>`
+    : '';
+  const editBtn = (a.strava_activity_id && isOwner)
+    ? `<button class="edit-btn" id="edit-act-btn" onclick="startEditActivity(${a.id})" title="Edit title, description, type & equipment">Edit…</button>`
     : '';
 
   // pace string helper: mph → "M:SS/mi" or "M:SS/km"
@@ -2594,16 +2759,28 @@ function buildDetailHTML(a) {
     ['Keyword 1',a.keyword1],['Keyword 2',a.keyword2],['Notes tag',a.custom],
   ].filter(([,v])=>v&&v!=='null'&&v!=='0');
 
+  // Visibility display
+  const visMap = {everyone:'Public', followers_only:'Followers Only', only_me:'Private'};
+  const visIcon = {everyone:'🌍', followers_only:'👥', only_me:'🔒'};
+  const effVis = a.strava_visibility || a.effective_visibility;
+  const stravaEditLink = a.strava_activity_id ? `<a href="https://www.strava.com/activities/${a.strava_activity_id}/edit" target="_blank" style="opacity:.5;color:inherit;text-decoration:underline;text-underline-offset:2px">(change on Strava)</a>` : `<span style="opacity:.5">(change on Strava)</span>`;
+  const visHtml = effVis ? `<div style="font-size:11px;color:var(--muted);margin-bottom:6px">${visIcon[effVis]||''} ${visMap[effVis]||effVis} ${stravaEditLink}</div>` : '';
+
   return `
     <div class="act-title-bar">
-      <div class="act-title">${escHtml(a.name||'(unnamed)')}</div>
-      <div class="act-title-links"><button class="zones-btn" onclick="openZones()">Zones</button>${resyncBtn}${stravaLink}</div>
+      <div class="act-title">${escHtml(a.name||'(unnamed)')}${isDirty?'<span style="color:#f97316;font-size:10px;margin-left:5px;font-weight:400;vertical-align:middle">edited</span>':''}</div>
+      <div class="act-title-links">${editBtn}${resyncBtn}${stravaLink}</div>
     </div>
-    <div style="font-size:11.5px;color:var(--muted);margin-bottom:8px">${fmtDate(a.start_time)}</div>
+    <div style="display:grid;grid-template-columns:auto 1fr;column-gap:20px;row-gap:4px;margin-bottom:6px;align-items:baseline">
+      <span style="font-size:11.5px;color:var(--muted)">${fmtDate(a.start_time)}</span>
+      <span id="wx-weather-text" style="font-size:11px;color:var(--muted)"></span>
+      <span style="font-size:11px;color:var(--muted)">${effVis?`${visIcon[effVis]||''} ${visMap[effVis]||effVis} ${stravaEditLink}`:''}</span>
+      <span id="wx-location-text" style="font-size:11px;color:var(--muted)"></span>
+    </div>
     ${a.notes?`<div class="act-notes" style="margin-bottom:8px">${escHtml(a.notes)}</div>`:''}
     <div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:8px;max-width:100%;overflow:hidden">
       <div class="stats-grid">${chips.map(([l,v,sub])=>{const span=l==='Equipment'?Math.min(6,Math.max(1,Math.ceil(v.length/14))):1;const s=span>1?` style="grid-column:span ${span}"`:'';;return`<div class="stat-chip"${s}><div class="sc-label">${l}</div><div class="sc-val">${v}</div><div class="sc-sub">${sub||''}</div></div>`}).join('')}</div>
-      <div id="wx-panel"></div>
+      ${_hasAnthropicKey?`<div class="stat-chip" id="ai-summary-chip" style="width:252px;flex-shrink:0;align-items:flex-start;justify-content:flex-start;padding:6px 8px;overflow-y:auto;box-sizing:border-box${isOwner?'':';display:none'}"><div class="sc-label" style="margin-bottom:3px">✦ AI Summary</div><div id="ai-summary-text" style="font-size:11px;color:var(--muted);line-height:1.45">${isOwner?'Loading…':''}</div></div>`:''}
     </div>
     ${meta.length?`<div class="meta-row" style="margin-top:4px">${meta.map(([l,v])=>`<div class="meta-field"><div class="mf-label">${l}</div><div class="mf-val">${escHtml(String(v))}</div></div>`).join('')}</div>`:''}
   `;
@@ -2652,42 +2829,45 @@ let resizing=false,rsX=0,rsW=0;
 // axis: 'x' or 'y', onMove(delta), onEnd()
 function addDrag(el, axis, onMove, onEnd, onStart) {
   el.style.touchAction = 'none';
-  let touchActive = false;
 
-  // Touch fallback for iOS/WebKit where setPointerCapture is unreliable.
-  // touchstart fires before pointerdown; preventDefault() suppresses the
-  // subsequent pointer events so both paths don't fire simultaneously.
-  el.addEventListener('touchstart', e => {
-    e.preventDefault();
-    e.stopPropagation();
-    touchActive = true;
-    if (onStart) onStart();
-    el.classList.add('dragging');
-    const t0 = e.touches[0];
-    const start = axis==='x' ? t0.clientX : t0.clientY;
-    function tm(ev) {
-      ev.preventDefault();
-      const t = ev.touches[0];
-      if (!t) return;
-      onMove(axis==='x' ? t.clientX - start : t.clientY - start);
-    }
-    function tu() {
-      touchActive = false;
-      el.classList.remove('dragging');
-      document.body.style.cssText = '';
-      if (onEnd) onEnd();
-      document.removeEventListener('touchmove', tm);
-      document.removeEventListener('touchend',  tu);
-      document.removeEventListener('touchcancel', tu);
-    }
-    document.addEventListener('touchmove', tm, {passive: false});
-    document.addEventListener('touchend',  tu);
-    document.addEventListener('touchcancel', tu);
-  }, {passive: false});
+  // Use Pointer Events as the primary path on all modern browsers (including
+  // iPad Safari 13+). setPointerCapture routes all subsequent events to this
+  // element even as the pointer moves outside, which is exactly what drag
+  // handles need and eliminates the intermittent "touch starts but won't move"
+  // bug on iPad caused by hit-testing misses on narrow elements.
+  //
+  // Touch event fallback only for browsers that don't support PointerEvent
+  // (essentially IE11 and very old iOS <13).
+  if (!window.PointerEvent) {
+    el.addEventListener('touchstart', e => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (onStart) onStart();
+      el.classList.add('dragging');
+      const t0 = e.touches[0];
+      const start = axis==='x' ? t0.clientX : t0.clientY;
+      function tm(ev) {
+        ev.preventDefault();
+        const t = ev.touches[0];
+        if (!t) return;
+        onMove(axis==='x' ? t.clientX - start : t.clientY - start);
+      }
+      function tu() {
+        el.classList.remove('dragging');
+        document.body.style.cssText = '';
+        if (onEnd) onEnd();
+        document.removeEventListener('touchmove', tm);
+        document.removeEventListener('touchend',  tu);
+        document.removeEventListener('touchcancel', tu);
+      }
+      document.addEventListener('touchmove', tm, {passive: false});
+      document.addEventListener('touchend',  tu);
+      document.addEventListener('touchcancel', tu);
+    }, {passive: false});
+  }
 
-  // Pointer Events for mouse (and touch on non-iOS)
+  // Pointer Events (mouse + touch on modern browsers including iPad Safari 13+)
   el.addEventListener('pointerdown', e => {
-    if (touchActive) return;  // touch handler is active
     if (e.button !== undefined && e.button !== 0) return;
     e.preventDefault();
     e.stopPropagation();
@@ -2821,12 +3001,14 @@ function showPhoto(idx) {
   const ph    = document.getElementById('photo-placeholder');
   const nav   = document.getElementById('photo-nav');
   const count = document.getElementById('photo-count');
+  const dlBtn = document.getElementById('photo-dl-btn');
 
   if (idx === null || !photoState.media.length) {
     img.style.display = 'none';
     _panelDetach();
     ph.style.display  = '';
     nav.style.display = 'none';
+    if (dlBtn) dlBtn.style.display = 'none';
     return;
   }
 
@@ -2852,6 +3034,19 @@ function showPhoto(idx) {
   } else {
     nav.style.display = 'none';
   }
+  if (dlBtn) dlBtn.style.display = 'block';
+}
+
+function downloadCurrentMedia() {
+  const item = photoState.media[photoState.idx];
+  if (!item) return;
+  // Use server-side /download endpoint — fetches video segments from CDN for videos,
+  // serves the file directly with attachment header for images.
+  const a = document.createElement('a');
+  a.href = item.url + '/download';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
 }
 
 function _lbShow(item) {
@@ -2912,49 +3107,71 @@ document.addEventListener('keydown', e => {
 
 // Set active button on load
 document.addEventListener('DOMContentLoaded', () => {
-  const saved = localStorage.getItem('ascent-map-style') || 'osm';
+  const saved = _uiPrefsGet('ascent-map-style') || 'osm';
   document.querySelectorAll('.map-style-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.style === saved);
   });
 });
 
+// ── AI SUMMARY ───────────────────────────────────────────────────────────────
+function _resizeAIChip() {
+  const chip  = document.getElementById('ai-summary-chip');
+  const grid  = document.querySelector('#act-detail .stats-grid');
+  if (!chip || !grid) return;
+  const gridChips = grid.querySelectorAll('.stat-chip');
+  if (!gridChips.length) return;
+  // Bottom of row 3 = chip at index min(17, last). 6 cols × 3 rows = indices 0–17.
+  const lastIdx  = Math.min(17, gridChips.length - 1);
+  const gridTop  = grid.getBoundingClientRect().top;
+  const rowBot   = gridChips[lastIdx].getBoundingClientRect().bottom;
+  const h = rowBot - gridTop;
+  if (h > 20) { chip.style.height = h + 'px'; chip.style.maxHeight = h + 'px'; }
+}
+
+async function loadAISummary(activityId, refresh = false) {
+  if (!_hasAnthropicKey) return;
+  const el   = document.getElementById('ai-summary-text');
+  const chip = document.getElementById('ai-summary-chip');
+  if (!el || !chip) return;
+  if (refresh) el.textContent = 'Generating…';
+  try {
+    const model = coachGetModel();
+    const url = `/api/activities/${activityId}/ai-summary?model=${encodeURIComponent(model)}${refresh ? '&refresh=true' : ''}`;
+    const r = await fetch(url);
+    if (r.status === 403) { chip.style.display = 'none'; return; } // not owner, no cached summary
+    if (!r.ok) { el.textContent = '—'; return; }
+    const d = await r.json();
+    chip.style.display = '';
+    el.style.color = 'var(--text)';
+    el.textContent = d.summary || '—';
+  } catch(e) {
+    el.textContent = '—';
+  }
+}
+
 // ── WEATHER & LOCATION ───────────────────────────────────────────────────────
 async function loadWeatherLocation(activityId) {
-  const panel = document.getElementById('wx-panel');
-  if (!panel) return;
-  panel.innerHTML = '';
-  panel.style.display = 'none';
-
   try {
     const r = await fetch(`/api/activities/${activityId}/weather-location`);
     if (!r.ok) return;
     const d = await r.json();
 
-    let chipsHtml = '';
-    if (d.weather?.description) {
+    const wxEl = document.getElementById('wx-weather-text');
+    if (wxEl && d.weather?.description) {
       const w = d.weather;
       const details = [];
-      if (w.avg_temp_f  != null) details.push(U.tempS(w.avg_temp_f));
+      if (w.avg_temp_f   != null) details.push(U.tempS(w.avg_temp_f));
       if (w.avg_wind_kph != null) details.push(`Wind ${Math.round(w.avg_wind_kph)} km/h`);
       if (w.avg_humidity != null) details.push(`${Math.round(w.avg_humidity)}% humidity`);
       if (w.precip_mm > 0)        details.push(`${w.precip_mm}mm precip`);
-      const wval = [w.description, ...details].join(' · ');
-      chipsHtml += `<div class="wx-chip"><div class="sc-label">Weather</div><div class="wx-scroll-val">${escHtml(wval)}</div><div class="sc-sub"></div></div>`;
+      wxEl.textContent = [w.description, ...details].join(' · ');
     }
-    if (d.locations) {
-      const locLabel = d.locations.includes(' → ') ? 'Trajectory' : 'Location';
-      chipsHtml += `<div class="wx-chip"><div class="sc-label">${locLabel}</div><div class="wx-scroll-val">${escHtml(d.locations)}</div><div class="sc-sub"></div></div>`;
+
+    const locEl = document.getElementById('wx-location-text');
+    if (locEl && d.locations) {
+      locEl.textContent = d.locations;
     }
-    if (chipsHtml) {
-      panel.innerHTML = chipsHtml;
-      const chip = document.querySelector('.stat-chip');
-      if (chip && chip.offsetWidth > 0) panel.style.maxWidth = (chip.offsetWidth * 3 + 12) + 'px';
-      else panel.style.maxWidth = '';
-      panel.style.display = 'flex';
-    }
-  } catch(e) {
-    panel.style.display = 'none';
-  }
+  } catch(e) {}
 }
 
 // ── ANIMATION ENGINE ─────────────────────────────────────────────────────────
@@ -3292,12 +3509,12 @@ function clearSplitHighlights() {
 // ── PANE SIZE PERSISTENCE ────────────────────────────────────────────────────
 function savePaneSizes(patch) {
   try {
-    const cur = JSON.parse(localStorage.getItem('ascent-pane-sizes') || '{}');
-    localStorage.setItem('ascent-pane-sizes', JSON.stringify(Object.assign(cur, patch)));
+    const cur = JSON.parse(_uiPrefsGet('ascent-pane-sizes') || '{}');
+    _uiPrefsSet('ascent-pane-sizes', JSON.stringify(Object.assign(cur, patch)));
   } catch(e) {}
 }
 function loadPaneSizes() {
-  try { return JSON.parse(localStorage.getItem('ascent-pane-sizes') || '{}'); } catch(e) { return {}; }
+  try { return JSON.parse(_uiPrefsGet('ascent-pane-sizes') || '{}'); } catch(e) { return {}; }
 }
 
 const STATS_TITLE_H = 28;
@@ -3327,7 +3544,7 @@ function toggleStats() {
     const al = document.getElementById('act-list');
     if (al) al.dispatchEvent(new Event('scroll'));
   }, 220);
-  try { localStorage.setItem('ascent-stats-open', isOpen ? '0' : '1'); } catch(e) {}
+  try { _uiPrefsSet('ascent-stats-open', isOpen ? '0' : '1'); } catch(e) {}
 }
 
 // ── RESIZE HANDLES ───────────────────────────────────────────────────────────
@@ -3436,17 +3653,12 @@ function toggleAnalysis() {
     if (tb) tb.style.cursor = 'row-resize';
     setTimeout(() => {
       if (elevChart) elevChart.resize();
-      // Re-measure wx-panel max-width now that chips are visible
-      const chip = document.querySelector('.stat-chip');
-      const panel = document.getElementById('wx-panel');
-      if (chip && panel && panel.style.display !== 'none' && chip.offsetWidth > 0) {
-        panel.style.maxWidth = (chip.offsetWidth * 3 + 12) + 'px';
-      }
+
       refitMap();
       _repaintList();
     }, 220);
   }
-  try { localStorage.setItem('ascent-analysis-open', isOpen ? '0' : '1'); } catch(e) {}
+  try { _uiPrefsSet('ascent-analysis-open', isOpen ? '0' : '1'); } catch(e) {}
 }
 
 (function(){
@@ -4200,11 +4412,11 @@ function coachToggleUsage(btn) {
 // ── Model selector ────────────────────────────────────────────────────────────
 
 function coachSaveModel(val) {
-  localStorage.setItem('ascent-coach-model', val);
+  _uiPrefsSet('ascent-coach-model', val);
 }
 
 function coachGetModel() {
-  return localStorage.getItem('ascent-coach-model') || 'claude-haiku-4-5-20251001';
+  return _uiPrefsGet('ascent-coach-model') || 'claude-haiku-4-5-20251001';
 }
 
 function coachRestoreModel() {
@@ -4239,6 +4451,73 @@ async function coachRequestPlan() {
   await new Promise(r => setTimeout(r, 150));
   await coachSend();
   btn.disabled = false;
+}
+
+async function coachAskToday() {
+  if (coach.sending) return;
+  coach.sending = true;
+  const btn = document.getElementById('coach-today-btn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Thinking…';
+  coachShowTyping();
+  coachScrollBottom();
+  try {
+    const model = coachGetModel();
+    const r = await fetch(`/api/coach/today?model=${encodeURIComponent(model)}`);
+    coachRemoveTyping();
+    if (!r.ok) {
+      const e = await r.json().catch(() => ({}));
+      coachAppendMessage('assistant', '⚠️ ' + (e.detail || 'Something went wrong.'), Math.floor(Date.now()/1000));
+    } else {
+      const d = await r.json();
+      coachAppendMessage('assistant', d.advice, Math.floor(Date.now()/1000));
+      if (d.activities && d.activities.length > 0) {
+        _coachAppendTodayMaps(d.activities);
+      }
+    }
+    coachScrollBottom();
+  } catch(e) {
+    coachRemoveTyping();
+    coachAppendMessage('assistant', '⚠️ Network error — please try again.', Math.floor(Date.now()/1000));
+    coachScrollBottom();
+  } finally {
+    coach.sending = false;
+    btn.disabled = false;
+    btn.textContent = '📍 What should I do today?';
+  }
+}
+
+function _coachAppendTodayMaps(activities) {
+  const container = document.getElementById('coach-messages');
+  const wrap = document.createElement('div');
+  wrap.className = 'coach-today-maps';
+  activities.forEach(act => {
+    const card = document.createElement('div');
+    card.className = 'coach-today-card';
+    card.title = act.name;
+    card.onclick = () => { closeCoach(); selectActivity(act.id); };
+    const mapId = `today-map-${act.id}-${Date.now()}`;
+    const dist = act.distance_mi ? ` · ${(+act.distance_mi).toFixed(1)} mi` : '';
+    card.innerHTML = `<div id="${mapId}" class="coach-today-map-el"></div>`
+      + `<div class="coach-today-map-label">${escHtml(act.name)}${escHtml(dist)}</div>`;
+    wrap.appendChild(card);
+    // Init Leaflet after DOM is inserted
+    requestAnimationFrame(() => {
+      const el = document.getElementById(mapId);
+      if (!el || !act.coords || act.coords.length < 2) return;
+      const style = MAP_STYLES[_uiPrefsGet('ascent-map-style') || 'osm'] || MAP_STYLES['osm'];
+      const m = L.map(el, {
+        zoomControl:false, attributionControl:false,
+        dragging:false, scrollWheelZoom:false, doubleClickZoom:false,
+        keyboard:false, touchZoom:false, boxZoom:false,
+      });
+      L.tileLayer(style.url, {maxZoom:19}).addTo(m);
+      const lls = act.coords.map(c => [c[1], c[0]]);
+      L.polyline(lls, {color:'#ef4444', weight:2.5, opacity:.9, smoothFactor:2}).addTo(m);
+      m.fitBounds(L.latLngBounds(lls), {padding:[8,8]});
+    });
+  });
+  container.appendChild(wrap);
 }
 
 
@@ -4310,9 +4589,170 @@ function renderZoneChart(times, title, boundaries, unit) {
   return html;
 }
 
+// ── Activity editing ──────────────────────────────────────────────────────────
+
+async function startEditActivity(id) {
+  const a = currentAct;
+  if (!a || a.id !== id) return;
+  document.getElementById('edit-act-name').value     = a.name || '';
+  document.getElementById('edit-act-textarea').value = a.notes || '';
+  document.getElementById('edit-act-status').textContent = '';
+  const helpEl = document.getElementById('suggest-help-text');
+  if (helpEl) helpEl.style.display = 'none';
+
+  // Populate activity type dropdown
+  const typeEl = document.getElementById('edit-act-type');
+  if (typeEl) {
+    const current = a.local_sport_type || a.activity_type || '';
+    let opts = STRAVA_SPORT_TYPES.includes(current) ? '' :
+      (current ? `<option value="${escHtml(current)}">${escHtml(current)}</option>` : '<option value="">— Unknown —</option>');
+    opts += STRAVA_SPORT_TYPES.map(t =>
+      `<option value="${t}"${t === current ? ' selected' : ''}>${t}</option>`
+    ).join('');
+    typeEl.innerHTML = opts;
+    if (current) typeEl.value = current;
+  }
+
+  // Open overlay immediately so user isn't waiting
+  document.getElementById('edit-activity-overlay').classList.add('open');
+  _updateSuggestBtn();
+  document.getElementById('edit-act-name').focus();
+
+  // Populate gear dropdown async (shows "Loading…" until ready)
+  const gearEl = document.getElementById('edit-act-gear');
+  if (gearEl) {
+    const gear = await fetchGear();
+    const allGear = [...(gear.bikes || []), ...(gear.shoes || [])];
+    const pendingId   = a.local_gear_id;   // null=not set, ""=clear, "bXXX"=set
+    const currentName = a.equipment || '';
+    let matched = false;
+    let opts = `<option value="__keep__">— No change —</option><option value="">— None (clear) —</option>`;
+    for (const g of allGear) {
+      const sel = (pendingId != null ? pendingId === g.id : g.name === currentName);
+      if (sel) matched = true;
+      opts += `<option value="${escHtml(g.id)}"${sel ? ' selected' : ''}>${escHtml(g.name)}</option>`;
+    }
+    gearEl.innerHTML = opts;
+    if (pendingId === '') {
+      gearEl.value = '';           // pending "clear gear"
+    } else if (matched) {
+      // already selected in loop above
+    } else {
+      gearEl.value = '__keep__';   // no match — don't touch gear on save
+    }
+  }
+}
+
+function _updateSuggestBtn() {
+  const btn = document.getElementById('suggest-title-btn');
+  if (!btn) return;
+  btn.disabled     = !_hasAnthropicKey;
+  btn.style.opacity = _hasAnthropicKey ? '1' : '0.4';
+  btn.style.cursor  = _hasAnthropicKey ? 'pointer' : 'not-allowed';
+  btn.title = _hasAnthropicKey
+    ? 'Generate a humorous title with AI'
+    : 'Requires an Anthropic API key — see Settings';
+}
+
+function toggleSuggestHelp(e) {
+  e.stopPropagation();
+  const el = document.getElementById('suggest-help-text');
+  if (el) el.style.display = el.style.display === 'none' ? '' : 'none';
+}
+
+async function suggestTitle() {
+  if (!_hasAnthropicKey) return;
+  const id = currentAct && currentAct.id;
+  if (!id) return;
+  const btn    = document.getElementById('suggest-title-btn');
+  const status = document.getElementById('edit-act-status');
+  btn.disabled = true; btn.textContent = '⏳ Thinking…';
+  status.textContent = '';
+  try {
+    const r = await fetch(`/api/activities/${id}/suggest-title`, { method: 'POST' });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      status.textContent = '✗ ' + (err.detail || 'AI error');
+      status.style.color = '#ef4444';
+      return;
+    }
+    const data = await r.json();
+    document.getElementById('edit-act-name').value = data.title;
+    status.textContent = '✨ Title suggested — edit or save as-is';
+    status.style.color = 'var(--muted)';
+  } catch(e) {
+    status.textContent = '✗ ' + e.message;
+    status.style.color = '#ef4444';
+  } finally {
+    btn.disabled = !_hasAnthropicKey; btn.textContent = '✨ Suggest';
+  }
+}
+
+function cancelEditActivity() {
+  document.getElementById('edit-activity-overlay').classList.remove('open');
+}
+
+async function saveEditActivity() {
+  const id   = currentAct && currentAct.id;
+  if (!id) return;
+  const name = (document.getElementById('edit-act-name').value || '').trim();
+  if (!name) {
+    const st = document.getElementById('edit-act-status');
+    st.textContent = 'Title is required'; st.style.color = '#ef4444';
+    return;
+  }
+  const desc      = document.getElementById('edit-act-textarea').value;
+  const status    = document.getElementById('edit-act-status');
+  const saveBtn   = document.getElementById('edit-save-btn');
+  saveBtn.disabled = true; saveBtn.textContent = 'Saving…';
+
+  const typeEl    = document.getElementById('edit-act-type');
+  const gearEl    = document.getElementById('edit-act-gear');
+  const body = { name, description: desc };
+  if (typeEl && typeEl.value) body.sport_type = typeEl.value;
+  if (gearEl && gearEl.value !== '__keep__') {
+    body.gear_id   = gearEl.value;   // "" = clear, "bXXX" = set
+    body.gear_name = gearEl.value
+      ? (gearEl.options[gearEl.selectedIndex]?.text || '')
+      : '';
+  }
+
+  try {
+    const r = await fetch(`/api/activities/${id}/update`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body),
+    });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      status.textContent = '✗ ' + (err.detail || r.statusText);
+      status.style.color = '#ef4444';
+      return;
+    }
+    const updated = await r.json();
+
+    // Update cached state
+    const idx  = state.all.findIndex(a => a.id === id);
+    if (idx  >= 0) state.all[idx]      = updated;
+    const fidx = state.filtered.findIndex(a => a.id === id);
+    if (fidx >= 0) state.filtered[fidx] = updated;
+    currentAct = updated;
+
+    cancelEditActivity();  // close overlay
+    const infoDiv = document.getElementById('act-detail');
+    if (infoDiv) { infoDiv.innerHTML = buildDetailHTML(updated); loadWeatherLocation(id); }
+    renderVirtualList();
+  } catch(e) {
+    status.textContent = '✗ ' + e.message;
+    status.style.color = '#ef4444';
+  } finally {
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save'; }
+  }
+}
+
 async function resyncActivity(activityId) {
   const btn = document.getElementById('resync-btn');
   if (!btn || btn.disabled) return;
+  const hadPendingEdits = btn.classList.contains('dirty');
   btn.disabled = true;
   btn.classList.add('spinning');
 
@@ -4339,15 +4779,17 @@ async function resyncActivity(activityId) {
     if (infoDiv) {
       infoDiv.innerHTML = buildDetailHTML(updated);
       loadWeatherLocation(activityId);
+      loadAISummary(activityId, true);
     }
     renderVirtualList();
+
 
     // Flash the new button green briefly to confirm
     const newBtn = document.getElementById('resync-btn');
     if (newBtn) {
       newBtn.classList.remove('spinning');
       newBtn.disabled = false;
-      newBtn.innerHTML = '✓ Synced';
+      newBtn.innerHTML = hadPendingEdits ? '✓ Pushed & Synced' : '✓ Synced';
       newBtn.style.color = '#30d158';
       newBtn.style.borderColor = '#30d158';
       setTimeout(() => {
@@ -4467,15 +4909,15 @@ async function cmpOpenManualWithSegment() {
   const panel   = document.getElementById('compare-panel');
   overlay.classList.add('open');
 
-  const savedW = localStorage.getItem('ascent-cmp-w');
-  const savedH = localStorage.getItem('ascent-cmp-h');
+  const savedW = _uiPrefsGet('ascent-cmp-w');
+  const savedH = _uiPrefsGet('ascent-cmp-h');
   if (panel && savedW) panel.style.width  = savedW;
   if (panel && savedH) panel.style.height = savedH;
-  const savedSpeed = localStorage.getItem('ascent-cmp-speed') || '25';
+  const savedSpeed = _uiPrefsGet('ascent-cmp-speed') || '25';
   const speedSel = document.getElementById('cmp-speed');
   if (speedSel) speedSel.value = savedSpeed;
   const friendsCb = document.getElementById('cmp-include-friends');
-  if (friendsCb) friendsCb.checked = localStorage.getItem('ascent-cmp-friends') === '1';
+  if (friendsCb) friendsCb.checked = _uiPrefsGet('ascent-cmp-friends') === '1';
 
   loading.style.display = 'flex';
   document.getElementById('cmp-loading-text').textContent = 'Searching activities…';
@@ -4575,15 +5017,15 @@ async function cmpOpenManual() {
   const panel   = document.getElementById('compare-panel');
   overlay.classList.add('open');
 
-  const savedW = localStorage.getItem('ascent-cmp-w');
-  const savedH = localStorage.getItem('ascent-cmp-h');
+  const savedW = _uiPrefsGet('ascent-cmp-w');
+  const savedH = _uiPrefsGet('ascent-cmp-h');
   if (panel && savedW) panel.style.width  = savedW;
   if (panel && savedH) panel.style.height = savedH;
-  const savedSpeed = localStorage.getItem('ascent-cmp-speed') || '25';
+  const savedSpeed = _uiPrefsGet('ascent-cmp-speed') || '25';
   const speedSel = document.getElementById('cmp-speed');
   if (speedSel) speedSel.value = savedSpeed;
   const friendsCb = document.getElementById('cmp-include-friends');
-  if (friendsCb) friendsCb.checked = localStorage.getItem('ascent-cmp-friends') === '1';
+  if (friendsCb) friendsCb.checked = _uiPrefsGet('ascent-cmp-friends') === '1';
 
   titleEl.textContent = `${ordered.length} Activities — choose a segment`;
   loading.style.display = 'none';
@@ -4632,7 +5074,7 @@ async function initCompareMapManual(actIds) {
   if (cmp.profileChart) { cmp.profileChart.destroy(); cmp.profileChart = null; }
   cmp.markers = []; cmp.zoomMarkers = []; cmp.tracks = [];
 
-  const style = MAP_STYLES[localStorage.getItem('ascent-map-style') || 'osm'] || MAP_STYLES['osm'];
+  const style = MAP_STYLES[_uiPrefsGet('ascent-map-style') || 'osm'] || MAP_STYLES['osm'];
 
   // Overview map
   cmp.map = L.map(mapEl, {zoomControl:true, attributionControl:false});
@@ -4707,15 +5149,15 @@ async function openCompare() {
 
   // Restore persisted settings
   const panel = document.getElementById('compare-panel');
-  const savedW = localStorage.getItem('ascent-cmp-w');
-  const savedH = localStorage.getItem('ascent-cmp-h');
+  const savedW = _uiPrefsGet('ascent-cmp-w');
+  const savedH = _uiPrefsGet('ascent-cmp-h');
   if (panel && savedW) panel.style.width  = savedW;
   if (panel && savedH) panel.style.height = savedH;
-  const savedSpeed = localStorage.getItem('ascent-cmp-speed') || '25';
+  const savedSpeed = _uiPrefsGet('ascent-cmp-speed') || '25';
   const speedSel = document.getElementById('cmp-speed');
   if (speedSel) speedSel.value = savedSpeed;
   const friendsCb = document.getElementById('cmp-include-friends');
-  if (friendsCb) friendsCb.checked = localStorage.getItem('ascent-cmp-friends') === '1';
+  if (friendsCb) friendsCb.checked = _uiPrefsGet('ascent-cmp-friends') === '1';
 
   // If no segment selected, single activity: show error (require segment or multiple activities)
   if (cmp.selStartIdx === null || cmp.selEndIdx === null) {
@@ -4783,7 +5225,7 @@ async function openCompare() {
     if (nameEl) nameEl.value = '';
 
     // Sync map style buttons to current stored style
-    const _curStyle = localStorage.getItem('ascent-map-style') || 'osm';
+    const _curStyle = _uiPrefsGet('ascent-map-style') || 'osm';
     document.querySelectorAll('.map-style-btn').forEach(b => {
       b.classList.toggle('active', b.dataset.style === _curStyle);
     });
@@ -4830,8 +5272,8 @@ function closeCompare() {
   // Persist panel size
   const _panel = document.getElementById('compare-panel');
   if (_panel) {
-    localStorage.setItem('ascent-cmp-w', _panel.style.width  || _panel.offsetWidth  + 'px');
-    localStorage.setItem('ascent-cmp-h', _panel.style.height || _panel.offsetHeight + 'px');
+    _uiPrefsSet('ascent-cmp-w', _panel.style.width  || _panel.offsetWidth  + 'px');
+    _uiPrefsSet('ascent-cmp-h', _panel.style.height || _panel.offsetHeight + 'px');
   }
   cmp._manualIds = null;
   cmpStop();
@@ -4887,7 +5329,7 @@ function initCompareMapBrowse() {
   cmp.markers = []; cmp.zoomMarkers = []; cmp.tracks = [];
 
   cmp.map = L.map(mapEl, {zoomControl:true, attributionControl:false});
-  const _cmpStyle = MAP_STYLES[localStorage.getItem('ascent-map-style') || 'osm'] || MAP_STYLES['osm'];
+  const _cmpStyle = MAP_STYLES[_uiPrefsGet('ascent-map-style') || 'osm'] || MAP_STYLES['osm'];
   cmp.tileLayer = L.tileLayer(_cmpStyle.url, {maxZoom:19});
   cmp.tileLayer.addTo(cmp.map);
 
@@ -4973,7 +5415,7 @@ function initCompareMap() {
   const mapEl = document.getElementById('compare-map');
   if (cmp.map) { cmp.map.remove(); cmp.map = null; }
   cmp.map = L.map(mapEl, {zoomControl:true, attributionControl:false});
-  const _cmpStyle = MAP_STYLES[localStorage.getItem('ascent-map-style') || 'osm'] || MAP_STYLES['osm'];
+  const _cmpStyle = MAP_STYLES[_uiPrefsGet('ascent-map-style') || 'osm'] || MAP_STYLES['osm'];
   cmp.tileLayer = L.tileLayer(_cmpStyle.url, {maxZoom:19});
   cmp.tileLayer.addTo(cmp.map);
 
@@ -5292,7 +5734,7 @@ function cmpUpdateUI(wallT) {
 // Use speed=1 so the animation runs in real-time for the fastest rider.
 function cmpGetSpeed() { return parseFloat(document.getElementById("cmp-speed")?.value || 25); }
 function cmpSetSpeed(v) {
-  localStorage.setItem('ascent-cmp-speed', v);
+  _uiPrefsSet('ascent-cmp-speed', v);
 }
 
 function cmpFrame(ts) {
@@ -5815,8 +6257,11 @@ document.addEventListener('DOMContentLoaded', () => {
       _allUsers = users;
       viewState.myId       = me.id;
       viewState.myUsername = me.username;
-      // Restore saved user selection, falling back to own ID
-      const _savedIds = JSON.parse(localStorage.getItem('ascent-view-user-ids') || 'null');
+      _hasAnthropicKey     = !!me.has_anthropic_key;
+      // Restore saved user selection — keyed by user ID so different logins don't bleed into each other
+      const _viewKey  = `ascent-view-user-ids-${me.id}`;
+      viewState._viewKey = _viewKey;
+      const _savedIds = JSON.parse(_uiPrefsGet(_viewKey) || 'null');
       const _validIds = _savedIds && _savedIds.filter(id => users.some(u => u.id === id));
       if (_validIds && _validIds.length > 0) {
         _validIds.forEach(id => viewState.selectedUserIds.add(id));
@@ -5839,7 +6284,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (ps.photoW)   { const el = document.getElementById('info-right'); if (el) el.style.width = ps.photoW + 'px'; }
   // Restore stats open/closed state
   try {
-    if (localStorage.getItem('ascent-stats-open') === '0') {
+    if (_uiPrefsGet('ascent-stats-open') === '0') {
       const panel    = document.getElementById('info-panel');
       const btn      = document.getElementById('stats-disclose');
       const content  = panel && panel.querySelector('.stats-content');
@@ -5853,7 +6298,7 @@ document.addEventListener('DOMContentLoaded', () => {
   } catch(e) {}
   // Restore analysis open/closed state
   try {
-    if (localStorage.getItem('ascent-analysis-open') === '0') {
+    if (_uiPrefsGet('ascent-analysis-open') === '0') {
       const wrap = document.getElementById('chart-wrap');
       const btn  = document.getElementById('analysis-disclose');
       const tb   = document.getElementById('analysis-titlebar');
@@ -5934,14 +6379,27 @@ async function applyUserSelection() {
   if (viewState.selectedUserIds.size === 0 && viewState.myId !== null) {
     viewState.selectedUserIds.add(viewState.myId);
   }
-  localStorage.setItem('ascent-view-user-ids', JSON.stringify([...viewState.selectedUserIds]));
+  const _vk = viewState._viewKey || `ascent-view-user-ids-${viewState.myId}`;
+  _uiPrefsSet(_vk, JSON.stringify([...viewState.selectedUserIds]));
   _updateViewBadge();
   // Reset filters
   state.search = ''; state.actType = ''; state.year = '';
   document.getElementById('searchInput').value = '';
   document.getElementById('typeFilter').value  = '';
   document.getElementById('yearFilter').value  = '';
-  state.all = []; state.filtered = []; state.selected = null;
+  state.all = []; state.filtered = []; state.selected = null; state.selectedId = null;
+  document.getElementById('act-detail').style.display = 'none';
+  document.getElementById('no-selection').style.display = 'flex';
+  const _ctbU = document.getElementById('chart-toolbar'); if (_ctbU) _ctbU.classList.remove('visible');
+  clearMap();
+  animReset();
+  // Clear photo/video panel
+  _panelDetach();
+  showPhoto(null);
+  photoState.media = []; photoState.idx = 0; photoState.activityId = null;
+  // Clear elevation chart
+  if (elevChart) { elevChart.destroy(); elevChart = null; }
+  elevChartData = null;
   document.getElementById('act-list').scrollTop = 0;
   document.getElementById('list-rows').innerHTML = '';
   document.getElementById('list-spacer').style.height = '0';
@@ -6053,7 +6511,7 @@ async function applyUserSelection() {
       <button class="cmp-t-btn" onclick="cmpDeleteSegment()" title="Delete selected segment" style="padding:3px 7px;font-size:12px;color:#f87171">🗑</button>
       <label style="margin-left:10px;display:flex;align-items:center;gap:4px;font-size:12px;color:var(--muted);cursor:pointer" title="Include activities from friends who have sharing enabled">
         <input type="checkbox" id="cmp-include-friends" style="accent-color:#f97316"
-               onchange="localStorage.setItem('ascent-cmp-friends',this.checked?'1':'0')">
+               onchange="_uiPrefsSet('ascent-cmp-friends',this.checked?'1':'0')">
         Friends
       </label>
     </div>
@@ -6151,6 +6609,9 @@ async function applyUserSelection() {
         </select>
         <button class="coach-plan-btn" id="coach-plan-btn" onclick="coachRequestPlan()" title="Generate a detailed training plan based on your goal and recent data">
           📋 Generate Training Plan
+        </button>
+        <button class="coach-today-btn" id="coach-today-btn" onclick="coachAskToday()" title="Get AI advice on what workout to do today, with suggested routes from your history">
+          📍 What should I do today?
         </button>
       </div>
 

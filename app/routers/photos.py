@@ -19,7 +19,7 @@ import httpx
 import logging
 from fastapi import APIRouter, HTTPException
 log = logging.getLogger('photos')
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 
 router = APIRouter()
 db_getter = None   # injected by main.py
@@ -44,30 +44,23 @@ def _legacy_dirs() -> list[Path]:
 
 # ── token ─────────────────────────────────────────────────────────────────────
 
-async def _fresh_token() -> Optional[str]:
+async def _fresh_token(user_id: Optional[int] = None) -> Optional[str]:
+    """Get a valid Strava access token for the given user, refreshing if needed.
+    Uses strava.py's credential/token infrastructure so per-user DB credentials work."""
     try:
-        p = Path(_db_path()).parent / "strava_tokens.json"
-        if not p.exists():
+        from app.routers import strava as strava_mod
+        tokens = strava_mod.load_tokens(user_id)
+        if not tokens:
             return None
-        tok = json.loads(p.read_text())
-        if tok.get("expires_at", 0) > time.time() + 60:
-            return tok.get("access_token")
-        async with httpx.AsyncClient(timeout=20) as c:
-            r = await c.post("https://www.strava.com/oauth/token", data={
-                "client_id":     os.environ.get("STRAVA_CLIENT_ID", ""),
-                "client_secret": os.environ.get("STRAVA_CLIENT_SECRET", ""),
-                "grant_type":    "refresh_token",
-                "refresh_token": tok["refresh_token"],
-            })
-            if r.status_code == 200:
-                d = r.json()
-                tok.update({"access_token": d["access_token"],
-                             "refresh_token": d.get("refresh_token", tok["refresh_token"]),
-                             "expires_at": d["expires_at"]})
-                p.write_text(json.dumps(tok, indent=2))
-                return tok["access_token"]
-    except Exception:
-        pass
+        if strava_mod.tokens_are_fresh(tokens):
+            return tokens["access_token"]
+        # Token expired — refresh using strava.py's credential lookup
+        refreshed = await strava_mod.refresh_tokens(tokens, user_id)
+        if refreshed:
+            strava_mod.save_tokens(refreshed, user_id)
+            return refreshed["access_token"]
+    except Exception as e:
+        log.warning(f"_fresh_token failed for user {user_id}: {e}")
     return None
 
 # ── DB ────────────────────────────────────────────────────────────────────────
@@ -87,7 +80,7 @@ def _get_info(activity_id: int) -> Optional[dict]:
     con = sqlite3.connect(_db_path())
     try:
         row = con.execute(
-            "SELECT strava_activity_id, local_media_items_json, local_video_urls_json "
+            "SELECT strava_activity_id, local_media_items_json, local_video_urls_json, user_id "
             "FROM activities WHERE id=?",
             (activity_id,)).fetchone()
         if not row:
@@ -96,11 +89,21 @@ def _get_info(activity_id: int) -> Optional[dict]:
         if row[1]:
             try: filenames = json.loads(row[1])
             except Exception: pass
-        video_urls = []
+        video_map = {}
         if row[2]:
-            try: video_urls = json.loads(row[2])
+            try:
+                parsed = json.loads(row[2])
+                # Support both new dict format and legacy list format
+                if isinstance(parsed, dict):
+                    video_map = parsed
+                elif isinstance(parsed, list) and parsed:
+                    # Legacy list: last N filenames correspond to the N video URLs
+                    n = len(parsed)
+                    for fname, url in zip(filenames[-n:], parsed):
+                        if url:
+                            video_map[fname] = url
             except Exception: pass
-        return {"strava_id": row[0], "filenames": filenames, "video_urls": video_urls}
+        return {"strava_id": row[0], "filenames": filenames, "video_map": video_map, "user_id": row[3]}
     except sqlite3.OperationalError:
         # Column may not exist yet; fall back
         row = con.execute(
@@ -112,18 +115,18 @@ def _get_info(activity_id: int) -> Optional[dict]:
         if row[1]:
             try: filenames = json.loads(row[1])
             except Exception: pass
-        return {"strava_id": row[0], "filenames": filenames, "video_urls": []}
+        return {"strava_id": row[0], "filenames": filenames, "video_map": {}, "user_id": None}
     finally:
         con.close()
 
-def _save_media(activity_id: int, filenames: list[str], video_urls: list[str]):
-    """Persist photo filenames and video HLS URLs to the DB."""
+def _save_media(activity_id: int, filenames: list[str], video_map: dict):
+    """Persist photo filenames and video HLS URL map {filename: hls_url} to the DB."""
     _ensure_video_column()
     con = sqlite3.connect(_db_path())
     try:
         con.execute(
             "UPDATE activities SET local_media_items_json=?, local_video_urls_json=? WHERE id=?",
-            (json.dumps(filenames), json.dumps(video_urls), activity_id))
+            (json.dumps(filenames), json.dumps(video_map), activity_id))
         con.commit()
     finally:
         con.close()
@@ -131,20 +134,22 @@ def _save_media(activity_id: int, filenames: list[str], video_urls: list[str]):
 # ── Strava download ───────────────────────────────────────────────────────────
 
 async def _download_from_strava(strava_id: int, dest_dir: Path,
-                                 existing: set[str]) -> tuple[list[str], list[str]]:
+                                 existing: set[str],
+                                 user_id: Optional[int] = None) -> tuple[Optional[list], Optional[dict]]:
     """
     Fetch media from Strava for the activity.
     - type=1 (photo): download JPEG, return in filenames list
     - type=2 (video): download thumbnail JPEG, collect HLS URL
-    Returns (photo_filenames, hls_video_urls).
+    Returns (photo_filenames, video_map_dict), or (None, None) on API failure.
+    (None, None) signals a transient error — callers should not wipe existing cached data.
     """
-    token = await _fresh_token()
+    token = await _fresh_token(user_id)
     if not token:
         log.warning(f"No Strava token for media download (activity {strava_id})")
-        return [], []
+        return None, None
 
-    filenames  = []
-    video_urls = []
+    filenames = []
+    video_map = {}  # {filename: hls_url} for type=2 items with a video URL
     try:
         async with httpx.AsyncClient(timeout=60) as client:
             resp = await client.get(
@@ -154,10 +159,10 @@ async def _download_from_strava(strava_id: int, dest_dir: Path,
             )
             if resp.status_code != 200:
                 log.warning(f"Strava photos API {resp.status_code} for {strava_id}: {resp.text[:200]}")
-                return [], []
+                return None, None
             photos = resp.json()
             if not isinstance(photos, list):
-                return [], []
+                return [], {}
 
             for i, photo in enumerate(photos):
                 media_type = photo.get("type", 1)  # 1=photo, 2=video
@@ -169,10 +174,8 @@ async def _download_from_strava(strava_id: int, dest_dir: Path,
 
                 if media_type == 2:
                     # Video: collect HLS URL, download thumbnail for panel preview
-                    hls = photo.get("video_url")
-                    if hls:
-                        video_urls.append(hls)
-                        log.info(f"Found video HLS for {strava_id}: {hls[:80]}")
+                    hls = (photo.get("video_url") or photo.get("hls_url") or
+                           photo.get("video_hls_url"))
                     if thumb_url:
                         filename = f"strava_{uid}.jpg"
                         if filename not in existing and not (dest_dir / filename).exists():
@@ -183,6 +186,8 @@ async def _download_from_strava(strava_id: int, dest_dir: Path,
                             except Exception as e:
                                 log.warning(f"Video thumb download failed: {e}")
                         filenames.append(filename)
+                        if hls:
+                            video_map[filename] = hls
                 else:
                     # Regular photo
                     if not thumb_url:
@@ -207,25 +212,38 @@ async def _download_from_strava(strava_id: int, dest_dir: Path,
 
     except Exception as e:
         log.error(f"_download_from_strava outer exception for {strava_id}: {e}")
+        return None, None
 
-    return filenames, video_urls
+    return filenames, video_map
 
 # ── core resolution ───────────────────────────────────────────────────────────
 
-async def resolve_photos(activity_id: int) -> dict:
+async def resolve_photos(activity_id: int, force: bool = False) -> dict:
     """
     Ensure all photos for an activity are in support/photos/{strava_id}/.
+    force=True: always re-fetch from Strava, replacing any cached media.
     Returns {"filenames": [...], "video_urls": [...]}.
     """
     info = _get_info(activity_id)
     if not info or not info["strava_id"]:
-        return {"filenames": [], "video_urls": []}
+        return {"filenames": [], "video_map": {}}
 
     strava_id    = int(info["strava_id"])
     db_filenames = info["filenames"]
-    db_videos    = info["video_urls"]
+    db_video_map = info["video_map"]
+    user_id      = info.get("user_id")
     dest_dir     = _photos_dir(strava_id)
     legacy_dirs  = _legacy_dirs()
+
+    if force:
+        # Always re-download from Strava, discarding cached filenames
+        existing_names = {f.stem for f in dest_dir.iterdir() if f.is_file()}
+        new_filenames, new_video_map = await _download_from_strava(strava_id, dest_dir, existing_names, user_id)
+        if new_filenames is None:
+            # Strava API failed — keep existing DB data rather than wiping it
+            return {"filenames": db_filenames, "video_map": db_video_map}
+        _save_media(activity_id, new_filenames, new_video_map)
+        return {"filenames": new_filenames, "video_map": new_video_map}
 
     resolved   = []
     still_need = []
@@ -256,27 +274,45 @@ async def resolve_photos(activity_id: int) -> dict:
 
     # Step 3 & 4: download from Strava if files are missing OR db has no filenames
     new_filenames = []
-    new_videos    = []
+    new_video_map = {}
+    strava_failed = False
     if remaining or not db_filenames:
         existing_names = {f.stem for f in dest_dir.iterdir() if f.is_file()}
-        new_filenames, new_videos = await _download_from_strava(strava_id, dest_dir, existing_names)
-        for fname in new_filenames:
-            if fname not in resolved:
-                resolved.append(fname)
+        dl_filenames, dl_video_map = await _download_from_strava(strava_id, dest_dir, existing_names, user_id)
+        if dl_filenames is None:
+            strava_failed = True
+        else:
+            new_filenames = dl_filenames
+            new_video_map = dl_video_map
+            for fname in new_filenames:
+                if fname not in resolved:
+                    resolved.append(fname)
+
+    # If Strava failed and we have nothing, scan disk for any existing thumbnails
+    if strava_failed and not resolved and not db_filenames:
+        disk_files = sorted(f.name for f in dest_dir.iterdir() if f.is_file())
+        if disk_files:
+            log.warning(f"Strava unavailable; serving {len(disk_files)} cached files from disk for activity {activity_id}")
+            return {"filenames": disk_files, "video_map": db_video_map}
+        return {"filenames": [], "video_map": {}}
+
+    # If Strava failed but we have existing data, return it unchanged
+    if strava_failed:
+        return {"filenames": db_filenames or list(resolved), "video_map": db_video_map}
 
     # Step 5: persist if anything changed
-    db_set    = set(db_filenames)
-    final     = [f for f in db_filenames if f in resolved]
+    db_set        = set(db_filenames)
+    final         = [f for f in db_filenames if f in resolved]
     for fname in new_filenames:
         if fname not in db_set:
             final.append(fname)
 
-    final_videos = new_videos if new_videos else db_videos
+    final_video_map = new_video_map if new_video_map else db_video_map
 
-    if set(final) != set(db_filenames) or final != db_filenames or final_videos != db_videos:
-        _save_media(activity_id, final, final_videos)
+    if set(final) != set(db_filenames) or final != db_filenames or final_video_map != db_video_map:
+        _save_media(activity_id, final, final_video_map)
 
-    return {"filenames": final, "video_urls": final_videos}
+    return {"filenames": final, "video_map": final_video_map}
 
 # ── API endpoints ──────────────────────────────────────────────────────────────
 
@@ -286,36 +322,103 @@ async def get_photos(activity_id: int):
     Return available photos and video HLS URLs for an activity.
     Response includes a `media` array with type info for the frontend.
     """
-    result   = await resolve_photos(activity_id)
-    filenames  = result["filenames"]
-    video_urls = result["video_urls"]
-    base_url   = f"/photos/{activity_id}/"
+    result    = await resolve_photos(activity_id)
+    filenames = result["filenames"]
+    video_map = result.get("video_map") or {}
+    if not isinstance(video_map, dict):
+        video_map = {}
+    base_url  = f"/photos/{activity_id}/"
 
-    # Build a unified media list. Videos appear last (matching Strava order:
-    # photos first, video last). We match them by position — last N filenames
-    # correspond to the N video_urls (they share the same uid ordering).
-    # Simpler: tag the last len(video_urls) filenames as videos if counts match.
     media = []
-    n_vid = len(video_urls)
-    n_img = len(filenames) - n_vid  # photos come first
-
-    for i, fname in enumerate(filenames):
-        if n_vid > 0 and i >= n_img:
-            vid_idx = i - n_img
-            media.append({
-                "url":     base_url + fname,
-                "type":    "video",
-                "hls_url": video_urls[vid_idx],
-            })
+    for fname in filenames:
+        hls = video_map.get(fname)
+        if hls:
+            media.append({"url": base_url + fname, "type": "video", "hls_url": hls})
         else:
             media.append({"url": base_url + fname, "type": "image"})
 
     return {
-        "photos":   filenames,        # backward compat
-        "base_url": base_url,
-        "media":    media,
-        "video_urls": video_urls,
+        "photos":     filenames,   # backward compat
+        "base_url":   base_url,
+        "media":      media,
+        "video_urls": list(video_map.values()),
     }
+
+
+@router.get("/photos/{activity_id}/{filename}/download")
+async def download_media(activity_id: int, filename: str):
+    """
+    Download endpoint for photos and videos.
+    - Images: served with Content-Disposition: attachment.
+    - Videos: HLS segments are fetched from CDN and streamed back as concatenated MPEG-TS.
+    """
+    info = _get_info(activity_id)
+    if not info or not info["strava_id"]:
+        raise HTTPException(404, "Activity not found")
+
+    video_map = info.get("video_map") or {}
+    hls_url   = video_map.get(filename)
+
+    if not hls_url:
+        # Photo — serve locally with attachment header
+        dest_dir  = _photos_dir(info["strava_id"])
+        file_path = dest_dir / filename
+        try:
+            file_path.resolve().relative_to(dest_dir.resolve())
+        except ValueError:
+            raise HTTPException(403, "Forbidden")
+        if not file_path.exists():
+            raise HTTPException(404, f"Photo not found: {filename}")
+        fn = filename.lower()
+        if   fn.endswith(".png"):  mt = "image/png"
+        elif fn.endswith(".webp"): mt = "image/webp"
+        elif fn.endswith(".heic"): mt = "image/heic"
+        else:                      mt = "image/jpeg"
+        return FileResponse(file_path, media_type=mt,
+                            headers={"Content-Disposition": f'attachment; filename="{filename}"'})
+
+    # Video — fetch HLS from CDN and stream back as MPEG-TS
+    async def _stream_hls():
+        async with httpx.AsyncClient(timeout=60, follow_redirects=True) as client:
+            r = await client.get(hls_url)
+            if r.status_code != 200:
+                log.warning(f"HLS manifest fetch failed {r.status_code}: {hls_url[:80]}")
+                return
+            manifest  = r.text
+            base_url  = hls_url.rsplit('/', 1)[0] + '/'
+
+            # If this is a master playlist, pick the first (highest-quality) variant
+            if '#EXT-X-STREAM-INF' in manifest:
+                for line in manifest.splitlines():
+                    line = line.strip()
+                    if line and not line.startswith('#'):
+                        variant_url = line if line.startswith('http') else base_url + line
+                        r2 = await client.get(variant_url)
+                        if r2.status_code == 200:
+                            manifest = r2.text
+                            base_url = variant_url.rsplit('/', 1)[0] + '/'
+                        break
+
+            # Stream each segment
+            for line in manifest.splitlines():
+                line = line.strip()
+                if not line or line.startswith('#'):
+                    continue
+                seg_url = line if line.startswith('http') else base_url + line
+                try:
+                    seg = await client.get(seg_url, timeout=30)
+                    if seg.status_code == 200:
+                        yield seg.content
+                except Exception as e:
+                    log.warning(f"Segment download failed: {e}")
+
+    stem     = filename.rsplit('.', 1)[0]
+    dl_name  = f"{stem}.ts"
+    return StreamingResponse(
+        _stream_hls(),
+        media_type="video/mp2t",
+        headers={"Content-Disposition": f'attachment; filename="{dl_name}"'},
+    )
 
 
 @router.get("/photos/{activity_id}/{filename}")

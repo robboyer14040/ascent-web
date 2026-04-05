@@ -250,6 +250,28 @@ def build_activity(row: sqlite3.Row) -> dict:
     # User ownership
     a["user_id"] = d.get("user_id")
 
+    # Local edits (pending Strava push) + last-known Strava visibility
+    a["local_name"]        = d.get("local_name")
+    a["local_description"] = d.get("local_description")
+    a["local_visibility"]  = d.get("local_visibility")
+    a["local_edited_at"]   = d.get("local_edited_at")
+    a["strava_visibility"] = d.get("strava_visibility")
+    a["local_sport_type"]  = d.get("local_sport_type")
+    a["local_gear_id"]     = d.get("local_gear_id")
+    a["local_gear_name"]   = d.get("local_gear_name")
+    # Effective visibility: pending local override takes precedence
+    a["effective_visibility"] = d.get("local_visibility") or d.get("strava_visibility")
+    # Apply local overrides for display
+    if d.get("local_name"):
+        a["name"] = d["local_name"]
+    local_desc = d.get("local_description")
+    if local_desc is not None:
+        a["notes"] = local_desc
+    if d.get("local_sport_type"):
+        a["activity_type"] = d["local_sport_type"]
+    if d.get("local_gear_id") is not None:   # NULL=not set, ""=clear, "bXXX"=set
+        a["equipment"] = d.get("local_gear_name") or ""
+
     # ── altitude ─────────────────────────────────────────────────────────
     a["max_altitude_ft"] = round(safe_float(attrs.get("maxAltitude") or d.get("src_max_elevation")))
     a["min_altitude_ft"] = round(safe_float(attrs.get("minAltitude") or d.get("src_min_elevation")))
@@ -280,6 +302,16 @@ class AscentDB:
         for col in ("start_lat REAL", "start_lon REAL",
                     "map_min_lat REAL", "map_max_lat REAL",
                     "map_min_lon REAL", "map_max_lon REAL"):
+            try:
+                self._con.execute(f"ALTER TABLE activities ADD COLUMN {col}")
+                self._con.commit()
+            except Exception:
+                pass
+        # Migration: local edit columns for pending Strava push + known Strava visibility
+        for col in ("local_name TEXT", "local_description TEXT",
+                    "local_visibility TEXT", "local_edited_at INTEGER",
+                    "strava_visibility TEXT",
+                    "local_sport_type TEXT", "local_gear_id TEXT", "local_gear_name TEXT"):
             try:
                 self._con.execute(f"ALTER TABLE activities ADD COLUMN {col}")
                 self._con.commit()
@@ -605,7 +637,10 @@ class AscentDB:
                     COUNT(*)            AS count,
                     SUM(distance_mi)    AS dist_mi,
                     SUM(src_total_climb) AS climb_ft,
-                    SUM(src_moving_time_s) AS moving_s
+                    SUM(src_moving_time_s) AS moving_s,
+                    MAX(src_total_climb) AS max_climb_ft,
+                    AVG(CASE WHEN src_avg_power     > 0 THEN src_avg_power     END) AS avg_power_w,
+                    AVG(CASE WHEN src_avg_heartrate > 0 THEN src_avg_heartrate END) AS avg_hr
                 FROM activities
                 {where}
                 GROUP BY month
@@ -615,16 +650,20 @@ class AscentDB:
 
         return [
             {
-                "month":    r["month"],
-                "count":    r["count"],
-                "dist_mi":  round(r["dist_mi"] or 0, 1),
-                "climb_ft": round(r["climb_ft"] or 0),
-                "active_h": round((r["moving_s"] or 0) / 3600, 1),
+                "month":        r["month"],
+                "count":        r["count"],
+                "dist_mi":      round(r["dist_mi"] or 0, 1),
+                "climb_ft":     round(r["climb_ft"] or 0),
+                "active_h":     round((r["moving_s"] or 0) / 3600, 1),
+                "max_climb_ft": round(r["max_climb_ft"] or 0),
+                "avg_power_w":  round(r["avg_power_w"] or 0),
+                "avg_hr":       round(r["avg_hr"] or 0),
             }
             for r in rows
         ]
 
     def get_weekly_totals(self, year: Optional[int] = None,
+                          month: Optional[int] = None,
                           user_id: Optional[int] = None,
                           include_shared: bool = False) -> list[dict]:
         base_where, params = self._build_where("", "", year,
@@ -632,6 +671,8 @@ class AscentDB:
         where = base_where if base_where else "WHERE creation_time_s IS NOT NULL"
         if base_where:
             where += " AND creation_time_s IS NOT NULL"
+        if month:
+            where += f" AND strftime('%m', datetime(creation_time_s,'unixepoch')) = '{month:02d}'"
 
         # Use the Monday of each week as the group key (reliable cross-year grouping)
         # SQLite: 'weekday 1' = Monday; subtract days to get Monday of that week
@@ -641,7 +682,10 @@ class AscentDB:
                     COUNT(*)               AS count,
                     SUM(distance_mi)       AS dist_mi,
                     SUM(src_total_climb)   AS climb_ft,
-                    SUM(src_moving_time_s) AS moving_s
+                    SUM(src_moving_time_s) AS moving_s,
+                    MAX(src_total_climb)   AS max_climb_ft,
+                    AVG(CASE WHEN src_avg_power     > 0 THEN src_avg_power     END) AS avg_power_w,
+                    AVG(CASE WHEN src_avg_heartrate > 0 THEN src_avg_heartrate END) AS avg_hr
                 FROM activities
                 {where}
                 GROUP BY week
@@ -651,14 +695,169 @@ class AscentDB:
 
         return [
             {
-                "week":     r["week"],
-                "count":    r["count"],
-                "dist_mi":  round(r["dist_mi"] or 0, 1),
-                "climb_ft": round(r["climb_ft"] or 0),
-                "active_h": round((r["moving_s"] or 0) / 3600, 1),
+                "week":         r["week"],
+                "count":        r["count"],
+                "dist_mi":      round(r["dist_mi"] or 0, 1),
+                "climb_ft":     round(r["climb_ft"] or 0),
+                "active_h":     round((r["moving_s"] or 0) / 3600, 1),
+                "max_climb_ft": round(r["max_climb_ft"] or 0),
+                "avg_power_w":  round(r["avg_power_w"] or 0),
+                "avg_hr":       round(r["avg_hr"] or 0),
             }
             for r in rows
         ]
+
+    def get_daily_totals(self, user_id: int, week_start: str) -> list[dict]:
+        """Return daily activity totals for the 7-day week starting on week_start (YYYY-MM-DD)."""
+        from datetime import date, timedelta
+        d0 = date.fromisoformat(week_start)
+        week_end = (d0 + timedelta(days=6)).isoformat()
+        rows = self._con.execute("""
+            SELECT
+                date(datetime(creation_time_s,'unixepoch')) AS day,
+                COUNT(*)               AS count,
+                SUM(distance_mi)       AS dist_mi,
+                SUM(src_total_climb)   AS climb_ft,
+                SUM(src_moving_time_s) AS moving_s,
+                MAX(src_total_climb)   AS max_climb_ft,
+                AVG(CASE WHEN src_avg_power     > 0 THEN src_avg_power     END) AS avg_power_w,
+                AVG(CASE WHEN src_avg_heartrate > 0 THEN src_avg_heartrate END) AS avg_hr
+            FROM activities
+            WHERE user_id = ?
+              AND date(datetime(creation_time_s,'unixepoch')) BETWEEN ? AND ?
+            GROUP BY day
+            ORDER BY day ASC
+        """, (user_id, week_start, week_end)).fetchall()
+        day_map = {r["day"]: r for r in rows}
+        result = []
+        for i in range(7):
+            day = (d0 + timedelta(days=i)).isoformat()
+            r = day_map.get(day)
+            result.append({
+                "day":          day,
+                "count":        r["count"] if r else 0,
+                "dist_mi":      round((r["dist_mi"]  or 0) if r else 0, 1),
+                "climb_ft":     round((r["climb_ft"] or 0) if r else 0),
+                "active_h":     round(((r["moving_s"] or 0) if r else 0) / 3600, 2),
+                "max_climb_ft": round((r["max_climb_ft"] or 0) if r else 0),
+                "avg_power_w":  round((r["avg_power_w"]  or 0) if r else 0),
+                "avg_hr":       round((r["avg_hr"]       or 0) if r else 0),
+            })
+        return result
+
+    def get_activities_missing_points(self, user_id: int,
+                                       year: Optional[int] = None,
+                                       month: Optional[int] = None,
+                                       week_start: Optional[str] = None) -> dict:
+        """Return IDs of activities that have no local points but have a Strava ID to fetch from."""
+        where_parts = [
+            "user_id = ?",
+            "points_saved = 0",
+            "strava_activity_id IS NOT NULL",
+            "strava_activity_id != ''",
+        ]
+        params: list = [user_id]
+        if year:
+            where_parts.append(
+                "strftime('%Y', datetime(creation_time_s,'unixepoch')) = ?"
+            )
+            params.append(str(year))
+        if month:
+            where_parts.append(
+                f"strftime('%m', datetime(creation_time_s,'unixepoch')) = '{month:02d}'"
+            )
+        if week_start:
+            from datetime import date, timedelta
+            week_end = (date.fromisoformat(week_start) + timedelta(days=6)).isoformat()
+            where_parts.append("date(datetime(creation_time_s,'unixepoch')) BETWEEN ? AND ?")
+            params.extend([week_start, week_end])
+        where = "WHERE " + " AND ".join(where_parts)
+        rows = self._con.execute(
+            f"SELECT id FROM activities {where} ORDER BY creation_time_s DESC", params
+        ).fetchall()
+        ids = [r["id"] for r in rows]
+        return {"total": len(ids), "activity_ids": ids}
+
+    def get_zone_time(self, user_id: int, year: Optional[int] = None, month: Optional[int] = None, week_start: Optional[str] = None) -> dict:
+        """Return time (minutes) spent in each HR and power zone for the given filter.
+
+        HR zones use % of max_hr (Garmin 5-zone model).
+        Power zones use % of FTP (6-zone model).
+        Returns zeros if max_hr / ftp not configured.
+        """
+        profile = self.get_user_profile(user_id)
+        max_hr = profile.get("max_hr")
+        ftp    = profile.get("ftp_watts")
+
+        where_parts = [
+            "a.user_id = ?",
+            "p.active_time_delta_s > 0",
+            "p.active_time_delta_s < 60",   # exclude gaps/pauses
+        ]
+        params: list = [user_id]
+        if year:
+            where_parts.append(
+                "strftime('%Y', datetime(a.creation_time_s,'unixepoch')) = ?"
+            )
+            params.append(str(year))
+        if month:
+            where_parts.append(
+                f"strftime('%m', datetime(a.creation_time_s,'unixepoch')) = '{month:02d}'"
+            )
+        if week_start:
+            from datetime import date, timedelta
+            week_end = (date.fromisoformat(week_start) + timedelta(days=6)).isoformat()
+            where_parts.append("date(datetime(a.creation_time_s,'unixepoch')) BETWEEN ? AND ?")
+            params.extend([week_start, week_end])
+        where = "WHERE " + " AND ".join(where_parts)
+
+        hr_result = [0.0] * 5
+        pw_result = [0.0] * 6
+
+        if max_hr:
+            b = [0.60 * max_hr, 0.70 * max_hr, 0.80 * max_hr, 0.90 * max_hr]
+            row = self._con.execute(f"""
+                SELECT
+                  SUM(CASE WHEN p.heartrate_bpm > 0 AND p.heartrate_bpm < ? THEN p.active_time_delta_s ELSE 0 END),
+                  SUM(CASE WHEN p.heartrate_bpm >= ? AND p.heartrate_bpm < ? THEN p.active_time_delta_s ELSE 0 END),
+                  SUM(CASE WHEN p.heartrate_bpm >= ? AND p.heartrate_bpm < ? THEN p.active_time_delta_s ELSE 0 END),
+                  SUM(CASE WHEN p.heartrate_bpm >= ? AND p.heartrate_bpm < ? THEN p.active_time_delta_s ELSE 0 END),
+                  SUM(CASE WHEN p.heartrate_bpm >= ? THEN p.active_time_delta_s ELSE 0 END)
+                FROM points p JOIN activities a ON p.track_id = a.id {where}
+            """, [b[0],
+                  b[0], b[1],
+                  b[1], b[2],
+                  b[2], b[3],
+                  b[3]] + params).fetchone()
+            if row:
+                hr_result = [round((row[i] or 0) / 60, 1) for i in range(5)]
+
+        if ftp:
+            b = [0.55 * ftp, 0.75 * ftp, 0.90 * ftp, 1.05 * ftp, 1.20 * ftp]
+            row = self._con.execute(f"""
+                SELECT
+                  SUM(CASE WHEN p.power_w > 0 AND p.power_w < ? THEN p.active_time_delta_s ELSE 0 END),
+                  SUM(CASE WHEN p.power_w >= ? AND p.power_w < ? THEN p.active_time_delta_s ELSE 0 END),
+                  SUM(CASE WHEN p.power_w >= ? AND p.power_w < ? THEN p.active_time_delta_s ELSE 0 END),
+                  SUM(CASE WHEN p.power_w >= ? AND p.power_w < ? THEN p.active_time_delta_s ELSE 0 END),
+                  SUM(CASE WHEN p.power_w >= ? AND p.power_w < ? THEN p.active_time_delta_s ELSE 0 END),
+                  SUM(CASE WHEN p.power_w >= ? THEN p.active_time_delta_s ELSE 0 END)
+                FROM points p JOIN activities a ON p.track_id = a.id {where}
+            """, [b[0],
+                  b[0], b[1],
+                  b[1], b[2],
+                  b[2], b[3],
+                  b[3], b[4],
+                  b[4]] + params).fetchone()
+            if row:
+                pw_result = [round((row[i] or 0) / 60, 1) for i in range(6)]
+
+        return {
+            "hr_zones_min":    hr_result,
+            "power_zones_min": pw_result,
+            "max_hr": max_hr,
+            "ftp":    ftp,
+        }
 
     def get_yearly_totals(self, year: Optional[int] = None,
                           user_id: Optional[int] = None,
@@ -675,7 +874,10 @@ class AscentDB:
                     COUNT(*)               AS count,
                     SUM(distance_mi)       AS dist_mi,
                     SUM(src_total_climb)   AS climb_ft,
-                    SUM(src_moving_time_s) AS moving_s
+                    SUM(src_moving_time_s) AS moving_s,
+                    MAX(src_total_climb)   AS max_climb_ft,
+                    AVG(CASE WHEN src_avg_power     > 0 THEN src_avg_power     END) AS avg_power_w,
+                    AVG(CASE WHEN src_avg_heartrate > 0 THEN src_avg_heartrate END) AS avg_hr
                 FROM activities
                 {where}
                 GROUP BY year
@@ -685,11 +887,14 @@ class AscentDB:
 
         return [
             {
-                "year":     r["year"],
-                "count":    r["count"],
-                "dist_mi":  round(r["dist_mi"] or 0, 1),
-                "climb_ft": round(r["climb_ft"] or 0),
-                "active_h": round((r["moving_s"] or 0) / 3600, 1),
+                "year":         r["year"],
+                "count":        r["count"],
+                "dist_mi":      round(r["dist_mi"] or 0, 1),
+                "climb_ft":     round(r["climb_ft"] or 0),
+                "active_h":     round((r["moving_s"] or 0) / 3600, 1),
+                "max_climb_ft": round(r["max_climb_ft"] or 0),
+                "avg_power_w":  round(r["avg_power_w"] or 0),
+                "avg_hr":       round(r["avg_hr"] or 0),
             }
             for r in rows
         ]
@@ -790,6 +995,41 @@ class AscentDB:
         finally:
             con.close()
 
+    def update_activity_local(self, activity_id: int, user_id: int,
+                              name: Optional[str] = None,
+                              description: Optional[str] = None,
+                              visibility: Optional[str] = None,
+                              sport_type: Optional[str] = None,
+                              gear_id: Optional[str] = None,
+                              gear_name: Optional[str] = None,
+                              update_gear: bool = False) -> None:
+        """Store pending local edits for a Strava activity (pushed on next resync)."""
+        import time as _time
+        cols = ["local_name=?", "local_description=?", "local_visibility=?",
+                "local_edited_at=?", "local_sport_type=?"]
+        vals: list = [name or None, description, visibility, int(_time.time()),
+                      sport_type or None]
+        if update_gear:
+            cols += ["local_gear_id=?", "local_gear_name=?"]
+            vals += [gear_id, gear_name or None]
+        vals += [activity_id, user_id]
+        self._con.execute(
+            f"UPDATE activities SET {', '.join(cols)} WHERE id=? AND user_id=?", vals
+        )
+        self._con.commit()
+
+    def clear_activity_local_edits(self, activity_id: int) -> None:
+        """Clear pending local edits after a successful push to Strava."""
+        self._con.execute(
+            """UPDATE activities
+               SET local_name=NULL, local_description=NULL,
+                   local_visibility=NULL, local_edited_at=NULL,
+                   local_sport_type=NULL, local_gear_id=NULL, local_gear_name=NULL
+               WHERE id=?""",
+            (activity_id,),
+        )
+        self._con.commit()
+
     def get_last_sync_time(self, user_id: Optional[int] = None) -> Optional[int]:
         """Return unix timestamp of the most recent activity in the DB."""
         if user_id is not None:
@@ -831,7 +1071,10 @@ class AscentDB:
             )
         """)
         # Add columns introduced after initial table creation (existing DBs)
-        for col, defn in [("autoplay_videos", "INTEGER DEFAULT 1")]:
+        for col, defn in [
+            ("autoplay_videos", "INTEGER DEFAULT 1"),
+            ("ui_prefs_json",   "TEXT"),
+        ]:
             try:
                 self._con.execute(f"ALTER TABLE user_profile_v2 ADD COLUMN {col} {defn}")
             except Exception:
@@ -891,6 +1134,45 @@ class AscentDB:
                   use_metric, use_metric,
                   autoplay_videos, autoplay_videos,
                   user_id))
+            con.commit()
+        finally:
+            con.close()
+
+    def get_ui_prefs(self, user_id: int) -> dict:
+        self._ensure_user_profile_table()
+        row = self._con.execute(
+            "SELECT ui_prefs_json FROM user_profile_v2 WHERE user_id=?", (user_id,)
+        ).fetchone()
+        if row and row[0]:
+            try:
+                import json
+                return json.loads(row[0])
+            except Exception:
+                pass
+        return {}
+
+    def set_ui_prefs(self, user_id: int, prefs: dict):
+        import json
+        self._ensure_user_profile_table()
+        con = sqlite3.connect(self.path, timeout=30)
+        try:
+            con.execute("PRAGMA journal_mode=WAL")
+            con.execute("INSERT OR IGNORE INTO user_profile_v2 (user_id) VALUES (?)", (user_id,))
+            # Merge with existing prefs rather than overwriting
+            row = con.execute(
+                "SELECT ui_prefs_json FROM user_profile_v2 WHERE user_id=?", (user_id,)
+            ).fetchone()
+            existing = {}
+            if row and row[0]:
+                try:
+                    existing = json.loads(row[0])
+                except Exception:
+                    pass
+            existing.update(prefs)
+            con.execute(
+                "UPDATE user_profile_v2 SET ui_prefs_json=? WHERE user_id=?",
+                (json.dumps(existing), user_id)
+            )
             con.commit()
         finally:
             con.close()
@@ -1092,12 +1374,22 @@ class AscentDB:
     def update_user_strava_tokens(self, user_id: int, tokens: dict):
         import json as json_mod
         self._ensure_users_tables()
+        # Always save the token JSON — do this unconditionally so the user is connected
+        self._con.execute(
+            "UPDATE users SET strava_tokens_json=? WHERE id=?",
+            (json_mod.dumps(tokens), user_id)
+        )
+        # Best-effort: link athlete ID; may fail on UNIQUE conflict (another user has same Strava)
         athlete    = tokens.get("athlete", {})
         athlete_id = str(athlete.get("id", "")) if athlete else None
-        self._con.execute("""
-            UPDATE users SET strava_tokens_json=?, strava_athlete_id=COALESCE(strava_athlete_id,?)
-            WHERE id=?
-        """, (json_mod.dumps(tokens), athlete_id, user_id))
+        if athlete_id:
+            try:
+                self._con.execute(
+                    "UPDATE users SET strava_athlete_id=COALESCE(strava_athlete_id,?) WHERE id=?",
+                    (athlete_id, user_id)
+                )
+            except Exception:
+                pass
         self._con.commit()
 
     def get_user_strava_tokens(self, user_id: int) -> dict:
@@ -1163,6 +1455,66 @@ class AscentDB:
             "SELECT * FROM invites ORDER BY created_at DESC"
         ).fetchall()
         return [dict(r) for r in rows]
+
+    def delete_user(self, user_id: int) -> dict:
+        """
+        Permanently delete a user and all their data.
+        Returns a summary dict of what was removed.
+        """
+        self._ensure_users_tables()
+        # Collect activity IDs first so we can delete points/laps explicitly
+        act_rows = self._con.execute(
+            "SELECT id FROM activities WHERE user_id=?", (user_id,)
+        ).fetchall()
+        act_ids = [r[0] for r in act_rows]
+
+        summary = {"activities": 0, "points": 0, "coach_goals": 0}
+
+        if act_ids:
+            ph = ','.join('?' * len(act_ids))
+            pts = self._con.execute(
+                f"DELETE FROM points WHERE track_id IN ({ph})", act_ids
+            ).rowcount
+            summary["points"] = pts
+            try:
+                self._con.execute(f"DELETE FROM laps WHERE track_id IN ({ph})", act_ids)
+            except Exception:
+                pass
+            summary["activities"] = self._con.execute(
+                f"DELETE FROM activities WHERE id IN ({ph})", act_ids
+            ).rowcount
+
+        # Coach goals — messages cascade via goal_id FK in coach router
+        try:
+            goal_rows = self._con.execute(
+                "SELECT id FROM coach_goals WHERE user_id=?", (user_id,)
+            ).fetchall()
+            goal_ids = [r[0] for r in goal_rows]
+            if goal_ids:
+                gph = ','.join('?' * len(goal_ids))
+                self._con.execute(f"DELETE FROM coach_messages WHERE goal_id IN ({gph})", goal_ids)
+                self._con.execute(f"DELETE FROM coach_goals WHERE id IN ({gph})", goal_ids)
+                summary["coach_goals"] = len(goal_ids)
+        except Exception:
+            pass
+
+        # Training-zones profile
+        try:
+            self._con.execute("DELETE FROM user_profile_v2 WHERE user_id=?", (user_id,))
+        except Exception:
+            pass
+
+        # Invites created by this user
+        try:
+            self._con.execute(
+                "DELETE FROM invites WHERE invited_by_user_id=?", (user_id,))
+        except Exception:
+            pass
+
+        # Finally the user record itself
+        self._con.execute("DELETE FROM users WHERE id=?", (user_id,))
+        self._con.commit()
+        return summary
 
     def ensure_seed_admin(self, email: str, username: str = "Admin") -> int:
         """Create a seed admin user if no users exist yet. Returns user_id."""

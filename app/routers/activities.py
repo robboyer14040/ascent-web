@@ -15,7 +15,11 @@ async def activities_spa(request: Request):
     uid = get_session_user_id(request)
     if uid is None:
         return RedirectResponse(f"/login?next=/activities", status_code=303)
-    resp = templates.TemplateResponse("main.html", {"request": request})
+    try:
+        ui_prefs = db_getter().get_ui_prefs(uid)
+    except Exception:
+        ui_prefs = {}
+    resp = templates.TemplateResponse("main.html", {"request": request, "ui_prefs": ui_prefs})
     resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
     resp.headers["Pragma"] = "no-cache"
     return resp

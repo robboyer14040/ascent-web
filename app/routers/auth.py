@@ -311,8 +311,35 @@ async def admin_delete_user(
     target = db.get_user(user_id)
     if not target or target.get("is_admin") or user_id == uid:
         return RedirectResponse("/admin/invites", status_code=303)
-    db._con.execute("DELETE FROM users WHERE id=?", (user_id,))
-    db._con.commit()
+
+    # Collect Strava IDs before deletion so we can clean photos on disk
+    try:
+        strava_ids = [
+            r[0] for r in db._con.execute(
+                "SELECT strava_id FROM activities WHERE user_id=? AND strava_id IS NOT NULL",
+                (user_id,)
+            ).fetchall()
+        ]
+    except Exception:
+        strava_ids = []
+
+    # Delete all user data from DB
+    db.delete_user(user_id)
+
+    # Remove photos on disk for this user's activities (best-effort)
+    try:
+        import os, shutil
+        from pathlib import Path
+        db_path = os.environ.get("ASCENT_DB_PATH", "")
+        if db_path and strava_ids:
+            photos_root = Path(db_path).parent / "support" / "photos"
+            for sid in strava_ids:
+                photo_dir = photos_root / str(sid)
+                if photo_dir.exists():
+                    shutil.rmtree(photo_dir, ignore_errors=True)
+    except Exception:
+        pass
+
     return RedirectResponse("/admin/invites", status_code=303)
 
 @router.post("/admin/users/toggle-admin")

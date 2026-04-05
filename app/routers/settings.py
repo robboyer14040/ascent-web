@@ -244,6 +244,29 @@ async def save_training_zones(request: Request, req: dict):
 
 
 
+# ── UI preferences ───────────────────────────────────────────────────────────
+
+@router.get("/api/settings/ui-prefs")
+async def get_ui_prefs(request: Request):
+    uid = get_session_user_id(request)
+    if uid is None:
+        raise HTTPException(401, "Not authenticated")
+    return db_getter().get_ui_prefs(uid)
+
+
+@router.post("/api/settings/ui-prefs")
+async def save_ui_prefs(request: Request):
+    uid = get_session_user_id(request)
+    if uid is None:
+        raise HTTPException(401, "Not authenticated")
+    body = await request.json()
+    prefs = body.get("prefs", {})
+    if not isinstance(prefs, dict):
+        raise HTTPException(400, "prefs must be an object")
+    db_getter().set_ui_prefs(uid, prefs)
+    return {"status": "ok"}
+
+
 # ── Sharing settings ──────────────────────────────────────────────────────────
 
 @router.get("/api/settings/sharing")

@@ -3,7 +3,18 @@
     "allow": [
       "Bash(fly deploy:*)",
       "Bash(python3:*)",
-      "Bash(chmod +x:*)"
+      "Bash(chmod +x:*)",
+      "Bash(grep -r \"PUT\\\\|PATCH\\\\|method.*put\\\\|method.*patch\" app/routers/*.py app/*.py)",
+      "Bash(fly logs:*)",
+      "WebSearch",
+      "WebFetch(domain:communityhub.strava.com)",
+      "WebFetch(domain:developers.strava.com)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:forum.intervals.icu)",
+      "Bash(fly ssh:*)",
+      "Bash(fly status:*)",
+      "Bash(fly machine:*)",
+      "Bash(ASCENT_DB_PATH=/Users/rob/Desktop/Ascent.ascentdb python3 scripts/delete_ai_summaries_for_user.py Kelly)"
     ]
   }
 }

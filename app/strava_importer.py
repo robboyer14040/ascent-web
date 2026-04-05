@@ -460,7 +460,8 @@ class StravaImporter:
                     weight_lb, altitude_smooth_factor, equipment_weight_lb, device_total_time_s,
                     local_media_items_json, photo_urls_json,
                     start_lat, start_lon,
-                    map_min_lat, map_max_lat, map_min_lon, map_max_lon
+                    map_min_lat, map_max_lat, map_min_lon, map_max_lon,
+                    strava_visibility
                 ) VALUES (
                     ?,?,?,NULL,
                     ?,?,
@@ -479,7 +480,8 @@ class StravaImporter:
                     0,0,0,0,
                     NULL,NULL,
                     ?,?,
-                    ?,?,?,?
+                    ?,?,?,?,
+                    ?
                 )
             """, (
                 act_uuid,
@@ -498,6 +500,7 @@ class StravaImporter:
                 parse_tz_name(act), parse_tz_offset(act),
                 start_lat, start_lon,
                 map_min_lat, map_max_lat, map_min_lon, map_max_lon,
+                act.get("visibility"),
             ))
             activity_db_id = cur.lastrowid
 
