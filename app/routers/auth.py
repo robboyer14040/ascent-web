@@ -6,7 +6,7 @@ import os
 import time
 from typing import Callable, Optional
 
-from fastapi import APIRouter, Request, Form, Query, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Request, Form, Query, Depends, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 router = APIRouter()
@@ -221,19 +221,31 @@ async def admin_invites(request: Request):
     invites = db.list_invites()
     users   = db.list_users()
     try:
-        db_path        = db.path
-        activity_count = db.count_activities()
+        db_path             = db.path
+        activity_count      = db.count_activities()
+        points_saved_count  = db._con.execute(
+            "SELECT COUNT(*) FROM activities WHERE points_saved=1 AND points_count>0"
+        ).fetchone()[0]
+        summary_count       = db._con.execute(
+            "SELECT COUNT(DISTINCT track_id) FROM points_summary"
+        ).fetchone()[0]
     except Exception:
-        db_path        = "Not connected"
-        activity_count = 0
+        db_path             = "Not connected"
+        activity_count      = 0
+        points_saved_count  = 0
+        summary_count       = 0
+    summary_backfill_started = "summary_backfill" in str(request.url)
     return templates.TemplateResponse("admin_invites.html", {
-        "request":        request,
-        "invites":        invites,
-        "users":          users,
-        "current_user":   user,
-        "db_path":        db_path,
-        "activity_count": activity_count,
-        "username":       getpass.getuser(),
+        "request":                  request,
+        "invites":                  invites,
+        "users":                    users,
+        "current_user":             user,
+        "db_path":                  db_path,
+        "activity_count":           activity_count,
+        "points_saved_count":       points_saved_count,
+        "summary_count":            summary_count,
+        "username":                 getpass.getuser(),
+        "summary_backfill_started": summary_backfill_started,
     })
 
 @router.post("/admin/invites/create")
@@ -276,11 +288,19 @@ async def admin_create_invite(
 
     import getpass
     try:
-        db_path        = db.path
-        activity_count = db.count_activities()
+        db_path            = db.path
+        activity_count     = db.count_activities()
+        points_saved_count = db._con.execute(
+            "SELECT COUNT(*) FROM activities WHERE points_saved=1 AND points_count>0"
+        ).fetchone()[0]
+        summary_count      = db._con.execute(
+            "SELECT COUNT(DISTINCT track_id) FROM points_summary"
+        ).fetchone()[0]
     except Exception:
-        db_path        = "Not connected"
-        activity_count = 0
+        db_path            = "Not connected"
+        activity_count     = 0
+        points_saved_count = 0
+        summary_count      = 0
     return templates.TemplateResponse("admin_invites.html", {
         "request":        request,
         "invites":        db.list_invites(),
@@ -289,9 +309,11 @@ async def admin_create_invite(
         "new_invite_url": invite_url,
         "invite_email":   clean_email,
         "email_status":   email_status,
-        "db_path":        db_path,
-        "activity_count": activity_count,
-        "username":       getpass.getuser(),
+        "db_path":           db_path,
+        "activity_count":    activity_count,
+        "points_saved_count": points_saved_count,
+        "summary_count":     summary_count,
+        "username":          getpass.getuser(),
     })
 
 @router.post("/admin/users/delete")
@@ -377,6 +399,21 @@ async def admin_delete_invite(
         return RedirectResponse("/", status_code=303)
     db.delete_invite(token)
     return RedirectResponse("/admin/invites", status_code=303)
+
+
+@router.post("/admin/backfill-summary")
+async def admin_backfill_summary(request: Request, background_tasks: BackgroundTasks):
+    from app.auth import get_session_user_id
+    uid  = get_session_user_id(request)
+    user = db_getter().get_user(uid) if uid else None
+    if not user or not user.get("is_admin"):
+        raise HTTPException(403, "Admin only")
+
+    def _run():
+        db_getter().backfill_points_summary()
+
+    background_tasks.add_task(_run)
+    return RedirectResponse("/admin/invites?summary_backfill=started", status_code=303)
 
 
 @router.get("/admin/backup-db")

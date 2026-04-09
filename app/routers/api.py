@@ -785,7 +785,9 @@ async def segment_compare(req: SegmentRequest, request: Request):
     # shift indices. Filter ref_pts the same way the chart does.
     ref_pts = [p for p in ref_pts if p["lat"] != 999.0 and p["lon"] != 999.0]
     n  = len(ref_pts)
-    si = max(0, min(req.start_idx, n - 1))
+    if n < 2:
+        raise HTTPException(400, "Not enough valid GPS points in reference activity")
+    si = max(0, min(req.start_idx, n - 2))   # clamp to n-2 so ei always has room
     ei = max(si + 1, min(req.end_idx, n - 1))
 
     ref_start    = ref_pts[si]
@@ -1116,7 +1118,14 @@ async def segment_compare(req: SegmentRequest, request: Request):
                     and -90 <= lat <= 90 and -180 <= lon <= 180
                     and not (lat == 0.0 and lon == 0.0))
 
-        if pts_saved and pts_count:
+        # Try precomputed summary first (lean lat/lon/cum_dist_m/t/orig_idx rows).
+        # Fall back to full point dicts only if summary not built yet.
+        sum_pts = db.get_points_summary(act_id)
+        using_summary = bool(sum_pts)
+
+        if using_summary:
+            pts = sum_pts
+        elif pts_saved and pts_count:
             pts = [p for p in db.get_track_points(act_id) if _valid_pt(p)]
         elif strava_id:
             # No points yet — fetch from Strava on demand
@@ -1193,25 +1202,58 @@ async def segment_compare(req: SegmentRequest, request: Request):
 
             # Quick sanity check: does the track get close to end coords within 1.5× length?
             max_walk = ref_length_km * 1.5
-            accum_q = 0.0
             min_end_q = float("inf")
-            for _q in range(si2, min(si2 + 5000, len(pts) - 1)):
-                accum_q += haversine_km(pts[_q]["lat"], pts[_q]["lon"], pts[_q+1]["lat"], pts[_q+1]["lon"])
-                d_q = haversine_km(pts[_q+1]["lat"], pts[_q+1]["lon"], end_lat, end_lon)
-                if d_q < min_end_q:
-                    min_end_q = d_q
-                if accum_q > max_walk:
-                    break
+            if using_summary:
+                # Use precomputed cum_dist_m to walk without recomputing haversine
+                si2_cum = pts[si2]["cum_dist_m"]
+                max_walk_m = max_walk * 1000.0
+                for p in pts[si2:]:
+                    if p["cum_dist_m"] - si2_cum > max_walk_m:
+                        break
+                    d_q = haversine_km(p["lat"], p["lon"], end_lat, end_lon)
+                    if d_q < min_end_q:
+                        min_end_q = d_q
+            else:
+                accum_q = 0.0
+                for _q in range(si2, min(si2 + 5000, len(pts) - 1)):
+                    accum_q += haversine_km(pts[_q]["lat"], pts[_q]["lon"], pts[_q+1]["lat"], pts[_q+1]["lon"])
+                    d_q = haversine_km(pts[_q+1]["lat"], pts[_q+1]["lon"], end_lat, end_lon)
+                    if d_q < min_end_q:
+                        min_end_q = d_q
+                    if accum_q > max_walk:
+                        break
             if min_end_q > max_dev_km * 3:
                 continue
 
-            # b. Walk forward from si2 accumulating distance to find end index
-            ei2 = find_segment_end(pts, si2, ref_length_km, tol_km, end_lat, end_lon)
+            # b. Find end index
+            if using_summary:
+                # Binary search on cum_dist_m — accurate because cum_dist reflects full-res path
+                si2_cum = pts[si2]["cum_dist_m"]
+                target_min_m = si2_cum + (ref_length_km - tol_km) * 1000.0
+                target_max_m = si2_cum + (ref_length_km + tol_km) * 1000.0
+                window_pts = []
+                for _wi in range(si2 + 1, len(pts)):
+                    c = pts[_wi]["cum_dist_m"]
+                    if c < target_min_m:
+                        continue
+                    if c > target_max_m:
+                        break
+                    window_pts.append((_wi, haversine_km(pts[_wi]["lat"], pts[_wi]["lon"], end_lat, end_lon)))
+                if not window_pts:
+                    continue
+                window_pts.sort(key=lambda x: x[1])
+                _best_i, _best_d = window_pts[0]
+                ei2 = _best_i if _best_d <= tol_km else -1
+            else:
+                ei2 = find_segment_end(pts, si2, ref_length_km, tol_km, end_lat, end_lon)
             if ei2 < 0 or ei2 <= si2:
                 continue
 
             # c. Length check
-            cand_len_km = seg_length_km(pts, si2, ei2)
+            if using_summary:
+                cand_len_km = (pts[ei2]["cum_dist_m"] - pts[si2]["cum_dist_m"]) / 1000.0
+            else:
+                cand_len_km = seg_length_km(pts, si2, ei2)
             if cand_len_km < min_length_km or cand_len_km > max_length_km:
                 continue
 
@@ -1228,7 +1270,40 @@ async def segment_compare(req: SegmentRequest, request: Request):
             if d_b2a > max_dev_km:
                 continue
 
-        m = build_match(act_id, act_name, act_ts, pts, si2, ei2, user_id=act_user_id)
+        # For summary-based matches, load full points to build the rich response.
+        # Re-run the exact same start/end search on full_pts — summary orig_idx is
+        # only approximate (step can be 10–30 for long activities), so a window
+        # refinement isn't reliable. Full scan is O(n) on confirmed matches only (2–5).
+        if using_summary:
+            full_pts = [p for p in db.get_track_points(act_id) if _valid_pt(p)]
+
+            if use_lenient:
+                si2_full, best_dsq = 0, float("inf")
+                for _k, p in enumerate(full_pts):
+                    d2 = (p["lat"]-start_lat)**2 + ((p["lon"]-start_lon)*cos_lat)**2
+                    if d2 < best_dsq:
+                        best_dsq, si2_full = d2, _k
+                ei2_full, best_dsq = si2_full + 1, float("inf")
+                for _k in range(si2_full + 1, len(full_pts)):
+                    d2 = (full_pts[_k]["lat"]-end_lat)**2 + ((full_pts[_k]["lon"]-end_lon)*cos_lat)**2
+                    if d2 < best_dsq:
+                        best_dsq, ei2_full = d2, _k
+            else:
+                tol_deg_sq_full = (start_tol_km / 111.0) ** 2
+                si2_full, best_dsq = -1, float("inf")
+                for _k, p in enumerate(full_pts):
+                    d2 = (p["lat"]-start_lat)**2 + ((p["lon"]-start_lon)*cos_lat)**2
+                    if d2 < best_dsq:
+                        best_dsq, si2_full = d2, _k
+                if si2_full < 0 or best_dsq > tol_deg_sq_full:
+                    continue
+                ei2_full = find_segment_end(full_pts, si2_full, ref_length_km, tol_km, end_lat, end_lon)
+                if ei2_full < 0 or ei2_full <= si2_full:
+                    continue
+
+            m = build_match(act_id, act_name, act_ts, full_pts, si2_full, ei2_full, user_id=act_user_id)
+        else:
+            m = build_match(act_id, act_name, act_ts, pts, si2, ei2, user_id=act_user_id)
         if m:
             matches.append(m)
 

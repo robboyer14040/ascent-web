@@ -204,6 +204,27 @@ td{padding:.5rem;border-bottom:1px solid #2a2a2c;vertical-align:middle;white-spa
     </div>
 
     <div style="margin-top:1.25rem;padding-top:1.25rem;border-top:1px solid #3a3a3c">
+      <h2>Segment Compare Cache</h2>
+      <p>Precomputed summaries speed up the Compare feature by avoiding full point loads for non-matching activities.</p>
+      <p style="margin-top:.5rem">
+        Cached: <strong>{{ summary_count }}</strong> / <strong>{{ points_saved_count }}</strong> activities with GPS points
+        <span style="color:#636366;font-size:11px">({{ activity_count }} total activities, {{ activity_count - points_saved_count }} without GPS)</span>
+      </p>
+      {% if summary_backfill_started %}
+      <p style="margin-top:.5rem;color:#30d158;font-size:12px">Backfill started — running in background. Refresh this page to check progress.</p>
+      {% endif %}
+      <div class="btn-row">
+        <form method="post" action="/admin/backfill-summary">
+          <button type="submit" class="btn btn-ghost"
+            {% if summary_count >= points_saved_count %}disabled{% endif %}
+            onclick="return confirm('Build summary cache for {{ points_saved_count - summary_count }} activities? This runs in the background.')">
+            Build Summary Cache
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <div style="margin-top:1.25rem;padding-top:1.25rem;border-top:1px solid #3a3a3c">
       <h2>Switch Database</h2>
       <p>Choose an existing Ascent database file to use.</p>
       <input type="file" id="switchDbFile" accept=".ascentdb,.db"

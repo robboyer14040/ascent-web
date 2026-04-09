@@ -451,7 +451,8 @@ select.edit-act-input{appearance:none;-webkit-appearance:none;cursor:pointer;pad
   background:#f97316;border:none;color:#fff;border-radius:6px;
   padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;
 }
-#cmp-seg-save:hover{background:#ea6c0a}
+#cmp-seg-save:hover:not(:disabled){background:#ea6c0a}
+#cmp-seg-save:disabled{background:#555;cursor:default;opacity:.5}
 #cmp-seg-save.saved{background:#22c55e}
 #cmp-seg-select{
   max-width:220px;background:var(--surface);border:1px solid var(--border2);
@@ -2692,6 +2693,12 @@ async function drawElevation(data, version) {
       });
     }
     elevChart.update('none');
+
+    // ── Auto-run compare if overlay is open and waiting for a selection ───────
+    const _cmpOverlay = document.getElementById('compare-overlay');
+    if (hi > lo && _cmpOverlay && _cmpOverlay.classList.contains('open') && !cmp.matches.length) {
+      openCompare();
+    }
 
     // ── Highlight map segment ─────────────────────────────────────────────────
     if (splitsState._elevSelMapLayer && leafMap) {
@@ -5625,6 +5632,7 @@ const cmp = {
   _resizing:     false,  // true during/just after resize to suppress overlay click
   _resizeTimer:  null,
   savedSegId:    null,   // currently loaded saved segment id (null = unsaved)
+  savedSegName:  null,   // original name of the loaded saved segment (for Rename detection)
   savedSegments: [],     // list of saved segments for current activity
   // Segment selection state (set by elevation drag)
   selStartIdx: null,
@@ -5922,13 +5930,15 @@ async function openCompare() {
   const friendsCb = document.getElementById('cmp-include-friends');
   if (friendsCb) friendsCb.checked = _uiPrefsGet('ascent-cmp-friends') === '1';
 
-  // If no segment selected, single activity: show error (require segment or multiple activities)
+  // If no segment selected, single activity: show error but load saved segments so
+  // the user can pick one from the dropdown to run compare immediately.
   if (cmp.selStartIdx === null || cmp.selEndIdx === null) {
-    titleEl.textContent = 'You need to select multiple activities or a selection region to use Compare';
+    titleEl.textContent = 'Select a region on the elevation chart, or choose a saved segment below';
     loading.style.display = 'none';
     cmp.matches  = [];
     cmp.currentT = 0;
     cmp.savedSegId = null;
+    await cmpLoadSavedSegments();
     return;
   }
 
@@ -5983,9 +5993,11 @@ async function openCompare() {
     titleEl.textContent = `Selected Activity vs. ${nOthers} Fastest`;
 
     // Reset saved segment state for a fresh elevation-drag selection
-    cmp.savedSegId = null;
+    cmp.savedSegId   = null;
+    cmp.savedSegName = null;
     const nameEl = document.getElementById('cmp-seg-name');
     if (nameEl) nameEl.value = '';
+    cmpUpdateSaveBtn();
 
     // Sync map style buttons to current stored style
     const _curStyle = _uiPrefsGet('ascent-map-style') || 'osm';
@@ -6054,9 +6066,18 @@ function buildCompareLegend() {
   const leg = document.getElementById('compare-legend');
   leg.innerHTML = '';
   const multiUser = new Set(cmp.matches.map(m => m.user_id).filter(id => id != null)).size > 1;
-  cmp.matches.forEach((m, i) => {
-    const color    = CMP_COLORS[i % CMP_COLORS.length];
+
+  // Display order: fastest non-missing first, missing last
+  const nonMissing = [...cmp.matches].filter(m => !m.missing).sort((a,b) => a.elapsed_s - b.elapsed_s);
+  const missing    = cmp.matches.filter(m => m.missing);
+  const displayOrder = [...nonMissing, ...missing];
+  const fastestId  = nonMissing.length ? nonMissing[0].activity_id : null;
+
+  displayOrder.forEach(m => {
+    const origIdx  = cmp.matches.indexOf(m);
+    const color    = CMP_COLORS[origIdx % CMP_COLORS.length];
     const isRef    = currentAct && m.activity_id === currentAct.id;
+    const isFastest = m.activity_id === fastestId;
     const date     = m.start_time ? new Date(m.start_time*1000).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '';
     const userName = multiUser && m.user_id && userMap[m.user_id] ? escHtml(userMap[m.user_id].username || '') + ': ' : '';
     const dispName = userName + escHtml(m.name || '');
@@ -6067,20 +6088,27 @@ function buildCompareLegend() {
         `<div class="cmp-sphere" style="background:radial-gradient(circle at 35% 35%,#9ca3af66,#9ca3af33 55%,#9ca3af11);flex-shrink:0;opacity:0.6"></div>` +
         `<span style="font-style:italic;color:var(--muted)">${dispName}</span>` +
         `<span style="color:var(--muted);font-size:11px;white-space:nowrap">${date}</span>` +
-        `<span style="font-size:11px;color:var(--muted);white-space:nowrap;margin-left:2px">—</span>` +
-        `<span id="cmp-delta-${i}" style="margin-left:auto;font-size:12px;min-width:70px;text-align:right;color:var(--muted);flex-shrink:0">—</span>`;
+        `<span style="margin-left:auto;display:flex;gap:6px;align-items:center;flex-shrink:0">` +
+        `<span style="font-size:11px;color:var(--muted);white-space:nowrap;font-family:ui-monospace,'SF Mono','Fira Code',monospace;font-variant-numeric:tabular-nums;min-width:40px;text-align:right">—</span>` +
+        `<span id="cmp-delta-${m.activity_id}" style="font-size:12px;min-width:50px;text-align:right;color:var(--muted);font-family:ui-monospace,'SF Mono','Fira Code',monospace;font-variant-numeric:tabular-nums">—</span>` +
+        `</span>`;
     } else {
-      const nameStyle = isRef ? 'font-weight:700' : '';
+      const nameStyle    = isRef ? 'font-weight:700' : '';
+      const elapsedStyle = isFastest
+        ? 'font-weight:700;color:#fff'
+        : 'color:var(--muted)';
       item.style.cursor = 'pointer';
       item.title = 'Go to activity';
       item.innerHTML =
         `<div class="cmp-sphere" style="background:radial-gradient(circle at 35% 35%,${color}ee,${color}88 55%,${color}44);flex-shrink:0"></div>` +
         `<span style="${nameStyle}">${dispName}</span>` +
         `<span style="color:var(--muted);font-size:11px;white-space:nowrap">${date}</span>` +
-        `<span style="font-size:11px;color:var(--muted);white-space:nowrap;margin-left:2px">${fmtElapsed(m.elapsed_s)}</span>` +
-        `<span id="cmp-delta-${i}" style="margin-left:auto;font-family:ui-monospace,'SF Mono','Fira Code',monospace;` +
-        `font-size:12px;font-weight:600;min-width:70px;text-align:right;font-variant-numeric:tabular-nums;` +
-        `color:var(--muted2);flex-shrink:0">0:00</span>`;
+        `<span style="margin-left:auto;display:flex;gap:6px;align-items:center;flex-shrink:0">` +
+        `<span style="font-size:11px;font-family:ui-monospace,'SF Mono','Fira Code',monospace;font-variant-numeric:tabular-nums;white-space:nowrap;min-width:40px;text-align:right;${elapsedStyle}">${fmtElapsed(m.elapsed_s)}</span>` +
+        `<span id="cmp-delta-${m.activity_id}" style="font-family:ui-monospace,'SF Mono','Fira Code',monospace;` +
+        `font-size:12px;font-weight:600;min-width:50px;text-align:right;font-variant-numeric:tabular-nums;` +
+        `color:var(--muted2)">0:00</span>` +
+        `</span>`;
       const actId  = m.activity_id;
       const mSi    = m.start_idx ?? null;
       const mEi    = m.end_idx   ?? null;
@@ -6406,8 +6434,8 @@ function interpOnRefByDist(refPoints, distM) {
 }
 
 function cmpUpdateUI(wallT) {
-  // wallT = seconds elapsed in animation (0 → reference elapsed_s)
-  const refEl = cmp.matches.length ? cmp.matches[0].elapsed_s : 1;
+  // wallT = seconds elapsed in animation (0 → fastest elapsed_s)
+  const refEl = cmpFastestElapsed();
   cmp.currentT = Math.max(0, Math.min(wallT, refEl));
 
   document.getElementById('cmp-time').textContent = fmtCmpTime(cmp.currentT);
@@ -6453,9 +6481,9 @@ function cmpUpdateUI(wallT) {
     }
 
     // Delta: estimate time ahead/behind reference using distance gap + current speeds
-    const deltaEl = document.getElementById('cmp-delta-' + i);
+    const deltaEl = document.getElementById('cmp-delta-' + m.activity_id);
     if (deltaEl) {
-      if (i === 0) {
+      if (m.activity_id === cmp.matches[0]?.activity_id) {
         deltaEl.textContent = '0:00';
         deltaEl.style.color = 'var(--muted2)';
       } else if (refData) {
@@ -6512,10 +6540,15 @@ function cmpSetSpeed(v) {
   _uiPrefsSet('ascent-cmp-speed', v);
 }
 
+function cmpFastestElapsed() {
+  if (!cmp.matches.length) return 1;
+  return Math.min(...cmp.matches.map(m => m.elapsed_s));
+}
+
 function cmpFrame(ts) {
   if (!cmp.playing) return;
   if (cmp.lastTs !== null) {
-    const refElapsed = cmp.matches.length ? cmp.matches[0].elapsed_s : 1;
+    const refElapsed = cmpFastestElapsed();
     cmp.currentT += ((ts - cmp.lastTs) / 1000) * cmpGetSpeed();
     if (cmp.currentT >= refElapsed) {
       cmpUpdateUI(refElapsed);
@@ -6530,7 +6563,7 @@ function cmpFrame(ts) {
 
 function cmpPlay() {
   if (cmp.playing) { cmpStop(); return; }
-  const _refEl = cmp.matches.length ? cmp.matches[0].elapsed_s : 1;
+  const _refEl = cmpFastestElapsed();
   if (cmp.currentT >= _refEl) cmp.currentT = 0;
   cmp.playing = true;
   cmp.lastTs  = null;
@@ -6547,14 +6580,12 @@ function cmpStop() {
 
 function cmpJump(frac) {
   cmpStop();
-  const refEl = cmp.matches.length ? cmp.matches[0].elapsed_s : 1;
-  cmpUpdateUI(frac * refEl);
+  cmpUpdateUI(frac * cmpFastestElapsed());
 }
 
 function cmpScrub(val) {
   cmpStop();
-  const refEl = cmp.matches.length ? cmp.matches[0].elapsed_s : 1;
-  cmpUpdateUI((val / 1000) * refEl);
+  cmpUpdateUI((val / 1000) * cmpFastestElapsed());
 }
 
 // ── COMPARE PANE RESIZE ──────────────────────────────────────────────────────
@@ -6743,6 +6774,22 @@ async function cmpLoadSavedSegments() {
   } catch(e) { console.warn('cmpLoadSavedSegments:', e); }
 }
 
+function cmpUpdateSaveBtn() {
+  const nameEl = document.getElementById('cmp-seg-name');
+  const btn    = document.getElementById('cmp-seg-save');
+  if (!nameEl || !btn) return;
+  const currentName = nameEl.value.trim();
+  if (cmp.savedSegId) {
+    // Rename mode: enable only when name actually changed
+    btn.textContent = 'Rename';
+    btn.disabled = (currentName === (cmp.savedSegName || '') || currentName === '');
+  } else {
+    // Save mode: enable when name has text
+    btn.textContent = 'Save';
+    btn.disabled = (currentName === '');
+  }
+}
+
 async function cmpSaveSegment() {
   if (!currentAct) return;
   const nameEl = document.getElementById('cmp-seg-name');
@@ -6758,8 +6805,9 @@ async function cmpSaveSegment() {
         headers: {'Content-Type':'application/json'},
         body: JSON.stringify({name}),
       });
-      btn.textContent = 'Saved!'; btn.classList.add('saved');
-      setTimeout(() => { btn.textContent = 'Save'; btn.classList.remove('saved'); }, 1500);
+      cmp.savedSegName = name;
+      btn.textContent = 'Renamed!'; btn.classList.add('saved');
+      setTimeout(() => { btn.classList.remove('saved'); cmpUpdateSaveBtn(); }, 1500);
       await cmpLoadSavedSegments();
     } catch(e) { console.error(e); }
     return;
@@ -6780,9 +6828,10 @@ async function cmpSaveSegment() {
     });
     if (!r.ok) { console.error(await r.text()); return; }
     const d = await r.json();
-    cmp.savedSegId = d.id;
+    cmp.savedSegId   = d.id;
+    cmp.savedSegName = name;
     btn.textContent = 'Saved!'; btn.classList.add('saved');
-    setTimeout(() => { btn.textContent = 'Save'; btn.classList.remove('saved'); }, 1500);
+    setTimeout(() => { btn.classList.remove('saved'); cmpUpdateSaveBtn(); }, 1500);
     await cmpLoadSavedSegments();
     // Select the newly saved segment
     const sel = document.getElementById('cmp-seg-select');
@@ -6841,9 +6890,10 @@ async function cmpRunManualCompare(seg) {
         });
       }
     }
-    cmp.matches  = allMatches;
-    cmp.currentT = 0;
-    cmp.savedSegId = seg.id;
+    cmp.matches      = allMatches;
+    cmp.currentT     = 0;
+    cmp.savedSegId   = seg.id;
+    cmp.savedSegName = seg.name;
 
     const nFound = d.matches.length;
     const nTotal = (cmp._manualIds || []).length;
@@ -6876,9 +6926,11 @@ async function cmpLoadSavedSegment(segId) {
   }
   if (!currentAct) return;
 
-  cmp.savedSegId = seg.id;
+  cmp.savedSegId   = seg.id;
+  cmp.savedSegName = seg.name;
   const nameEl = document.getElementById('cmp-seg-name');
   if (nameEl) nameEl.value = seg.name;
+  cmpUpdateSaveBtn();
 
   // Update elevation selection to match saved segment
   cmp.selStartIdx = seg.start_idx;
@@ -7331,8 +7383,8 @@ async function applyUserSelection() {
     </div>
     <div id="cmp-seg-bar">
       <label>Segment:</label>
-      <input id="cmp-seg-name" type="text" placeholder="Name this segment…" maxlength="80">
-      <button id="cmp-seg-save" onclick="cmpSaveSegment()">Save</button>
+      <input id="cmp-seg-name" type="text" placeholder="Name this segment…" maxlength="80" oninput="cmpUpdateSaveBtn()">
+      <button id="cmp-seg-save" onclick="cmpSaveSegment()" disabled>Save</button>
       <label style="margin-left:6px">Saved:</label>
       <select id="cmp-seg-select" onchange="cmpLoadSavedSegment(this.value)" title="Switch to a saved segment">
         <option value="">— choose —</option>

@@ -319,6 +319,23 @@ class AscentDB:
                 self._con.commit()
             except Exception:
                 pass
+        # Lazy-create points_summary table for fast segment compare
+        self._con.execute("""
+            CREATE TABLE IF NOT EXISTS points_summary (
+                track_id   INTEGER NOT NULL,
+                seq        INTEGER NOT NULL,
+                orig_idx   INTEGER NOT NULL,
+                lat        REAL    NOT NULL,
+                lon        REAL    NOT NULL,
+                cum_dist_m REAL    NOT NULL,
+                t          REAL    NOT NULL,
+                PRIMARY KEY (track_id, seq)
+            )
+        """)
+        self._con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_points_summary_track ON points_summary (track_id)"
+        )
+        self._con.commit()
 
     def close(self):
         self._con.close()
@@ -512,12 +529,194 @@ class AscentDB:
                 (count, activity_id)
             )
             con.commit()
-            return count
         except Exception as e:
             con.rollback()
             raise e
         finally:
             con.close()
+        self.build_points_summary(activity_id)
+        return count
+
+    def build_points_summary(self, activity_id: int, n_samples: int = 300) -> int:
+        """
+        Compute and store a subsampled (lat, lon, cum_dist_m, t) summary for an activity.
+        Used by segment_compare to avoid loading full point dicts for non-matching candidates.
+        Opens its own connection so it is safe to call from any thread.
+        Returns number of rows inserted.
+        """
+        import math
+        con = sqlite3.connect(self.path, timeout=30)
+        con.row_factory = sqlite3.Row
+        try:
+            con.execute("PRAGMA journal_mode=WAL")
+            rows = con.execute(
+                """SELECT latitude_e7, longitude_e7, wall_clock_delta_s
+                   FROM points
+                   WHERE track_id = ?
+                     AND latitude_e7 != 999.0 AND longitude_e7 != 999.0
+                     AND latitude_e7 BETWEEN -90 AND 90
+                     AND longitude_e7 BETWEEN -180 AND 180
+                     AND NOT (latitude_e7 = 0.0 AND longitude_e7 = 0.0)
+                   ORDER BY wall_clock_delta_s ASC, active_time_delta_s ASC""",
+                (activity_id,)
+            ).fetchall()
+
+            if len(rows) < 2:
+                return 0
+
+            # Cumulative distance (metres) using full-resolution points
+            R = 6371000.0
+            cum = [0.0]
+            for i in range(1, len(rows)):
+                lat1, lon1 = rows[i-1][0], rows[i-1][1]
+                lat2, lon2 = rows[i][0], rows[i][1]
+                dlat = math.radians(lat2 - lat1)
+                dlon = math.radians(lon2 - lon1)
+                a = (math.sin(dlat/2)**2 +
+                     math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) *
+                     math.sin(dlon/2)**2)
+                cum.append(cum[-1] + R * 2 * math.asin(min(1.0, math.sqrt(a))))
+
+            # Subsample evenly; always include last point
+            step = max(1, len(rows) // n_samples)
+            indices = list(range(0, len(rows), step))
+            if indices[-1] != len(rows) - 1:
+                indices.append(len(rows) - 1)
+
+            summary_rows = [
+                (activity_id, seq, orig_idx,
+                 rows[orig_idx][0], rows[orig_idx][1],
+                 cum[orig_idx], rows[orig_idx][2])
+                for seq, orig_idx in enumerate(indices)
+            ]
+
+            con.execute("DELETE FROM points_summary WHERE track_id=?", (activity_id,))
+            con.executemany(
+                """INSERT INTO points_summary
+                   (track_id, seq, orig_idx, lat, lon, cum_dist_m, t)
+                   VALUES (?,?,?,?,?,?,?)""",
+                summary_rows
+            )
+            con.commit()
+            return len(summary_rows)
+        except Exception as e:
+            con.rollback()
+            raise e
+        finally:
+            con.close()
+
+    def get_points_summary(self, activity_id: int) -> list[dict]:
+        """Return the precomputed subsampled track for segment compare matching."""
+        rows = self._con.execute(
+            """SELECT seq, orig_idx, lat, lon, cum_dist_m, t
+               FROM points_summary WHERE track_id = ?
+               ORDER BY seq ASC""",
+            (activity_id,)
+        ).fetchall()
+        return [
+            {"seq": r[0], "orig_idx": r[1], "lat": r[2], "lon": r[3],
+             "cum_dist_m": r[4], "t": r[5]}
+            for r in rows
+        ]
+
+    def backfill_points_summary(self, n_samples: int = 300) -> dict:
+        """
+        Build points_summary for all activities that have points but no summary yet.
+        Uses a single dedicated connection for the whole operation — safe to run in a
+        background thread without touching self._con.
+        Returns {"processed": N, "skipped": M}.
+        """
+        import math
+        con = sqlite3.connect(self.path, timeout=60)
+        con.row_factory = sqlite3.Row
+        con.execute("PRAGMA journal_mode=WAL")
+
+        try:
+            activities = con.execute(
+                """SELECT a.id FROM activities a
+                   WHERE a.points_saved = 1 AND a.points_count > 0
+                     AND NOT EXISTS (
+                         SELECT 1 FROM points_summary ps WHERE ps.track_id = a.id
+                     )"""
+            ).fetchall()
+        except Exception:
+            con.close()
+            return {"processed": 0, "skipped": 0}
+
+        processed = 0
+        skipped = 0
+        batch: list = []
+        BATCH_SIZE = 50
+
+        for row in activities:
+            act_id = row[0]
+            try:
+                pts = con.execute(
+                    """SELECT latitude_e7, longitude_e7, wall_clock_delta_s
+                       FROM points
+                       WHERE track_id = ?
+                         AND latitude_e7 != 999.0 AND longitude_e7 != 999.0
+                         AND latitude_e7 BETWEEN -90 AND 90
+                         AND longitude_e7 BETWEEN -180 AND 180
+                         AND NOT (latitude_e7 = 0.0 AND longitude_e7 = 0.0)
+                       ORDER BY wall_clock_delta_s ASC, active_time_delta_s ASC""",
+                    (act_id,)
+                ).fetchall()
+
+                if len(pts) < 2:
+                    skipped += 1
+                    continue
+
+                R = 6371000.0
+                cum = [0.0]
+                for i in range(1, len(pts)):
+                    lat1, lon1 = pts[i-1][0], pts[i-1][1]
+                    lat2, lon2 = pts[i][0], pts[i][1]
+                    dlat = math.radians(lat2 - lat1)
+                    dlon = math.radians(lon2 - lon1)
+                    a = (math.sin(dlat/2)**2 +
+                         math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) *
+                         math.sin(dlon/2)**2)
+                    cum.append(cum[-1] + R * 2 * math.asin(min(1.0, math.sqrt(a))))
+
+                step = max(1, len(pts) // n_samples)
+                indices = list(range(0, len(pts), step))
+                if indices[-1] != len(pts) - 1:
+                    indices.append(len(pts) - 1)
+
+                for seq, orig_idx in enumerate(indices):
+                    batch.append((act_id, seq, orig_idx,
+                                  pts[orig_idx][0], pts[orig_idx][1],
+                                  cum[orig_idx], pts[orig_idx][2]))
+                processed += 1
+
+                if len(batch) >= BATCH_SIZE * n_samples:
+                    con.executemany(
+                        """INSERT OR REPLACE INTO points_summary
+                           (track_id, seq, orig_idx, lat, lon, cum_dist_m, t)
+                           VALUES (?,?,?,?,?,?,?)""",
+                        batch
+                    )
+                    con.commit()
+                    batch.clear()
+
+            except Exception:
+                skipped += 1
+
+        if batch:
+            try:
+                con.executemany(
+                    """INSERT OR REPLACE INTO points_summary
+                       (track_id, seq, orig_idx, lat, lon, cum_dist_m, t)
+                       VALUES (?,?,?,?,?,?,?)""",
+                    batch
+                )
+                con.commit()
+            except Exception:
+                pass
+
+        con.close()
+        return {"processed": processed, "skipped": skipped}
 
     def get_chart_data_for_points(self, activity_id: int) -> dict:
         import math
@@ -1319,15 +1518,15 @@ class AscentDB:
         if not act_pts:
             return [dict(r) for r in rows]
 
-        def min_dist_deg(lat, lon, pts):
-            """Minimum squared degree distance from (lat,lon) to any point in pts."""
+        def closest_idx(lat, lon, pts):
+            """Return (index, distance_m) of the closest point in pts to (lat, lon)."""
             cos_l = math.cos(math.radians(lat))
-            best = float("inf")
-            for p in pts:
+            best_d2, best_i = float("inf"), 0
+            for i, p in enumerate(pts):
                 d2 = (p[0]-lat)**2 + ((p[1]-lon)*cos_l)**2
-                if d2 < best:
-                    best = d2
-            return math.sqrt(best) * 111000  # approx metres
+                if d2 < best_d2:
+                    best_d2, best_i = d2, i
+            return best_i, math.sqrt(best_d2) * 111000  # approx metres
 
         tol_m = 200.0  # must be within 200m of start, mid, and end
 
@@ -1340,10 +1539,13 @@ class AscentDB:
             start = seg_pts[0]
             end   = seg_pts[-1]
             mid   = seg_pts[len(seg_pts)//2]
-            # Check all three anchor points are close to some activity point
-            if (min_dist_deg(start[0], start[1], act_pts) <= tol_m and
-                min_dist_deg(mid[0],   mid[1],   act_pts) <= tol_m and
-                min_dist_deg(end[0],   end[1],   act_pts) <= tol_m):
+
+            si, sd = closest_idx(start[0], start[1], act_pts)
+            mi, md = closest_idx(mid[0],   mid[1],   act_pts)
+            ei, ed = closest_idx(end[0],   end[1],   act_pts)
+
+            # All three anchors must be within tolerance AND appear in forward order
+            if sd <= tol_m and md <= tol_m and ed <= tol_m and si < mi < ei:
                 result.append(dict(row))
 
         return result
