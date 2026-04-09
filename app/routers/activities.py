@@ -15,8 +15,13 @@ async def activities_spa(request: Request):
     uid = get_session_user_id(request)
     if uid is None:
         return RedirectResponse(f"/login?next=/activities", status_code=303)
+    db = db_getter()
     try:
-        ui_prefs = db_getter().get_ui_prefs(uid)
+        db.touch_last_active(uid)
+    except Exception:
+        pass
+    try:
+        ui_prefs = db.get_ui_prefs(uid)
     except Exception:
         ui_prefs = {}
     resp = templates.TemplateResponse("main.html", {"request": request, "ui_prefs": ui_prefs})

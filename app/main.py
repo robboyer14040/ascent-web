@@ -30,6 +30,7 @@ from app.db import AscentDB
 from app.routers import activities, api, strava, photos, settings, weather
 from app.routers import coach
 from app.routers import auth as auth_router
+from app.routers import fitgpx
 from app.auth import get_session_user_id
 
 load_dotenv()
@@ -125,7 +126,7 @@ def type_badge(t):
 
 templates.env.filters["fmt_date"]   = fmt_date
 templates.env.filters["type_badge"] = type_badge
-templates.env.globals["app_version"] = "v0.2.74"
+templates.env.globals["app_version"] = "v0.3.67"
 
 # ── wire routers ──────────────────────────────────────────────────────────────
 activities.db_getter = get_db
@@ -154,6 +155,9 @@ auth_router.db_getter = get_db
 auth_router.templates = templates
 # (auth router already included above)
 
+fitgpx.db_getter = get_db
+app.include_router(fitgpx.router)
+
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon():
     from fastapi.responses import Response
@@ -174,19 +178,25 @@ async def dashboard(request: Request):
     if uid is None:
         return RedirectResponse("/login?next=/", status_code=303)
 
-    user = get_db().get_user(uid)
+    db = get_db()
+    user = db.get_user(uid)
+    try:
+        db.touch_last_active(uid)
+    except Exception:
+        pass
 
     try:
-        db             = get_db()
         stats          = db.get_dashboard_stats(user_id=uid)
         years          = db.get_years(user_id=uid)
         activity_types = db.get_activity_types(user_id=uid)
         monthly        = db.get_monthly_totals(user_id=uid)
         ui_prefs       = db.get_ui_prefs(uid)
+        profile        = db.get_user_profile(uid)
+        ui_prefs["use_metric"] = profile.get("use_metric", False)
         db_ok          = True
         db_error       = None
     except Exception as e:
-        stats = {}; years = []; activity_types = []; monthly = []; ui_prefs = {}
+        stats = {}; years = []; activity_types = []; monthly = []; ui_prefs = {"use_metric": False}
         db_ok = False; db_error = str(e)
 
     return templates.TemplateResponse("dashboard.html", {

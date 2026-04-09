@@ -11,6 +11,7 @@ router = APIRouter()
 db_getter: Callable = None
 
 
+
 @router.get("/stats/recent")
 async def recent_stats(request: Request, limit: int = Query(15)):
     uid = get_session_user_id(request)
@@ -38,6 +39,13 @@ async def daily_stats(request: Request, week_start: str = Query(...)):
     if uid is None:
         raise HTTPException(401, "Not authenticated")
     return db_getter().get_daily_totals(user_id=uid, week_start=week_start)
+
+@router.get("/stats/daily-month")
+async def daily_month_stats(request: Request, year: int = Query(...), month: int = Query(...)):
+    uid = get_session_user_id(request)
+    if uid is None:
+        raise HTTPException(401, "Not authenticated")
+    return db_getter().get_daily_totals_for_month(user_id=uid, year=year, month=month)
 
 @router.get("/stats/zones")
 async def zone_stats(request: Request, year: Optional[int] = Query(None),
@@ -130,19 +138,23 @@ async def suggest_activity_title(activity_id: int, request: Request):
         raise HTTPException(503, "No Anthropic API key configured")
 
 
-    import random
-    seed_word = random.choice([
+    import secrets
+    _SEED_WORDS = [
         "accordion", "badger", "Ptolemy", "stapler", "fjord", "mayonnaise",
         "trebuchet", "hamster", "Wellington", "kumquat", "dirigible", "platypus",
         "Rasputin", "cauliflower", "monocle", "catapult", "brisket", "Vesuvius",
         "yodeling", "wombat", "saxophone", "turnip", "Machiavelli", "marmalade",
         "penguin", "obelisk", "fondue", "Charlemagne", "kazoo", "spatula",
         "narwhal", "crouton", "bureaucracy", "corgi", "Copernicus", "jalapeño",
-    ])
+        "quokka", "periscope", "semaphore", "baguette", "Fibonacci", "tambourine",
+        "walrus", "archipelago", "tiramisu", "zeppelin", "mongoose", "croissant",
+    ]
+    word_a = secrets.choice(_SEED_WORDS)
+    word_b = secrets.choice([w for w in _SEED_WORDS if w != word_a])
 
     prompt  = (
         f"Write a short (2–6 words), absurd, funny activity title. "
-        f"It MUST be about or reference: {seed_word}. "
+        f"It MUST reference both: {word_a} and {word_b}. "
         "Nothing to do with exercise, cycling, running, or fitness. "
         "Be weird and unexpected. Reply with ONLY the title, no quotes, no explanation."
     )
@@ -364,8 +376,22 @@ async def list_users(request: Request):
     uid = get_session_user_id(request)
     if uid is None:
         raise HTTPException(401, "Not authenticated")
-    users = db_getter().list_users()
-    return [{"id": u["id"], "username": u.get("username") or u.get("email", "?")} for u in users]
+    from pathlib import Path
+    db = db_getter()
+    users = db.list_users()
+    result = []
+    for u in users:
+        avatar_url = None
+        if u.get("avatar_path"):
+            thumb_path = Path(u["avatar_path"]).parent / f"{u['id']}_thumb.jpg"
+            if thumb_path.exists():
+                avatar_url = f"/api/avatar/{u['id']}?thumb=1"
+        result.append({
+            "id":         u["id"],
+            "username":   u.get("username") or u.get("email", "?"),
+            "avatar_url": avatar_url,
+        })
+    return result
 
 
 @router.get("/debug/activity-user-counts")
@@ -482,13 +508,18 @@ async def update_activity_local(activity_id: int, req: dict, request: Request):
     update_gear = "gear_id" in req
     gear_id     = req.get("gear_id")    # "" = clear gear; "bXXX" = set gear
     gear_name   = req.get("gear_name") or ""
+    update_pe   = "perceived_exertion" in req
+    pe_raw      = req.get("perceived_exertion")
+    perceived_exertion = int(pe_raw) if pe_raw is not None else None
     if visibility is not None and visibility not in ("everyone", "followers_only", "only_me"):
         raise HTTPException(400, "visibility must be 'everyone' or 'only_me'")
     db_inst = db_getter()
     db_inst.update_activity_local(activity_id, uid,
                                   name=name, description=description, visibility=visibility,
                                   sport_type=sport_type, gear_id=gear_id, gear_name=gear_name,
-                                  update_gear=update_gear)
+                                  update_gear=update_gear,
+                                  perceived_exertion=perceived_exertion,
+                                  update_perceived_exertion=update_pe)
     return db_inst.get_activity(activity_id)
 
 
@@ -497,7 +528,8 @@ async def _push_activity_to_strava(strava_id: int, token: str,
                                    description: Optional[str],
                                    visibility: Optional[str],
                                    sport_type: Optional[str] = None,
-                                   gear_id: Optional[str] = None) -> dict:
+                                   gear_id: Optional[str] = None,
+                                   perceived_exertion: Optional[int] = None) -> dict:
     """PUT updated fields to Strava. Only sends fields that were explicitly changed.
     Returns the Strava response body."""
     import httpx, logging
@@ -511,6 +543,8 @@ async def _push_activity_to_strava(strava_id: int, token: str,
         payload["sport_type"] = sport_type
     if gear_id is not None:           # "" clears gear on Strava; "bXXX" sets it
         payload["gear_id"] = gear_id
+    if perceived_exertion is not None:
+        payload["perceived_exertion"] = perceived_exertion
     # visibility intentionally omitted — Strava's API does not support changing it
     if not payload:
         return {}
@@ -539,7 +573,6 @@ async def resync_activity(activity_id: int, request: Request):
         iso_to_unix, parse_tz_name, parse_tz_offset,
         _f, M_TO_MI, M_TO_FT, MPS_TO_MPH,
     )
-    from app.routers.strava import load_tokens, tokens_are_fresh, refresh_tokens
     from app.routers.photos import resolve_photos
 
     db = db_getter()
@@ -551,15 +584,18 @@ async def resync_activity(activity_id: int, request: Request):
     if not strava_id:
         raise HTTPException(400, "Activity has no Strava ID")
 
-    uid    = get_session_user_id(request)
-    tokens = load_tokens(user_id=uid)
-    if not tokens.get("refresh_token"):
-        raise HTTPException(401, "Not connected to Strava")
-    if not tokens_are_fresh(tokens):
-        tokens = await refresh_tokens(tokens, user_id=uid)
-    token = tokens["access_token"]
+    uid       = get_session_user_id(request)
+    owner_uid = act.get("user_id") or uid
 
-    # Push any pending local edits to Strava before re-fetching
+    # Prefer the activity owner's Strava token; fall back to the viewer's
+    from app.routers.strava import get_fresh_token as _gft
+    token = await _gft(user_id=owner_uid)
+    if not token:
+        token = await _gft(user_id=uid)
+    if not token:
+        raise HTTPException(401, "Not connected to Strava")
+
+    # Push any pending local edits to Strava before re-fetching (owner only)
     if act.get("local_edited_at"):
         await _push_activity_to_strava(
             strava_id=strava_id,
@@ -569,6 +605,7 @@ async def resync_activity(activity_id: int, request: Request):
             visibility=None,
             sport_type=act.get("local_sport_type"),
             gear_id=act.get("local_gear_id"),
+            perceived_exertion=act.get("perceived_exertion"),
         )
         db.clear_activity_local_edits(activity_id)
 
@@ -617,6 +654,8 @@ async def resync_activity(activity_id: int, request: Request):
     db_path = os.environ.get("ASCENT_DB_PATH", "")
     con = sqlite3.connect(db_path, timeout=30)
     try:
+        src_pe = sa.get("perceived_exertion")
+        pe_val = int(src_pe) if src_pe is not None else None
         con.execute("""
             UPDATE activities SET
                 name                    = ?,
@@ -646,6 +685,7 @@ async def resync_activity(activity_id: int, request: Request):
                 map_min_lon             = ?,
                 map_max_lon             = ?,
                 strava_visibility       = ?,
+                perceived_exertion      = COALESCE(?, perceived_exertion),
                 local_media_items_json  = NULL,
                 local_video_urls_json   = NULL
             WHERE id = ?
@@ -665,6 +705,7 @@ async def resync_activity(activity_id: int, request: Request):
             start_lat, start_lon,
             map_min_lat, map_max_lat, map_min_lon, map_max_lon,
             sa.get("visibility"),
+            pe_val,
             activity_id,
         ))
         con.commit()
@@ -899,6 +940,8 @@ async def segment_compare(req: SegmentRequest, request: Request):
             "start_time":  start_time,
             "elapsed_s":   elapsed,
             "user_id":     user_id,
+            "start_idx":   si2,
+            "end_idx":     ei2,
             "points":      seg_points_sample(pts, si2, ei2),
         }
 
@@ -910,6 +953,8 @@ async def segment_compare(req: SegmentRequest, request: Request):
         "start_time":  ref_act.get("start_time") if ref_act else None,
         "elapsed_s":   ref_elapsed,
         "user_id":     ref_act.get("user_id") if ref_act else None,
+        "start_idx":   si,
+        "end_idx":     ei,
         "points":      seg_points_sample(ref_pts, si, ei),
     }
 
@@ -1507,6 +1552,8 @@ async def segment_compare_manual(req: MultiCompareRequest):
             "start_time":  act.get("start_time"),
             "elapsed_s":   elapsed,
             "user_id":     act.get("user_id"),
+            "start_idx":   si2,
+            "end_idx":     ei2,
             "points":      seg_points_sample(pts, si2, ei2),
         })
 
@@ -1516,5 +1563,164 @@ async def segment_compare_manual(req: MultiCompareRequest):
     return {"matches": matches, "segment_name": seg["name"]}
 
 
+@router.get("/activities/{activity_id}/strava-kudos")
+async def get_strava_kudos(activity_id: int, request: Request):
+    """Return the kudos count for a Strava-linked activity."""
+    import httpx
+    from app.routers.strava import get_fresh_token
+
+    uid = get_session_user_id(request)
+    db  = db_getter()
+    act = db.get_activity(activity_id)
+    if not act:
+        raise HTTPException(404, "Activity not found")
+
+    strava_id = act.get("strava_activity_id")
+    if not strava_id:
+        return {"kudos_count": 0}
+
+    owner_uid = act.get("user_id") or uid
+    token = await get_fresh_token(user_id=owner_uid)
+    if not token:
+        token = await get_fresh_token(user_id=uid)
+    if not token:
+        raise HTTPException(401, "No Strava connection available for this activity")
+
+    async with httpx.AsyncClient(timeout=15) as client:
+        resp = await client.get(
+            f"https://www.strava.com/api/v3/activities/{strava_id}",
+            headers={"Authorization": f"Bearer {token}"},
+            params={"include_all_efforts": "false"},
+        )
+        if resp.status_code == 401:
+            raise HTTPException(401, "Strava token invalid — reconnect Strava")
+        if resp.status_code != 200:
+            raise HTTPException(resp.status_code, "Strava API error")
+        data = resp.json()
+
+    return {"kudos_count": data.get("kudos_count", 0)}
+
+
+@router.get("/activities/{activity_id}/strava-kudos-list")
+async def get_strava_kudos_list(activity_id: int, request: Request):
+    """Return the list of athletes who gave kudos."""
+    import httpx
+    from app.routers.strava import get_fresh_token
+
+    uid = get_session_user_id(request)
+    db  = db_getter()
+    act = db.get_activity(activity_id)
+    if not act:
+        raise HTTPException(404, "Activity not found")
+
+    strava_id = act.get("strava_activity_id")
+    if not strava_id:
+        return {"athletes": []}
+
+    owner_uid = act.get("user_id") or uid
+    token = await get_fresh_token(user_id=owner_uid)
+    if not token:
+        token = await get_fresh_token(user_id=uid)
+    if not token:
+        raise HTTPException(401, "No Strava connection available for this activity")
+
+    async with httpx.AsyncClient(timeout=15) as client:
+        resp = await client.get(
+            f"https://www.strava.com/api/v3/activities/{strava_id}/kudos",
+            headers={"Authorization": f"Bearer {token}"},
+            params={"per_page": 200, "page": 1},
+        )
+        if resp.status_code == 401:
+            raise HTTPException(401, "Strava token invalid — reconnect Strava")
+        if resp.status_code != 200:
+            raise HTTPException(resp.status_code, "Strava API error")
+        raw = resp.json()
+
+    athletes = [{"firstname": a.get("firstname", ""), "lastname": a.get("lastname", "")} for a in raw]
+    return {"athletes": athletes}
+
+
+@router.get("/activities/{activity_id}/strava-comments")
+async def get_strava_comments(activity_id: int, request: Request):
+    """Return the comment count for a Strava-linked activity."""
+    import httpx
+    from app.routers.strava import get_fresh_token
+
+    uid = get_session_user_id(request)
+    db  = db_getter()
+    act = db.get_activity(activity_id)
+    if not act:
+        raise HTTPException(404, "Activity not found")
+
+    strava_id = act.get("strava_activity_id")
+    if not strava_id:
+        return {"comment_count": 0}
+
+    owner_uid = act.get("user_id") or uid
+    token = await get_fresh_token(user_id=owner_uid)
+    if not token:
+        token = await get_fresh_token(user_id=uid)
+    if not token:
+        raise HTTPException(401, "No Strava connection available for this activity")
+
+    async with httpx.AsyncClient(timeout=15) as client:
+        resp = await client.get(
+            f"https://www.strava.com/api/v3/activities/{strava_id}/comments",
+            headers={"Authorization": f"Bearer {token}"},
+            params={"per_page": 200, "page": 1},
+        )
+        if resp.status_code == 401:
+            raise HTTPException(401, "Strava token invalid — reconnect Strava")
+        if resp.status_code != 200:
+            raise HTTPException(resp.status_code, "Strava API error")
+        raw = resp.json()
+
+    return {"comment_count": len(raw)}
+
+
+@router.get("/activities/{activity_id}/strava-comments-list")
+async def get_strava_comments_list(activity_id: int, request: Request):
+    """Return the list of comments on a Strava-linked activity."""
+    import httpx
+    from app.routers.strava import get_fresh_token
+
+    uid = get_session_user_id(request)
+    db  = db_getter()
+    act = db.get_activity(activity_id)
+    if not act:
+        raise HTTPException(404, "Activity not found")
+
+    strava_id = act.get("strava_activity_id")
+    if not strava_id:
+        return {"comments": []}
+
+    owner_uid = act.get("user_id") or uid
+    token = await get_fresh_token(user_id=owner_uid)
+    if not token:
+        token = await get_fresh_token(user_id=uid)
+    if not token:
+        raise HTTPException(401, "No Strava connection available for this activity")
+
+    async with httpx.AsyncClient(timeout=15) as client:
+        resp = await client.get(
+            f"https://www.strava.com/api/v3/activities/{strava_id}/comments",
+            headers={"Authorization": f"Bearer {token}"},
+            params={"per_page": 200, "page": 1},
+        )
+        if resp.status_code == 401:
+            raise HTTPException(401, "Strava token invalid — reconnect Strava")
+        if resp.status_code != 200:
+            raise HTTPException(resp.status_code, "Strava API error")
+        raw = resp.json()
+
+    comments = []
+    for c in raw:
+        athlete = c.get("athlete") or {}
+        firstname = athlete.get("firstname", "")
+        lastname  = athlete.get("lastname", "")
+        name = f"{firstname} {lastname}".strip() or "Unknown"
+        comments.append({"athlete_name": name, "text": c.get("text", "")})
+
+    return {"comments": comments}
 
 

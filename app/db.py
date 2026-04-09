@@ -241,8 +241,9 @@ def build_activity(row: sqlite3.Row) -> dict:
     a["work_kj"]     = round(safe_float(attrs.get("work") or d.get("src_kilojoules")))
 
     # ── misc ──────────────────────────────────────────────────────────────
-    a["calories"]     = round(safe_float(attrs.get("calories")))
-    a["suffer_score"] = round(safe_float(attrs.get("sufferScore")))
+    a["calories"]            = round(safe_float(attrs.get("calories")))
+    a["suffer_score"]        = round(safe_float(attrs.get("sufferScore")))
+    a["perceived_exertion"]  = d.get("perceived_exertion")
 
     # Photos — pass through raw JSON string; API layer parses it
     a["local_media_items_json"] = d.get("local_media_items_json")
@@ -311,7 +312,8 @@ class AscentDB:
         for col in ("local_name TEXT", "local_description TEXT",
                     "local_visibility TEXT", "local_edited_at INTEGER",
                     "strava_visibility TEXT",
-                    "local_sport_type TEXT", "local_gear_id TEXT", "local_gear_name TEXT"):
+                    "local_sport_type TEXT", "local_gear_id TEXT", "local_gear_name TEXT",
+                    "perceived_exertion INTEGER"):
             try:
                 self._con.execute(f"ALTER TABLE activities ADD COLUMN {col}")
                 self._con.commit()
@@ -635,6 +637,7 @@ class AscentDB:
             f"""SELECT
                     strftime('%Y-%m', datetime(creation_time_s,'unixepoch')) AS month,
                     COUNT(*)            AS count,
+                    COUNT(DISTINCT date(datetime(creation_time_s,'unixepoch'))) AS active_days,
                     SUM(distance_mi)    AS dist_mi,
                     SUM(src_total_climb) AS climb_ft,
                     SUM(src_moving_time_s) AS moving_s,
@@ -652,6 +655,7 @@ class AscentDB:
             {
                 "month":        r["month"],
                 "count":        r["count"],
+                "active_days":  r["active_days"],
                 "dist_mi":      round(r["dist_mi"] or 0, 1),
                 "climb_ft":     round(r["climb_ft"] or 0),
                 "active_h":     round((r["moving_s"] or 0) / 3600, 1),
@@ -672,7 +676,13 @@ class AscentDB:
         if base_where:
             where += " AND creation_time_s IS NOT NULL"
         if month:
-            where += f" AND strftime('%m', datetime(creation_time_s,'unixepoch')) = '{month:02d}'"
+            # Filter by the activity's actual date falling in the month.
+            # Weeks that straddle the month boundary will still appear, showing
+            # only the days that fall within the selected month.
+            where += (
+                f" AND strftime('%m', date(datetime(creation_time_s,'unixepoch')))"
+                f" = '{month:02d}'"
+            )
 
         # Use the Monday of each week as the group key (reliable cross-year grouping)
         # SQLite: 'weekday 1' = Monday; subtract days to get Monday of that week
@@ -680,6 +690,7 @@ class AscentDB:
             f"""SELECT
                     date(datetime(creation_time_s,'unixepoch'), '-' || ((strftime('%w', datetime(creation_time_s,'unixepoch')) + 6) % 7) || ' days') AS week,
                     COUNT(*)               AS count,
+                    COUNT(DISTINCT date(datetime(creation_time_s,'unixepoch'))) AS active_days,
                     SUM(distance_mi)       AS dist_mi,
                     SUM(src_total_climb)   AS climb_ft,
                     SUM(src_moving_time_s) AS moving_s,
@@ -697,6 +708,7 @@ class AscentDB:
             {
                 "week":         r["week"],
                 "count":        r["count"],
+                "active_days":  r["active_days"],
                 "dist_mi":      round(r["dist_mi"] or 0, 1),
                 "climb_ft":     round(r["climb_ft"] or 0),
                 "active_h":     round((r["moving_s"] or 0) / 3600, 1),
@@ -736,6 +748,48 @@ class AscentDB:
             result.append({
                 "day":          day,
                 "count":        r["count"] if r else 0,
+                "active_days":  1 if r else 0,
+                "dist_mi":      round((r["dist_mi"]  or 0) if r else 0, 1),
+                "climb_ft":     round((r["climb_ft"] or 0) if r else 0),
+                "active_h":     round(((r["moving_s"] or 0) if r else 0) / 3600, 2),
+                "max_climb_ft": round((r["max_climb_ft"] or 0) if r else 0),
+                "avg_power_w":  round((r["avg_power_w"]  or 0) if r else 0),
+                "avg_hr":       round((r["avg_hr"]       or 0) if r else 0),
+            })
+        return result
+
+    def get_daily_totals_for_month(self, user_id: int, year: int, month: int) -> list[dict]:
+        """Return daily activity totals for every day in the given month."""
+        import calendar
+        from datetime import date, timedelta
+        d0 = date(year, month, 1)
+        days_in_month = calendar.monthrange(year, month)[1]
+        d_end = date(year, month, days_in_month)
+        rows = self._con.execute("""
+            SELECT
+                date(datetime(creation_time_s,'unixepoch')) AS day,
+                COUNT(*)               AS count,
+                SUM(distance_mi)       AS dist_mi,
+                SUM(src_total_climb)   AS climb_ft,
+                SUM(src_moving_time_s) AS moving_s,
+                MAX(src_total_climb)   AS max_climb_ft,
+                AVG(CASE WHEN src_avg_power     > 0 THEN src_avg_power     END) AS avg_power_w,
+                AVG(CASE WHEN src_avg_heartrate > 0 THEN src_avg_heartrate END) AS avg_hr
+            FROM activities
+            WHERE user_id = ?
+              AND date(datetime(creation_time_s,'unixepoch')) BETWEEN ? AND ?
+            GROUP BY day
+            ORDER BY day ASC
+        """, (user_id, d0.isoformat(), d_end.isoformat())).fetchall()
+        day_map = {r["day"]: r for r in rows}
+        result = []
+        for i in range(days_in_month):
+            day = (d0 + timedelta(days=i)).isoformat()
+            r = day_map.get(day)
+            result.append({
+                "day":          day,
+                "count":        r["count"] if r else 0,
+                "active_days":  1 if r else 0,
                 "dist_mi":      round((r["dist_mi"]  or 0) if r else 0, 1),
                 "climb_ft":     round((r["climb_ft"] or 0) if r else 0),
                 "active_h":     round(((r["moving_s"] or 0) if r else 0) / 3600, 2),
@@ -872,6 +926,7 @@ class AscentDB:
             f"""SELECT
                     strftime('%Y', datetime(creation_time_s,'unixepoch')) AS year,
                     COUNT(*)               AS count,
+                    COUNT(DISTINCT date(datetime(creation_time_s,'unixepoch'))) AS active_days,
                     SUM(distance_mi)       AS dist_mi,
                     SUM(src_total_climb)   AS climb_ft,
                     SUM(src_moving_time_s) AS moving_s,
@@ -889,6 +944,7 @@ class AscentDB:
             {
                 "year":         r["year"],
                 "count":        r["count"],
+                "active_days":  r["active_days"],
                 "dist_mi":      round(r["dist_mi"] or 0, 1),
                 "climb_ft":     round(r["climb_ft"] or 0),
                 "active_h":     round((r["moving_s"] or 0) / 3600, 1),
@@ -1002,7 +1058,9 @@ class AscentDB:
                               sport_type: Optional[str] = None,
                               gear_id: Optional[str] = None,
                               gear_name: Optional[str] = None,
-                              update_gear: bool = False) -> None:
+                              update_gear: bool = False,
+                              perceived_exertion: Optional[int] = None,
+                              update_perceived_exertion: bool = False) -> None:
         """Store pending local edits for a Strava activity (pushed on next resync)."""
         import time as _time
         cols = ["local_name=?", "local_description=?", "local_visibility=?",
@@ -1012,6 +1070,9 @@ class AscentDB:
         if update_gear:
             cols += ["local_gear_id=?", "local_gear_name=?"]
             vals += [gear_id, gear_name or None]
+        if update_perceived_exertion:
+            cols += ["perceived_exertion=?"]
+            vals += [perceived_exertion]
         vals += [activity_id, user_id]
         self._con.execute(
             f"UPDATE activities SET {', '.join(cols)} WHERE id=? AND user_id=?", vals
@@ -1075,6 +1136,7 @@ class AscentDB:
             ("autoplay_videos",        "INTEGER DEFAULT 1"),
             ("ui_prefs_json",          "TEXT"),
             ("compare_lookback_years", "INTEGER DEFAULT 0"),
+            ("birthday",               "TEXT"),
         ]:
             try:
                 self._con.execute(f"ALTER TABLE user_profile_v2 ADD COLUMN {col} {defn}")
@@ -1098,7 +1160,7 @@ class AscentDB:
     def get_user_profile(self, user_id: int) -> dict:
         self._ensure_user_profile_table()
         row = self._con.execute(
-            "SELECT max_hr, ftp_watts, age, weight_lb, use_metric, autoplay_videos, compare_lookback_years FROM user_profile_v2 WHERE user_id=?",
+            "SELECT max_hr, ftp_watts, age, weight_lb, use_metric, autoplay_videos, compare_lookback_years, birthday FROM user_profile_v2 WHERE user_id=?",
             (user_id,)
         ).fetchone()
         if row:
@@ -1110,13 +1172,15 @@ class AscentDB:
                 "use_metric":              bool(row[4]),
                 "autoplay_videos":         bool(row[5]) if row[5] is not None else True,
                 "compare_lookback_years":  row[6] if row[6] is not None else 0,
+                "birthday":                row[7],
             }
         return {"max_hr": None, "ftp_watts": None, "age": None, "weight_lb": None,
-                "use_metric": False, "autoplay_videos": True, "compare_lookback_years": 0}
+                "use_metric": False, "autoplay_videos": True, "compare_lookback_years": 0,
+                "birthday": None}
 
     def set_user_profile(self, user_id: int, max_hr=None, ftp_watts=None, age=None,
                          weight_lb=None, use_metric=None, autoplay_videos=None,
-                         compare_lookback_years=None):
+                         compare_lookback_years=None, birthday=None):
         self._ensure_user_profile_table()
         con = sqlite3.connect(self.path, timeout=30)
         try:
@@ -1132,12 +1196,14 @@ class AscentDB:
                     weight_lb               = COALESCE(?, weight_lb),
                     use_metric              = CASE WHEN ? IS NOT NULL THEN ? ELSE use_metric END,
                     autoplay_videos         = CASE WHEN ? IS NOT NULL THEN ? ELSE autoplay_videos END,
-                    compare_lookback_years  = CASE WHEN ? IS NOT NULL THEN ? ELSE compare_lookback_years END
+                    compare_lookback_years  = CASE WHEN ? IS NOT NULL THEN ? ELSE compare_lookback_years END,
+                    birthday                = CASE WHEN ? IS NOT NULL THEN ? ELSE birthday END
                 WHERE user_id=?
             """, (max_hr, ftp_watts, age, weight_lb,
                   use_metric, use_metric,
                   autoplay_videos, autoplay_videos,
                   compare_lookback_years, compare_lookback_years,
+                  birthday, birthday,
                   user_id))
             con.commit()
         finally:
@@ -1329,7 +1395,8 @@ class AscentDB:
             );
         """)
         # Add per-user key columns if missing (migration)
-        for col in ("anthropic_api_key TEXT", "strava_client_id TEXT", "strava_client_secret TEXT"):
+        for col in ("anthropic_api_key TEXT", "strava_client_id TEXT", "strava_client_secret TEXT",
+                    "last_active_at INTEGER", "avatar_path TEXT"):
             try:
                 self._con.execute(f"ALTER TABLE users ADD COLUMN {col}")
                 self._con.commit()
@@ -1409,9 +1476,9 @@ class AscentDB:
         return {}
 
     def update_user_settings(self, user_id: int, **kwargs):
-        """Update user settings fields. Allowed: share_activities, share_segments, username."""
+        """Update user settings fields. Allowed: share_activities, share_segments, username, avatar_path."""
         allowed = {"share_activities", "share_segments", "username",
-                   "anthropic_api_key", "strava_client_id", "strava_client_secret"}
+                   "anthropic_api_key", "strava_client_id", "strava_client_secret", "avatar_path"}
         fields  = {k: v for k, v in kwargs.items() if k in allowed}
         if not fields: return
         sets = ", ".join(f"{k}=?" for k in fields)
@@ -1419,11 +1486,19 @@ class AscentDB:
                           list(fields.values()) + [user_id])
         self._con.commit()
 
+    def touch_last_active(self, user_id: int):
+        import time
+        self._con.execute(
+            "UPDATE users SET last_active_at=? WHERE id=?",
+            (int(time.time()), user_id)
+        )
+        self._con.commit()
+
     def list_users(self) -> list:
         self._ensure_users_tables()
         rows = self._con.execute(
             "SELECT id, email, username, is_admin, share_activities, share_segments, "
-            "created_at, invited_by, strava_athlete_id FROM users ORDER BY created_at"
+            "created_at, invited_by, strava_athlete_id, last_active_at, avatar_path FROM users ORDER BY created_at"
         ).fetchall()
         return [dict(r) for r in rows]
 

@@ -6,8 +6,8 @@ import getpass
 from pathlib import Path
 from typing import Callable, Optional
 
-from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import HTMLResponse
+from fastapi import APIRouter, HTTPException, Request, UploadFile, File
+from fastapi.responses import HTMLResponse, FileResponse
 from pydantic import BaseModel
 
 router = APIRouter()
@@ -300,5 +300,75 @@ async def save_sharing(request: Request):
         share_segments=int(bool(body.get("share_segments"))),
     )
     return {"status": "ok"}
+
+
+# ── User Info (username + birthday) ──────────────────────────────────────────
+
+class UserInfoRequest(BaseModel):
+    username: Optional[str] = None
+    birthday: Optional[str] = None  # YYYY-MM-DD or empty string
+
+
+@router.post("/api/settings/user-info")
+async def save_user_info(req: UserInfoRequest, request: Request):
+    uid = get_session_user_id(request)
+    if uid is None:
+        raise HTTPException(401, "Not authenticated")
+    db = db_getter()
+    if req.username is not None:
+        name = req.username.strip()
+        if not name:
+            raise HTTPException(400, "Username cannot be empty")
+        db.update_user_settings(uid, username=name)
+    birthday = req.birthday.strip() if req.birthday else None
+    if birthday == "":
+        birthday = None
+    db.set_user_profile(uid, birthday=birthday)
+    return {"status": "ok"}
+
+
+# ── Avatar ────────────────────────────────────────────────────────────────────
+
+def _avatar_dir(db) -> Path:
+    return Path(db.path).parent / "avatars"
+
+
+@router.post("/api/settings/avatar")
+async def upload_avatar(request: Request, file: UploadFile = File(...)):
+    from PIL import Image
+    import io
+    uid = get_session_user_id(request)
+    if uid is None:
+        raise HTTPException(401, "Not authenticated")
+    data = await file.read()
+    try:
+        img = Image.open(io.BytesIO(data)).convert("RGB")
+    except Exception:
+        raise HTTPException(400, "Invalid image file")
+    # Resize to 400x400 (client already cropped to square)
+    img = img.resize((400, 400), Image.LANCZOS)
+    thumb = img.resize((40, 40), Image.LANCZOS)
+    db = db_getter()
+    avatar_dir = _avatar_dir(db)
+    avatar_dir.mkdir(parents=True, exist_ok=True)
+    full_path  = avatar_dir / f"{uid}.jpg"
+    thumb_path = avatar_dir / f"{uid}_thumb.jpg"
+    img.save(str(full_path),  "JPEG", quality=88)
+    thumb.save(str(thumb_path), "JPEG", quality=85)
+    db.update_user_settings(uid, avatar_path=str(full_path))
+    return {"status": "ok", "avatar_url": f"/api/avatar/{uid}", "thumb_url": f"/api/avatar/{uid}?thumb=1"}
+
+
+@router.get("/api/avatar/{user_id}")
+async def get_avatar(user_id: int, thumb: int = 0):
+    db = db_getter()
+    avatar_dir = _avatar_dir(db)
+    if thumb:
+        path = avatar_dir / f"{user_id}_thumb.jpg"
+    else:
+        path = avatar_dir / f"{user_id}.jpg"
+    if not path.exists():
+        raise HTTPException(404, "No avatar")
+    return FileResponse(str(path), media_type="image/jpeg")
 
 

@@ -8,10 +8,13 @@
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif;font-size:14px;background:#1c1c1e;color:#f2f2f7;min-height:100vh}
-nav{display:flex;align-items:center;gap:1rem;padding:.65rem 1.25rem;background:#2c2c2e;border-bottom:1px solid #3a3a3c}
-.brand{font-size:1rem;font-weight:700;color:#f97316;text-decoration:none}
-nav a{color:#8e8e93;font-size:.85rem;text-decoration:none}
-nav a:hover{color:#f2f2f7}
+nav{display:flex;align-items:center;gap:0;padding:0 12px;height:44px;background:#2c2c2e;border-bottom:1px solid #3a3a3c;position:sticky;top:0;z-index:99}
+.nav-brand-name{font-size:14px;font-weight:700;color:#f97316}
+.nav-version{font-size:10px;font-weight:400;color:#8e8e93;margin-left:4px;letter-spacing:.02em}
+.nav-pages{display:flex;align-items:center;gap:2px;margin-left:14px}
+.nav-btn{padding:5px 10px;border-radius:6px;font-size:12px;font-weight:500;color:#8e8e93;background:none;border:none;cursor:pointer;white-space:nowrap;display:flex;align-items:center;text-decoration:none;height:34px}
+.nav-btn:hover{color:#f2f2f7;background:rgba(255,255,255,.06)}
+.nav-btn.nav-active{color:#fff;font-weight:700}
 .spacer{flex:1}
 .container{max-width:640px;margin:2rem auto;padding:0 1.25rem 4rem}
 .card{background:#2c2c2e;border:1px solid #3a3a3c;border-radius:12px;padding:1.5rem;margin-bottom:1rem}
@@ -22,13 +25,30 @@ p{color:#8e8e93;font-size:.875rem;line-height:1.6;margin-bottom:1rem}
 p:last-child{margin-bottom:0}
 label{display:block;font-size:.85rem;color:#8e8e93;margin-bottom:.35rem;margin-top:.75rem}
 label:first-of-type{margin-top:0}
-input[type=text],input[type=password]{
+input[type=text],input[type=password],input[type=date]{
   width:100%;background:#1c1c1e;border:1px solid #3a3a3c;border-radius:8px;
   padding:.55rem .8rem;color:#f2f2f7;font-size:.9rem;outline:none;
   font-family:inherit;
 }
-input[type=text]:focus,input[type=password]:focus{border-color:#f97316}
+input[type=text]:focus,input[type=password]:focus,input[type=date]:focus{border-color:#f97316}
+input[type=date]{color-scheme:dark;-webkit-appearance:none;appearance:none;height:auto;line-height:normal}
 input[readonly]{color:#8e8e93;cursor:default}
+
+/* ── Avatar crop ─────────────────────────────────────────────────────────── */
+#crop-wrap{
+  position:relative;width:260px;height:260px;overflow:hidden;
+  border-radius:50%;border:3px solid #f97316;cursor:grab;background:#1c1c1e;flex-shrink:0;
+}
+#crop-wrap:active{cursor:grabbing}
+#crop-canvas{display:block;width:260px;height:260px}
+.avatar-preview{
+  width:64px;height:64px;border-radius:50%;object-fit:cover;
+  border:2px solid #3a3a3c;display:block;
+}
+.avatar-placeholder{
+  width:64px;height:64px;border-radius:50%;background:#3a3a3c;
+  display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;
+}
 .btn{display:inline-flex;align-items:center;gap:.5rem;padding:.55rem 1.1rem;border-radius:8px;font-size:.875rem;font-weight:600;cursor:pointer;border:none;text-decoration:none;transition:background .15s;white-space:nowrap}
 .btn-primary{background:#f97316;color:#fff}.btn-primary:hover{background:#ea6c0a}
 .btn-danger{background:#ef4444;color:#fff}.btn-danger:hover{background:#dc2626}
@@ -94,14 +114,79 @@ input[readonly]{color:#8e8e93;cursor:default}
 </head>
 <body>
 <nav>
-  <a href="/" class="brand">⛰ Ascent</a>
-  <a href="/activities">Activities</a>
-  <a href="/strava/sync">Strava Sync</a>
+  <div style="display:flex;align-items:center">
+    <span class="nav-brand-name">⛰ Ascent</span><span class="nav-version">{{ app_version }}</span>
+  </div>
+  <div class="nav-pages">
+    <a href="/activities" class="nav-btn">Activities</a>
+    <a href="/" class="nav-btn">Summary</a>
+    <a href="/activities" class="nav-btn" onclick="sessionStorage.setItem('openCoach','1')">Coach</a>
+    <a href="/strava/sync" class="nav-btn">Sync</a>
+  </div>
   <div class="spacer"></div>
-  <a href="/settings" style="color:#f2f2f7">Settings</a>
-<div class="spacer" style="flex:1"></div>{% if current_user and current_user.is_admin %}<a href="/admin/invites" style="color:#8e8e93;font-size:.85rem;text-decoration:none">Admin</a>{% endif %}<a href="/logout" style="color:#8e8e93;font-size:.85rem;text-decoration:none">Sign Out</a></nav>
+  <div class="nav-pages">
+    {% if current_user and current_user.is_admin %}<a href="/admin/invites" class="nav-btn">Admin</a>{% endif %}
+    <a href="/settings" class="nav-btn nav-active">Settings</a>
+    <a href="/logout" class="nav-btn">Sign Out</a>
+  </div>
+</nav>
 
 <div class="container">
+
+  <!-- ── User Info ─────────────────────────────────────────────────────────── -->
+  <div class="card">
+    <div class="card-header">
+      <h1>User Info</h1>
+    </div>
+    <p class="section-intro">Your public display name, birthday, and profile photo.</p>
+
+    <!-- Avatar -->
+    <div style="display:flex;align-items:center;gap:1.25rem;margin-bottom:1.25rem">
+      <div id="avatar-current">
+        <div class="avatar-placeholder" id="avatar-placeholder">👤</div>
+        <img id="avatar-img" class="avatar-preview" src="" alt="Your photo" style="display:none">
+      </div>
+      <div>
+        <div style="font-weight:500;margin-bottom:.35rem">Profile Photo</div>
+
+        <label class="btn btn-ghost btn-sm" style="cursor:pointer">
+          Choose Photo…
+          <input type="file" id="avatar-file-input" accept="image/*" style="display:none" onchange="onAvatarFileSelected(event)">
+        </label>
+      </div>
+    </div>
+
+    <!-- Crop modal -->
+    <div id="crop-modal" class="modal-overlay" onclick="cropOverlayClick(event)">
+      <div class="modal" style="width:min(360px,100%);padding:1.25rem">
+        <div style="font-weight:700;font-size:1rem;margin-bottom:1rem">Crop Photo</div>
+        <div style="display:flex;justify-content:center;margin-bottom:1rem">
+          <div id="crop-wrap">
+            <canvas id="crop-canvas" width="260" height="260"></canvas>
+          </div>
+        </div>
+        <div style="color:#8e8e93;font-size:.8rem;text-align:center;margin-bottom:1rem">Drag to position · Pinch or scroll to zoom</div>
+        <div style="display:flex;gap:.75rem">
+          <button class="btn btn-primary" style="flex:1" onclick="saveCroppedAvatar()">Save Photo</button>
+          <button class="btn btn-ghost" onclick="closeCropModal()">Cancel</button>
+        </div>
+        <div id="crop-result" class="result" style="margin-top:.75rem"></div>
+      </div>
+    </div>
+
+    <!-- Username -->
+    <label for="ui-username">User Name</label>
+    <input type="text" id="ui-username" placeholder="Your name" autocomplete="off">
+
+    <!-- Birthday -->
+    <label for="ui-birthday">Birthday</label>
+    <input type="date" id="ui-birthday" onchange="onBirthdayChange()">
+
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="saveUserInfo()">Save</button>
+    </div>
+    <div class="result" id="ui-result"></div>
+  </div>
 
   <!-- ── API Keys ──────────────────────────────────────────────────────────── -->
 
@@ -174,8 +259,8 @@ input[readonly]{color:#8e8e93;cursor:default}
         <input type="text" id="tp-ftp" placeholder="e.g. 250">
       </div>
       <div>
-        <label for="tp-age">Age <span style="color:#636366;font-weight:400">(years)</span></label>
-        <input type="text" id="tp-age" placeholder="e.g. 42">
+        <label for="tp-age">Age <span style="color:#636366;font-weight:400">(years — set birthday above)</span></label>
+        <input type="text" id="tp-age" placeholder="—" readonly>
       </div>
       <div>
         <label for="tp-weight">Weight <span style="color:#636366;font-weight:400">(lbs)</span></label>
@@ -360,6 +445,18 @@ document.addEventListener('keydown', e => {
 });
 
 // ── Utility ───────────────────────────────────────────────────────────────────
+
+function calcAge(birthday) {
+  if (!birthday) return null;
+  const bday = new Date(birthday + 'T00:00:00');
+  if (isNaN(bday)) return null;
+  const today = new Date();
+  let age = today.getFullYear() - bday.getFullYear();
+  const m = today.getMonth() - bday.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < bday.getDate())) age--;
+  return age >= 0 ? age : null;
+}
+
 // ── Training Profile ─────────────────────────────────────────────────────────
 async function loadTrainingProfile() {
   try {
@@ -367,17 +464,21 @@ async function loadTrainingProfile() {
     const d = await r.json();
     if (d.max_hr)    document.getElementById('tp-max-hr').value = d.max_hr;
     if (d.ftp_watts) document.getElementById('tp-ftp').value    = d.ftp_watts;
-    if (d.age)       document.getElementById('tp-age').value    = d.age;
     if (d.weight_lb) document.getElementById('tp-weight').value = d.weight_lb;
     document.getElementById('tp-metric').checked = !!d.use_metric;
   } catch(e) {}
+}
+
+function onBirthdayChange() {
+  const bday = document.getElementById('ui-birthday').value;
+  const age = calcAge(bday);
+  document.getElementById('tp-age').value = age !== null ? age : '';
 }
 
 async function saveTrainingProfile() {
   const res = document.getElementById('tp-result');
   const max_hr    = document.getElementById('tp-max-hr').value.trim() || null;
   const ftp_watts = document.getElementById('tp-ftp').value.trim()    || null;
-  const age       = document.getElementById('tp-age').value.trim()    || null;
   const weight_lb = document.getElementById('tp-weight').value.trim() || null;
   const use_metric= document.getElementById('tp-metric').checked;
   const btn = event.target;
@@ -385,7 +486,7 @@ async function saveTrainingProfile() {
   try {
     const r = await fetch('/api/settings/training-zones', {
       method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({max_hr, ftp_watts, age, weight_lb, use_metric}),
+      body: JSON.stringify({max_hr, ftp_watts, weight_lb, use_metric}),
     });
     const d = await r.json();
     show(res, r.ok ? 'ok' : 'err', r.ok ? '✓ Training profile saved' : `✗ ${d.detail||'Error'}`);
@@ -465,6 +566,216 @@ async function loadPrefs() {
   }
 }
 document.addEventListener('DOMContentLoaded', loadPrefs);
+
+// ── User Info ─────────────────────────────────────────────────────────────────
+async function loadUserInfo() {
+  try {
+    const [mr, pr] = await Promise.all([fetch('/api/me'), fetch('/api/settings/training-zones')]);
+    let meId = null;
+    if (mr.ok) {
+      const me = await mr.json();
+      meId = me.id;
+      document.getElementById('ui-username').value = me.username || '';
+    }
+    if (pr.ok) {
+      const p = await pr.json();
+      if (p.birthday) {
+        document.getElementById('ui-birthday').value = p.birthday;
+        onBirthdayChange();
+      }
+    }
+    // Load avatar (probe — show if exists)
+    if (meId) {
+      const avatarImg = document.getElementById('avatar-img');
+      const testImg = new Image();
+      testImg.onload = () => {
+        document.getElementById('avatar-placeholder').style.display = 'none';
+        avatarImg.src = `/api/avatar/${meId}?ts=${Date.now()}`;
+        avatarImg.style.display = 'block';
+      };
+      testImg.src = `/api/avatar/${meId}?ts=${Date.now()}`;
+    }
+  } catch(e) {}
+}
+
+async function saveUserInfo() {
+  const res = document.getElementById('ui-result');
+  const username = document.getElementById('ui-username').value.trim();
+  const birthday = document.getElementById('ui-birthday').value || null;
+  const btn = event.target;
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    const r = await fetch('/api/settings/user-info', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({username, birthday}),
+    });
+    const d = await r.json();
+    show(res, r.ok ? 'ok' : 'err', r.ok ? '✓ Saved' : `✗ ${d.detail||'Error'}`);
+    if (r.ok) onBirthdayChange();
+  } catch(e) { show(res, 'err', `✗ ${e.message}`); }
+  btn.disabled = false; btn.textContent = 'Save';
+}
+
+document.addEventListener('DOMContentLoaded', loadUserInfo);
+
+// ── Avatar crop ───────────────────────────────────────────────────────────────
+let _cropImg = null;
+let _cropOffX = 0, _cropOffY = 0;
+let _cropScale = 1;
+let _dragging = false, _lastX = 0, _lastY = 0;
+let _pinchDist = 0;
+const CROP_SIZE = 260;
+
+function onAvatarFileSelected(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    _cropImg = new Image();
+    _cropImg.onload = () => {
+      // Initial: fit the shorter dimension to CROP_SIZE
+      const shorter = Math.min(_cropImg.naturalWidth, _cropImg.naturalHeight);
+      _cropScale = CROP_SIZE / shorter;
+      _cropOffX  = (CROP_SIZE - _cropImg.naturalWidth  * _cropScale) / 2;
+      _cropOffY  = (CROP_SIZE - _cropImg.naturalHeight * _cropScale) / 2;
+      _drawCrop();
+      document.getElementById('crop-modal').classList.add('open');
+    };
+    _cropImg.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+  // Reset input so same file can be reselected
+  e.target.value = '';
+}
+
+function _drawCrop() {
+  const canvas = document.getElementById('crop-canvas');
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#1c1c1e';
+  ctx.fillRect(0, 0, CROP_SIZE, CROP_SIZE);
+  if (_cropImg) {
+    ctx.drawImage(_cropImg, _cropOffX, _cropOffY,
+                  _cropImg.naturalWidth * _cropScale,
+                  _cropImg.naturalHeight * _cropScale);
+  }
+}
+
+function _clampOffset() {
+  const w = _cropImg.naturalWidth  * _cropScale;
+  const h = _cropImg.naturalHeight * _cropScale;
+  // Keep image filling the crop square
+  if (w >= CROP_SIZE) {
+    _cropOffX = Math.min(0, Math.max(_cropOffX, CROP_SIZE - w));
+  } else {
+    _cropOffX = (CROP_SIZE - w) / 2;
+  }
+  if (h >= CROP_SIZE) {
+    _cropOffY = Math.min(0, Math.max(_cropOffY, CROP_SIZE - h));
+  } else {
+    _cropOffY = (CROP_SIZE - h) / 2;
+  }
+}
+
+// Mouse drag
+const cropWrap = () => document.getElementById('crop-wrap');
+document.addEventListener('DOMContentLoaded', () => {
+  const wrap = cropWrap();
+  wrap.addEventListener('mousedown',  e => { _dragging=true; _lastX=e.clientX; _lastY=e.clientY; e.preventDefault(); });
+  document.addEventListener('mousemove', e => {
+    if (!_dragging) return;
+    _cropOffX += e.clientX - _lastX;
+    _cropOffY += e.clientY - _lastY;
+    _lastX = e.clientX; _lastY = e.clientY;
+    _clampOffset(); _drawCrop();
+  });
+  document.addEventListener('mouseup', () => { _dragging = false; });
+
+  // Wheel zoom
+  wrap.addEventListener('wheel', e => {
+    e.preventDefault();
+    const factor = e.deltaY < 0 ? 1.07 : 0.93;
+    const cx = CROP_SIZE / 2, cy = CROP_SIZE / 2;
+    _cropOffX = cx + (_cropOffX - cx) * factor;
+    _cropOffY = cy + (_cropOffY - cy) * factor;
+    _cropScale *= factor;
+    _clampOffset(); _drawCrop();
+  }, { passive: false });
+
+  // Touch drag + pinch
+  wrap.addEventListener('touchstart', e => {
+    if (e.touches.length === 1) {
+      _dragging = true; _lastX = e.touches[0].clientX; _lastY = e.touches[0].clientY;
+    } else if (e.touches.length === 2) {
+      _dragging = false;
+      _pinchDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX,
+                              e.touches[0].clientY - e.touches[1].clientY);
+    }
+    e.preventDefault();
+  }, { passive: false });
+  wrap.addEventListener('touchmove', e => {
+    if (e.touches.length === 1 && _dragging) {
+      _cropOffX += e.touches[0].clientX - _lastX;
+      _cropOffY += e.touches[0].clientY - _lastY;
+      _lastX = e.touches[0].clientX; _lastY = e.touches[0].clientY;
+      _clampOffset(); _drawCrop();
+    } else if (e.touches.length === 2) {
+      const newDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX,
+                                 e.touches[0].clientY - e.touches[1].clientY);
+      if (_pinchDist) {
+        const factor = newDist / _pinchDist;
+        const cx = CROP_SIZE / 2, cy = CROP_SIZE / 2;
+        _cropOffX = cx + (_cropOffX - cx) * factor;
+        _cropOffY = cy + (_cropOffY - cy) * factor;
+        _cropScale *= factor;
+        _clampOffset(); _drawCrop();
+      }
+      _pinchDist = newDist;
+    }
+    e.preventDefault();
+  }, { passive: false });
+  wrap.addEventListener('touchend', () => { _dragging = false; _pinchDist = 0; });
+});
+
+function closeCropModal() {
+  document.getElementById('crop-modal').classList.remove('open');
+}
+function cropOverlayClick(e) {
+  if (e.target === document.getElementById('crop-modal')) closeCropModal();
+}
+
+async function saveCroppedAvatar() {
+  const res = document.getElementById('crop-result');
+  const btn = document.querySelector('#crop-modal .btn-primary');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    // Render the visible square to a 400×400 offscreen canvas
+    const out = document.createElement('canvas');
+    out.width = 400; out.height = 400;
+    const ctx = out.getContext('2d');
+    // The crop canvas shows the image at (offX, offY, w*scale, h*scale)
+    // We need to map from output canvas coords back to source image coords
+    const scaleOut = 400 / CROP_SIZE;
+    ctx.drawImage(document.getElementById('crop-canvas'), 0, 0, CROP_SIZE, CROP_SIZE, 0, 0, 400, 400);
+
+    const blob = await new Promise(res => out.toBlob(res, 'image/jpeg', 0.88));
+    const form = new FormData();
+    form.append('file', blob, 'avatar.jpg');
+    const r = await fetch('/api/settings/avatar', { method: 'POST', body: form });
+    const d = await r.json();
+    if (r.ok) {
+      show(res, 'ok', '✓ Photo saved');
+      // Update current avatar preview
+      const avatarImg = document.getElementById('avatar-img');
+      avatarImg.src = d.thumb_url + '&ts=' + Date.now();
+      avatarImg.style.display = 'block';
+      document.getElementById('avatar-placeholder').style.display = 'none';
+      setTimeout(closeCropModal, 800);
+    } else {
+      show(res, 'err', `✗ ${d.detail||'Error'}`);
+    }
+  } catch(e) { show(res, 'err', `✗ ${e.message}`); }
+  btn.disabled = false; btn.textContent = 'Save Photo';
+}
 </script>
 </body>
 </html>

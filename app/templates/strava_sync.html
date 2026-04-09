@@ -6,10 +6,13 @@
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif;font-size:14px;background:#1c1c1e;color:#f2f2f7;min-height:100vh}
-nav{display:flex;align-items:center;gap:1rem;padding:.65rem 1.25rem;background:#2c2c2e;border-bottom:1px solid #3a3a3c}
-.brand{font-size:1rem;font-weight:700;color:#f97316;text-decoration:none}
-nav a{color:#8e8e93;font-size:.85rem;text-decoration:none}
-nav a:hover{color:#f2f2f7}
+nav{display:flex;align-items:center;gap:0;padding:0 12px;height:44px;background:#2c2c2e;border-bottom:1px solid #3a3a3c;position:sticky;top:0;z-index:99}
+.nav-brand-name{font-size:14px;font-weight:700;color:#f97316}
+.nav-version{font-size:10px;font-weight:400;color:#8e8e93;margin-left:4px;letter-spacing:.02em}
+.nav-pages{display:flex;align-items:center;gap:2px;margin-left:14px}
+.nav-btn{padding:5px 10px;border-radius:6px;font-size:12px;font-weight:500;color:#8e8e93;background:none;border:none;cursor:pointer;white-space:nowrap;display:flex;align-items:center;text-decoration:none;height:34px}
+.nav-btn:hover{color:#f2f2f7;background:rgba(255,255,255,.06)}
+.nav-btn.nav-active{color:#fff;font-weight:700}
 .spacer{flex:1}
 .container{max-width:720px;margin:2rem auto;padding:0 1.25rem}
 .card{background:#2c2c2e;border:1px solid #3a3a3c;border-radius:12px;padding:1.5rem;margin-bottom:1rem}
@@ -92,14 +95,20 @@ p:last-child{margin-bottom:0}
 </head>
 <body>
 <nav>
-  <a href="/" class="brand">⛰ Ascent</a>
-  <a href="/activities">Activities</a>
-  <a href="/">Dashboard</a>
-  <div class="spacer"></div>
-  <a href="/settings">Settings</a>
-  <a href="/strava/disconnect" class="btn-ghost btn" style="font-size:.8rem;padding:.3rem .7rem"
-     onclick="return confirm('Disconnect Strava?')">Disconnect</a>
-  <a href="/logout" style="color:#8e8e93;font-size:.85rem;text-decoration:none">Sign out</a>
+  <div style="display:flex;align-items:center">
+    <span class="nav-brand-name">⛰ Ascent</span><span class="nav-version">{{ app_version }}</span>
+  </div>
+  <div class="nav-pages">
+    <a href="/activities" class="nav-btn">Activities</a>
+    <a href="/" class="nav-btn">Summary</a>
+    <a href="/activities" class="nav-btn" onclick="sessionStorage.setItem('openCoach','1')">Coach</a>
+    <button class="nav-btn nav-active">Sync</button>
+  </div>
+  <div style="flex:1"></div>
+  <div class="nav-pages">
+    <a href="/settings" class="nav-btn">Settings</a>
+    <a href="/logout" class="nav-btn">Sign Out</a>
+  </div>
 </nav>
 
 <div class="container">
@@ -163,6 +172,8 @@ p:last-child{margin-bottom:0}
         Start Sync
       </button>
       <button class="btn btn-ghost" onclick="window.location='/activities'">View Activities</button>
+      <div style="flex:1"></div>
+      <a href="/strava/disconnect" class="btn btn-ghost" style="font-weight:700" onclick="return confirm('Disconnect Strava?')">Disconnect</a>
     </div>
 
     {% else %}

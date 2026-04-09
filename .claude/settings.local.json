@@ -14,7 +14,18 @@
       "Bash(fly ssh:*)",
       "Bash(fly status:*)",
       "Bash(fly machine:*)",
-      "Bash(ASCENT_DB_PATH=/Users/rob/Desktop/Ascent.ascentdb python3 scripts/delete_ai_summaries_for_user.py Kelly)"
+      "Bash(ASCENT_DB_PATH=/Users/rob/Desktop/Ascent.ascentdb python3 scripts/delete_ai_summaries_for_user.py Kelly)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8000/favicon.ico)",
+      "Bash(ls /Volumes/Lion2/projects/ascent-web/venv*/bin/uvicorn)",
+      "Bash(venv_arm64/bin/uvicorn app.main:app --port 8000)",
+      "Bash(curl -s http://localhost:8000/ -c /tmp/cookies.txt -b /tmp/cookies.txt)",
+      "Bash(ipconfig getifaddr:*)",
+      "Bash(pkill -f \"uvicorn app.main:app\")",
+      "Bash(venv_arm64/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://127.0.0.1:8000/favicon.ico)",
+      "Bash(python:*)",
+      "Bash(pip install:*)",
+      "Bash(pip3 install:*)"
     ]
   }
 }

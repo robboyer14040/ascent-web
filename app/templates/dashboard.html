@@ -9,17 +9,19 @@
 :root{--bg:#1c1c1e;--surface:#2c2c2e;--surface2:#3a3a3c;--border:#3a3a3c;--border2:#48484a;--text:#f2f2f7;--muted:#8e8e93;--accent:#f97316;--accent-blue:#3b82f6;--green:#30d158}
 html,body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif;font-size:14px}
 a{color:var(--accent);text-decoration:none}
-nav{display:flex;align-items:center;gap:1rem;padding:.6rem 1.25rem;background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:99}
-.brand{font-size:1rem;font-weight:700;color:var(--accent)}.brand:hover{text-decoration:none}
-nav a{color:var(--muted);font-size:.85rem}nav a:hover{color:var(--text);text-decoration:none}
+nav{display:flex;align-items:center;gap:0;padding:0 12px;height:44px;background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:99}
+.nav-brand-name{font-size:14px;font-weight:700;color:var(--accent)}
+.nav-version{font-size:10px;font-weight:400;color:var(--muted);margin-left:4px;letter-spacing:.02em}
+.nav-pages{display:flex;align-items:center;gap:2px;margin-left:14px}
+.nav-btn{padding:5px 10px;border-radius:6px;font-size:12px;font-weight:500;color:var(--muted);background:none;border:none;cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:4px;text-decoration:none;height:34px}
+.nav-btn:hover{color:var(--text);background:rgba(255,255,255,.06)}
+.nav-btn.nav-active{color:#fff;font-weight:700}
 .spacer{flex:1}
-.strava-btn{display:flex;align-items:center;gap:.35rem;background:#fc4c02;color:#fff;padding:.3rem .75rem;border-radius:6px;font-size:.8rem;font-weight:600}
-.strava-btn:hover{background:#e04402;text-decoration:none}
 .container{max-width:1200px;margin:0 auto;padding:1.5rem}
 .stat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:.75rem;margin-bottom:1.5rem}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.1rem}
 .card-label{font-size:.7rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:.3rem}
-.card-val{font-size:1.7rem;font-weight:700}
+.card-val{font-size:1.4rem;font-weight:700}
 .card-sub{font-size:.75rem;color:var(--muted);margin-top:.2rem}
 .section{margin-bottom:1.5rem}
 .section-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;gap:.75rem;flex-wrap:wrap}
@@ -46,8 +48,8 @@ tr:hover td{background:rgba(255,255,255,.03)}
 .period-btn{background:none;border:none;color:var(--muted);font-size:.8rem;font-weight:500;padding:.25rem .7rem;border-radius:5px;cursor:pointer;transition:background .15s,color .15s}
 .period-btn.active{background:var(--surface);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.3)}
 /* period stats strip */
-.period-stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:.6rem;margin-bottom:.75rem}
-.ps-card{background:var(--surface2);border-radius:8px;padding:.7rem .9rem}
+.period-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(105px,1fr));gap:.5rem}
+.ps-card{background:var(--surface2);border-radius:8px;padding:.6rem .7rem}
 .ps-label{font-size:.65rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:.2rem}
 .ps-val{font-size:1.2rem;font-weight:700}
 .ps-sub{font-size:.7rem;color:var(--muted);margin-top:.1rem}
@@ -62,14 +64,20 @@ select.filter-sel{background:var(--surface2);border:1px solid var(--border2);col
 </head>
 <body>
 <nav>
-  <a href="/" class="brand">⛰ Ascent</a>
-  <a href="/activities">Activities</a>
+  <div style="display:flex;align-items:center">
+    <span class="nav-brand-name">⛰ Ascent</span><span class="nav-version">{{ app_version }}</span>
+  </div>
+  <div class="nav-pages">
+    <a href="/activities" class="nav-btn">Activities</a>
+    <button class="nav-btn nav-active">Summary</button>
+    <a href="/activities" class="nav-btn" onclick="sessionStorage.setItem('openCoach','1')">Coach</a>
+    <a href="/strava/sync" class="nav-btn">Sync</a>
+  </div>
   <div class="spacer"></div>
-  <a href="/strava/sync" class="strava-btn">
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169"/></svg>
-    Strava
-  </a>
-  <a href="/logout" style="color:#8e8e93;font-size:.85rem;text-decoration:none">Sign out</a>
+  <div class="nav-pages">
+    <a href="/settings" class="nav-btn">Settings</a>
+    <button class="nav-btn" onclick="window.location='/logout'">Sign Out</button>
+  </div>
 </nav>
 
 <div class="container">
@@ -80,12 +88,12 @@ select.filter-sel{background:var(--surface2);border:1px solid var(--border2);col
   <!-- All-time stats -->
   <div class="stat-grid">
     <div class="card"><div class="card-label">Activities</div><div class="card-val">{{ stats.get("total_activities",0)|int }}</div></div>
-    <div class="card"><div class="card-label">Distance</div><div class="card-val">{{ stats.get("total_distance_mi",0) }}</div><div class="card-sub">miles · {{ stats.get("total_distance_km",0) }} km</div></div>
+    <div class="card" id="stat-distance" data-mi="{{ stats.get('total_distance_mi',0) }}" data-km="{{ stats.get('total_distance_km',0) }}"><div class="card-label">Distance</div><div class="card-val">{{ stats.get("total_distance_mi",0) }}</div><div class="card-sub">{{ stats.get("total_distance_km",0) }} km</div></div>
     <div class="card"><div class="card-label">Total Time</div><div class="card-val" style="font-size:1.3rem">{{ stats.get("total_active_hms","—") }}</div></div>
-    <div class="card"><div class="card-label">Climbing</div><div class="card-val">{{ "{:,}".format(stats.get("total_climb_ft",0)|int) }}</div><div class="card-sub">feet · {{ "{:,}".format(stats.get("total_climb_m",0)|int) }} m</div></div>
+    <div class="card" id="stat-climbing" data-ft="{{ stats.get('total_climb_ft',0)|int }}" data-m="{{ stats.get('total_climb_m',0)|int }}"><div class="card-label">Climbing</div><div class="card-val">{{ "{:,}".format(stats.get("total_climb_ft",0)|int) }}</div><div class="card-sub">{{ "{:,}".format(stats.get("total_climb_m",0)|int) }} m</div></div>
     <div class="card"><div class="card-label">Avg Heart Rate</div><div class="card-val">{{ stats.get("avg_heartrate",0)|int }}</div><div class="card-sub">bpm</div></div>
-    <div class="card"><div class="card-label">Longest</div><div class="card-val">{{ stats.get("longest_mi",0) }}</div><div class="card-sub">miles · {{ "%.1f"|format(stats.get("longest_mi",0) * 1.60934) }} km</div></div>
-    <div class="card"><div class="card-label">Best Climb</div><div class="card-val">{{ "{:,}".format(stats.get("most_climb_ft",0)|int) }}</div><div class="card-sub">feet · {{ "{:,}".format((stats.get("most_climb_ft",0) / 3.28084)|int) }} m</div></div>
+    <div class="card" id="stat-longest" data-mi="{{ stats.get('longest_mi',0) }}"><div class="card-label">Longest</div><div class="card-val">{{ stats.get("longest_mi",0) }}</div><div class="card-sub">{{ "%.1f"|format(stats.get("longest_mi",0) * 1.60934) }} km</div></div>
+    <div class="card" id="stat-bestclimb" data-ft="{{ stats.get('most_climb_ft',0)|int }}"><div class="card-label">Best Climb</div><div class="card-val">{{ "{:,}".format(stats.get("most_climb_ft",0)|int) }}</div><div class="card-sub">{{ "{:,}".format((stats.get("most_climb_ft",0) / 3.28084)|int) }} m</div></div>
   </div>
 
   <!-- Chart section with period toggle -->
@@ -114,10 +122,9 @@ select.filter-sel{background:var(--surface2);border:1px solid var(--border2);col
       </div>
     </div>
 
-    <!-- Period summary stats -->
-    <div class="period-stats" id="periodStats"></div>
-
     <div class="chart-card">
+      <!-- Period summary stats -->
+      <div class="period-stats" id="periodStats" style="margin-bottom:.75rem"></div>
       <div class="chart-wrap"><canvas id="mainChart"></canvas></div>
     </div>
   </div>
@@ -177,6 +184,40 @@ let currentData = [];
 
 // ── UI prefs persistence ──────────────────────────────────────────────────────
 const _uiPrefs = Object.assign({}, {{ ui_prefs | tojson | safe }});
+
+function updateSummaryCards() {
+  const um = _uiPrefs?.use_metric;
+  const fmtN = n => parseFloat(n||0).toLocaleString(undefined, {maximumFractionDigits:1});
+  const fmtI = n => Math.round(n||0).toLocaleString();
+  const u = unit => `<span style="font-size:.75rem;font-weight:400;color:var(--muted)"> ${unit}</span>`;
+
+  const distEl = document.getElementById('stat-distance');
+  if (distEl) {
+    const mi = parseFloat(distEl.dataset.mi||0), km = parseFloat(distEl.dataset.km||0);
+    distEl.querySelector('.card-val').innerHTML = um ? `${fmtN(km)}${u('km')}` : `${fmtN(mi)}${u('mi')}`;
+    distEl.querySelector('.card-sub').textContent = um ? `${fmtN(mi)} mi` : `${fmtN(km)} km`;
+  }
+  const climbEl = document.getElementById('stat-climbing');
+  if (climbEl) {
+    const ft = parseFloat(climbEl.dataset.ft||0), m = parseFloat(climbEl.dataset.m||0);
+    climbEl.querySelector('.card-val').innerHTML = um ? `${fmtI(m)}${u('m')}` : `${fmtI(ft)}${u('ft')}`;
+    climbEl.querySelector('.card-sub').textContent = um ? `${fmtI(ft)} ft` : `${fmtI(m)} m`;
+  }
+  const longestEl = document.getElementById('stat-longest');
+  if (longestEl) {
+    const mi = parseFloat(longestEl.dataset.mi||0), km = mi * 1.60934;
+    longestEl.querySelector('.card-val').innerHTML = um ? `${km.toFixed(1)}${u('km')}` : `${mi.toFixed(1)}${u('mi')}`;
+    longestEl.querySelector('.card-sub').textContent = um ? `${mi.toFixed(1)} mi` : `${km.toFixed(1)} km`;
+  }
+  const bestEl = document.getElementById('stat-bestclimb');
+  if (bestEl) {
+    const ft = parseFloat(bestEl.dataset.ft||0), m = ft / 3.28084;
+    bestEl.querySelector('.card-val').innerHTML = um ? `${fmtI(m)}${u('m')}` : `${fmtI(ft)}${u('ft')}`;
+    bestEl.querySelector('.card-sub').textContent = um ? `${fmtI(ft)} ft` : `${fmtI(m)} m`;
+  }
+}
+updateSummaryCards();
+
 let _uiPrefsSaveTimer = null;
 function _uiPrefsGet(key, fallback) {
   if (_uiPrefs[key] !== undefined && _uiPrefs[key] !== null) return _uiPrefs[key];
@@ -338,10 +379,12 @@ async function loadChart(save = true) {
     buildChart(data.map(d => dayLabel(d.day)), data);
 
   } else if (currentPeriod === 'month') {
-    titleBase = 'Distance & Climb by Week';
-    const r = await fetch(`/api/stats/weekly${getFilterParams()}`);
+    titleBase = 'Distance & Climb by Day';
+    const year  = selVal('yearSel')  || new Date().getFullYear();
+    const month = selVal('monthSel') || (new Date().getMonth() + 1);
+    const r = await fetch(`/api/stats/daily-month?year=${year}&month=${month}`);
     data = await r.json();
-    buildChart(data.map(d => weekLabel(d.week)), data);
+    buildChart(data.map(d => dayLabel(d.day)), data);
 
   } else {
     const year = selVal('yearSel');
@@ -374,11 +417,11 @@ function updatePeriodStats(data) {
   const totalDist  = data.reduce((s, d) => s + (d.dist_mi  || 0), 0);
   const totalClimb = data.reduce((s, d) => s + (d.climb_ft || 0), 0);
   const totalH     = data.reduce((s, d) => s + (d.active_h || 0), 0);
-  const totalActs  = data.reduce((s, d) => s + (d.count    || 0), 0);
+  const totalActs       = data.reduce((s, d) => s + (d.count       || 0), 0);
+  const totalActiveDays = data.reduce((s, d) => s + (d.active_days || 0), 0);
   const periods    = data.length;
 
-  const windowLabel = {week: 'This Week', month: 'This Month', year: selVal('yearSel') ? 'This Year' : 'All Time'}[currentPeriod];
-  const avgLabel    = {week: 'Avg / day',  month: 'Avg / wk',   year: 'Avg / mo'}[currentPeriod];
+  const avgLabel = {week: 'Avg / day', month: 'Avg / day', year: 'Avg / mo'}[currentPeriod];
   const avgDist  = totalDist  / periods;
   const avgClimb = totalClimb / periods;
 
@@ -393,26 +436,46 @@ function updatePeriodStats(data) {
   const avgHr    = hrCnt > 0 ? Math.round(hrSum / hrCnt) : 0;
   const avgPower = pwCnt > 0 ? Math.round(pwSum / pwCnt) : 0;
 
+  const um = _uiPrefs?.use_metric;
+  const totalKm   = totalDist  * 1.60934;
+  const avgKm     = avgDist    * 1.60934;
+  const totalM    = totalClimb / 3.28084;
+  const avgClimbM = avgClimb   / 3.28084;
+  const sub = (v, u) => `<span style="font-size:.8rem;font-weight:400;color:var(--muted)">${v} ${u}</span>`;
+
+  const distVal  = um ? `${totalKm.toFixed(1)} ${sub('','km').replace('  ',' ')}` : `${totalDist.toFixed(1)} ${sub('','mi').replace('  ',' ')}`;
+  // helpers: primary bold value+unit, secondary muted value+unit
+  const dPrimVal  = um ? totalKm.toFixed(1)          : totalDist.toFixed(1);
+  const dPrimU    = um ? 'km'                         : 'mi';
+  const dSecVal   = um ? totalDist.toFixed(1)         : totalKm.toFixed(1);
+  const dSecU     = um ? 'mi'                         : 'km';
+  const dAvgPrimV = um ? avgKm.toFixed(1)             : avgDist.toFixed(1);
+  const dAvgSecV  = um ? avgDist.toFixed(1)           : avgKm.toFixed(1);
+
+  const cPrimVal  = um ? fmt(Math.round(totalM))      : fmt(Math.round(totalClimb));
+  const cPrimU    = um ? 'm'                          : 'ft';
+  const cSecVal   = um ? fmt(Math.round(totalClimb))  : fmt(Math.round(totalM));
+  const cSecU     = um ? 'ft'                         : 'm';
+  const cAvgPrimV = um ? fmt(Math.round(avgClimbM))   : fmt(Math.round(avgClimb));
+  const cAvgSecV  = um ? fmt(Math.round(avgClimb))    : fmt(Math.round(avgClimbM));
+  const cAvgSecU  = um ? 'ft'                         : 'm';
+  const cAvgPrimU = um ? 'm'                          : 'ft';
+
+  const maxClimbPrim = um ? fmt(Math.round(maxClimb/3.28084)) : fmt(maxClimb);
+  const maxClimbPrimU = um ? 'm' : 'ft';
+  const maxClimbSec  = um ? fmt(maxClimb) : fmt(Math.round(maxClimb/3.28084));
+  const maxClimbSecU = um ? 'ft' : 'm';
+
   document.getElementById('periodStats').innerHTML = `
     <div class="ps-card">
-      <div class="ps-label">${windowLabel}</div>
-      <div class="ps-val">${totalDist.toFixed(1)} <span style="font-size:.8rem;font-weight:400;color:var(--muted)">mi</span></div>
-      <div class="ps-sub">${fmt(Math.round(totalClimb))} ft climb</div>
-    </div>
-    <div class="ps-card">
-      <div class="ps-label">${avgLabel}</div>
-      <div class="ps-val">${avgDist.toFixed(1)} <span style="font-size:.8rem;font-weight:400;color:var(--muted)">mi</span></div>
-      <div class="ps-sub">${fmt(Math.round(avgClimb))} ft climb</div>
-    </div>
-    <div class="ps-card">
       <div class="ps-label">Total Distance</div>
-      <div class="ps-val">${totalDist.toFixed(0)} <span style="font-size:.8rem;font-weight:400;color:var(--muted)">mi</span></div>
-      <div class="ps-sub">${(totalDist*1.60934).toFixed(0)} km</div>
+      <div class="ps-val">${dPrimVal} <span style="font-size:.8rem;font-weight:400;color:var(--muted)">${dPrimU}</span></div>
+      <div class="ps-sub">${dSecVal} ${dSecU}</div>
     </div>
     <div class="ps-card">
       <div class="ps-label">Total Climb</div>
-      <div class="ps-val">${fmt(Math.round(totalClimb))} <span style="font-size:.8rem;font-weight:400;color:var(--muted)">ft</span></div>
-      <div class="ps-sub">${fmt(Math.round(totalClimb/3.28084))} m</div>
+      <div class="ps-val">${cPrimVal} <span style="font-size:.8rem;font-weight:400;color:var(--muted)">${cPrimU}</span></div>
+      <div class="ps-sub">${cSecVal} ${cSecU}</div>
     </div>
     <div class="ps-card">
       <div class="ps-label">Moving Time</div>
@@ -420,9 +483,14 @@ function updatePeriodStats(data) {
       <div class="ps-sub">${totalActs} activities</div>
     </div>
     <div class="ps-card">
+      <div class="ps-label">Active Days</div>
+      <div class="ps-val">${totalActiveDays}</div>
+      <div class="ps-sub">${totalActs} activities</div>
+    </div>
+    <div class="ps-card">
       <div class="ps-label">Max Climb</div>
-      <div class="ps-val">${maxClimb > 0 ? fmt(maxClimb) : '—'} <span style="font-size:.8rem;font-weight:400;color:var(--muted)">${maxClimb > 0 ? 'ft' : ''}</span></div>
-      <div class="ps-sub">${maxClimb > 0 ? fmt(Math.round(maxClimb/3.28084)) + ' m' : 'no climb data'}</div>
+      <div class="ps-val">${maxClimb > 0 ? maxClimbPrim : '—'} <span style="font-size:.8rem;font-weight:400;color:var(--muted)">${maxClimb > 0 ? maxClimbPrimU : ''}</span></div>
+      <div class="ps-sub">${maxClimb > 0 ? maxClimbSec + ' ' + maxClimbSecU : 'no climb data'}</div>
     </div>
     <div class="ps-card">
       <div class="ps-label">Avg Power</div>
@@ -443,24 +511,30 @@ function fmtH(h) {
   return mm ? `${hh}h ${mm}m` : `${hh}h`;
 }
 
+
 // ── Chart ─────────────────────────────────────────────────────────────────────
 function buildChart(labels, data) {
   const ctx = document.getElementById('mainChart').getContext('2d');
   if (chart) chart.destroy();
+  const useMetric = _uiPrefs?.use_metric;
+  const PC = '#f2f2f7', PF = { size: 12, weight: 'bold' }; // primary
+  const SC = '#64748b', SF = { size: 10 };                  // secondary
+  const maxMi  = Math.max(1, ...data.map(d => d.dist_mi || 0));
+  const maxKft = Math.max(0.1, ...data.map(d => (d.climb_ft || 0) / 1000));
   chart = new Chart(ctx, {
     type: 'bar',
     data: {
       labels,
       datasets: [
         {
-          label: 'Distance (mi)',
+          label: 'Distance',
           data: data.map(d => d.dist_mi),
           backgroundColor: 'rgba(249,115,22,.75)',
           borderRadius: 3,
           yAxisID: 'y',
         },
         {
-          label: 'Climb (k ft)',
+          label: 'Climb',
           data: data.map(d => ((d.climb_ft||0)/1000).toFixed(2)),
           type: 'line',
           borderColor: '#3b82f6',
@@ -476,11 +550,60 @@ function buildChart(labels, data) {
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      plugins: { legend: { labels: { color: '#94a3b8', font: { size: 11 } } } },
+      plugins: {
+        legend: { labels: { color: '#f2f2f7', font: { size: 13, weight: 'bold' }, usePointStyle: true, generateLabels: chart => chart.data.datasets.map((ds, i) => ds.label === 'Climb'
+            ? { text: ds.label, fillStyle: 'transparent', strokeStyle: ds.borderColor, lineWidth: 3, pointStyle: 'line', hidden: false, datasetIndex: i, fontColor: '#f2f2f7' }
+            : { text: ds.label, fillStyle: ds.backgroundColor, strokeStyle: ds.backgroundColor, lineWidth: 0, pointStyle: 'rect', hidden: false, datasetIndex: i, fontColor: '#f2f2f7' }
+          ) } },
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const useMetric = _uiPrefs.use_metric;
+              if (ctx.dataset.label === 'Distance') {
+                const mi = ctx.parsed.y;
+                const km = (mi * 1.60934).toFixed(1);
+                return useMetric
+                  ? ` ${km}km (${mi.toFixed(1)}mi)`
+                  : ` ${mi.toFixed(1)} (${km}km)`;
+              } else {
+                const ft = Math.round(ctx.parsed.y * 1000);
+                const m  = Math.round(ft / 3.28084);
+                return useMetric
+                  ? ` ${m.toLocaleString()} (${ft.toLocaleString()}ft)`
+                  : ` ${ft.toLocaleString()} (${m.toLocaleString()}m)`;
+              }
+            }
+          }
+        }
+      },
       scales: {
         x: { ticks: { color: '#64748b', maxRotation: 45, maxTicksLimit: 24 }, grid: { color: '#2a2d3a' } },
-        y: { ticks: { color: '#94a3b8' }, grid: { color: '#2a2d3a' }, title: { display: true, text: 'Miles', color: '#64748b', font: { size: 11 } } },
-        y2: { position: 'right', ticks: { color: '#94a3b8' }, grid: { drawOnChartArea: false }, title: { display: true, text: 'k ft', color: '#64748b', font: { size: 11 } } },
+        y: {
+          position: 'left', weight: useMetric ? 2 : 1,
+          grid: { color: '#2a2d3a' },
+          ticks: { color: useMetric ? SC : PC, font: useMetric ? SF : PF },
+          title: { display: true, text: 'mi', color: useMetric ? SC : PC, font: useMetric ? SF : PF },
+        },
+        y_km: {
+          position: 'left', weight: useMetric ? 1 : 2,
+          min: 0, suggestedMax: maxMi * 1.60934,
+          grid: { drawOnChartArea: false },
+          ticks: { color: useMetric ? PC : SC, font: useMetric ? PF : SF, callback: v => Math.round(v) },
+          title: { display: true, text: 'km', color: useMetric ? PC : SC, font: useMetric ? PF : SF },
+        },
+        y2: {
+          position: 'right', weight: useMetric ? 2 : 1,
+          grid: { drawOnChartArea: false },
+          ticks: { color: useMetric ? SC : PC, font: useMetric ? SF : PF, callback: v => (v * 1000).toLocaleString() },
+          title: { display: true, text: 'ft', color: useMetric ? SC : PC, font: useMetric ? SF : PF },
+        },
+        y_m: {
+          position: 'right', weight: useMetric ? 1 : 2,
+          min: 0, suggestedMax: maxKft * 304.8,
+          grid: { drawOnChartArea: false },
+          ticks: { color: useMetric ? PC : SC, font: useMetric ? PF : SF, callback: v => Math.round(v).toLocaleString() },
+          title: { display: true, text: 'm', color: useMetric ? PC : SC, font: useMetric ? PF : SF },
+        },
       },
       onClick: (evt, elements) => {
         if (!elements.length) return;
@@ -513,7 +636,7 @@ function buildChart(labels, data) {
         const canvas = evt.native?.target;
         if (canvas) canvas.style.cursor = elements.length ? 'pointer' : 'default';
       },
-    }
+    },
   });
 }
 
@@ -734,9 +857,9 @@ function fmtHMS(s) {
       <td style="color:var(--muted)">${fmtDate(a.start_time)}</td>
       <td><a href="/activities/${a.id}">${a.name||'(unnamed)'}</a></td>
       <td>${typeBadge(a.activity_type)}</td>
-      <td>${(a.distance_mi||0).toFixed(2)} mi</td>
+      <td>${_uiPrefs.use_metric ? ((a.distance_mi||0)*1.60934).toFixed(2)+' km' : (a.distance_mi||0).toFixed(2)+' mi'}</td>
       <td>${fmtHMS(a.active_time)}</td>
-      <td>${a.total_climb_ft?Math.round(a.total_climb_ft)+' ft':'—'}</td>
+      <td>${a.total_climb_ft ? (_uiPrefs.use_metric ? Math.round(a.total_climb_ft/3.28084)+' m' : Math.round(a.total_climb_ft)+' ft') : '—'}</td>
       <td>${a.avg_heartrate?Math.round(a.avg_heartrate)+' bpm':'—'}</td>
     </tr>`).join('');
 })();

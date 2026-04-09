@@ -6,7 +6,7 @@
 <title>Ascent</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
-*{box-sizing:border-box;margin:0;padding:0}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 :root{
   --bg:#1c1c1e;--surface:#2c2c2e;--surface2:#3a3a3c;
   --border:#3a3a3c;--border2:#48484a;
@@ -29,7 +29,7 @@ input,select{font:inherit}
 .tb-search{
   display:flex;align-items:center;gap:6px;
   background:var(--surface2);border:1px solid var(--border2);border-radius:7px;
-  padding:4px 10px;width:260px;
+  padding:4px 10px;flex:1;min-width:60px;
 }
 .tb-search input{background:none;border:none;outline:none;color:var(--text);font-size:12px;width:100%}
 .tb-search input::placeholder{color:var(--muted2)}
@@ -39,6 +39,13 @@ input,select{font:inherit}
 .tb-btn.strava{background:rgba(252,76,2,.2);border-color:rgba(252,76,2,.5);color:#fc4c02}
 .tb-btn.strava:hover{background:rgba(252,76,2,.35)}
 .tb-count{font-size:11px;color:var(--muted);padding:0 6px;white-space:nowrap}
+/* unified nav */
+.nav-brand-name{font-size:14px;font-weight:700;color:var(--accent)}
+.nav-version{font-size:10px;font-weight:400;color:var(--muted);margin-left:4px;letter-spacing:.02em}
+.nav-pages{display:flex;align-items:center;gap:2px}
+.nav-btn{padding:5px 10px;border-radius:6px;font-size:12px;font-weight:500;color:var(--muted);background:none;border:none;cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:4px;text-decoration:none}
+.nav-btn:hover{color:var(--text);background:rgba(255,255,255,.06)}
+.nav-btn.nav-active{color:#fff;font-weight:700}
 
 /* root */
 #root{display:flex;flex-direction:column;height:calc(100vh - 44px);overflow:hidden;touch-action:none;}
@@ -196,14 +203,14 @@ input,select{font:inherit}
 
 #info-panel{flex:none;height:200px;display:flex;flex-direction:column;overflow:hidden;transition:height .2s ease}
 #stats-titlebar{flex:none;height:28px;display:flex;align-items:center;padding:0 6px 0 12px;background:var(--surface2);border-bottom:1px solid var(--border);user-select:none;-webkit-user-select:none;cursor:row-resize;touch-action:none}
-#stats-title-label{flex:1;font-size:10px;font-weight:700;letter-spacing:.08em;color:var(--muted);text-transform:uppercase}
-#stats-disclose{background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;padding:0 8px;line-height:1;display:flex;align-items:center;height:28px;flex-shrink:0}
+#stats-title-label{flex:1;font-size:10px;font-weight:700;letter-spacing:.08em;color:#fff;text-transform:uppercase}
+#stats-disclose{background:none;border:none;color:#fff;font-size:14px;cursor:pointer;padding:0 8px;line-height:1;display:flex;align-items:center;height:28px;flex-shrink:0}
 #stats-disclose .arr{display:inline-block;transform:scale(2.25);transform-origin:center;transition:transform .2s}
 #stats-disclose.collapsed .arr{transform:scale(2.25) rotate(-90deg)}
 .stats-content{flex:1;display:flex;overflow:hidden;min-height:0}
 #analysis-titlebar{flex:none;height:28px;display:flex;align-items:center;padding:0 6px 0 12px;background:var(--surface2);border-bottom:1px solid var(--border);user-select:none;-webkit-user-select:none;cursor:row-resize;touch-action:none}
-#analysis-title-label{flex:1;font-size:10px;font-weight:700;letter-spacing:.08em;color:var(--muted);text-transform:uppercase}
-#analysis-disclose{background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;padding:0 8px;line-height:1;display:flex;align-items:center;height:28px;flex-shrink:0}
+#analysis-title-label{flex:1;font-size:10px;font-weight:700;letter-spacing:.08em;color:#fff;text-transform:uppercase}
+#analysis-disclose{background:none;border:none;color:#fff;font-size:14px;cursor:pointer;padding:0 8px;line-height:1;display:flex;align-items:center;height:28px;flex-shrink:0}
 #analysis-disclose .arr{display:inline-block;transform:scale(2.25);transform-origin:center;transition:transform .2s}
 #analysis-disclose.collapsed .arr{transform:scale(2.25) rotate(-90deg)}
 #info-left{flex:1;padding:12px 14px 60px 14px;overflow-y:auto;min-width:0;scrollbar-width:thin;scrollbar-color:var(--border2) transparent}
@@ -243,6 +250,8 @@ input,select{font:inherit}
 .edit-modal-label{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:3px}
 .edit-act-input{width:100%;background:var(--surface2);border:1px solid var(--border2);border-radius:6px;color:var(--text);padding:5px 8px;font-size:12.5px;font-family:inherit;outline:none;box-sizing:border-box}
 .edit-act-input:focus{border-color:#f97316}
+.edit-act-name-display{width:100%;background:var(--surface2);border:1px solid var(--border2);border-radius:6px;color:var(--text);padding:5px 8px;font-size:12.5px;font-family:inherit;box-sizing:border-box;cursor:text;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:28px;line-height:1.5}
+.edit-act-name-display:hover{border-color:#636366}
 textarea.edit-act-input{resize:vertical;min-height:52px;line-height:1.4}
 select.edit-act-input{appearance:none;-webkit-appearance:none;cursor:pointer;padding-right:24px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%23888' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center}
 .edit-vis-row{display:flex;gap:5px;margin-top:3px}
@@ -253,6 +262,18 @@ select.edit-act-input{appearance:none;-webkit-appearance:none;cursor:pointer;pad
 .edit-save-btn:hover{background:#ea6c0a}
 .edit-cancel-btn{font-size:11px;font-weight:600;padding:4px 10px;border-radius:4px;border:1px solid var(--border2);background:none;color:var(--muted);cursor:pointer;font-family:inherit}
 .edit-cancel-btn:hover{color:var(--text);border-color:var(--text)}
+.rpe-field{margin-bottom:.75rem}
+.rpe-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+.rpe-label{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+.rpe-val-label{font-size:11px;font-weight:600;color:var(--text)}
+.rpe-clear-btn{font-size:11px;color:#60a5fa;background:none;border:none;cursor:pointer;padding:0;line-height:1}
+.rpe-clear-btn:hover{text-decoration:underline}
+#rpe-slider{-webkit-appearance:none;width:100%;height:6px;border-radius:3px;outline:none;cursor:pointer;background:linear-gradient(to right,#22c55e,#eab308,#ef4444)}
+#rpe-slider::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:24px;border-radius:4px;background:#2c2c2e;border:2px solid #636366;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.4)}
+#rpe-slider::-moz-range-thumb{width:20px;height:24px;border-radius:4px;background:#2c2c2e;border:2px solid #636366;cursor:pointer}
+#rpe-slider.rpe-unset{background:#48484a}
+.rpe-ticks{display:flex;justify-content:space-between;margin-top:4px}
+.rpe-tick{font-size:10px;color:var(--muted)}
 
 .stats-row{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
 .stats-grid{display:grid;grid-template-columns:repeat(6,80px);gap:6px;align-content:start;flex-shrink:0}
@@ -289,6 +310,9 @@ select.edit-act-input{appearance:none;-webkit-appearance:none;cursor:pointer;pad
   align-items:center;justify-content:center;backdrop-filter:blur(3px);
 }
 #coach-overlay.open{display:flex}
+#coach-overlay.page-mode{background:none;backdrop-filter:none;inset:44px 0 0 0;align-items:stretch;justify-content:stretch;z-index:100}
+#coach-overlay.page-mode #coach-panel{width:100%;height:100%;border-radius:0;border:none;box-shadow:none}
+#coach-overlay.page-mode #coach-close-btn{display:none}
 #coach-panel{
   background:var(--surface);border:1px solid var(--border2);border-radius:14px;
   width:min(860px,96vw);height:min(780px,92vh);
@@ -334,12 +358,30 @@ select.edit-act-input{appearance:none;-webkit-appearance:none;cursor:pointer;pad
 @media (pointer:coarse){
   #compare-panel{
     resize:none;
-    width:96vw !important;
-    height:92vh !important;
+    width:96vw;
+    height:92vh;
     border-radius:10px;
   }
 }
-#cmp-corner-handle{ display:none; }
+#cmp-corner-handle{
+  display:none;position:absolute;bottom:0;right:0;
+  width:38px;height:38px;z-index:20;touch-action:none;cursor:nwse-resize;
+  /* 3×3 grip dots */
+  background:
+    radial-gradient(circle,#8e8e93 1.8px,transparent 1.8px) 8px 8px/8px 8px,
+    radial-gradient(circle,#8e8e93 1.8px,transparent 1.8px) 16px 8px/8px 8px,
+    radial-gradient(circle,#8e8e93 1.8px,transparent 1.8px) 24px 8px/8px 8px,
+    radial-gradient(circle,#8e8e93 1.8px,transparent 1.8px) 8px 16px/8px 8px,
+    radial-gradient(circle,#8e8e93 1.8px,transparent 1.8px) 16px 16px/8px 8px,
+    radial-gradient(circle,#8e8e93 1.8px,transparent 1.8px) 24px 16px/8px 8px,
+    radial-gradient(circle,#8e8e93 1.8px,transparent 1.8px) 8px 24px/8px 8px,
+    radial-gradient(circle,#8e8e93 1.8px,transparent 1.8px) 16px 24px/8px 8px,
+    radial-gradient(circle,#8e8e93 1.8px,transparent 1.8px) 24px 24px/8px 8px;
+  background-repeat:no-repeat;opacity:.55;
+}
+@media (pointer:coarse){
+  #cmp-corner-handle{ display:block; }
+}
 #cmp-maps-handle{
   flex-shrink:0;height:5px;cursor:row-resize;background:transparent;
   border-top:1px solid var(--border);transition:background .15s;
@@ -347,11 +389,12 @@ select.edit-act-input{appearance:none;-webkit-appearance:none;cursor:pointer;pad
 }
 #cmp-maps-handle:hover,#cmp-maps-handle.dragging{background:#f97316;opacity:.6}
 @media (pointer:coarse){
-  /* On touch: panel is always full-size, hide resize handle */
-  #cmp-maps-handle{ display:none; }
-  /* Give maps and profile a fixed split: maps 55%, profile rest */
-  #compare-maps{ flex:0 0 55% !important;height:55% !important; }
-  #compare-profile{ flex:1; }
+  /* Make the inner split handle taller and easier to grab on touch */
+  #cmp-maps-handle{ display:block !important;height:20px !important;border-top:none; }
+  #cmp-maps-handle::before{
+    content:'';display:block;margin:8px auto 0;
+    width:36px;height:4px;border-radius:2px;background:#8e8e93;opacity:.5;
+  }
 }
 #compare-header{
   display:flex;align-items:center;gap:8px;padding:12px 16px 10px;
@@ -384,10 +427,10 @@ select.edit-act-input{appearance:none;-webkit-appearance:none;cursor:pointer;pad
 #cmp-time{font-family:"SF Mono","Fira Code",monospace;font-size:14px;font-weight:600;color:#f2f2f7;min-width:64px}
 #cmp-scrub{flex:1;accent-color:#f97316}
 .cmp-t-btn{
-  background:var(--surface2);border:1px solid var(--border2);color:var(--text);
-  border-radius:6px;padding:3px 8px;font-size:14px;cursor:pointer;line-height:1;
+  background:#2c2c2e;border:none;color:#f2f2f7;border-radius:6px;
+  width:30px;height:30px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .15s;
 }
-.cmp-t-btn:hover{background:var(--border2)}
+.cmp-t-btn:hover{background:#48484a}
 #compare-profile{
   flex-shrink:0;height:90px;background:var(--bg);border-top:1px solid var(--border);
   position:relative;
@@ -676,7 +719,7 @@ select.edit-act-input{appearance:none;-webkit-appearance:none;cursor:pointer;pad
   .t-btn{ width:38px; height:38px; font-size:16px; }
   #transport-bar{ padding:8px 12px calc(8px + env(safe-area-inset-bottom)) 12px; }
 }
-.sp-tb-btn{background:none;border:none;color:var(--muted);cursor:pointer;
+.sp-tb-btn{background:none;border:none;color:#fff;cursor:pointer;
   padding:2px 5px;border-radius:4px;font-size:13px;line-height:1}
 .sp-tb-btn:hover{background:var(--surface2);color:var(--text)}
 /* auto-sync toast */
@@ -697,6 +740,167 @@ select.edit-act-input{appearance:none;-webkit-appearance:none;cursor:pointer;pad
   animation:toastSpin .7s linear infinite;flex-shrink:0;
 }
 @keyframes toastSpin{to{transform:rotate(360deg)}}
+
+/* ── MOBILE CHROME — hidden on desktop by default ─────────────────────────── */
+#mob-header,#mob-detail-screen,#mob-global-nav{display:none}
+/* Tab panel base: always defined globally so landscape (>767px wide) can use them */
+.mob-tab-panel{flex:1;min-height:0;overflow:hidden;display:none;flex-direction:column}
+.mob-tab-panel.active{display:flex}
+
+/* ── SHARED PHONE STYLES — applies to BOTH portrait (≤767px) and landscape phones ── */
+/* Combined query: portrait phones OR landscape phones (short screens) */
+@media(max-width:767px),(max-height:500px) and (orientation:landscape){
+  #toolbar{display:none!important}
+  /* Elements that JS moves into tabs — hide originals; restored by parent panel */
+  #top-row>#detail,#root>#info-panel,#root>#chart-wrap,#root>#transport-bar{display:none!important}
+  /* Restore display once JS has moved them into a tab panel */
+  .mob-tab-panel #detail{display:flex!important;flex:1;flex-direction:column;overflow:hidden;min-height:0;width:100%}
+  .mob-tab-panel #map-wrap{flex:1;min-height:0}
+  .mob-tab-panel #transport-bar{display:flex!important;flex-shrink:0;padding:8px 10px calc(4px + env(safe-area-inset-bottom)) 10px}
+  .mob-tab-panel #info-panel{display:flex!important;flex-direction:column;height:auto!important;flex:none;overflow:visible}
+  .mob-tab-panel #chart-wrap{display:flex!important;flex-direction:column;height:auto!important;flex:1;overflow:hidden}
+  .mob-tab-panel #info-right{display:flex!important;width:100%!important;flex:1;background:#111}
+  /* Info tab */
+  #mob-tab-info{overflow-y:auto;-webkit-overflow-scrolling:touch}
+  #mob-tab-info #stats-titlebar{display:none!important}
+  #mob-tab-info .stats-content{flex-direction:column!important;overflow:visible!important;height:auto!important;flex:none!important}
+  #mob-tab-info #info-left{overflow:visible!important;padding:12px 14px calc(20px + env(safe-area-inset-bottom)) 14px!important;flex:none}
+  #mob-tab-info #photo-drag-handle{display:none!important}
+  .stats-grid{grid-template-columns:repeat(auto-fill,minmax(82px,1fr))!important;width:100%!important}
+  .sc-val{font-size:15px!important}
+  /* Analysis tab */
+  #mob-tab-analysis #analysis-titlebar{cursor:default!important;touch-action:auto!important}
+  #mob-tab-analysis #analysis-disclose{display:none!important}
+  #mob-tab-analysis #chart-toolbar{display:flex!important;padding:4px 8px 2px!important}
+  #mob-tab-analysis #elev-zoom-bar{display:flex!important}
+  #mob-tab-analysis .sp-tb-btn{min-height:36px;font-size:16px;padding:4px 10px}
+  .zones-btn{min-height:36px!important;padding:4px 12px!important;font-size:13px!important}
+  .elev-zoom-btn{min-height:36px!important;padding:4px 10px!important}
+  /* Photos tab */
+  #mob-tab-photos #info-right{width:100%!important;flex:1;background:#111;display:flex!important}
+  /* Detail tab bar */
+  #mob-detail-tabbar{flex-shrink:0;display:flex;align-items:stretch;background:var(--surface);border-top:1px solid var(--border);height:58px;padding-bottom:env(safe-area-inset-bottom)}
+  .mob-tab-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:4px;font-size:10px;font-weight:500;letter-spacing:.02em;text-transform:uppercase;color:var(--muted);background:none;border:none;cursor:pointer}
+  .mob-tab-icon{font-size:22px;line-height:1.2}
+  .mob-tab-btn.active{color:var(--accent)}
+  /* Touch sizing */
+  .drag-handle,#photo-drag-handle{display:none!important}
+  input,select,textarea{font-size:16px!important}
+  .edit-save-btn,.edit-cancel-btn{min-height:44px!important;padding:10px 16px!important;font-size:14px!important}
+  .dcb-btns button{min-height:44px!important;padding:10px 16px!important;font-size:14px!important}
+  #coach-close-btn,#zones-close-btn,#compare-close-btn{min-width:44px;min-height:44px}
+  #coach-input-bar{padding:10px 12px}
+  #coach-send-btn{height:44px!important}
+}
+
+/* ── PORTRAIT PHONE ONLY (≤767px wide) ───────────────────────────────────── */
+@media(max-width:767px){
+  #root{position:fixed!important;top:52px!important;left:0;right:0;bottom:58px!important;height:auto!important;overflow:hidden}
+  #top-row{display:block!important;width:100%;height:100%}
+  #sidebar{width:100%!important;max-width:none!important;min-width:0!important;height:100%;border-right:none}
+  #resize-handle{display:none!important}
+  /* Mobile header */
+  #mob-header{display:flex;position:fixed;top:0;left:0;right:0;height:52px;z-index:300;background:var(--surface);border-bottom:1px solid var(--border);align-items:center;padding:0 8px 0 4px;gap:4px}
+  #mob-back-btn{display:none;align-items:center;gap:2px;padding:4px 6px;border-radius:8px;color:var(--accent);background:none;border:none;font-size:13px;font-weight:600;min-width:60px;min-height:44px;cursor:pointer;flex-shrink:0}
+  #mob-back-btn span:first-child{font-size:26px;line-height:1;margin-top:-2px}
+  #mob-header-title{font-size:16px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;padding:0 4px}
+  .mob-hdr-btn{display:flex;align-items:center;justify-content:center;min-width:44px;min-height:44px;font-size:22px;border-radius:8px;color:var(--text);background:none;border:none;text-decoration:none;cursor:pointer;flex-shrink:0}
+  .mob-hdr-btn:hover{background:var(--surface2)}
+  /* Global nav */
+  #mob-global-nav{display:flex;position:fixed;bottom:0;left:0;right:0;height:58px;z-index:300;background:var(--surface);border-top:1px solid var(--border);align-items:stretch;padding-bottom:env(safe-area-inset-bottom)}
+  body.mob-detail-active #mob-global-nav{display:none}
+  body.mob-detail-active #mob-header-version{display:none}
+  body.mob-detail-active #mob-user-btn{display:none!important}
+  .mob-nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:4px;font-size:10px;font-weight:500;letter-spacing:.02em;text-transform:uppercase;color:var(--muted);background:none;border:none;cursor:pointer;text-decoration:none}
+  .mob-nav-btn>span:first-child{font-size:22px;line-height:1.2}
+  .mob-nav-btn.active{color:var(--accent)}
+  /* Detail screen: slides in from right */
+  #mob-detail-screen{display:flex;flex-direction:column;position:fixed;top:52px;left:0;right:0;bottom:0;z-index:200;background:var(--bg);transform:translateX(100%);transition:transform .3s cubic-bezier(.4,0,.2,1);overflow:hidden}
+  #mob-detail-screen.active{transform:translateX(0)}
+  /* Transport bar larger buttons */
+  .t-btn{width:44px!important;height:44px!important;font-size:18px!important}
+  #anim-stats{display:none!important}
+  /* List row touch sizing */
+  #filter-bar select,#filter-bar button{min-height:38px!important;font-size:14px!important}
+  .act-row{height:46px}
+  .ac{font-size:13px}.ac-date{font-size:12px}.ac-num{font-size:13px}
+  #select-mode-bar{padding:8px 12px!important}
+}
+
+/* ── LANDSCAPE PHONE (height ≤500px) ─────────────────────────────────────── */
+@media(max-height:500px) and (orientation:landscape){
+  #root{position:fixed!important;inset:0!important;height:100%!important;display:flex!important;flex-direction:row!important;overflow:hidden}
+  /* Left: sidebar + resize handle */
+  #top-row{display:flex!important;flex-direction:row!important;flex:none!important;height:100%;overflow:hidden}
+  #sidebar{width:260px;min-width:160px;max-width:55vw;height:100%;border-right:1px solid var(--border)}
+  #resize-handle{display:flex!important}
+  /* Right: detail screen as flex sibling — column so tabs stack vertically */
+  #mob-detail-screen{position:static!important;transform:none!important;transition:none!important;flex:1!important;display:flex!important;flex-direction:column!important;min-width:0;height:100%}
+  /* Hide portrait-only chrome */
+  #mob-header,#mob-global-nav{display:none!important}
+  /* Compact tab bar for landscape */
+  #mob-detail-tabbar{height:40px!important;padding-bottom:env(safe-area-inset-bottom)}
+  .mob-tab-btn{flex-direction:row!important;gap:5px!important;font-size:11px!important}
+  .mob-tab-icon{font-size:16px!important}
+  /* Compact transport */
+  #mob-tab-map #transport-bar{padding:4px 8px calc(2px + env(safe-area-inset-bottom)) 8px!important}
+  .t-btn{width:36px!important;height:36px!important;font-size:16px!important}
+  #t-time{font-size:13px!important}
+  #anim-stats{display:none!important}
+  /* Compact list rows */
+  #filter-bar select,#filter-bar button{min-height:34px!important}
+  .act-row{height:38px!important}
+}
+
+/* ── Compare panel on phones ─────────────────────────────────────────────── */
+/* shared portrait + landscape phone fixes */
+@media (max-width:767px),(max-height:500px) and (orientation:landscape){
+  /* Panel must fit the *small* viewport (browser chrome visible) so transport bar is never clipped */
+  #compare-panel{
+    width:100vw!important;
+    height:100svh!important;
+    max-height:100svh!important;
+    border-radius:0!important;
+    min-height:0!important;
+  }
+  #compare-overlay{
+    align-items:flex-start!important;
+    justify-content:flex-start!important;
+  }
+  /* Body scrolls vertically so legend is always reachable */
+  #compare-body{
+    overflow-y:auto!important;
+    overflow-x:hidden!important;
+  }
+  /* Maps: fixed height instead of flex 55% so legend has room */
+  #compare-maps{
+    flex:0 0 auto!important;
+    height:clamp(140px,38svh,300px)!important;
+  }
+  /* Profile: fixed height */
+  #compare-profile{
+    flex:0 0 70px!important;
+    height:70px!important;
+  }
+  /* Legend: never clip, scroll if many entries */
+  #compare-legend{
+    overflow-y:auto;
+    max-height:40svh;
+  }
+}
+/* Landscape phones: tighter heights since viewport is short */
+@media (max-height:500px) and (orientation:landscape){
+  #compare-maps{
+    height:clamp(100px,42svh,200px)!important;
+  }
+  #compare-profile{
+    flex:0 0 50px!important;
+    height:50px!important;
+  }
+  #compare-legend{
+    max-height:30svh;
+  }
+}
 </style>
 </head>
 <body>
@@ -718,7 +922,8 @@ select.edit-act-input{appearance:none;-webkit-appearance:none;cursor:pointer;pad
         <strong style="color:var(--text)">✨ AI Title Suggestion</strong> uses Anthropic Claude to generate a witty title based on your activity stats.<br>
         Requires an Anthropic API key — add yours in <strong>Settings → Anthropic API Key</strong>.
       </div>
-      <input id="edit-act-name" type="text" class="edit-act-input">
+      <div id="edit-act-name-display" class="edit-act-name-display" onclick="activateTitleEdit()" title="Click to edit title"></div>
+      <input id="edit-act-name" type="text" class="edit-act-input" style="display:none" onblur="deactivateTitleEdit()">
     </div>
     <div class="edit-modal-field">
       <div class="edit-modal-label">Description</div>
@@ -734,6 +939,19 @@ select.edit-act-input{appearance:none;-webkit-appearance:none;cursor:pointer;pad
         <select id="edit-act-gear" class="edit-act-input"><option value="__keep__">Loading…</option></select>
       </div>
     </div>
+    <div class="rpe-field">
+      <div class="rpe-header">
+        <span class="rpe-label">Perceived Exertion</span>
+        <span id="rpe-val-label" class="rpe-val-label"></span>
+        <button class="rpe-clear-btn" onclick="clearRpe()">Clear Entry</button>
+      </div>
+      <input type="range" id="rpe-slider" min="1" max="10" step="1" class="rpe-unset" oninput="onRpeInput(this.value)">
+      <div class="rpe-ticks">
+        <span class="rpe-tick">Easy</span>
+        <span class="rpe-tick">Moderate</span>
+        <span class="rpe-tick">Max Effort</span>
+      </div>
+    </div>
     <div style="display:flex;gap:8px;align-items:center;margin-top:1rem">
       <button class="edit-save-btn"   id="edit-save-btn"   onclick="saveEditActivity()">Save</button>
       <button class="edit-cancel-btn" onclick="cancelEditActivity()">Cancel</button>
@@ -743,22 +961,19 @@ select.edit-act-input{appearance:none;-webkit-appearance:none;cursor:pointer;pad
 </div>
 
 <div id="toolbar">
-  <span class="tb-title">⛰ Ascent <span style="font-size:10px;font-weight:400;color:var(--muted);letter-spacing:.02em">{{ app_version }}</span></span><span id="viewing-user-badge" onclick="openUserPicker()" title="Switch user" style="margin-left:8px;font-size:11px;font-weight:500;color:#f97316;cursor:pointer;padding:2px 7px;border:1px solid #f97316;border-radius:10px;opacity:.85;user-select:none"></span>
-  <div style="flex:1"></div>
-  <div class="tb-search">
-    <span class="tb-icon">⌕</span>
-    <input type="text" id="searchInput" placeholder="Search activities…">
+  <div style="display:flex;align-items:center">
+    <span class="nav-brand-name">⛰ Ascent</span><span class="nav-version">{{ app_version }}</span>
   </div>
-  <span class="tb-count" id="actCount"></span>
-  <div style="display:flex;gap:6px">
-    <button class="tb-btn" onclick="window.location='/'">📊 Dashboard</button>
-    <button class="tb-btn" id="coach-open-btn" onclick="openCoach()" title="AI Coach">🧠 Coach<span id="coach-new-dot" class="coach-dot" style="display:none"></span></button>
-    <button class="tb-btn" onclick="window.location='/settings'" style="background:#3a3a3c" title="Settings"><span style="font-size:20px;line-height:1">⚙</span></button>
-    <button class="tb-btn strava" onclick="window.location='/strava/sync'">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169"/></svg>
-      Strava Sync
-    </button>
-    <button class="tb-btn" onclick="window.location=window.location.origin+'/logout'" style="background:#3a3a3c" title="Sign Out">Sign out</button>
+  <div class="nav-pages" style="margin-left:14px">
+    <button class="nav-btn nav-active" data-page="activities">Activities</button>
+    <button class="nav-btn" data-page="summary" onclick="window.location='/'">Summary</button>
+    <button class="nav-btn" data-page="coach" id="coach-nav-btn" onclick="openCoach()">Coach<span id="coach-new-dot" class="coach-dot" style="display:none"></span></button>
+    <button class="nav-btn" data-page="sync" onclick="window.location='/strava/sync'">Sync</button>
+  </div>
+  <div style="flex:1"></div>
+  <div class="nav-pages">
+    <button class="nav-btn" data-page="settings" onclick="window.location='/settings'">Settings</button>
+    <button class="nav-btn" onclick="window.location='/logout'">Sign Out</button>
   </div>
 </div>
 
@@ -768,7 +983,14 @@ select.edit-act-input{appearance:none;-webkit-appearance:none;cursor:pointer;pad
     <div id="filter-bar">
       <select id="typeFilter"><option value="">All types</option></select>
       <select id="yearFilter"><option value="">All years</option></select>
-      <div style="flex:1"></div>
+      <span id="viewing-user-badge" onclick="openUserPicker()" title="Switch user" style="display:none;font-size:11px;font-weight:500;color:#f97316;cursor:pointer;padding:2px 7px;border:1px solid #f97316;border-radius:10px;opacity:.85;user-select:none;flex-shrink:0"></span>
+      <div class="tb-search">
+        <span class="tb-icon">⌕</span>
+        <input type="text" id="searchInput" placeholder="Search…">
+      </div>
+      <span class="tb-count" id="actCount"></span>
+      <button class="tb-btn" id="bulk-gpx-btn" onclick="downloadSelectedGPX()" title="Download selected activities as GPX files" style="display:none">↓ GPX (<span id="bulk-gpx-count">0</span>)</button>
+      <button class="tb-btn" onclick="openImportModal()" title="Import GPX or FIT files">↑ Import</button>
       <button class="tb-btn" id="col-gear-btn" onclick="toggleColPicker(event)" title="Choose columns" style="padding:3px 7px;font-size:20px;line-height:1">⚙</button>
       <div id="col-picker"></div>
     </div>
@@ -838,14 +1060,6 @@ select.edit-act-input{appearance:none;-webkit-appearance:none;cursor:pointer;pad
       </div>
       </div><!-- .stats-content -->
 
-      <!-- User picker dialog -->
-      <div id="user-picker-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9998;align-items:center;justify-content:center" onclick="if(event.target===this)closeUserPicker()">
-        <div style="background:#1c1c1e;border-radius:12px;padding:20px;min-width:260px;max-width:90vw;box-shadow:0 8px 32px rgba(0,0,0,.6)" onclick="event.stopPropagation()">
-          <div style="font-weight:600;font-size:15px;margin-bottom:14px;color:#f5f5f7">Show activities for…</div>
-          <div id="user-picker-list" style="display:flex;flex-direction:column;gap:8px;max-height:60vh;overflow-y:auto"></div>
-          <button onclick="closeUserPicker()" style="margin-top:8px;width:100%;padding:8px;background:#3a3a3c;border:none;border-radius:8px;color:#f5f5f7;cursor:pointer;font-size:13px">Cancel</button>
-        </div>
-      </div>
 
       <!-- Lightbox -->
       <div id="lightbox" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:9999;align-items:center;justify-content:center;flex-direction:column" onclick="closeLightbox()">
@@ -973,11 +1187,11 @@ select.edit-act-input{appearance:none;-webkit-appearance:none;cursor:pointer;pad
   </div>
   <div id="transport-bar">
   <div class="tb-transport">
-    <button class="t-btn" id="t-start" onclick="animJump(0)"       title="Go to start">⏮</button>
-    <button class="t-btn" id="t-rev"   onclick="animSetSpeed(-1)"  title="Reverse">◀</button>
-    <button class="t-btn" id="t-stop"  onclick="animStop()"        title="Stop">⏹</button>
-    <button class="t-btn" id="t-play"  onclick="animPlay()"        title="Play">▶</button>
-    <button class="t-btn" id="t-end"   onclick="animJump(1)"       title="Go to end">⏭</button>
+    <button class="t-btn" id="t-start" onclick="animJump(0)"       title="Go to start"><svg viewBox="0 0 14 14" width="14" height="14" fill="currentColor"><rect x="1" y="1" width="2" height="12"/><polygon points="13,1 5,7 13,13"/></svg></button>
+    <button class="t-btn" id="t-rev"   onclick="animSetSpeed(-1)"  title="Reverse"><svg viewBox="0 0 14 14" width="14" height="14" fill="currentColor"><polygon points="12,1 4,7 12,13"/></svg></button>
+    <button class="t-btn" id="t-stop"  onclick="animStop()"        title="Stop"><svg viewBox="0 0 14 14" width="14" height="14" fill="currentColor"><rect x="2" y="2" width="10" height="10"/></svg></button>
+    <button class="t-btn" id="t-play"  onclick="animPlay()"        title="Play"><svg viewBox="0 0 14 14" width="14" height="14" fill="currentColor"><polygon points="2,1 12,7 2,13"/></svg></button>
+    <button class="t-btn" id="t-end"   onclick="animJump(1)"       title="Go to end"><svg viewBox="0 0 14 14" width="14" height="14" fill="currentColor"><polygon points="1,1 9,7 1,13"/><rect x="11" y="1" width="2" height="12"/></svg></button>
   </div>
   <span id="t-time">0:00:00</span>
   <input type="range" id="t-scrub" min="0" max="1000" value="0"
@@ -998,6 +1212,46 @@ select.edit-act-input{appearance:none;-webkit-appearance:none;cursor:pointer;pad
     <div class="anim-stat"><div class="anim-stat-val" id="as-dst">—</div><div class="anim-stat-lbl" id="as-dst-lbl">mi</div></div>
   </div>
 </div>
+<!-- #mob-detail-screen lives inside #root so it can be a flex sibling of #top-row in landscape -->
+<div id="mob-detail-screen">
+  <div id="mob-tab-map"      class="mob-tab-panel active"></div>
+  <div id="mob-tab-info"     class="mob-tab-panel"></div>
+  <div id="mob-tab-analysis" class="mob-tab-panel"></div>
+  <div id="mob-tab-photos"   class="mob-tab-panel"></div>
+  <div id="mob-detail-tabbar">
+    <button class="mob-tab-btn active" data-tab="map"      onclick="mobSwitchTab('map')">      <span class="mob-tab-icon">🗺</span><span>Map</span></button>
+    <button class="mob-tab-btn"        data-tab="info"     onclick="mobSwitchTab('info')">     <span class="mob-tab-icon">ℹ️</span><span>Info</span></button>
+    <button class="mob-tab-btn"        data-tab="analysis" onclick="mobSwitchTab('analysis')"> <span class="mob-tab-icon">📊</span><span>Analysis</span></button>
+    <button class="mob-tab-btn"        data-tab="photos"   onclick="mobSwitchTab('photos')">   <span class="mob-tab-icon">📷</span><span>Photos</span></button>
+  </div>
+</div>
+</div>
+
+<!-- ── MOBILE CHROME — hidden on desktop ─────────────────────────────────── -->
+<div id="mob-header">
+  <button id="mob-back-btn" onclick="mobileGoBack()"><span>‹</span><span>Back</span></button>
+  <div style="display:flex;align-items:baseline;gap:5px;flex-shrink:0">
+    <span id="mob-header-title">⛰ Ascent</span><span id="mob-header-version" style="font-size:10px;font-weight:400;color:var(--muted);letter-spacing:.02em">{{ app_version }}</span>
+  </div>
+  <div style="flex:1"></div>
+  <button id="mob-user-btn" onclick="openUserPicker()" title="Switch user" style="display:none;align-items:center;justify-content:center;min-height:36px;padding:0 10px;margin-left:8px;border-radius:8px;background:none;border:1px solid #f97316;color:#f97316;font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></button>
+</div>
+
+<div id="mob-global-nav">
+  <button class="mob-nav-btn active"><span>≡</span><span>Activities</span></button>
+  <button class="mob-nav-btn" onclick="openCoach()"><span></span><span>Coach</span></button>
+  <a href="/" class="mob-nav-btn"><span></span><span>Summary</span></a>
+  <a href="/strava/sync" class="mob-nav-btn"><span></span><span>Sync</span></a>
+  <a href="/settings" class="mob-nav-btn"><span></span><span>Settings</span></a>
+</div>
+
+<!-- User picker — at body level so position:fixed works inside transformed ancestors -->
+<div id="user-picker-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9998;align-items:center;justify-content:center" onclick="if(event.target===this)closeUserPicker()">
+  <div style="background:#1c1c1e;border-radius:12px;padding:20px;min-width:260px;max-width:90vw;box-shadow:0 8px 32px rgba(0,0,0,.6)" onclick="event.stopPropagation()">
+    <div style="font-weight:600;font-size:15px;margin-bottom:14px;color:#f5f5f7">Show activities for…</div>
+    <div id="user-picker-list" style="display:flex;flex-direction:column;gap:8px;max-height:60vh;overflow-y:auto"></div>
+    <button onclick="closeUserPicker()" style="margin-top:8px;width:100%;padding:8px;background:#3a3a3c;border:none;border-radius:8px;color:#f5f5f7;cursor:pointer;font-size:13px">Cancel</button>
+  </div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -1005,6 +1259,118 @@ select.edit-act-input{appearance:none;-webkit-appearance:none;cursor:pointer;pad
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.15/dist/hls.min.js"></script>
 <script>
+// ── MOBILE LAYOUT ─────────────────────────────────────────────────────────────
+function _isMobile() { return window.innerWidth <= 767; }
+// True for both portrait phones AND landscape phones (short screens)
+function _isPhoneLayout() { return window.innerWidth <= 767 || window.innerHeight <= 500; }
+
+function _mobMoveElements() {
+  if (!_isPhoneLayout()) return;
+  const tabMap      = document.getElementById('mob-tab-map');
+  const tabInfo     = document.getElementById('mob-tab-info');
+  const tabAnalysis = document.getElementById('mob-tab-analysis');
+  const tabPhotos   = document.getElementById('mob-tab-photos');
+  if (!tabMap) return;
+  // Map + transport bar → map tab
+  const detail    = document.getElementById('detail');
+  const transport = document.getElementById('transport-bar');
+  if (detail)    tabMap.insertBefore(detail, tabMap.firstChild);
+  if (transport) tabMap.appendChild(transport);
+  // Photo panel → photos tab (extracted from info-panel)
+  const photoDragH = document.getElementById('photo-drag-handle');
+  const infoRight  = document.getElementById('info-right');
+  if (photoDragH) photoDragH.remove();
+  if (infoRight)  tabPhotos.appendChild(infoRight);
+  // Info panel → info tab
+  const infoPanel = document.getElementById('info-panel');
+  if (infoPanel)  tabInfo.appendChild(infoPanel);
+  // Chart wrap → analysis tab
+  const chartWrap = document.getElementById('chart-wrap');
+  if (chartWrap)  tabAnalysis.appendChild(chartWrap);
+}
+
+function _mobRefitMap() {
+  if (typeof leafMap === 'undefined' || !leafMap) return;
+  leafMap.invalidateSize({animate: false});
+  if (typeof trackLayer !== 'undefined' && trackLayer) {
+    try { leafMap.fitBounds(trackLayer.getBounds(), {padding:[20,20]}); } catch(e) {}
+  }
+}
+
+function mobilePushDetail(actTitle) {
+  if (!_isPhoneLayout()) return;
+  if (_isMobile()) {
+    // Portrait: slide detail screen in, then refit after animation finishes
+    const ds = document.getElementById('mob-detail-screen');
+    if (!ds) return;
+    const titleEl = document.getElementById('mob-header-title');
+    const backBtn = document.getElementById('mob-back-btn');
+    if (titleEl) titleEl.textContent = actTitle || 'Activity';
+    if (backBtn) backBtn.style.display = 'flex';
+    ds.classList.add('active');
+    document.body.classList.add('mob-detail-active');
+    setTimeout(_mobRefitMap, 320); // after 300ms slide animation
+  } else {
+    // Landscape: detail screen always visible — just refit after layout settles
+    requestAnimationFrame(() => requestAnimationFrame(_mobRefitMap));
+  }
+}
+
+function mobileGoBack() {
+  if (!_isMobile()) return;
+  const ds = document.getElementById('mob-detail-screen');
+  if (!ds) return;
+  ds.classList.remove('active');
+  document.body.classList.remove('mob-detail-active');
+  const titleEl = document.getElementById('mob-header-title');
+  const backBtn = document.getElementById('mob-back-btn');
+  if (titleEl) titleEl.textContent = '⛰ Ascent';
+  if (backBtn) backBtn.style.display = 'none';
+  if (typeof animStop === 'function') animStop();
+  if (typeof _panelDetach === 'function') _panelDetach();
+}
+
+function mobSwitchTab(tab) {
+  // Stop video when leaving the photos tab
+  if (tab !== 'photos') _panelDetach();
+  document.querySelectorAll('.mob-tab-panel').forEach(p => p.classList.remove('active'));
+  const panel = document.getElementById('mob-tab-' + tab);
+  if (panel) panel.classList.add('active');
+  document.querySelectorAll('.mob-tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll(`.mob-tab-btn[data-tab="${tab}"]`).forEach(b => b.classList.add('active'));
+  if (tab === 'map') {
+    requestAnimationFrame(_mobRefitMap);
+  }
+  if (tab === 'analysis') {
+    requestAnimationFrame(() => {
+      if (typeof elevChart !== 'undefined' && elevChart) elevChart.resize();
+      if (typeof redrawElevWithOverlays === 'function') redrawElevWithOverlays();
+    });
+  }
+}
+
+document.addEventListener('DOMContentLoaded', _mobMoveElements);
+
+// On rotation / resize: refit map and resize chart if we're in a phone layout
+window.addEventListener('resize', () => {
+  if (!_isPhoneLayout()) return;
+  // Debounce — layout hasn't settled yet during the resize event
+  clearTimeout(window._mobResizeTimer);
+  window._mobResizeTimer = setTimeout(() => {
+    // Only refit if the map tab is active (or landscape where map is always the default view)
+    const mapPanel = document.getElementById('mob-tab-map');
+    if (mapPanel && mapPanel.classList.contains('active')) {
+      _mobRefitMap();
+    }
+    // Resize chart if analysis tab is active
+    const analysisPanel = document.getElementById('mob-tab-analysis');
+    if (analysisPanel && analysisPanel.classList.contains('active')) {
+      if (typeof elevChart !== 'undefined' && elevChart) elevChart.resize();
+      if (typeof redrawElevWithOverlays === 'function') redrawElevWithOverlays();
+    }
+  }, 200);
+});
+
 // ── UI PREFS (server-seeded, persisted per user) ──────────────────────────────
 const _INIT_PREFS = {{ ui_prefs | tojson | safe }};
 const _uiPrefs = Object.assign({}, _INIT_PREFS);
@@ -1033,6 +1399,11 @@ async function _uiPrefsSaveToServer() {
 // ── STATE ────────────────────────────────────────────────────────────────────
 let elevRenderVersion = 0; // incremented each selectActivity call to cancel stale renders
 let currentAct    = null;  // last selected activity object
+// Session caches for Strava social data — cleared on page refresh, never re-fetched for same activity
+const _kudosCountCache    = new Map();   // activity id → kudos count (null = fetch failed)
+const _commentsCountCache = new Map();   // activity id → comment count (null = fetch failed)
+const _kudosListCache     = new Map();   // activity id → athletes array
+const _commentsListCache  = new Map();   // activity id → comments array
 let currentCharts = null;  // last fetched chart data
 let cachedProfile    = null;  // user profile (max_hr, ftp_watts) — fetched once per activity
 let _hasAnthropicKey = false; // set from /api/me at init
@@ -1168,11 +1539,21 @@ const state = {
 };
 
 // ── COLUMN DEFINITIONS ────────────────────────────────────────────────────────
-// User lookup map: id → username (populated async during init)
+// User lookup map: id → {username, avatar_url} (populated async during init)
 const userMap = {};
 
+function renderUserCell(a) {
+  const u = userMap[a.user_id];
+  if (!u) return '';
+  const name = escHtml(u.username || '');
+  if (u.avatar_url) {
+    return `<img src="${u.avatar_url}" alt="" style="width:22px;height:22px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:5px;flex-shrink:0">${name}`;
+  }
+  return name;
+}
+
 const ALL_COLS = [
-  {id:'user',      label:'User',        sort:'',             w:'90px',  align:'left',  render: a => escHtml(userMap[a.user_id] || '')},
+  {id:'user',      label:'User',        sort:'',             w:'110px', align:'left',  render: renderUserCell},
   {id:'date',      label:'Date/Time',   sort:'start_time',   w:'168px', align:'left',  render: a => fmtDate(a.start_time)},
   {id:'name',      label:'Title',       sort:'name',         w:'1fr',   align:'left',  render: a => escHtml(a.name) + (a.strava_activity_id?`<a href="https://www.strava.com/activities/${a.strava_activity_id}" target="_blank" class="ac-strava" title="View on Strava">↗</a>`:'')},
   {id:'dist',      label:'Dist',        sort:'distance_m',   w:'78px',  align:'right', unitLabel: () => U.distUnit(),  render: a => fmtN(U.dist(a.distance_mi),2)},
@@ -1314,6 +1695,7 @@ function renderVirtualList() {
 
   document.getElementById('actCount').textContent =
     acts.length === state.all.length ? `${acts.length} activities` : `${acts.length} of ${state.all.length}`;
+  _updateMultiActions();
 }
 
 // ── SORT & FILTER ─────────────────────────────────────────────────────────────
@@ -1379,8 +1761,13 @@ function _updateViewBadge() {
   const ids = viewState.selectedUserIds.size > 0
     ? [...viewState.selectedUserIds]
     : (viewState.myId !== null ? [viewState.myId] : []);
-  const names = ids.map(id => userMap[id] || '?');
-  badge.textContent = names.join(', ');
+  const names = ids.map(id => (userMap[id] && userMap[id].username) || '?');
+  const label = names.join(', ');
+  badge.textContent = label;
+  badge.style.display = label ? 'inline' : 'none';
+  // Keep mobile header user button in sync
+  const mobBtn = document.getElementById('mob-user-btn');
+  if (mobBtn) { mobBtn.textContent = label; mobBtn.style.display = 'flex'; }
 }
 
 async function loadAll() {
@@ -2415,6 +2802,9 @@ async function drawElevation(data, version) {
 
   document.addEventListener('DOMContentLoaded', setup);
   setTimeout(setup, 800);
+
+  // Expose for compare legend navigation
+  window._applyElevSelection = applyElevSelection;
 })();
 
 // ── LONG-PRESS MULTI-SELECT (touch devices) ───────────────────────────────────
@@ -2470,6 +2860,89 @@ function _updateSelectBar() {
   const n = state.selectedIds.size;
   document.getElementById('select-mode-count').textContent =
     n === 1 ? '1 activity selected' : `${n} activities selected`;
+}
+
+function _updateMultiActions() {
+  const n   = state.selectedIds.size;
+  const btn = document.getElementById('bulk-gpx-btn');
+  if (!btn) return;
+  if (n >= 2) {
+    btn.style.display = '';
+    document.getElementById('bulk-gpx-count').textContent = n;
+  } else {
+    btn.style.display = 'none';
+  }
+}
+
+function _safeFilename(name) {
+  return (name || 'activity').replace(/[/\\:*?"<>|]/g, '_').trim() || 'activity';
+}
+
+async function downloadSelectedGPX() {
+  const ids = [...state.selectedIds];
+  if (ids.length < 2) return;
+
+  const btn      = document.getElementById('bulk-gpx-btn');
+  const origHTML = btn.innerHTML;
+
+  // File System Access API path — Chrome/Edge only, requires secure context
+  const fsaAvailable = typeof window.showDirectoryPicker === 'function'
+    && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1');
+
+  if (fsaAvailable) {
+    let dirHandle = null;
+    try {
+      dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+    } catch(e) {
+      if (e.name === 'AbortError') return; // user cancelled — do nothing
+      // showDirectoryPicker failed — fall through to ZIP download below
+      console.warn('showDirectoryPicker failed:', e.name, e.message);
+    }
+
+    if (dirHandle) {
+      for (let i = 0; i < ids.length; i++) {
+        const id       = ids[i];
+        const act      = state.all.find(a => a.id === id);
+        const filename = _safeFilename(act?.name) + '.gpx';
+        btn.innerHTML  = `↓ GPX ${i + 1}/${ids.length}…`;
+        try {
+          const resp       = await fetch(`/activities/${id}/export/gpx`);
+          const blob       = await resp.blob();
+          const fileHandle = await dirHandle.getFileHandle(filename, { create: true });
+          const writable   = await fileHandle.createWritable();
+          await writable.write(blob);
+          await writable.close();
+        } catch(e) {
+          console.warn(`GPX write failed for activity ${id}:`, e);
+        }
+      }
+      btn.innerHTML = origHTML;
+      return;
+    }
+  }
+
+  // Fallback: server-side ZIP — one download, no per-file dialogs.
+  btn.innerHTML = `↓ GPX zipping…`;
+  try {
+    const resp = await fetch('/export/gpx/batch', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ ids }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    const blob = await resp.blob();
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = 'activities.zip';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch(e) {
+    console.error('Batch GPX export failed:', e);
+  }
+  btn.innerHTML = origHTML;
 }
 
 // ── ACTIVITY DETAIL ───────────────────────────────────────────────────────────
@@ -2592,6 +3065,8 @@ async function selectActivity(id) {
   loadPhotos(id); // async
   loadWeatherLocation(id); // async
   loadAISummary(id); // async
+  if (act.strava_activity_id) loadKudos(id); // async
+  if (act.strava_activity_id) loadComments(id); // async
 
   // Wait for layout to settle after DOM changes before any rendering
   await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
@@ -2634,6 +3109,8 @@ async function selectActivity(id) {
           // Rebuild detail HTML now that act may have description
           det.innerHTML = buildDetailHTML(act);
           loadPhotos(id); // re-load after panel rebuild
+          loadKudos(id); // re-load after panel rebuild
+          loadComments(id); // re-load after panel rebuild
 
           // Hide placeholder, invalidate map size
           document.getElementById('mapPlaceholder').style.display = 'none';
@@ -2699,19 +3176,32 @@ async function selectActivity(id) {
     badge.textContent=`${U.distS(act.distance_mi)} · ${U.climbS(act.total_climb_ft||0)} climb`;
     badge.style.display='block';
   } else { badge.style.display='none'; }
+  mobilePushDetail(act.title || act.activity_type || 'Activity');
 }
 
 function buildDetailHTML(a) {
   const stravaLink = a.strava_activity_id
     ? `<a href="https://www.strava.com/activities/${a.strava_activity_id}" target="_blank" class="strava">View on Strava ↗</a>`
     : '';
+  // kudos + comments buttons — hidden until load functions populate counts
+  const kudosBtn = a.strava_activity_id
+    ? `<button id="kudos-btn" onclick="toggleKudosList(${a.id}, event)" style="display:none;border:1px solid var(--border2);border-radius:4px;padding:3px 7px;font-size:11px;font-weight:600;cursor:pointer;background:transparent;color:var(--text);align-items:center;gap:4px;line-height:1;vertical-align:middle"></button>`
+    : '';
+  const commentsBtn = a.strava_activity_id
+    ? `<button id="comments-btn" onclick="toggleCommentsList(${a.id}, event)" style="display:none;border:1px solid var(--border2);border-radius:4px;padding:3px 7px;font-size:11px;font-weight:600;cursor:pointer;background:transparent;color:var(--text);align-items:center;gap:4px;line-height:1;vertical-align:middle"></button>`
+    : '';
   const isDirty  = Boolean(a.local_edited_at);
   const isOwner  = a.user_id === viewState.myId;
-  const resyncBtn = (a.strava_activity_id && isOwner)
-    ? `<button class="resync-btn${isDirty ? ' dirty' : ''}" id="resync-btn" onclick="resyncActivity(${a.id})" title="${isDirty ? 'Push local edits then re-sync from Strava' : 'Re-sync metadata from Strava'}"><span class="resync-icon">↻</span> Sync</button>`
+  const resyncBtn = a.strava_activity_id
+    ? (isOwner
+        ? `<button class="resync-btn${isDirty ? ' dirty' : ''}" id="resync-btn" onclick="resyncActivity(${a.id})" title="${isDirty ? 'Push local edits then re-sync from Strava' : 'Re-sync metadata from Strava'}"><span class="resync-icon">↻</span> Sync</button>`
+        : `<button class="resync-btn" id="resync-btn" onclick="resyncActivity(${a.id})" title="Re-sync from Strava"><span class="resync-icon">↻</span> Sync</button>`)
     : '';
   const editBtn = (a.strava_activity_id && isOwner)
     ? `<button class="edit-btn" id="edit-act-btn" onclick="startEditActivity(${a.id})" title="Edit title, description, type & equipment">Edit…</button>`
+    : '';
+  const exportBtn = isOwner
+    ? `<a href="/activities/${a.id}/export/gpx" class="edit-btn" style="text-decoration:none" title="Download as GPX file">↓ GPX</a>`
     : '';
 
   // pace string helper: mph → "M:SS/mi" or "M:SS/km"
@@ -2766,11 +3256,52 @@ function buildDetailHTML(a) {
   const stravaEditLink = a.strava_activity_id ? `<a href="https://www.strava.com/activities/${a.strava_activity_id}/edit" target="_blank" style="opacity:.5;color:inherit;text-decoration:underline;text-underline-offset:2px">(change on Strava)</a>` : `<span style="opacity:.5">(change on Strava)</span>`;
   const visHtml = effVis ? `<div style="font-size:11px;color:var(--muted);margin-bottom:6px">${visIcon[effVis]||''} ${visMap[effVis]||effVis} ${stravaEditLink}</div>` : '';
 
+  // Perceived exertion color: green→yellow→red across 1–10
+  function rpeColor(v) {
+    v = Math.max(1, Math.min(10, v));
+    const t = (v - 1) / 9; // 0→1
+    let r, g, b;
+    if (t <= 0.5) {
+      const u = t / 0.5;
+      r = Math.round(0x22 + u * (0xea - 0x22));
+      g = Math.round(0xc5 + u * (0xb3 - 0xc5));
+      b = Math.round(0x5e + u * (0x08 - 0x5e));
+    } else {
+      const u = (t - 0.5) / 0.5;
+      r = Math.round(0xea + u * (0xef - 0xea));
+      g = Math.round(0xb3 + u * (0x44 - 0xb3));
+      b = Math.round(0x08 + u * (0x44 - 0x08));
+    }
+    return `rgb(${r},${g},${b})`;
+  }
+
+  let rpeKudosHtml = '';
+  if (a.perceived_exertion != null) {
+    const v   = a.perceived_exertion;
+    const col = rpeColor(v);
+    const lbl = _rpeText(v).replace(/\s*\(\d+\)/, '');
+    rpeKudosHtml = `<div style="display:flex;align-items:center;gap:7px;margin-bottom:5px">
+      <div style="width:14px;height:14px;border-radius:3px;background:${col};flex-shrink:0"></div>
+      <span style="font-size:12px;color:var(--text);font-weight:500">${lbl}</span>
+      <span style="font-size:11px;color:var(--muted)">(${v}/10)</span>
+      ${kudosBtn}${commentsBtn}
+    </div>`;
+  } else if (kudosBtn || commentsBtn) {
+    rpeKudosHtml = `<div style="display:flex;align-items:center;gap:4px;margin-bottom:5px">${kudosBtn}${commentsBtn}</div>`;
+  }
+
+  const ownerAvatarUrl = a.user_id && userMap[a.user_id]?.avatar_url
+    ? userMap[a.user_id].avatar_url.replace('?thumb=1', '') + '?thumb=1'
+    : null;
+  const avatarHtml = ownerAvatarUrl
+    ? `<img src="${ownerAvatarUrl}" alt="" style="width:32px;height:32px;object-fit:cover;border-radius:4px;flex-shrink:0;margin-right:9px;margin-top:1px">`
+    : '';
   return `
     <div class="act-title-bar">
-      <div class="act-title">${escHtml(a.name||'(unnamed)')}${isDirty?'<span style="color:#f97316;font-size:10px;margin-left:5px;font-weight:400;vertical-align:middle">edited</span>':''}</div>
-      <div class="act-title-links">${editBtn}${resyncBtn}${stravaLink}</div>
+      <div style="display:flex;align-items:flex-start;min-width:0;flex:1">${avatarHtml}<div class="act-title">${escHtml(a.name||'(unnamed)')}${isDirty?'<span style="color:#f97316;font-size:10px;margin-left:5px;font-weight:400;vertical-align:middle">edited</span>':''}</div></div>
+      <div class="act-title-links">${editBtn}${resyncBtn}${exportBtn}${stravaLink}</div>
     </div>
+    ${rpeKudosHtml}
     <div style="display:grid;grid-template-columns:auto 1fr;column-gap:20px;row-gap:4px;margin-bottom:6px;align-items:baseline">
       <span style="font-size:11.5px;color:var(--muted)">${fmtDate(a.start_time)}</span>
       <span id="wx-weather-text" style="font-size:11px;color:var(--muted)"></span>
@@ -2892,12 +3423,14 @@ function addDrag(el, axis, onMove, onEnd, onStart) {
   });
 }
 
+// Always attach — handle is CSS-hidden on portrait mobile; works on desktop and landscape phone
 addDrag(handle, 'x',
   delta => {
-    sidebar.style.width = Math.max(380, Math.min(window.innerWidth*.65, rsW+delta)) + 'px';
-    if(leafMap) leafMap.invalidateSize();
+    const minW = window.innerHeight <= 500 ? 160 : 380; // narrower min on landscape phone
+    sidebar.style.width = Math.max(minW, Math.min(window.innerWidth * .65, rsW + delta)) + 'px';
+    if (leafMap) leafMap.invalidateSize();
   },
-  () => { savePaneSizes({sidebarW:sidebar.offsetWidth}); },
+  () => { savePaneSizes({sidebarW: sidebar.offsetWidth}); },
   () => { rsW = sidebar.offsetWidth; }
 );
 
@@ -2968,18 +3501,18 @@ async function loadPhotos(activityId) {
   } catch(e) {}
 }
 
-function _attachHls(videoEl, hlsUrl) {
+function _attachHls(videoEl, hlsUrl, autoplay = true) {
   if (videoEl._hls) { videoEl._hls.destroy(); videoEl._hls = null; }
   if (typeof Hls !== 'undefined' && Hls.isSupported()) {
     const hls = new Hls();
     videoEl._hls = hls;
     hls.loadSource(hlsUrl);
     hls.attachMedia(videoEl);
-    hls.on(Hls.Events.MANIFEST_PARSED, () => videoEl.play().catch(() => {}));
+    if (autoplay) hls.on(Hls.Events.MANIFEST_PARSED, () => videoEl.play().catch(() => {}));
   } else if (videoEl.canPlayType('application/vnd.apple.mpegurl')) {
     // Safari native HLS
     videoEl.src = hlsUrl;
-    videoEl.play().catch(() => {});
+    if (autoplay) videoEl.play().catch(() => {});
   }
 }
 
@@ -2995,7 +3528,7 @@ function _lbDetach() {
   v.pause(); v.removeAttribute('src'); v.style.display = 'none';
 }
 
-function showPhoto(idx) {
+async function showPhoto(idx) {
   const img   = document.getElementById('photo-img');
   const vid   = document.getElementById('photo-vid');
   const ph    = document.getElementById('photo-placeholder');
@@ -3019,9 +3552,10 @@ function showPhoto(idx) {
   if (item.type === 'video' && item.hls_url) {
     img.style.display = 'none';
     vid.style.display = 'block';
-    const autoplay = cachedProfile?.autoplay_videos !== false;
+    const profile  = await ensureProfile();
+    const autoplay = profile.autoplay_videos !== false;
     if (autoplay) _attachHls(vid, item.hls_url);
-    else { vid.poster = item.url; }  // show thumbnail without playing
+    else { vid.poster = item.url; }  // show thumbnail without loading/playing
   } else {
     _panelDetach();
     img.src = item.url;
@@ -3049,13 +3583,15 @@ function downloadCurrentMedia() {
   document.body.removeChild(a);
 }
 
-function _lbShow(item) {
+async function _lbShow(item) {
   const lbImg = document.getElementById('lb-img');
   const lbVid = document.getElementById('lb-vid');
   if (item.type === 'video' && item.hls_url) {
     lbImg.style.display = 'none';
     lbVid.style.display = 'block';
-    _attachHls(lbVid, item.hls_url);
+    const profile  = await ensureProfile();
+    const autoplay = profile.autoplay_videos !== false;
+    _attachHls(lbVid, item.hls_url, autoplay);
   } else {
     _lbDetach();
     lbImg.src = item.url;
@@ -3087,6 +3623,34 @@ function closeLightbox() {
   _lbDetach();
   document.getElementById('lightbox').style.display = 'none';
 }
+
+// Touch swipe helper — calls onLeft/onRight when horizontal drag > threshold
+function _addSwipe(el, onLeft, onRight) {
+  let sx = 0, sy = 0;
+  el.addEventListener('touchstart', e => {
+    sx = e.touches[0].clientX;
+    sy = e.touches[0].clientY;
+  }, {passive: true});
+  el.addEventListener('touchend', e => {
+    const dx = e.changedTouches[0].clientX - sx;
+    const dy = e.changedTouches[0].clientY - sy;
+    if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy) * 1.5) return; // not a horizontal swipe
+    if (dx < 0) onLeft(); else onRight();
+  }, {passive: true});
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const panel = document.getElementById('photo-panel');
+  if (panel) _addSwipe(panel,
+    () => photoNav(1),
+    () => photoNav(-1)
+  );
+  const lb = document.getElementById('lightbox');
+  if (lb) _addSwipe(lb,
+    () => photoNav(1, true),
+    () => photoNav(-1, true)
+  );
+});
 
 // Keyboard: Esc closes lightbox, ←→ navigate photos
 document.addEventListener('keydown', e => {
@@ -3146,6 +3710,115 @@ async function loadAISummary(activityId, refresh = false) {
     el.textContent = d.summary || '—';
   } catch(e) {
     el.textContent = '—';
+  }
+}
+
+// ── STRAVA KUDOS & COMMENTS ───────────────────────────────────────────────────
+function _openPopover(id, anchorBtn) {
+  // Close any existing popovers
+  ['kudos-popover','comments-popover'].forEach(pid => { const el = document.getElementById(pid); if (el) el.remove(); });
+  const pop = document.createElement('div');
+  pop.id = id;
+  pop.style.cssText = 'position:fixed;z-index:2000;background:var(--surface2);border:1px solid var(--border2);border-radius:6px;padding:8px 0;box-shadow:0 4px 16px rgba(0,0,0,.6);font-size:12px;min-width:160px;max-height:240px;overflow-y:auto';
+  pop.innerHTML = '<div style="padding:4px 12px;color:var(--muted)">Loading…</div>';
+  document.body.appendChild(pop);
+  const rect = anchorBtn.getBoundingClientRect();
+  pop.style.left = rect.left + 'px';
+  pop.style.top  = (rect.bottom + 4) + 'px';
+  const closeHandler = (e) => {
+    if (!pop.contains(e.target) && e.target !== anchorBtn) {
+      pop.remove();
+      document.removeEventListener('click', closeHandler, true);
+    }
+  };
+  setTimeout(() => document.addEventListener('click', closeHandler, true), 0);
+  return pop;
+}
+
+function _applyKudosBtn(count) {
+  const btn = document.getElementById('kudos-btn');
+  if (!btn || count <= 0) return;
+  btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:middle;flex-shrink:0"><path d="M1 21h4V9H1v12zm22-11c0-1.1-.9-2-2-2h-6.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L14.17 1 7.59 7.59C7.22 7.95 7 8.45 7 9v10c0 1.1.9 2 2 2h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-2z"/></svg> ${count}`;
+  btn.style.display = 'inline-flex';
+}
+
+async function loadKudos(activityId) {
+  if (_kudosCountCache.has(activityId)) {
+    _applyKudosBtn(_kudosCountCache.get(activityId) || 0);
+    return;
+  }
+  try {
+    const r = await fetch(`/api/activities/${activityId}/strava-kudos`);
+    if (!r.ok) return;
+    const count = (await r.json()).kudos_count || 0;
+    _kudosCountCache.set(activityId, count);
+    _applyKudosBtn(count);
+  } catch(e) {}
+}
+
+async function toggleKudosList(activityId, event) {
+  event.stopPropagation();
+  if (document.getElementById('kudos-popover')) { document.getElementById('kudos-popover').remove(); return; }
+  const pop = _openPopover('kudos-popover', event.currentTarget);
+  try {
+    let athletes = _kudosListCache.get(activityId);
+    if (!athletes) {
+      const r = await fetch(`/api/activities/${activityId}/strava-kudos-list`);
+      if (!r.ok) { pop.innerHTML = '<div style="padding:4px 12px;color:var(--muted)">Unable to load</div>'; return; }
+      athletes = (await r.json()).athletes || [];
+      _kudosListCache.set(activityId, athletes);
+    }
+    if (!athletes.length) { pop.innerHTML = '<div style="padding:4px 12px;color:var(--muted)">No kudos yet</div>'; return; }
+    pop.innerHTML = athletes.map(a =>
+      `<div style="padding:3px 12px;color:var(--text);white-space:nowrap">${escHtml(a.firstname)} ${escHtml(a.lastname)}</div>`
+    ).join('');
+  } catch(e) {
+    pop.innerHTML = '<div style="padding:4px 12px;color:var(--muted)">Error loading</div>';
+  }
+}
+
+function _applyCommentsBtn(count) {
+  const btn = document.getElementById('comments-btn');
+  if (!btn || count <= 0) return;
+  btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:middle;flex-shrink:0"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg> ${count}`;
+  btn.style.display = 'inline-flex';
+}
+
+async function loadComments(activityId) {
+  if (_commentsCountCache.has(activityId)) {
+    _applyCommentsBtn(_commentsCountCache.get(activityId) || 0);
+    return;
+  }
+  try {
+    const r = await fetch(`/api/activities/${activityId}/strava-comments`);
+    if (!r.ok) return;
+    const count = (await r.json()).comment_count || 0;
+    _commentsCountCache.set(activityId, count);
+    _applyCommentsBtn(count);
+  } catch(e) {}
+}
+
+async function toggleCommentsList(activityId, event) {
+  event.stopPropagation();
+  if (document.getElementById('comments-popover')) { document.getElementById('comments-popover').remove(); return; }
+  const pop = _openPopover('comments-popover', event.currentTarget);
+  try {
+    let comments = _commentsListCache.get(activityId);
+    if (!comments) {
+      const r = await fetch(`/api/activities/${activityId}/strava-comments-list`);
+      if (!r.ok) { pop.innerHTML = '<div style="padding:4px 12px;color:var(--muted)">Unable to load</div>'; return; }
+      comments = (await r.json()).comments || [];
+      _commentsListCache.set(activityId, comments);
+    }
+    if (!comments.length) { pop.innerHTML = '<div style="padding:4px 12px;color:var(--muted)">No comments yet</div>'; return; }
+    pop.innerHTML = comments.map((c, i) =>
+      `<div style="padding:5px 12px${i > 0 ? ';border-top:1px solid var(--border)' : ''}">
+        <div style="font-weight:600;color:var(--text);margin-bottom:2px">${escHtml(c.athlete_name)}</div>
+        <div style="color:var(--muted);line-height:1.4;white-space:pre-wrap">${escHtml(c.text)}</div>
+      </div>`
+    ).join('');
+  } catch(e) {
+    pop.innerHTML = '<div style="padding:4px 12px;color:var(--muted)">Error loading</div>';
   }
 }
 
@@ -3519,6 +4192,7 @@ function loadPaneSizes() {
 
 const STATS_TITLE_H = 28;
 function toggleStats() {
+  if (_isPhoneLayout()) return; // no collapse on phone — info panel is a full-screen tab
   const panel   = document.getElementById('info-panel');
   const btn     = document.getElementById('stats-disclose');
   const content = panel.querySelector('.stats-content');
@@ -3630,6 +4304,7 @@ function toggleStats() {
 // Analysis titlebar — toggle collapse + drag to resize chart
 const ANALYSIS_TITLE_H = 28;
 function toggleAnalysis() {
+  if (_isPhoneLayout()) return; // no collapse on phone — analysis is a full-screen tab
   const wrap = document.getElementById('chart-wrap');
   const btn  = document.getElementById('analysis-disclose');
   const tb   = document.getElementById('analysis-titlebar');
@@ -4064,16 +4739,28 @@ const coach = {
 };
 
 function openCoach() {
-  document.getElementById('coach-overlay').classList.add('open');
+  document.getElementById('root').style.display = 'none';
+  const ov = document.getElementById('coach-overlay');
+  ov.classList.add('open','page-mode');
+  document.querySelectorAll('.nav-btn[data-page]').forEach(b => b.classList.toggle('nav-active', b.dataset.page === 'coach'));
   coachLoadState();
 }
 
 function closeCoach() {
-  document.getElementById('coach-overlay').classList.remove('open');
+  document.getElementById('root').style.display = '';
+  const ov = document.getElementById('coach-overlay');
+  ov.classList.remove('open','page-mode');
+  document.querySelectorAll('.nav-btn[data-page]').forEach(b => b.classList.toggle('nav-active', b.dataset.page === 'activities'));
 }
 
 function coachOverlayClick(e) {
   if (e.target === document.getElementById('coach-overlay')) closeCoach();
+}
+
+// Auto-open coach when navigated here from another page via Coach nav button
+if (sessionStorage.getItem('openCoach') === '1') {
+  sessionStorage.removeItem('openCoach');
+  document.addEventListener('DOMContentLoaded', () => openCoach());
 }
 
 async function coachLoadState() {
@@ -4594,9 +5281,26 @@ function renderZoneChart(times, title, boundaries, unit) {
 async function startEditActivity(id) {
   const a = currentAct;
   if (!a || a.id !== id) return;
-  document.getElementById('edit-act-name').value     = a.name || '';
+  const _nameVal = a.name || '';
+  document.getElementById('edit-act-name').value       = _nameVal;
+  document.getElementById('edit-act-name').style.display = 'none';
+  document.getElementById('edit-act-name-display').textContent = _nameVal;
+  document.getElementById('edit-act-name-display').style.display = '';
   document.getElementById('edit-act-textarea').value = a.notes || '';
   document.getElementById('edit-act-status').textContent = '';
+  // Populate RPE slider
+  const rpeSlider = document.getElementById('rpe-slider');
+  const rpeLabel  = document.getElementById('rpe-val-label');
+  if (a.perceived_exertion != null) {
+    rpeSlider.value = a.perceived_exertion;
+    rpeSlider.classList.remove('rpe-unset');
+    rpeLabel.textContent = _rpeText(a.perceived_exertion);
+  } else {
+    rpeSlider.value = 5;
+    rpeSlider.classList.add('rpe-unset');
+    rpeLabel.textContent = '';
+  }
+  rpeSlider._rpeSet = (a.perceived_exertion != null);
   const helpEl = document.getElementById('suggest-help-text');
   if (helpEl) helpEl.style.display = 'none';
 
@@ -4616,7 +5320,6 @@ async function startEditActivity(id) {
   // Open overlay immediately so user isn't waiting
   document.getElementById('edit-activity-overlay').classList.add('open');
   _updateSuggestBtn();
-  document.getElementById('edit-act-name').focus();
 
   // Populate gear dropdown async (shows "Loading…" until ready)
   const gearEl = document.getElementById('edit-act-gear');
@@ -4678,6 +5381,8 @@ async function suggestTitle() {
     }
     const data = await r.json();
     document.getElementById('edit-act-name').value = data.title;
+    document.getElementById('edit-act-name-display').textContent = data.title;
+    activateTitleEdit();
     status.textContent = '✨ Title suggested — edit or save as-is';
     status.style.color = 'var(--muted)';
   } catch(e) {
@@ -4690,6 +5395,49 @@ async function suggestTitle() {
 
 function cancelEditActivity() {
   document.getElementById('edit-activity-overlay').classList.remove('open');
+}
+
+function activateTitleEdit() {
+  const display = document.getElementById('edit-act-name-display');
+  const input   = document.getElementById('edit-act-name');
+  display.style.display = 'none';
+  input.style.display   = '';
+  input.focus();
+  input.setSelectionRange(input.value.length, input.value.length);
+}
+
+function deactivateTitleEdit() {
+  const display = document.getElementById('edit-act-name-display');
+  const input   = document.getElementById('edit-act-name');
+  display.textContent   = input.value;
+  display.style.display = '';
+  input.style.display   = 'none';
+}
+
+function _rpeText(v) {
+  v = parseInt(v);
+  if (v <= 2)  return 'Easy (' + v + ')';
+  if (v <= 4)  return 'Light (' + v + ')';
+  if (v <= 6)  return 'Moderate (' + v + ')';
+  if (v <= 8)  return 'Hard (' + v + ')';
+  return 'Max Effort (' + v + ')';
+}
+
+function onRpeInput(val) {
+  const slider = document.getElementById('rpe-slider');
+  const label  = document.getElementById('rpe-val-label');
+  slider._rpeSet = true;
+  slider.classList.remove('rpe-unset');
+  label.textContent = _rpeText(val);
+}
+
+function clearRpe() {
+  const slider = document.getElementById('rpe-slider');
+  const label  = document.getElementById('rpe-val-label');
+  slider._rpeSet = false;
+  slider.value = 5;
+  slider.classList.add('rpe-unset');
+  label.textContent = '';
 }
 
 async function saveEditActivity() {
@@ -4708,6 +5456,7 @@ async function saveEditActivity() {
 
   const typeEl    = document.getElementById('edit-act-type');
   const gearEl    = document.getElementById('edit-act-gear');
+  const rpeSlider = document.getElementById('rpe-slider');
   const body = { name, description: desc };
   if (typeEl && typeEl.value) body.sport_type = typeEl.value;
   if (gearEl && gearEl.value !== '__keep__') {
@@ -4716,6 +5465,8 @@ async function saveEditActivity() {
       ? (gearEl.options[gearEl.selectedIndex]?.text || '')
       : '';
   }
+  // Always include perceived_exertion (null clears it)
+  body.perceived_exertion = rpeSlider._rpeSet ? parseInt(rpeSlider.value) : null;
 
   try {
     const r = await fetch(`/api/activities/${id}/update`, {
@@ -4911,8 +5662,12 @@ async function cmpOpenManualWithSegment() {
 
   const savedW = _uiPrefsGet('ascent-cmp-w');
   const savedH = _uiPrefsGet('ascent-cmp-h');
-  if (panel && savedW) panel.style.width  = savedW;
-  if (panel && savedH) panel.style.height = savedH;
+  if (panel && !matchMedia('(pointer:coarse)').matches) {
+    if (savedW) panel.style.width  = savedW;
+    if (savedH) panel.style.height = savedH;
+  } else if (panel) {
+    panel.style.width = ''; panel.style.height = '';
+  }
   const savedSpeed = _uiPrefsGet('ascent-cmp-speed') || '25';
   const speedSel = document.getElementById('cmp-speed');
   if (speedSel) speedSel.value = savedSpeed;
@@ -5019,8 +5774,12 @@ async function cmpOpenManual() {
 
   const savedW = _uiPrefsGet('ascent-cmp-w');
   const savedH = _uiPrefsGet('ascent-cmp-h');
-  if (panel && savedW) panel.style.width  = savedW;
-  if (panel && savedH) panel.style.height = savedH;
+  if (panel && !matchMedia('(pointer:coarse)').matches) {
+    if (savedW) panel.style.width  = savedW;
+    if (savedH) panel.style.height = savedH;
+  } else if (panel) {
+    panel.style.width = ''; panel.style.height = '';
+  }
   const savedSpeed = _uiPrefsGet('ascent-cmp-speed') || '25';
   const speedSel = document.getElementById('cmp-speed');
   if (speedSel) speedSel.value = savedSpeed;
@@ -5045,7 +5804,7 @@ async function cmpOpenManual() {
     ordered.forEach((id, i) => {
       const act = state.all?.find(a => a.id === id) || state.filtered?.find(a => a.id === id);
       const rawName = act?.name || `Activity ${id}`;
-      const userName = multiUser && act?.user_id && userMap[act.user_id] ? escHtml(userMap[act.user_id]) + ': ' : '';
+      const userName = multiUser && act?.user_id && userMap[act.user_id] ? escHtml(userMap[act.user_id].username || '') + ': ' : '';
       const name = userName + escHtml(rawName);
       const color = CMP_COLORS[i % CMP_COLORS.length];
       const li = document.createElement('div');
@@ -5151,8 +5910,12 @@ async function openCompare() {
   const panel = document.getElementById('compare-panel');
   const savedW = _uiPrefsGet('ascent-cmp-w');
   const savedH = _uiPrefsGet('ascent-cmp-h');
-  if (panel && savedW) panel.style.width  = savedW;
-  if (panel && savedH) panel.style.height = savedH;
+  if (panel && !matchMedia('(pointer:coarse)').matches) {
+    if (savedW) panel.style.width  = savedW;
+    if (savedH) panel.style.height = savedH;
+  } else if (panel) {
+    panel.style.width = ''; panel.style.height = '';
+  }
   const savedSpeed = _uiPrefsGet('ascent-cmp-speed') || '25';
   const speedSel = document.getElementById('cmp-speed');
   if (speedSel) speedSel.value = savedSpeed;
@@ -5295,7 +6058,7 @@ function buildCompareLegend() {
     const color    = CMP_COLORS[i % CMP_COLORS.length];
     const isRef    = currentAct && m.activity_id === currentAct.id;
     const date     = m.start_time ? new Date(m.start_time*1000).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '';
-    const userName = multiUser && m.user_id && userMap[m.user_id] ? escHtml(userMap[m.user_id]) + ': ' : '';
+    const userName = multiUser && m.user_id && userMap[m.user_id] ? escHtml(userMap[m.user_id].username || '') + ': ' : '';
     const dispName = userName + escHtml(m.name || '');
     const item     = document.createElement('div');
     item.className = 'cmp-legend-item';
@@ -5308,6 +6071,8 @@ function buildCompareLegend() {
         `<span id="cmp-delta-${i}" style="margin-left:auto;font-size:12px;min-width:70px;text-align:right;color:var(--muted);flex-shrink:0">—</span>`;
     } else {
       const nameStyle = isRef ? 'font-weight:700' : '';
+      item.style.cursor = 'pointer';
+      item.title = 'Go to activity';
       item.innerHTML =
         `<div class="cmp-sphere" style="background:radial-gradient(circle at 35% 35%,${color}ee,${color}88 55%,${color}44);flex-shrink:0"></div>` +
         `<span style="${nameStyle}">${dispName}</span>` +
@@ -5316,6 +6081,16 @@ function buildCompareLegend() {
         `<span id="cmp-delta-${i}" style="margin-left:auto;font-family:ui-monospace,'SF Mono','Fira Code',monospace;` +
         `font-size:12px;font-weight:600;min-width:70px;text-align:right;font-variant-numeric:tabular-nums;` +
         `color:var(--muted2);flex-shrink:0">0:00</span>`;
+      const actId  = m.activity_id;
+      const mSi    = m.start_idx ?? null;
+      const mEi    = m.end_idx   ?? null;
+      item.addEventListener('click', async () => {
+        closeCompare();
+        await selectActivity(actId);
+        scrollToSelected();
+        if (window._applyElevSelection && mSi !== null && mEi !== null && mEi > mSi)
+          window._applyElevSelection(mSi, mEi);
+      });
     }
     leg.appendChild(item);
   });
@@ -5868,6 +6643,58 @@ function cmpScrub(val) {
   setTimeout(initCmpResize, 500);
 })();
 
+// ── Compare panel corner-drag resize (touch / iPad) ───────────────────────────
+(function() {
+  function initCmpCornerResize() {
+    const handle = document.getElementById('cmp-corner-handle');
+    const panel  = document.getElementById('compare-panel');
+    if (!handle || !panel) return;
+
+    let startX, startY, startW, startH;
+
+    handle.addEventListener('touchstart', e => {
+      e.preventDefault();
+      e.stopPropagation();
+      const t = e.touches[0];
+      startX = t.clientX;
+      startY = t.clientY;
+      startW = panel.offsetWidth;
+      startH = panel.offsetHeight;
+      handle.style.opacity = '0.9';
+      document.addEventListener('touchmove', onMove,  {passive: false});
+      document.addEventListener('touchend',  onEnd,   {passive: false});
+    }, {passive: false});
+
+    function onMove(e) {
+      e.preventDefault();
+      const t = e.touches[0];
+      const newW = Math.max(320, Math.min(startW + (t.clientX - startX), window.innerWidth  * 0.98));
+      const newH = Math.max(340, Math.min(startH + (t.clientY - startY), window.innerHeight * 0.96));
+      panel.style.width  = newW + 'px';
+      panel.style.height = newH + 'px';
+      if (cmp.map)     cmp.map.invalidateSize();
+      if (cmp.zoomMap) cmp.zoomMap.invalidateSize();
+      cmp._resizing = true;
+      clearTimeout(cmp._resizeTimer);
+    }
+
+    function onEnd() {
+      handle.style.opacity = '';
+      document.removeEventListener('touchmove', onMove);
+      document.removeEventListener('touchend',  onEnd);
+      if (cmp.map)          cmp.map.invalidateSize();
+      if (cmp.zoomMap)      cmp.zoomMap.invalidateSize();
+      if (cmp.profileChart) cmp.profileChart.resize();
+      _uiPrefsSet('ascent-cmp-w', panel.style.width);
+      _uiPrefsSet('ascent-cmp-h', panel.style.height);
+      cmp._resizeTimer = setTimeout(() => { cmp._resizing = false; }, 300);
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', initCmpCornerResize);
+  setTimeout(initCmpCornerResize, 500);
+})();
+
 // ── SEGMENT SAVE / LOAD ──────────────────────────────────────────────────────
 
 async function cmpLoadSavedSegments() {
@@ -6253,7 +7080,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (mr.ok && ur.ok) {
       const me    = await mr.json();
       const users = await ur.json();
-      users.forEach(u => { userMap[u.id] = u.username; });
+      users.forEach(u => { userMap[u.id] = {username: u.username, avatar_url: u.avatar_url || null}; });
       _allUsers = users;
       viewState.myId       = me.id;
       viewState.myUsername = me.username;
@@ -6276,37 +7103,39 @@ document.addEventListener('DOMContentLoaded', () => {
   await loadFilterOptions();
   await loadAll();
   loadChartPrefs();
-  // Restore pane sizes
-  const ps = loadPaneSizes();
-  if (ps.sidebarW) { const sb = document.getElementById('sidebar'); if (sb) sb.style.width = ps.sidebarW + 'px'; }
-  if (ps.infoH)    { const el = document.getElementById('info-panel'); if (el) el.style.height = ps.infoH + 'px'; }
-  if (ps.chartH)   { const el = document.getElementById('chart-wrap'); if (el) el.style.height = ps.chartH + 'px'; }
-  if (ps.photoW)   { const el = document.getElementById('info-right'); if (el) el.style.width = ps.photoW + 'px'; }
-  // Restore stats open/closed state
-  try {
-    if (_uiPrefsGet('ascent-stats-open') === '0') {
-      const panel    = document.getElementById('info-panel');
-      const btn      = document.getElementById('stats-disclose');
-      const content  = panel && panel.querySelector('.stats-content');
-      if (panel) panel.style.height = STATS_TITLE_H + 'px';
-      if (content) content.style.display = 'none';
-      if (btn) btn.classList.add('collapsed');
-    } else {
-      const titlebar = document.getElementById('stats-titlebar');
-      if (titlebar) titlebar.style.cursor = 'row-resize';
-    }
-  } catch(e) {}
-  // Restore analysis open/closed state
-  try {
-    if (_uiPrefsGet('ascent-analysis-open') === '0') {
-      const wrap = document.getElementById('chart-wrap');
-      const btn  = document.getElementById('analysis-disclose');
-      const tb   = document.getElementById('analysis-titlebar');
-      if (wrap) wrap.style.height = ANALYSIS_TITLE_H + 'px';
-      if (btn) btn.classList.add('collapsed');
-      if (tb) tb.style.cursor = 'default';
-    }
-  } catch(e) {}
+  if (!_isPhoneLayout()) {
+    // Restore pane sizes (desktop/tablet only — phones use full-screen tab layout)
+    const ps = loadPaneSizes();
+    if (ps.sidebarW) { const sb = document.getElementById('sidebar'); if (sb) sb.style.width = ps.sidebarW + 'px'; }
+    if (ps.infoH)    { const el = document.getElementById('info-panel'); if (el) el.style.height = ps.infoH + 'px'; }
+    if (ps.chartH)   { const el = document.getElementById('chart-wrap'); if (el) el.style.height = ps.chartH + 'px'; }
+    if (ps.photoW)   { const el = document.getElementById('info-right'); if (el) el.style.width = ps.photoW + 'px'; }
+    // Restore stats open/closed state
+    try {
+      if (_uiPrefsGet('ascent-stats-open') === '0') {
+        const panel    = document.getElementById('info-panel');
+        const btn      = document.getElementById('stats-disclose');
+        const content  = panel && panel.querySelector('.stats-content');
+        if (panel) panel.style.height = STATS_TITLE_H + 'px';
+        if (content) content.style.display = 'none';
+        if (btn) btn.classList.add('collapsed');
+      } else {
+        const titlebar = document.getElementById('stats-titlebar');
+        if (titlebar) titlebar.style.cursor = 'row-resize';
+      }
+    } catch(e) {}
+    // Restore analysis open/closed state
+    try {
+      if (_uiPrefsGet('ascent-analysis-open') === '0') {
+        const wrap = document.getElementById('chart-wrap');
+        const btn  = document.getElementById('analysis-disclose');
+        const tb   = document.getElementById('analysis-titlebar');
+        if (wrap) wrap.style.height = ANALYSIS_TITLE_H + 'px';
+        if (btn) btn.classList.add('collapsed');
+        if (tb) tb.style.cursor = 'default';
+      }
+    } catch(e) {}
+  }
   // Auto-select activity from ?select= param
   const sel = new URLSearchParams(location.search).get('select');
   if (sel) selectActivity(parseInt(sel));
@@ -6532,10 +7361,11 @@ async function applyUserSelection() {
       <div id="compare-profile"><canvas id="cmp-profile-canvas"></canvas></div>
       <div id="compare-legend"></div>
     </div>
+    <div id="cmp-corner-handle"></div>
     <div id="compare-transport">
-      <button class="cmp-t-btn" id="cmp-play"  onclick="cmpPlay()">▶</button>
-      <button class="cmp-t-btn" id="cmp-stop"  onclick="cmpStop()">⏹</button>
-      <button class="cmp-t-btn" id="cmp-start" onclick="cmpJump(0)">⏮</button>
+      <button class="cmp-t-btn" id="cmp-play"  onclick="cmpPlay()"  title="Play"><svg viewBox="0 0 14 14" width="13" height="13" fill="currentColor"><polygon points="2,1 12,7 2,13"/></svg></button>
+      <button class="cmp-t-btn" id="cmp-stop"  onclick="cmpStop()"  title="Stop"><svg viewBox="0 0 14 14" width="13" height="13" fill="currentColor"><rect x="2" y="2" width="10" height="10"/></svg></button>
+      <button class="cmp-t-btn" id="cmp-start" onclick="cmpJump(0)" title="Go to start"><svg viewBox="0 0 14 14" width="13" height="13" fill="currentColor"><rect x="1" y="1" width="2" height="12"/><polygon points="13,1 5,7 13,13"/></svg></button>
       <span id="cmp-time">0:00:00</span>
       <input type="range" id="cmp-scrub" min="0" max="1000" value="0" oninput="cmpScrub(this.value)">
       <select id="cmp-speed" onchange="cmpSetSpeed(this.value)" title="Playback speed" style="background:var(--surface2);border:1px solid var(--border2);color:var(--text);border-radius:6px;padding:3px 6px;font-size:12px;font:inherit">
@@ -6680,6 +7510,104 @@ async function applyUserSelection() {
     </div>
   </div>
 </div>
+
+<!-- ── IMPORT MODAL ─────────────────────────────────────────────────────── -->
+<div id="import-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9000;align-items:center;justify-content:center">
+  <div style="background:var(--surface);border:1px solid var(--border2);border-radius:12px;padding:24px 28px;width:380px;max-width:95vw;box-shadow:0 8px 32px rgba(0,0,0,.6)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <span style="font-size:15px;font-weight:600;color:var(--text)">Import Activity</span>
+      <button onclick="closeImportModal()" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;line-height:1;padding:0">×</button>
+    </div>
+    <div id="import-drop-zone"
+         style="border:2px dashed var(--border2);border-radius:8px;padding:32px 16px;text-align:center;cursor:pointer;transition:border-color .15s"
+         onclick="document.getElementById('import-file-input').click()"
+         ondragover="event.preventDefault();this.style.borderColor='#f97316'"
+         ondragleave="this.style.borderColor=''"
+         ondrop="handleImportDrop(event)">
+      <div style="font-size:28px;margin-bottom:8px">↑</div>
+      <div style="font-size:13px;color:var(--text);margin-bottom:4px">Drop GPX or FIT files here</div>
+      <div style="font-size:11px;color:var(--muted)">or click to browse — multiple files supported</div>
+    </div>
+    <input type="file" id="import-file-input" accept=".gpx,.fit" multiple style="display:none" onchange="handleImportFiles(this.files)">
+    <div id="import-status" style="margin-top:14px;font-size:12px;color:var(--muted);min-height:18px;text-align:center"></div>
+  </div>
+</div>
+
+<script>
+function openImportModal() {
+  const ov = document.getElementById('import-overlay');
+  ov.style.display = 'flex';
+  document.getElementById('import-status').textContent = '';
+  document.getElementById('import-file-input').value = '';
+  document.getElementById('import-drop-zone').style.borderColor = '';
+}
+function closeImportModal() {
+  document.getElementById('import-overlay').style.display = 'none';
+}
+function handleImportDrop(e) {
+  e.preventDefault();
+  document.getElementById('import-drop-zone').style.borderColor = '';
+  if (e.dataTransfer.files.length) handleImportFiles(e.dataTransfer.files);
+}
+function handleImportFiles(files) {
+  if (!files || !files.length) return;
+  const valid = Array.from(files).filter(f => {
+    const ext = f.name.split('.').pop().toLowerCase();
+    return ext === 'gpx' || ext === 'fit';
+  });
+  if (!valid.length) {
+    document.getElementById('import-status').style.color = '#ff453a';
+    document.getElementById('import-status').textContent = 'Unsupported file type. Use .gpx or .fit';
+    return;
+  }
+  _runImportQueue(valid);
+}
+async function _runImportQueue(files) {
+  const statusEl = document.getElementById('import-status');
+  let imported = 0, skipped = 0, failed = 0;
+
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    const ext  = file.name.split('.').pop().toLowerCase();
+    statusEl.style.color = 'var(--muted)';
+    statusEl.textContent = files.length > 1
+      ? `Uploading ${i + 1} of ${files.length}…`
+      : 'Uploading…';
+
+    const fd = new FormData();
+    fd.append('file', file);
+    const endpoint = ext === 'fit' ? '/import/fit' : '/import/gpx';
+
+    try {
+      const resp = await fetch(endpoint, { method: 'POST', body: fd });
+      const data = await resp.json();
+      if (resp.status === 201)      imported++;
+      else if (resp.status === 409) skipped++;
+      else                          failed++;
+    } catch(err) {
+      failed++;
+    }
+  }
+
+  // Summary
+  const parts = [];
+  if (imported) parts.push(`${imported} imported`);
+  if (skipped)  parts.push(`${skipped} duplicate`);
+  if (failed)   parts.push(`${failed} failed`);
+  statusEl.style.color = failed ? '#ff453a' : imported ? '#30d158' : '#ff9f0a';
+  statusEl.textContent = parts.join(', ');
+
+  if (imported) {
+    setTimeout(() => closeImportModal(), 1200);
+    await loadAll();
+  }
+}
+// Close on backdrop click
+document.getElementById('import-overlay').addEventListener('click', function(e) {
+  if (e.target === this) closeImportModal();
+});
+</script>
+
 </body>
 </html>
 

@@ -1,5 +1,6 @@
 .env
 *.ascentdb
+*.ascentdb.gz
 strava_tokens.json
 __pycache__/
 *.pyc

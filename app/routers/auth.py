@@ -6,7 +6,7 @@ import os
 import time
 from typing import Callable, Optional
 
-from fastapi import APIRouter, Request, Form, Query, Depends
+from fastapi import APIRouter, Request, Form, Query, Depends, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 router = APIRouter()
@@ -377,5 +377,32 @@ async def admin_delete_invite(
         return RedirectResponse("/", status_code=303)
     db.delete_invite(token)
     return RedirectResponse("/admin/invites", status_code=303)
+
+
+@router.get("/admin/backup-db")
+async def backup_db(request: Request):
+    import subprocess
+    from datetime import date
+    from fastapi.responses import StreamingResponse
+    from app.auth import get_session_user_id
+    uid  = get_session_user_id(request)
+    user = db_getter().get_user(uid) if uid else None
+    if not user or not user.get("is_admin"):
+        raise HTTPException(403, "Admin only")
+    db_path = db_getter().path
+    fname   = f"Ascent-{date.today()}.ascentdb.gz"
+    def generate():
+        proc = subprocess.Popen(["gzip", "-c", db_path], stdout=subprocess.PIPE)
+        while True:
+            chunk = proc.stdout.read(65536)
+            if not chunk:
+                break
+            yield chunk
+        proc.wait()
+    return StreamingResponse(
+        generate(),
+        media_type="application/gzip",
+        headers={"Content-Disposition": f"attachment; filename={fname}"},
+    )
 
 
