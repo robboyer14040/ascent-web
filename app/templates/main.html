@@ -5742,10 +5742,12 @@ async function cmpOpenManualWithSegment() {
     const _refId = currentAct.id;
     const _refM  = allMatches.find(m => m.activity_id === _refId);
     const _restM = allMatches.filter(m => m.activity_id !== _refId);
-    cmp.matches  = _refM ? [_refM, ..._restM] : allMatches;
-    cmp.currentT = 0;
-    cmp.savedSegId = null;
+    cmp.matches      = _refM ? [_refM, ..._restM] : allMatches;
+    cmp.currentT     = 0;
+    cmp.savedSegId   = null;
+    cmp.savedSegName = null;
     cmp._manualIds = ordered;
+    cmpUpdateSaveBtn();
 
     const nFound = d.matches.length;
     const nTotal = ordered.length;
@@ -5796,10 +5798,12 @@ async function cmpOpenManual() {
 
   titleEl.textContent = `${ordered.length} Activities — choose a segment`;
   loading.style.display = 'none';
-  cmp.matches  = [];
-  cmp.currentT = 0;
-  cmp.savedSegId = null;
+  cmp.matches      = [];
+  cmp.currentT     = 0;
+  cmp.savedSegId   = null;
+  cmp.savedSegName = null;
   cmp._manualIds = ordered;  // store for later use when segment chosen
+  cmpUpdateSaveBtn();
 
   // Build placeholder legend with activity names + colors
   const legendEl = document.getElementById('compare-legend');
@@ -5935,9 +5939,11 @@ async function openCompare() {
   if (cmp.selStartIdx === null || cmp.selEndIdx === null) {
     titleEl.textContent = 'Select a region on the elevation chart, or choose a saved segment below';
     loading.style.display = 'none';
-    cmp.matches  = [];
-    cmp.currentT = 0;
-    cmp.savedSegId = null;
+    cmp.matches      = [];
+    cmp.currentT     = 0;
+    cmp.savedSegId   = null;
+    cmp.savedSegName = null;
+    cmpUpdateSaveBtn();
     await cmpLoadSavedSegments();
     return;
   }
@@ -6894,6 +6900,9 @@ async function cmpRunManualCompare(seg) {
     cmp.currentT     = 0;
     cmp.savedSegId   = seg.id;
     cmp.savedSegName = seg.name;
+    const _nameElM = document.getElementById('cmp-seg-name');
+    if (_nameElM) _nameElM.value = seg.name;
+    cmpUpdateSaveBtn();
 
     const nFound = d.matches.length;
     const nTotal = (cmp._manualIds || []).length;
@@ -7004,9 +7013,11 @@ async function cmpDeleteSegment() {
   if (!confirm(`Delete segment "${seg.name}"?`)) return;
   await fetch(`/api/segments/${segId}`, {method: 'DELETE'});
   if (cmp.savedSegId == segId) {
-    cmp.savedSegId = null;
+    cmp.savedSegId   = null;
+    cmp.savedSegName = null;
     const nameEl = document.getElementById('cmp-seg-name');
     if (nameEl) nameEl.value = '';
+    cmpUpdateSaveBtn();
   }
   await cmpLoadSavedSegments();
 }
