@@ -31,6 +31,7 @@ from app.routers import activities, api, strava, photos, settings, weather
 from app.routers import coach
 from app.routers import auth as auth_router
 from app.routers import fitgpx
+from app.routers import tours
 from app.auth import get_session_user_id
 
 load_dotenv()
@@ -126,7 +127,7 @@ def type_badge(t):
 
 templates.env.filters["fmt_date"]   = fmt_date
 templates.env.filters["type_badge"] = type_badge
-templates.env.globals["app_version"] = "v0.3.78"
+templates.env.globals["app_version"] = "v0.3.80"
 
 # ── wire routers ──────────────────────────────────────────────────────────────
 activities.db_getter = get_db
@@ -157,6 +158,9 @@ auth_router.templates = templates
 
 fitgpx.db_getter = get_db
 app.include_router(fitgpx.router)
+
+tours.db_getter = get_db
+app.include_router(tours.router)
 
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon():

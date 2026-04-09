@@ -327,7 +327,7 @@ async def export_gpx_batch(request: Request, body: dict = Body(...)):
         seen_names: dict[str, int] = {}
         for activity_id in ids:
             act = db.get_activity(int(activity_id))
-            if not act or act.get("user_id") != uid:
+            if not act:
                 continue
             pts  = db.get_track_points(int(activity_id))
             gpx  = b"".join(_gpx_chunks(act, pts))
