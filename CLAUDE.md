@@ -83,7 +83,7 @@ After every fix or feature, bump the patch version in `app/main.py`:
 templates.env.globals["app_version"] = "v0.1.X"
 ```
 
-Increment the third number (e.g. `v0.1.96` → `v0.1.97`). This is the single source of truth for the version displayed in the UI.
+Increment the third number (e.g. `v0.1.96` → `v0.1.97`). The third number can be up to 3 digits (e.g. `v0.5.0` → `v0.5.1` → … → `v0.5.100`). This is the single source of truth for the version displayed in the UI.
 
 ## Deployment
 

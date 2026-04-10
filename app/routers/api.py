@@ -1,6 +1,7 @@
 """routers/api.py — JSON API endpoints consumed by the frontend JS."""
 
 import os, json
+from datetime import datetime
 from app.auth import get_session_user_id
 from pathlib import Path
 from fastapi import APIRouter, Request, HTTPException, Query
@@ -263,23 +264,31 @@ async def activity_ai_summary(activity_id: int, request: Request, model: str = "
         con.close()
         raise HTTPException(403, "Summary not available")
 
-    # ── Fetch coach goal ──────────────────────────────────────────────────────
+    # ── Activity base info ────────────────────────────────────────────────────
+    act_start = act.get("start_time") or 0
+    act_type  = act.get("activity_type", "")
+
+    # ── Fetch applicable coach goal ───────────────────────────────────────────
+    # Apply the nearest goal whose target_date is still after this activity's date.
     goal_text = None
+    act_date_str = datetime.utcfromtimestamp(act_start).strftime("%Y-%m-%d") if act_start else None
     try:
-        row = con.execute(
-            "SELECT goal_text FROM coach_goals "
-            "WHERE user_id=? AND archived_at IS NULL "
-            "ORDER BY created_at DESC LIMIT 1",
-            (uid,)
-        ).fetchone()
-        if row:
-            goal_text = row[0]
+        # Find the nearest upcoming goal whose target_date is after this activity's date.
+        # No created_at gate — a goal set after an activity should still apply if the
+        # target date is still in the future relative to the activity.
+        rows = con.execute(
+            "SELECT goal_text, target_date FROM coach_goals "
+            "WHERE user_id=? AND target_date IS NOT NULL "
+            "  AND target_date > ? "
+            "ORDER BY target_date ASC LIMIT 1",
+            (uid, act_date_str)
+        ).fetchall()
+        if rows:
+            goal_text = rows[0][0]
     except Exception:
         pass
 
     # ── Fetch recent past activities of the same type (before this one) ───────
-    act_start = act.get("start_time") or 0
-    act_type  = act.get("activity_type", "")
     recent_lines = []
     try:
         rows = con.execute(
@@ -307,7 +316,6 @@ async def activity_ai_summary(activity_id: int, request: Request, model: str = "
 
     # ── Build prompt ──────────────────────────────────────────────────────────
     stats_str = _act_stats_str(act)
-    goal_clause = f"\nAthlete's current training goal: {goal_text}." if goal_text else ""
     recent_clause = (
         f"\nFor context, their {len(recent_lines)} most recent prior {act_type} activities:\n"
         + "\n".join(recent_lines)
@@ -326,11 +334,24 @@ async def activity_ai_summary(activity_id: int, request: Request, model: str = "
     type_hint = _TYPE_HINTS.get(act_type, "")
     type_hint_clause = f" ({type_hint})" if type_hint else ""
 
+    if goal_text:
+        goal_clause = f"\nAthlete's upcoming training goal: {goal_text}."
+        goal_instruction = (
+            "Briefly note how this activity relates to the athlete's training goal "
+            "if relevant. "
+        )
+    else:
+        goal_clause = ""
+        goal_instruction = (
+            "Highlight any performance standouts — e.g. distance, climb, pace, or HR records. "
+        )
+
     prompt = (
         f"Write a 1–2 sentence summary of this {act_type or 'activity'}{type_hint_clause}.\n"
         f"Name: \"{act.get('name', 'Unnamed')}\". Stats: {stats_str}."
         f"{goal_clause}{recent_clause}\n"
-        "Be specific and mention any notable stats or how it compares to recent efforts if relevant. "
+        f"Be specific and mention notable stats or how it compares to recent efforts if relevant. "
+        f"{goal_instruction}"
         "No emojis. No markdown."
     )
 

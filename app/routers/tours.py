@@ -8,7 +8,7 @@ import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from typing import Callable, List, Optional
 
-from fastapi import APIRouter, Body, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Body, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from app.auth import get_session_user_id
@@ -33,7 +33,25 @@ def _ensure_tables(con):
             title      TEXT    NOT NULL,
             start_date TEXT    NOT NULL,
             end_date   TEXT    NOT NULL,
-            created_at INTEGER NOT NULL
+            created_at INTEGER NOT NULL,
+            shared     INTEGER NOT NULL DEFAULT 1
+        )
+    """)
+    # Migrate existing DBs that pre-date the shared column
+    try:
+        con.execute("ALTER TABLE tours ADD COLUMN shared INTEGER NOT NULL DEFAULT 1")
+    except Exception:
+        pass
+    try:
+        con.execute("ALTER TABLE tours ADD COLUMN ai_summary TEXT")
+    except Exception:
+        pass
+    con.execute("""
+        CREATE TABLE IF NOT EXISTS tour_stage_ai_advice (
+            stage_id INTEGER NOT NULL,
+            user_id  INTEGER NOT NULL,
+            advice   TEXT    NOT NULL,
+            PRIMARY KEY (stage_id, user_id)
         )
     """)
     con.execute("""
@@ -317,8 +335,9 @@ async def list_tours(request: Request):
     try:
         _ensure_tables(con)
         rows = con.execute(
-            "SELECT id, created_by, title, start_date, end_date, created_at "
-            "FROM tours ORDER BY start_date DESC"
+            "SELECT id, created_by, title, start_date, end_date, created_at, shared "
+            "FROM tours WHERE created_by=? OR shared=1 ORDER BY start_date DESC",
+            (uid,),
         ).fetchall()
         return JSONResponse([{
             "id":         r[0],
@@ -327,6 +346,7 @@ async def list_tours(request: Request):
             "start_date": r[3],
             "end_date":   r[4],
             "created_at": r[5],
+            "shared":     bool(r[6]),
             "is_mine":    r[1] == uid,
         } for r in rows])
     finally:
@@ -339,6 +359,7 @@ async def create_tour(
     title:      str               = Form(...),
     start_date: str               = Form(...),
     end_date:   str               = Form(...),
+    shared:     int               = Form(default=1),
     files:      List[UploadFile]  = File(...),
 ):
     uid = get_session_user_id(request)
@@ -376,9 +397,9 @@ async def create_tour(
         _ensure_tables(con)
 
         cur = con.execute(
-            "INSERT INTO tours (created_by, title, start_date, end_date, created_at) "
-            "VALUES (?,?,?,?,?)",
-            (uid, title.strip(), start_date, end_date, int(_time.time())),
+            "INSERT INTO tours (created_by, title, start_date, end_date, created_at, shared) "
+            "VALUES (?,?,?,?,?,?)",
+            (uid, title.strip(), start_date, end_date, int(_time.time()), shared),
         )
         tour_id = cur.lastrowid
 
@@ -409,7 +430,7 @@ async def create_tour(
 
 
 @router.get("/tours/{tour_id}")
-async def get_tour(tour_id: int, request: Request):
+async def get_tour(tour_id: int, request: Request, match_user_id: Optional[int] = Query(default=None)):
     uid = get_session_user_id(request)
     if uid is None:
         raise HTTPException(401, "Not authenticated")
@@ -419,7 +440,7 @@ async def get_tour(tour_id: int, request: Request):
         _ensure_tables(con)
 
         row = con.execute(
-            "SELECT id, created_by, title, start_date, end_date FROM tours WHERE id=?",
+            "SELECT id, created_by, title, start_date, end_date, shared FROM tours WHERE id=?",
             (tour_id,),
         ).fetchone()
         if not row:
@@ -431,6 +452,7 @@ async def get_tour(tour_id: int, request: Request):
             "title":      row[2],
             "start_date": row[3],
             "end_date":   row[4],
+            "shared":     bool(row[5]) if row[5] is not None else True,
             "is_mine":    row[1] == uid,
         }
 
@@ -452,7 +474,8 @@ async def get_tour(tour_id: int, request: Request):
         } for sr in stage_rows]
 
         completions = _global_stage_matching(
-            con, uid, tour["start_date"], tour["end_date"], stages
+            con, match_user_id if match_user_id is not None else uid,
+            tour["start_date"], tour["end_date"], stages,
         )
         for stage in stages:
             stage["completion"] = completions.get(stage["id"])
@@ -477,7 +500,7 @@ async def get_tour_points(tour_id: int, request: Request):
             raise HTTPException(404, "Tour not found")
 
         rows = con.execute(
-            "SELECT ts.id, tp.lat, tp.lon "
+            "SELECT ts.id, tp.lat, tp.lon, tp.alt_ft "
             "FROM tour_stages ts "
             "JOIN tour_stage_points tp ON tp.stage_id = ts.id "
             "WHERE ts.tour_id = ? "
@@ -486,11 +509,11 @@ async def get_tour_points(tour_id: int, request: Request):
         ).fetchall()
 
         by_stage: dict = {}
-        for stage_id, lat, lon in rows:
+        for stage_id, lat, lon, alt_ft in rows:
             key = str(stage_id)
             if key not in by_stage:
                 by_stage[key] = []
-            by_stage[key].append([lat, lon])
+            by_stage[key].append([lat, lon, alt_ft])
 
         return JSONResponse(by_stage)
     finally:
@@ -564,6 +587,7 @@ async def update_tour(
     title:       str                       = Form(...),
     start_date:  str                       = Form(...),
     end_date:    str                       = Form(...),
+    shared:      int                       = Form(default=1),
     stage_order: str                       = Form(default="[]"),
     files:       Optional[List[UploadFile]] = File(default=None),
 ):
@@ -614,10 +638,15 @@ async def update_tour(
         if row[0] != uid:
             raise HTTPException(403, "Only the tour creator can edit it")
 
-        # Update metadata
+        # Update metadata and clear cached AI content
         con.execute(
-            "UPDATE tours SET title=?, start_date=?, end_date=? WHERE id=?",
-            (title.strip(), start_date, end_date, tour_id),
+            "UPDATE tours SET title=?, start_date=?, end_date=?, shared=?, ai_summary=NULL WHERE id=?",
+            (title.strip(), start_date, end_date, shared, tour_id),
+        )
+        con.execute(
+            "DELETE FROM tour_stage_ai_advice WHERE stage_id IN "
+            "(SELECT id FROM tour_stages WHERE tour_id=?)",
+            (tour_id,),
         )
 
         # Which existing stage IDs to keep
@@ -666,6 +695,345 @@ async def update_tour(
         raise
     finally:
         con.close()
+
+
+@router.get("/tours/{tour_id}/stages/{stage_id}/locations")
+async def get_stage_locations(tour_id: int, stage_id: int, request: Request):
+    """Sample points along a tour stage and reverse-geocode to a location string."""
+    uid = get_session_user_id(request)
+    if uid is None:
+        raise HTTPException(401, "Not authenticated")
+
+    con = sqlite3.connect(db_getter().path, timeout=10)
+    try:
+        _ensure_tables(con)
+        if not con.execute(
+            "SELECT 1 FROM tour_stages WHERE id=? AND tour_id=?", (stage_id, tour_id)
+        ).fetchone():
+            raise HTTPException(404, "Stage not found")
+        pts_rows = con.execute(
+            "SELECT lat, lon FROM tour_stage_points WHERE stage_id=? ORDER BY seq",
+            (stage_id,),
+        ).fetchall()
+    finally:
+        con.close()
+
+    if not pts_rows:
+        return JSONResponse({"locations": None})
+
+    from app.routers.weather import fetch_locations
+    pts = [{"lat": r[0], "lon": r[1]} for r in pts_rows]
+    locations = await fetch_locations(pts)
+    return JSONResponse({"locations": locations})
+
+
+@router.get("/tours/{tour_id}/stages/{stage_id}/forecast")
+async def get_stage_forecast(tour_id: int, stage_id: int, request: Request):
+    """Return an Open-Meteo forecast for the estimated date of an uncompleted tour stage."""
+    uid = get_session_user_id(request)
+    if uid is None:
+        raise HTTPException(401, "Not authenticated")
+
+    from datetime import date as _date, timedelta
+    import httpx
+
+    con = sqlite3.connect(db_getter().path, timeout=10)
+    try:
+        _ensure_tables(con)
+        stage_row = con.execute(
+            "SELECT ts.stage_num, ts.start_lat, ts.start_lon, t.start_date, t.end_date "
+            "FROM tour_stages ts JOIN tours t ON t.id = ts.tour_id "
+            "WHERE ts.id=? AND ts.tour_id=?",
+            (stage_id, tour_id),
+        ).fetchone()
+        if not stage_row:
+            raise HTTPException(404, "Stage not found")
+        stage_num, start_lat, start_lon, tour_start, tour_end = stage_row
+        total_stages = con.execute(
+            "SELECT COUNT(*) FROM tour_stages WHERE tour_id=?", (tour_id,)
+        ).fetchone()[0]
+    finally:
+        con.close()
+
+    if start_lat is None or start_lon is None:
+        return JSONResponse({"forecast": None, "out_of_range": False})
+
+    try:
+        sd = _date.fromisoformat(tour_start)
+        ed = _date.fromisoformat(tour_end)
+        tour_days = (ed - sd).days
+        offset = round((stage_num - 1) * tour_days / max(total_stages - 1, 1)) if total_stages > 1 else 0
+        stage_date = sd + timedelta(days=offset)
+    except Exception:
+        return JSONResponse({"forecast": None, "out_of_range": False})
+
+    today = datetime.now(timezone.utc).date()
+    delta = (stage_date - today).days
+    if not (0 <= delta <= 16):
+        return JSONResponse({"forecast": None, "out_of_range": True})
+
+    params = {
+        "latitude":  round(start_lat, 4),
+        "longitude": round(start_lon, 4),
+        "daily": "weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max",
+        "start_date": stage_date.isoformat(),
+        "end_date":   stage_date.isoformat(),
+        "temperature_unit": "fahrenheit",
+        "wind_speed_unit":  "kmh",
+        "timezone": "UTC",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.get("https://api.open-meteo.com/v1/forecast", params=params)
+            if r.status_code != 200:
+                return JSONResponse({"forecast": None})
+            data = r.json()
+    except Exception:
+        return JSONResponse({"forecast": None})
+
+    daily  = data.get("daily", {})
+    codes  = daily.get("weather_code",        [None])
+    t_max  = daily.get("temperature_2m_max",  [None])
+    t_min  = daily.get("temperature_2m_min",  [None])
+    precip = daily.get("precipitation_sum",   [None])
+    wind   = daily.get("wind_speed_10m_max",  [None])
+
+    from app.routers.weather import wmo_desc
+    return JSONResponse({"forecast": {
+        "stage_date":  stage_date.isoformat(),
+        "description": wmo_desc(codes[0]) if codes[0] is not None else None,
+        "temp_max_f":  round(t_max[0],  1) if t_max[0]  is not None else None,
+        "temp_min_f":  round(t_min[0],  1) if t_min[0]  is not None else None,
+        "precip_mm":   round(precip[0], 1) if precip[0] is not None else None,
+        "wind_kph":    round(wind[0],   1) if wind[0]   is not None else None,
+    }})
+
+
+@router.get("/tours/{tour_id}/ai-summary")
+async def get_tour_ai_summary(tour_id: int, request: Request, model: Optional[str] = Query(default=None), force: bool = Query(default=False)):
+    """Return an AI-generated summary of the entire tour (structure only, no activity data)."""
+    import os, httpx
+    from app.routers.coach import MODELS, DEFAULT_MODEL
+    uid = get_session_user_id(request)
+    if uid is None:
+        raise HTTPException(401, "Not authenticated")
+
+    db = db_getter()
+    api_key = (db.get_user(uid) or {}).get("anthropic_api_key") or ""
+    if not api_key:
+        api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        raise HTTPException(503, "No Anthropic API key configured")
+
+    con = sqlite3.connect(db.path, timeout=10)
+    try:
+        _ensure_tables(con)
+        row = con.execute(
+            "SELECT title, start_date, end_date, ai_summary FROM tours WHERE id=?", (tour_id,)
+        ).fetchone()
+        if not row:
+            raise HTTPException(404, "Tour not found")
+        tour_title, start_date, end_date, cached_summary = row
+        if cached_summary and not force:
+            return JSONResponse({"summary": cached_summary})
+        stage_rows = con.execute(
+            "SELECT stage_num, name, distance_mi, climb_ft FROM tour_stages WHERE tour_id=? ORDER BY stage_num",
+            (tour_id,),
+        ).fetchall()
+    finally:
+        con.close()
+
+    if not stage_rows:
+        raise HTTPException(404, "No stages found")
+
+    total_dist  = sum(r[2] for r in stage_rows)
+    total_climb = sum(r[3] for r in stage_rows)
+    avg_dist    = total_dist  / len(stage_rows)
+    avg_climb   = total_climb / len(stage_rows)
+
+    stage_lines = [
+        f"  Stage {r[0]}: {r[1]} — {r[2]:.1f}mi, {r[3]:.0f}ft climb"
+        for r in stage_rows
+    ]
+
+    prompt = (
+        f"Tour: {tour_title}\n"
+        f"Dates: {start_date} to {end_date}\n"
+        f"Number of stages: {len(stage_rows)}\n"
+        f"Total: {total_dist:.1f}mi, {total_climb:.0f}ft climb\n"
+        f"Average per stage: {avg_dist:.1f}mi, {avg_climb:.0f}ft climb\n\n"
+        "Stages:\n" + "\n".join(stage_lines) + "\n\n"
+        "Provide a concise summary of this tour for an endurance cyclist or hiker. Include:\n"
+        "- Overall character of the tour (total distance, total climbing, number of stages)\n"
+        "- Which stages are the most difficult and why they stand out\n"
+        "- Any notable patterns (e.g. back-to-back hard stages, easier transition stages, progressive difficulty)\n"
+        "Keep it to 3-5 sentences. Do not include training goals, training advice, or recent activity references."
+    )
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={
+                "x-api-key":         api_key,
+                "anthropic-version": "2023-06-01",
+                "content-type":      "application/json",
+            },
+            json={
+                "model":      model if model in MODELS else DEFAULT_MODEL,
+                "max_tokens": 350,
+                "messages":   [{"role": "user", "content": prompt}],
+            },
+        )
+
+    if resp.status_code != 200:
+        raise HTTPException(502, f"Claude API error: {resp.status_code}")
+
+    summary = resp.json()["content"][0]["text"].strip()
+
+    # Persist the generated summary
+    con2 = sqlite3.connect(db.path, timeout=10)
+    try:
+        con2.execute("UPDATE tours SET ai_summary=? WHERE id=?", (summary, tour_id))
+        con2.commit()
+    finally:
+        con2.close()
+
+    return JSONResponse({"summary": summary})
+
+
+@router.get("/tours/{tour_id}/stages/{stage_id}/ai-advice")
+async def get_stage_ai_advice(
+    tour_id: int,
+    stage_id: int,
+    request: Request,
+    match_user_id: Optional[int] = Query(default=None),
+    model: Optional[str] = Query(default=None),
+    force: bool = Query(default=False),
+):
+    """Return AI coach advice for an uncompleted tour stage."""
+    import os, httpx
+    from app.routers.coach import MODELS, DEFAULT_MODEL
+    uid = get_session_user_id(request)
+    if uid is None:
+        raise HTTPException(401, "Not authenticated")
+
+    db = db_getter()
+    api_key = (db.get_user(uid) or {}).get("anthropic_api_key") or ""
+    if not api_key:
+        api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        raise HTTPException(503, "No Anthropic API key configured")
+
+    con = sqlite3.connect(db.path, timeout=15)
+    try:
+        _ensure_tables(con)
+        tour_row = con.execute(
+            "SELECT title, start_date, end_date FROM tours WHERE id=?", (tour_id,)
+        ).fetchone()
+        if not tour_row:
+            raise HTTPException(404, "Tour not found")
+        tour_title, start_date, end_date = tour_row
+
+        target_row = con.execute(
+            "SELECT id, stage_num, name, distance_mi, climb_ft "
+            "FROM tour_stages WHERE id=? AND tour_id=?",
+            (stage_id, tour_id),
+        ).fetchone()
+        if not target_row:
+            raise HTTPException(404, "Stage not found")
+
+        all_stage_rows = con.execute(
+            "SELECT id, stage_num, name, distance_mi, climb_ft "
+            "FROM tour_stages WHERE tour_id=? ORDER BY stage_num",
+            (tour_id,),
+        ).fetchall()
+    finally:
+        con.close()
+
+    actual_uid = match_user_id if match_user_id is not None else uid
+
+    # Check per-user cache
+    con_cache = sqlite3.connect(db.path, timeout=10)
+    try:
+        _ensure_tables(con_cache)
+        cache_row = con_cache.execute(
+            "SELECT advice FROM tour_stage_ai_advice WHERE stage_id=? AND user_id=?",
+            (stage_id, actual_uid),
+        ).fetchone()
+        if cache_row and not force:
+            return JSONResponse({"advice": cache_row[0]})
+    finally:
+        con_cache.close()
+
+    stages = [
+        {"id": r[0], "stage_num": r[1], "name": r[2], "distance_mi": r[3], "climb_ft": r[4]}
+        for r in all_stage_rows
+    ]
+    target = next(s for s in stages if s["id"] == target_row[0])
+    con2 = sqlite3.connect(db.path, timeout=15)
+    try:
+        completions = _global_stage_matching(con2, actual_uid, start_date, end_date, stages)
+    finally:
+        con2.close()
+
+    n_done = sum(1 for s in stages if completions.get(s["id"]))
+
+    stage_lines = []
+    for s in stages:
+        comp = completions.get(s["id"])
+        marker = " ← UPCOMING" if s["id"] == target["id"] else ""
+        done_str = ""
+        if comp:
+            dur_h = round((comp.get("duration_s") or 0) / 3600, 1)
+            clb   = round(comp.get("climb_ft") or 0)
+            done_str = f" [DONE: {comp['distance_mi']:.1f}mi, {clb}ft climb, {dur_h}h]"
+        stage_lines.append(
+            f"  Stage {s['stage_num']}: {s['name']} — {s['distance_mi']:.1f}mi, {s['climb_ft']:.0f}ft climb{done_str}{marker}"
+        )
+
+    prompt = (
+        f"Tour: {tour_title} ({start_date} to {end_date})\n"
+        f"Progress: {n_done} of {len(stages)} stages completed\n\n"
+        "All stages:\n" + "\n".join(stage_lines) + "\n\n"
+        f"The athlete is preparing for Stage {target['stage_num']}: {target['name']} "
+        f"({target['distance_mi']:.1f}mi, {target['climb_ft']:.0f}ft climb).\n\n"
+        "Provide 2-4 sentences of specific coach advice for this upcoming stage. "
+        "Consider: the stage difficulty relative to completed stages, cumulative fatigue from prior stages, "
+        "and tactical tips (pacing, nutrition, effort management). "
+        "Do not mention training goals or recent training outside the tour. Be specific and actionable."
+    )
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={
+                "x-api-key":         api_key,
+                "anthropic-version": "2023-06-01",
+                "content-type":      "application/json",
+            },
+            json={
+                "model":      model if model in MODELS else DEFAULT_MODEL,
+                "max_tokens": 300,
+                "messages":   [{"role": "user", "content": prompt}],
+            },
+        )
+
+    if resp.status_code != 200:
+        raise HTTPException(502, f"Claude API error: {resp.status_code}")
+
+    advice = resp.json()["content"][0]["text"].strip()
+
+    con3 = sqlite3.connect(db.path, timeout=10)
+    try:
+        con3.execute(
+            "INSERT OR REPLACE INTO tour_stage_ai_advice (stage_id, user_id, advice) VALUES (?,?,?)",
+            (stage_id, actual_uid, advice),
+        )
+        con3.commit()
+    finally:
+        con3.close()
+
+    return JSONResponse({"advice": advice})
 
 
 @router.get("/tour", response_class=HTMLResponse)

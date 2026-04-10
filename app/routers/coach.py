@@ -56,6 +56,7 @@ _MIGRATIONS = [
     "ALTER TABLE coach_messages ADD COLUMN input_tokens  INTEGER DEFAULT 0",
     "ALTER TABLE coach_messages ADD COLUMN output_tokens INTEGER DEFAULT 0",
     "ALTER TABLE coach_goals ADD COLUMN user_id INTEGER",
+    "ALTER TABLE coach_goals ADD COLUMN target_date TEXT",   # ISO date YYYY-MM-DD, optional
 ]
 
 
@@ -174,15 +175,16 @@ def _build_activity_summary(db, user_id: Optional[int] = None) -> str:
     return summary
 
 
-def _build_system_prompt(goal_text: str, activity_summary: str) -> str:
+def _build_system_prompt(goal_text: str, activity_summary: str, target_date: Optional[str] = None) -> str:
     today = datetime.now().strftime("%B %d, %Y")
+    target_line = f"\nTarget date: {target_date}" if target_date else ""
     return f"""You are an expert endurance sports coach embedded in Ascent, a training log app. \
 You have access to the athlete's real training data and a specific goal they're working toward.
 
 Today's date: {today}
 
 ATHLETE'S GOAL:
-{goal_text}
+{goal_text}{target_line}
 
 {activity_summary}
 
@@ -232,6 +234,7 @@ def _model_info(model_id: str) -> dict:
 class GoalRequest(BaseModel):
     goal_text: str
     model: str = DEFAULT_MODEL
+    target_date: Optional[str] = None  # ISO date YYYY-MM-DD
 
 class ChatRequest(BaseModel):
     message: str
@@ -305,9 +308,10 @@ async def coach_state(request: Request):
             "SELECT COUNT(*) FROM coach_messages WHERE goal_id=?", (goal["id"],)
         ).fetchone()[0]
 
+        goal_dict = dict(goal)
         return {
             "has_goal":           True,
-            "goal":               dict(goal),
+            "goal":               goal_dict,
             "has_new_activities": has_new,
             "message_count":      msg_count,
         }
@@ -355,10 +359,17 @@ async def set_goal(req: GoalRequest, request: Request):
             (now, _uid)
         )
 
-        # Insert new goal with user_id
+        # Validate and sanitize target_date
+        target_date = None
+        if req.target_date:
+            import re
+            if re.match(r'^\d{4}-\d{2}-\d{2}$', req.target_date):
+                target_date = req.target_date
+
+        # Insert new goal with user_id and optional target_date
         cur = con.execute(
-            "INSERT INTO coach_goals (goal_text, created_at, user_id) VALUES (?,?,?)",
-            (req.goal_text.strip(), now, _uid)
+            "INSERT INTO coach_goals (goal_text, created_at, user_id, target_date) VALUES (?,?,?,?)",
+            (req.goal_text.strip(), now, _uid, target_date)
         )
         goal_id = cur.lastrowid
         con.commit()
@@ -367,7 +378,8 @@ async def set_goal(req: GoalRequest, request: Request):
 
     # Generate initial coach response
     initial = await _call_claude(db, goal_id, req.goal_text.strip(), [], proactive=True, user_id=_uid,
-                                  model=req.model if req.model in MODELS else DEFAULT_MODEL)
+                                  model=req.model if req.model in MODELS else DEFAULT_MODEL,
+                                  target_date=target_date)
     return {"goal_id": goal_id, "initial_message": initial}
 
 
@@ -392,8 +404,9 @@ async def coach_chat(req: ChatRequest, request: Request):
         if not goal:
             raise HTTPException(400, "No active goal. Set a goal first.")
 
-        goal_id   = goal["id"]
-        goal_text = goal["goal_text"]
+        goal_id     = goal["id"]
+        goal_text   = goal["goal_text"]
+        target_date = goal["target_date"] if "target_date" in goal.keys() else None
 
         # Check for new activities to surface proactively
         last_coach_ts    = _last_coach_message_ts(con, goal_id)
@@ -414,7 +427,8 @@ async def coach_chat(req: ChatRequest, request: Request):
 
     # Call Claude
     model = req.model if req.model in MODELS else DEFAULT_MODEL
-    reply = await _call_claude(db, goal_id, goal_text, history, proactive=has_new, model=model, user_id=uid)
+    reply = await _call_claude(db, goal_id, goal_text, history, proactive=has_new, model=model, user_id=uid,
+                               target_date=target_date)
     return {"reply": reply}
 
 
@@ -738,6 +752,7 @@ async def _call_claude(
     proactive: bool = False,
     model: str = DEFAULT_MODEL,
     user_id: int = None,
+    target_date: Optional[str] = None,
 ) -> str:
     """
     Call the Claude API and persist the assistant reply to the DB.
@@ -755,7 +770,7 @@ async def _call_claude(
         raise HTTPException(500, "No Anthropic API key set. Add your key in Settings.")
 
     activity_summary = _build_activity_summary(db, user_id=user_id)
-    system_prompt    = _build_system_prompt(goal_text, activity_summary)
+    system_prompt    = _build_system_prompt(goal_text, activity_summary, target_date=target_date)
 
     # Build messages array for the API (skip system-role rows)
     messages = []

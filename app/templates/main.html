@@ -320,19 +320,24 @@ select.edit-act-input{appearance:none;-webkit-appearance:none;cursor:pointer;pad
   overflow:hidden;
 }
 #coach-header{
-  display:flex;align-items:center;gap:8px;padding:14px 16px 12px;
+  display:flex;align-items:flex-start;gap:10px;padding:12px 14px 11px;
   border-bottom:1px solid var(--border);flex-shrink:0;
   background:linear-gradient(135deg,rgba(249,115,22,.12),rgba(10,132,255,.08));
 }
-#coach-header-icon{font-size:20px}
-#coach-header-title{font-size:15px;font-weight:700;flex:1;color:var(--text)}
-#coach-goal-text{
-  font-size:11px;color:var(--muted);white-space:nowrap;
-  overflow:hidden;text-overflow:ellipsis;max-width:340px;
+#coach-goal-block{
+  flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;
 }
+#coach-goal-label{
+  font-size:10px;font-weight:600;color:var(--muted2);text-transform:uppercase;letter-spacing:.05em;
+}
+#coach-goal-text{
+  font-size:12px;color:var(--text);line-height:1.5;
+  max-height:calc(12px * 1.5 * 3);overflow-y:auto;word-break:break-word;
+}
+#coach-header-actions{display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0}
 #coach-change-goal-btn{
   font-size:11px;color:var(--muted);border:1px solid var(--border2);
-  border-radius:5px;padding:3px 8px;background:var(--surface2);cursor:pointer;flex-shrink:0;
+  border-radius:5px;padding:4px 10px;background:var(--surface2);cursor:pointer;white-space:nowrap;
 }
 #coach-change-goal-btn:hover{color:var(--text);border-color:var(--text)}
 #coach-close-btn{font-size:20px;color:var(--muted);background:none;border:none;cursor:pointer;padding:0 2px;line-height:1}
@@ -966,7 +971,7 @@ select.edit-act-input{appearance:none;-webkit-appearance:none;cursor:pointer;pad
     <span class="nav-brand-name">⛰ Ascent</span><span class="nav-version">{{ app_version }}</span>
   </div>
   <div class="nav-pages" style="margin-left:14px">
-    <button class="nav-btn nav-active" data-page="activities">Activities</button>
+    <button class="nav-btn nav-active" data-page="activities" onclick="closeCoach()">Activities</button>
     <button class="nav-btn" data-page="summary" onclick="window.location='/'">Summary</button>
     <button class="nav-btn" data-page="coach" id="coach-nav-btn" onclick="openCoach()">Coach<span id="coach-new-dot" class="coach-dot" style="display:none"></span></button>
     <a href="/tour" class="nav-btn" data-page="tour">Tours</a>
@@ -1781,6 +1786,12 @@ async function loadAll() {
   const d = await r.json();
   state.all = d.activities;
   applyFilterAndSort();
+  const _pendingActId = sessionStorage.getItem('selectActivityId');
+  if (_pendingActId) {
+    sessionStorage.removeItem('selectActivityId');
+    const _target = state.filtered.find(a => String(a.id) === _pendingActId);
+    if (_target) { selectActivity(_target.id); scrollToSelected(); return; }
+  }
   if (state.filtered.length) selectActivity(state.filtered[0].id);
 }
 
@@ -3317,7 +3328,7 @@ function buildDetailHTML(a) {
     ${a.notes?`<div class="act-notes" style="margin-bottom:8px">${escHtml(a.notes)}</div>`:''}
     <div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:8px;max-width:100%;overflow:hidden">
       <div class="stats-grid">${chips.map(([l,v,sub])=>{const span=l==='Equipment'?Math.min(6,Math.max(1,Math.ceil(v.length/14))):1;const s=span>1?` style="grid-column:span ${span}"`:'';;return`<div class="stat-chip"${s}><div class="sc-label">${l}</div><div class="sc-val">${v}</div><div class="sc-sub">${sub||''}</div></div>`}).join('')}</div>
-      ${_hasAnthropicKey?`<div class="stat-chip" id="ai-summary-chip" style="width:252px;flex-shrink:0;align-items:flex-start;justify-content:flex-start;padding:6px 8px;overflow-y:auto;box-sizing:border-box${isOwner?'':';display:none'}"><div class="sc-label" style="margin-bottom:3px">✦ AI Summary</div><div id="ai-summary-text" style="font-size:11px;color:var(--muted);line-height:1.45">${isOwner?'Loading…':''}</div></div>`:''}
+      ${_hasAnthropicKey?`<div class="stat-chip" id="ai-summary-chip" style="width:252px;flex-shrink:0;align-items:flex-start;justify-content:flex-start;padding:6px 8px;overflow-y:auto;box-sizing:border-box${isOwner?'':';display:none'}"><div class="sc-label" style="margin-bottom:3px;display:flex;align-items:center;justify-content:space-between;width:100%"><span>✦ AI Summary</span>${isOwner?`<button id="ai-summary-refresh" onclick="loadAISummary(${a.id},true)" title="Regenerate summary" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:11px;padding:0;line-height:1" tabindex="-1">↺</button>`:''}</div><div id="ai-summary-text" style="font-size:11px;color:var(--muted);line-height:1.45">${isOwner?'Loading…':''}</div></div>`:''}
     </div>
     ${meta.length?`<div class="meta-row" style="margin-top:4px">${meta.map(([l,v])=>`<div class="meta-field"><div class="mf-label">${l}</div><div class="mf-val">${escHtml(String(v))}</div></div>`).join('')}</div>`:''}
   `;
@@ -3702,8 +3713,12 @@ async function loadAISummary(activityId, refresh = false) {
   if (!_hasAnthropicKey) return;
   const el   = document.getElementById('ai-summary-text');
   const chip = document.getElementById('ai-summary-chip');
+  const btn  = document.getElementById('ai-summary-refresh');
   if (!el || !chip) return;
-  if (refresh) el.textContent = 'Generating…';
+  if (refresh) {
+    el.textContent = 'Generating…';
+    if (btn) btn.disabled = true;
+  }
   try {
     const model = coachGetModel();
     const url = `/api/activities/${activityId}/ai-summary?model=${encodeURIComponent(model)}${refresh ? '&refresh=true' : ''}`;
@@ -3716,6 +3731,8 @@ async function loadAISummary(activityId, refresh = false) {
     el.textContent = d.summary || '—';
   } catch(e) {
     el.textContent = '—';
+  } finally {
+    if (btn) btn.disabled = false;
   }
 }
 
@@ -4740,6 +4757,7 @@ const coach = {
   hasGoal:      false,
   goalId:       null,
   goalText:     '',
+  targetDate:   null,
   hasNewActs:   false,
   sending:      false,
 };
@@ -4784,8 +4802,9 @@ async function coachLoadState() {
     if (!d.has_goal) {
       coachShowSetup();
     } else {
-      coach.goalId   = d.goal.id;
-      coach.goalText = d.goal.goal_text;
+      coach.goalId     = d.goal.id;
+      coach.goalText   = d.goal.goal_text;
+      coach.targetDate = d.goal.target_date || null;
       coachShowConversation();
       await coachLoadMessages();
       coachUpdateBanner();
@@ -4795,18 +4814,43 @@ async function coachLoadState() {
   }
 }
 
-function coachShowSetup() {
+function coachShowSetup(editing = false) {
   document.getElementById('coach-setup').style.display          = 'flex';
   document.getElementById('coach-conversation').style.display   = 'none';
   document.getElementById('coach-change-goal-btn').style.display = 'none';
-  document.getElementById('coach-goal-text').textContent        = '';
-  document.getElementById('coach-goal-input').value             = '';
-  document.getElementById('coach-set-goal-btn').disabled        = false;
-  document.getElementById('coach-set-goal-btn').textContent     = 'Start Coaching →';
   document.getElementById('coach-new-activity-banner').classList.remove('visible');
+
+  const cancelBtn = document.getElementById('coach-cancel-goal-btn');
+  const goalEl    = document.getElementById('coach-goal-text');
+  if (editing) {
+    document.getElementById('coach-setup-title').textContent = 'Update Your Training Goal';
+    document.getElementById('coach-setup-desc').textContent  = 'Edit your goal text or target date below. Saving will archive the current conversation and start a fresh coaching session.';
+    document.getElementById('coach-set-goal-btn').textContent = 'Update Goal →';
+    cancelBtn.style.display = 'inline-block';
+    // Keep current goal visible in header while editing
+    const dateLabel = coach.targetDate ? `  ·  Target: ${coach.targetDate}` : '';
+    goalEl.textContent = (coach.goalText || '') + dateLabel;
+    goalEl.style.display = 'block';
+  } else {
+    document.getElementById('coach-setup-title').textContent = 'Set Your Training Goal';
+    document.getElementById('coach-setup-desc').textContent  = 'Tell your AI coach what you\'re working toward. Be as specific as you like — event type, date, daily distances, terrain, anything that helps.';
+    document.getElementById('coach-goal-input').value        = '';
+    document.getElementById('coach-target-date').value       = '';
+    document.getElementById('coach-set-goal-btn').textContent = 'Start Coaching →';
+    cancelBtn.style.display = 'none';
+    goalEl.textContent = ''; goalEl.style.display = 'none';
+  }
+  document.getElementById('coach-set-goal-btn').disabled = false;
   // Restore saved model on setup screen
   const setupSel = document.getElementById('coach-setup-model');
   if (setupSel) setupSel.value = coachGetModel();
+}
+
+function coachChangeGoal() {
+  // Pre-fill with current goal text and target date, then show setup in edit mode
+  document.getElementById('coach-goal-input').value   = coach.goalText || '';
+  document.getElementById('coach-target-date').value  = coach.targetDate || '';
+  coachShowSetup(true);
 }
 
 function coachShowConversation() {
@@ -4816,11 +4860,11 @@ function coachShowConversation() {
   document.getElementById('coach-conversation').style.overflow    = 'hidden';
   document.getElementById('coach-conversation').style.flex        = '1';
   document.getElementById('coach-change-goal-btn').style.display  = 'inline-block';
-  // Truncate goal text for header display
-  const short = coach.goalText.length > 60
-    ? coach.goalText.slice(0, 57) + '…'
-    : coach.goalText;
-  document.getElementById('coach-goal-text').textContent = short;
+  // Show full goal text in the header card
+  const goalEl = document.getElementById('coach-goal-text');
+  const dateLabel = coach.targetDate ? `  ·  Target: ${coach.targetDate}` : '';
+  goalEl.textContent = (coach.goalText || '') + dateLabel;
+  goalEl.style.display = 'block';
   // Restore saved model selection
   coachRestoreModel();
   // Load usage summary quietly
@@ -4903,6 +4947,8 @@ async function coachSetGoal() {
   const setupModel = document.getElementById('coach-setup-model').value;
   coachSaveModel(setupModel);
 
+  const targetDate = document.getElementById('coach-target-date').value || null;
+
   const btn = document.getElementById('coach-set-goal-btn');
   btn.disabled = true;
   btn.textContent = 'Analysing your training…';
@@ -4911,7 +4957,7 @@ async function coachSetGoal() {
     const r = await fetch('/api/coach/goal', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({goal_text: text, model: setupModel}),
+      body: JSON.stringify({goal_text: text, model: setupModel, target_date: targetDate}),
     });
     if (!r.ok) {
       const e = await r.json();
@@ -4921,9 +4967,10 @@ async function coachSetGoal() {
       return;
     }
     const d = await r.json();
-    coach.goalId   = d.goal_id;
-    coach.goalText = text;
-    coach.hasGoal  = true;
+    coach.goalId     = d.goal_id;
+    coach.goalText   = text;
+    coach.targetDate = targetDate;
+    coach.hasGoal    = true;
     coach.hasNewActs = false;
 
     coachShowConversation();
@@ -7460,11 +7507,14 @@ async function applyUserSelection() {
 
     <!-- Header -->
     <div id="coach-header">
-      <span id="coach-header-icon">🧠</span>
-      <span id="coach-header-title">AI Coach</span>
-      <span id="coach-goal-text"></span>
-      <button id="coach-change-goal-btn" onclick="coachShowSetup()" style="display:none">Change Goal</button>
-      <button id="coach-close-btn" onclick="closeCoach()" title="Close">✕</button>
+      <div id="coach-goal-block">
+        <span id="coach-goal-label">Goal</span>
+        <div id="coach-goal-text"></div>
+      </div>
+      <div id="coach-header-actions">
+        <button id="coach-close-btn" onclick="closeCoach()" title="Close">✕</button>
+        <button id="coach-change-goal-btn" onclick="coachChangeGoal()" style="display:none">Change Goal…</button>
+      </div>
     </div>
 
     <!-- New-activity banner -->
@@ -7473,11 +7523,16 @@ async function applyUserSelection() {
       <span>New activities logged since your last coaching session — your coach will notice!</span>
     </div>
 
-    <!-- Goal setup screen (shown when no goal set) -->
+    <!-- Goal setup screen (shown when no goal set, or when editing existing goal) -->
     <div id="coach-setup">
-      <h2>Set Your Training Goal</h2>
-      <p>Tell your AI coach what you're working toward. Be as specific as you like — event type, date, daily distances, terrain, anything that helps.</p>
+      <h2 id="coach-setup-title">Set Your Training Goal</h2>
+      <p id="coach-setup-desc">Tell your AI coach what you're working toward. Be as specific as you like — event type, date, daily distances, terrain, anything that helps.</p>
       <textarea id="coach-goal-input" placeholder="e.g. I'm training for a 3-week bike tour in Spain starting June 15. Average day is 62 miles and 6,000ft of climbing. I have about 10 weeks to prepare."></textarea>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:8px;align-self:flex-start">
+        <span style="font-size:12px;color:var(--muted)">Target date:</span>
+        <input type="date" id="coach-target-date" style="background:var(--surface2);border:1px solid var(--border2);border-radius:6px;color:var(--text);font:inherit;font-size:12px;padding:3px 8px;outline:none;cursor:pointer" title="Optional: the date of your event or goal deadline">
+        <span style="font-size:11px;color:var(--muted2)">(optional)</span>
+      </div>
       <div style="display:flex;align-items:center;gap:8px;margin-top:4px;align-self:flex-start">
         <span style="font-size:12px;color:var(--muted)">Model:</span>
         <select id="coach-setup-model" style="background:var(--surface2);border:1px solid var(--border2);border-radius:6px;color:var(--text);font:inherit;font-size:12px;padding:3px 8px;outline:none;cursor:pointer">
@@ -7486,7 +7541,10 @@ async function applyUserSelection() {
           <option value="claude-sonnet-4-20250514">Sonnet 4 — most capable</option>
         </select>
       </div>
-      <button id="coach-set-goal-btn" onclick="coachSetGoal()">Start Coaching →</button>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button id="coach-set-goal-btn" onclick="coachSetGoal()">Start Coaching →</button>
+        <button id="coach-cancel-goal-btn" onclick="coachShowConversation()" style="display:none;background:var(--surface2);color:var(--muted);border:1px solid var(--border2);border-radius:8px;padding:10px 18px;font-size:13px;font-weight:600;cursor:pointer">Cancel</button>
+      </div>
     </div>
 
     <!-- Conversation (shown when goal exists) -->

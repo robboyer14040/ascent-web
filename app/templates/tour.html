@@ -37,6 +37,8 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
 #tour-controls{padding:10px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;flex-direction:column;gap:6px}
 #tour-selector{width:100%;font-size:12px;padding:5px 7px;background:var(--surface2);color:var(--text);border:1px solid var(--border2);border-radius:6px;outline:none}
 #tour-selector:focus{border-color:var(--accent)}
+#tour-user-selector{width:100%;font-size:11px;padding:4px 7px;background:var(--surface2);color:var(--accent);border:1px solid var(--border2);border-radius:6px;outline:none;font-weight:600}
+#tour-user-selector:focus{border-color:var(--accent)}
 #tour-btn-row{display:flex;gap:6px}
 .sb-btn{padding:5px 10px;border-radius:6px;font-size:12px;font-weight:500;background:var(--surface2);border:1px solid var(--border2);color:var(--text);white-space:nowrap;flex-shrink:0}
 .sb-btn:hover{background:var(--border2)}
@@ -128,6 +130,12 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
 #modal-drop-zone{border:2px dashed var(--border2);border-radius:7px;padding:12px;text-align:center;font-size:12px;color:var(--muted);cursor:pointer;margin-top:6px;transition:border-color .15s,color .15s}
 #modal-drop-zone:hover,#modal-drop-zone.drag-active{border-color:var(--accent);color:var(--text)}
 #modal-status{font-size:12px;color:var(--muted)}
+
+/* ── AI cards ── */
+.ai-card{background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:10px 12px;margin-top:14px}
+.ai-card-label{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--accent);margin-bottom:5px;font-weight:600}
+.ai-card-body{font-size:12px;color:var(--text);line-height:1.6}
+.ai-card-loading{font-size:11px;color:var(--muted);font-style:italic}
 </style>
 </head>
 <body>
@@ -163,6 +171,9 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
         <button class="sb-btn"         id="edit-tour-btn"  style="display:none" onclick="openEditModal()">Edit…</button>
         <button class="sb-btn danger"  id="delete-btn"     style="display:none" onclick="confirmDelete()">Delete</button>
       </div>
+      <select id="tour-user-selector" onchange="onUserSelect(this.value)">
+        <option value="">Match activities for…</option>
+      </select>
       <button class="sb-btn ghost full" id="view-all-btn" style="display:none" onclick="viewEntireTour()">View Entire Tour</button>
     </div>
     <div id="stage-list-wrap">
@@ -185,6 +196,11 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
         </div>
       </div>
       <div id="resize-handle" title="Drag to resize map"></div>
+      <div id="stage-elev-strip" style="display:none;height:100px;flex-shrink:0;background:var(--bg);border-bottom:1px solid var(--border);position:relative">
+        <canvas id="stage-elev-canvas"></canvas>
+        <div id="stage-elev-xhair" style="display:none;position:absolute;top:4px;bottom:0;width:1px;background:rgba(255,255,255,.45);pointer-events:none"></div>
+        <div id="stage-elev-hud" style="display:none;position:absolute;top:4px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.62);color:#e2e8f0;font-size:10px;font-family:monospace;padding:2px 8px;border-radius:4px;white-space:nowrap;pointer-events:none;z-index:10"></div>
+      </div>
       <div id="stage-detail"></div>
     </div>
   </div>
@@ -211,6 +227,10 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
           <label>End Date *</label>
           <input type="date" id="end-input">
         </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:7px;margin-bottom:10px">
+        <input type="checkbox" id="shared-input" checked style="width:14px;height:14px;accent-color:var(--accent);cursor:pointer;flex-shrink:0">
+        <label for="shared-input" style="font-size:12px;color:var(--text);cursor:pointer;user-select:none">Share with friends</label>
       </div>
       <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">Stages — drag to reorder</div>
     </div>
@@ -270,6 +290,7 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
 'use strict';
 
@@ -280,6 +301,8 @@ const U = {
   climbS: (ft) => U.metric ? Math.round(ft*0.3048)+' m' : Math.round(ft)+' ft',
   speedS: (mph)=> U.metric ? (+(mph*1.60934).toFixed(1))+' km/h' : (+mph).toFixed(1)+' mph',
   tempS:  (f)  => U.metric ? +((f-32)*5/9).toFixed(1)+' °C' : Math.round(f)+' °F',
+  windS:  (kph)=> U.metric ? Math.round(kph)+' km/h' : Math.round(kph/1.60934)+' mph',
+  precipS:(mm) => U.metric ? mm+' mm precip' : (mm/25.4).toFixed(2)+'" precip',
   async load() {
     try { const p = await fetch('/api/settings/training-zones').then(r=>r.json()); U.metric=!!p.use_metric; }
     catch(e) { U.metric=false; }
@@ -304,19 +327,46 @@ function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')
 
 // ── Color scheme ──────────────────────────────────────────────────────────────
 const C = {
-  done: ['#ef4444','#fca5a5'],  // red, light red
-  todo: ['#1e40af','#60a5fa'],  // dark blue,   light blue
+  done: '#ef4444',   // red
+  todo: '#1e40af',   // dark blue
   sel:  '#ef4444',
 };
-function stageColor(stage, idx) { return (stage.completion ? C.done : C.todo)[idx % 2]; }
+function stageColor(stage) { return stage.completion ? C.done : C.todo; }
+
+// ── Start / finish flag icons (same as Activities page) ───────────────────────
+const _startIcon = L.divIcon({
+  html: `<svg width="17" height="22" viewBox="0 0 20 26" xmlns="http://www.w3.org/2000/svg" style="filter:drop-shadow(0 1px 3px rgba(0,0,0,.9))">
+    <line x1="2" y1="0" x2="2" y2="26" stroke="white" stroke-width="2"/>
+    <polygon points="2,2 19,7 2,12" fill="#22c55e" stroke="#15803d" stroke-width="1"/>
+  </svg>`,
+  className: '', iconSize: [17,22], iconAnchor: [2,22],
+});
+const _endIcon = L.divIcon({
+  html: `<svg width="17" height="20" viewBox="0 0 22 26" xmlns="http://www.w3.org/2000/svg" style="filter:drop-shadow(0 1px 3px rgba(0,0,0,.9))">
+    <line x1="2" y1="0" x2="2" y2="26" stroke="white" stroke-width="2"/>
+    <rect x="2" y="2" width="20" height="12" fill="white" stroke="#333" stroke-width="0.5"/>
+    <rect x="2"  y="2"  width="5" height="4" fill="black"/>
+    <rect x="12" y="2"  width="5" height="4" fill="black"/>
+    <rect x="7"  y="6"  width="5" height="4" fill="black"/>
+    <rect x="17" y="6"  width="5" height="4" fill="black"/>
+    <rect x="2"  y="10" width="5" height="4" fill="black"/>
+    <rect x="12" y="10" width="5" height="4" fill="black"/>
+  </svg>`,
+  className: '', iconSize: [17,20], iconAnchor: [2,20],
+});
 
 // ── State ─────────────────────────────────────────────────────────────────────
-let tourMap     = null;
-let routeGroup  = null;
-let tourInfo    = null;
-let tourStages  = [];
-let selectedId  = null;
-let mapH        = 0;
+let tourCoachModel   = 'claude-haiku-4-5-20251001';
+let tourMap          = null;
+let routeGroup       = null;
+let tourInfo         = null;
+let tourStages       = [];
+let selectedId       = null;
+let mapH             = 0;
+let _tourPointsCache = {};   // byStage points for current tour, keyed by stage_id string
+let _stageElevChart  = null; // Chart.js instance for the elevation strip
+let _stageElevRawPts = null; // [[lat,lon,alt_ft], ...] parallel to chartPts for hover lookup
+let _stageHoverDot   = null; // Leaflet marker for yellow hover dot on map
 
 // Modal state
 let modalMode   = 'define';   // 'define' | 'edit'
@@ -366,6 +416,36 @@ function initMap() {
   handle.addEventListener('touchend',   endDrag);
 })();
 
+// ── User selector ─────────────────────────────────────────────────────────────
+let tourMatchUserId = null;
+
+async function loadUsers() {
+  try {
+    const users = await fetch('/api/users').then(r=>r.json());
+    const sel = document.getElementById('tour-user-selector');
+    sel.innerHTML = '';
+    users.forEach(u => {
+      const o = document.createElement('option');
+      o.value = u.id;
+      o.textContent = u.username;
+      sel.appendChild(o);
+    });
+    // Default to first user; will be overridden by persisted pref in init
+    if(users.length) { tourMatchUserId = users[0].id; sel.value = users[0].id; }
+  } catch(e) { console.error('loadUsers', e); }
+}
+
+async function onUserSelect(uid) {
+  tourMatchUserId = uid ? parseInt(uid) : null;
+  fetch('/api/settings/ui-prefs', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({prefs: {tour_match_user_id: tourMatchUserId || null}}),
+  }).catch(()=>{});
+  // Reload current tour with new user's activities
+  const tourSel = document.getElementById('tour-selector');
+  if(tourSel.value) await onTourSelect(tourSel.value);
+}
+
 // ── Tour CRUD ─────────────────────────────────────────────────────────────────
 async function loadTours() {
   try {
@@ -407,7 +487,8 @@ async function onTourSelect(id) {
   }
 
   try {
-    tourInfo   = await fetch(`/tours/${id}`).then(r=>r.json());
+    const tourUrl = tourMatchUserId ? `/tours/${id}?match_user_id=${tourMatchUserId}` : `/tours/${id}`;
+    tourInfo   = await fetch(tourUrl).then(r=>r.json());
     tourStages = tourInfo.stages || [];
   } catch(e) { console.error('tour fetch',e); return; }
 
@@ -452,7 +533,7 @@ function renderStageList() {
     item.className = 'stage-item' + (String(s.id)===String(selectedId) ? ' active' : '');
     item.dataset.id = s.id;
 
-    const dotColor = stageColor(s, idx);
+    const dotColor = stageColor(s);
     const statusHtml = s.completion
       ? `<div class="stage-status"><div class="stage-status-done">✓</div><div class="stage-status-date">${s.completion.date}</div></div>`
       : `<div class="stage-status"><div class="stage-status-none">—</div></div>`;
@@ -491,23 +572,53 @@ async function drawRoutes(activeId) {
   routeGroup.clearLayers();
   try {
     const byStage = await fetch(`/tours/${tourInfo.id}/points`).then(r=>r.json());
+    _tourPointsCache = byStage;
     const allPts  = [];
 
-    tourStages.forEach((s, idx) => {
+    tourStages.forEach((s) => {
       const pts = byStage[String(s.id)];
       if(!pts?.length) return;
       const isActive = activeId && String(s.id)===String(activeId);
       L.polyline(pts, {
-        color:   isActive ? C.sel : stageColor(s, idx),
+        color:   isActive ? C.sel : stageColor(s),
         weight:  isActive ? 5 : 3,
         opacity: activeId ? (isActive ? 1.0 : 0.18) : 0.85,
       }).addTo(routeGroup);
       allPts.push(...pts);
     });
 
+    // Stage start-point circle indicators — entire tour view only
+    if(!activeId) {
+      // Start flag behind stage-1 circle — drawn first, lower zIndexOffset
+      const first = tourStages.length ? tourStages[0] : null;
+      if(first?.start_lat != null)
+        L.marker([first.start_lat, first.start_lon], { icon: _startIcon, zIndexOffset: 50, interactive: false }).addTo(routeGroup);
+
+      // Stage number circles — on top of the start flag
+      tourStages.forEach(s => {
+        if(s.start_lat == null || s.start_lon == null) return;
+        const icon = L.divIcon({
+          className: '',
+          html: `<div style="width:16px;height:16px;border-radius:50%;background:#fff;border:1.5px solid #000;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:#000;font-family:-apple-system,sans-serif;line-height:1;box-sizing:border-box">${s.stage_num}</div>`,
+          iconSize:   [16, 16],
+          iconAnchor: [8, 8],
+        });
+        L.marker([s.start_lat, s.start_lon], { icon, zIndexOffset: 150, interactive: false }).addTo(routeGroup);
+      });
+
+      // Finish flag at end of last stage
+      const lastPts = tourStages.length ? byStage[String(tourStages[tourStages.length-1].id)] : null;
+      if(lastPts?.length)
+        L.marker(lastPts[lastPts.length-1], { icon: _endIcon, zIndexOffset: 200, interactive: false }).addTo(routeGroup);
+    }
+
     if(activeId) {
       const pts = byStage[String(activeId)];
-      if(pts?.length) tourMap.fitBounds(L.latLngBounds(pts), { padding:[36,36] });
+      if(pts?.length) {
+        L.marker(pts[0],            { icon: _startIcon, zIndexOffset: 200, interactive: false }).addTo(routeGroup);
+        L.marker(pts[pts.length-1], { icon: _endIcon,   zIndexOffset: 200, interactive: false }).addTo(routeGroup);
+        tourMap.fitBounds(L.latLngBounds(pts), { padding:[36,36] });
+      }
     } else if(allPts.length) {
       tourMap.fitBounds(L.latLngBounds(allPts), { padding:[24,24] });
     }
@@ -605,11 +716,214 @@ function buildStageActivityDetail(a) {
   return html;
 }
 
+// ── Stage elevation profile ───────────────────────────────────────────────────
+function _haversineMi(lat1, lon1, lat2, lon2) {
+  const R = 3958.8;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+  return R * 2 * Math.asin(Math.sqrt(a));
+}
+
+function calcStageGradient(chartPts, idx) {
+  const win = Math.min(5, Math.floor(chartPts.length / 20)) || 1;
+  const i0  = Math.max(0, idx - win);
+  const i1  = Math.min(chartPts.length - 1, idx + win);
+  if(i1 === i0) return 0;
+  const dx = chartPts[i1].x - chartPts[i0].x;
+  const dy = chartPts[i1].y - chartPts[i0].y;
+  if(!dx) return 0;
+  const factor = U.metric ? 1000 : 5280; // km→m or mi→ft
+  return dy / (dx * factor) * 100;
+}
+
+function _removeStageHoverDot() {
+  if(_stageHoverDot) { _stageHoverDot.remove(); _stageHoverDot = null; }
+}
+
+function onElevLeave() {
+  const xhair = document.getElementById('stage-elev-xhair');
+  const hud   = document.getElementById('stage-elev-hud');
+  if(xhair) xhair.style.display = 'none';
+  if(hud)   hud.style.display   = 'none';
+  _removeStageHoverDot();
+}
+
+function onElevHover(e) {
+  if(!_stageElevChart || !_stageElevRawPts) return;
+  const chart  = _stageElevChart;
+  const xAxis  = chart.scales.x;
+  const rect   = chart.canvas.getBoundingClientRect();
+  const mouseX = e.clientX - rect.left;
+
+  // Clamp to chart area
+  if(mouseX < xAxis.left || mouseX > xAxis.right) { onElevLeave(); return; }
+
+  const dataX  = xAxis.getValueForPixel(mouseX);
+  const pts    = _stageElevChart._elevChartPts;
+  const rawPts = _stageElevRawPts;
+
+  // Binary search for nearest point
+  let lo = 0, hi = pts.length - 1;
+  while(lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if(pts[mid].x < dataX) lo = mid + 1; else hi = mid;
+  }
+  const idx = (lo > 0 && Math.abs(pts[lo-1].x - dataX) < Math.abs(pts[lo].x - dataX)) ? lo - 1 : lo;
+  const pt  = pts[idx];
+  const px  = xAxis.getPixelForValue(pt.x);
+
+  // Crosshair
+  const xhair = document.getElementById('stage-elev-xhair');
+  if(xhair) { xhair.style.display = ''; xhair.style.left = px + 'px'; }
+
+  // HUD
+  const hud = document.getElementById('stage-elev-hud');
+  if(hud) {
+    const grad    = calcStageGradient(pts, idx);
+    const xUnit   = U.metric ? 'km' : 'mi';
+    const yUnit   = U.metric ? 'm'  : 'ft';
+    const distStr = `${pt.x.toFixed(2)} ${xUnit}`;
+    const altStr  = `${pt.y} ${yUnit}`;
+    const gradStr = `${grad >= 0 ? '+' : ''}${grad.toFixed(1)}%`;
+    hud.innerHTML = `DIST&nbsp;${distStr}&nbsp;&nbsp;ALT&nbsp;${altStr}&nbsp;&nbsp;GRAD&nbsp;${gradStr}`;
+    hud.style.display = '';
+  }
+
+  // Yellow map dot
+  if(rawPts[idx] && tourMap) {
+    const [lat, lon] = rawPts[idx];
+    const dotHtml = `<div style="width:10px;height:10px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#ffe066,#f59e0b 55%,#b45309);border:1.5px solid #fff;box-shadow:0 0 3px rgba(0,0,0,.5)"></div>`;
+    if(!_stageHoverDot) {
+      _stageHoverDot = L.marker([lat, lon], {
+        icon: L.divIcon({ html: dotHtml, className: '', iconSize: [10,10], iconAnchor: [5,5] }),
+        zIndexOffset: 1000, interactive: false,
+      }).addTo(tourMap);
+    } else {
+      _stageHoverDot.setLatLng([lat, lon]);
+    }
+  }
+}
+
+function drawStageElevation(pts) {
+  const strip  = document.getElementById('stage-elev-strip');
+  const canvas = document.getElementById('stage-elev-canvas');
+  if(!strip || !canvas) return;
+
+  // Destroy previous chart
+  if(_stageElevChart) { _stageElevChart.destroy(); _stageElevChart = null; }
+  _stageElevRawPts = null;
+  _removeStageHoverDot();
+  onElevLeave();
+
+  // Need altitude data — pts is [[lat,lon,alt_ft], ...]
+  if(!pts?.length || pts[0].length < 3) { strip.style.display = 'none'; return; }
+  const hasAlt = pts.some(p => p[2] && p[2] !== 0);
+  if(!hasAlt) { strip.style.display = 'none'; return; }
+
+  // Build {x: cumDist, y: alt} points, downsampled to ≤600
+  const step = Math.max(1, Math.floor(pts.length / 600));
+  const distConv = U.metric ? (mi => +(mi * 1.60934).toFixed(3)) : (mi => +mi.toFixed(3));
+  const altConv  = U.metric ? (ft => Math.round(ft * 0.3048))    : (ft => Math.round(ft));
+  const xUnit    = U.metric ? 'km' : 'mi';
+  const yUnit    = U.metric ? 'm'  : 'ft';
+
+  let cumDist = 0;
+  const chartPts = [];
+  const rawPts   = [];
+  for(let i = 0; i < pts.length; i++) {
+    if(i > 0) {
+      cumDist += _haversineMi(pts[i-1][0], pts[i-1][1], pts[i][0], pts[i][1]);
+    }
+    if(i % step === 0 || i === pts.length - 1) {
+      chartPts.push({ x: distConv(cumDist), y: altConv(pts[i][2] || 0) });
+      rawPts.push(pts[i]);
+    }
+  }
+  if(!chartPts.length) { strip.style.display = 'none'; return; }
+
+  _stageElevRawPts = rawPts;
+
+  const totalX = chartPts[chartPts.length - 1].x;
+  const minY   = Math.min(...chartPts.map(p => p.y));
+  const yFloor = Math.floor(minY / 100) * 100;
+
+  strip.style.display = '';
+  _stageElevChart = new Chart(canvas, {
+    type: 'line',
+    data: { datasets: [{
+      data: chartPts, fill: true,
+      borderColor: '#3b82f6', backgroundColor: 'rgba(30,80,180,.55)',
+      borderWidth: 1.5, pointRadius: 0, tension: 0.3,
+    }]},
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      layout: { padding: { top: 4, right: 10, bottom: 0, left: 0 } },
+      plugins: { legend: { display: false }, tooltip: { enabled: false } },
+      scales: {
+        x: {
+          type: 'linear', min: 0, max: totalX,
+          ticks: { color: '#64748b', font: { size: 9 }, maxTicksLimit: 8,
+                   callback: v => `${(+v).toFixed(1)} ${xUnit}` },
+          grid: { color: 'rgba(255,255,255,.04)' },
+        },
+        y: {
+          position: 'left', min: yFloor,
+          afterBuildTicks(axis) { if(axis.ticks.length > 1) axis.ticks.pop(); },
+          ticks: { color: '#64748b', font: { size: 9 }, maxTicksLimit: 4,
+                   callback: v => `${v} ${yUnit}` },
+          grid: { color: 'rgba(255,255,255,.06)' },
+        },
+      },
+    },
+  });
+
+  // Store chartPts on chart instance for hover handler
+  _stageElevChart._elevChartPts = chartPts;
+
+  // Wire hover events
+  strip.removeEventListener('mousemove', onElevHover);
+  strip.removeEventListener('mouseleave', onElevLeave);
+  strip.addEventListener('mousemove', onElevHover);
+  strip.addEventListener('mouseleave', onElevLeave);
+}
+
+function hideStageElevation() {
+  const strip = document.getElementById('stage-elev-strip');
+  if(strip) {
+    strip.style.display = 'none';
+    strip.removeEventListener('mousemove', onElevHover);
+    strip.removeEventListener('mouseleave', onElevLeave);
+  }
+  if(_stageElevChart) { _stageElevChart.destroy(); _stageElevChart = null; }
+  _stageElevRawPts = null;
+  _removeStageHoverDot();
+  onElevLeave();
+}
+
+// ── Client-side multi-point geocoding for trajectory ─────────────────────────
+async function geocodeAlongRoute(pts) {
+  if(!pts?.length) return null;
+  const n    = pts.length;
+  const num  = Math.min(5, n);
+  const idxs = num < 2 ? [0] :
+    Array.from({length: num}, (_, i) => Math.round(i * (n - 1) / (num - 1)));
+  const places = [];
+  for(let i = 0; i < idxs.length; i++) {
+    const [lat, lon] = pts[idxs[i]];
+    const p = await reverseGeocode(lat, lon);
+    if(p) places.push(p);
+  }
+  const deduped = places.filter((p, i) => i === 0 || p !== places[i - 1]);
+  return deduped.join(' → ') || null;
+}
+
 // ── Detail panel ──────────────────────────────────────────────────────────────
 async function renderDetail(activeId) {
   const el = document.getElementById('stage-detail');
 
   if(!activeId) {
+    hideStageElevation();
     if(!tourStages.length) { el.innerHTML=''; return; }
     const done       = tourStages.filter(s=>s.completion);
     const totalDist  = tourStages.reduce((s,x)=>s+(x.distance_mi||0),0);
@@ -619,8 +933,8 @@ async function renderDetail(activeId) {
     const pctD = totalDist >0 ? Math.round(doneDist /totalDist *100) : 0;
     const pctC = totalClimb>0 ? Math.round(doneClimb/totalClimb*100) : 0;
 
-    let html = `<div style="font-size:12px;color:var(--muted);margin-bottom:12px">${done.length} of ${tourStages.length} stages completed</div>`;
-    html += `<div class="stats-grid" style="max-width:380px;margin-bottom:14px">`;
+    let html = `<div class="stats-grid" style="max-width:380px;margin-bottom:14px">`;
+    html += `<div class="stat-chip"><div class="sc-label">Stages</div><div class="sc-val">${done.length} / ${tourStages.length}</div><div class="sc-sub">completed</div></div>`;
     html += `<div class="stat-chip"><div class="sc-label">Total Dist</div><div class="sc-val">${U.distS(totalDist)}</div><div class="sc-sub">${U.distS(doneDist)} done (${pctD}%)</div></div>`;
     html += `<div class="stat-chip"><div class="sc-label">Total Climb</div><div class="sc-val">${U.climbS(totalClimb)}</div><div class="sc-sub">${U.climbS(doneClimb)} done (${pctC}%)</div></div>`;
     html += `</div>`;
@@ -629,22 +943,75 @@ async function renderDetail(activeId) {
     const first = tourStages[0];
     const last  = tourStages[tourStages.length-1];
     const lastDone = done.length ? done[done.length-1] : null;
+    // End of tour = last point of last stage's route (not its start point)
+    const _lastStagePts = last ? (_tourPointsCache[String(last.id)] || []) : [];
+    const _lastPt = _lastStagePts.length ? _lastStagePts[_lastStagePts.length - 1] : null;
     html += `<div style="display:flex;flex-direction:column;gap:6px">`;
     if(first?.start_lat != null)
       html += `<div style="font-size:12px"><span style="color:var(--muted);margin-right:6px">Start:</span><span id="ov-start-loc">Loading…</span></div>`;
-    if(last?.start_lat != null)
+    if(_lastPt)
       html += `<div style="font-size:12px"><span style="color:var(--muted);margin-right:6px">End:</span><span id="ov-end-loc">Loading…</span></div>`;
     if(lastDone && lastDone.start_lat != null)
       html += `<div style="font-size:12px"><span style="color:var(--muted);margin-right:6px">Last completed:</span><span id="ov-last-loc">Loading…</span></div>`;
     html += `</div>`;
     el.innerHTML = html;
 
+    function _geocacheFill(lat, lon, elId, cacheKey) {
+      const _ls = s => { try { return localStorage.getItem(s); } catch(e) { return null; } };
+      const _lsSet = (k,v) => { try { localStorage.setItem(k,v); } catch(e) {} };
+      const cached = _ls(cacheKey);
+      if(cached) { const e=document.getElementById(elId); if(e) e.textContent=cached; return; }
+      reverseGeocode(lat, lon).then(loc => {
+        if(loc) _lsSet(cacheKey, loc);
+        const e=document.getElementById(elId); if(e) e.textContent=loc||'—';
+      });
+    }
     if(first?.start_lat != null)
-      reverseGeocode(first.start_lat,first.start_lon).then(loc=>{ const e=document.getElementById('ov-start-loc'); if(e)e.textContent=loc||'—'; });
-    if(last?.start_lat != null)
-      reverseGeocode(last.start_lat,last.start_lon).then(loc=>{ const e=document.getElementById('ov-end-loc'); if(e)e.textContent=loc||'—'; });
+      _geocacheFill(first.start_lat, first.start_lon, 'ov-start-loc', `tour-ov-start-${tourInfo.id}`);
+    if(_lastPt)
+      _geocacheFill(_lastPt[0], _lastPt[1], 'ov-end-loc', `tour-ov-endpt-${tourInfo.id}`);
     if(lastDone?.start_lat != null)
-      reverseGeocode(lastDone.start_lat,lastDone.start_lon).then(loc=>{ const e=document.getElementById('ov-last-loc'); if(e)e.textContent=loc||'—'; });
+      _geocacheFill(lastDone.start_lat, lastDone.start_lon, 'ov-last-loc', `tour-ov-last-${lastDone.id}`);
+
+    // AI Tour Summary card — show when tour is not fully completed OR end date has passed
+    const today = new Date().toISOString().slice(0,10);
+    const tourEnded    = tourInfo.end_date < today;
+    const allCompleted = tourStages.length > 0 && done.length === tourStages.length;
+    if(!allCompleted || tourEnded) {
+      el.insertAdjacentHTML('beforeend', `<div class="ai-card" id="tour-ai-summary-card">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
+          <div class="ai-card-label" style="margin-bottom:0">AI Tour Summary</div>
+          <button id="tour-ai-summary-refresh" title="Regenerate summary" onclick="refreshTourAiSummary()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:13px;padding:0;line-height:1;flex-shrink:0">↺</button>
+        </div>
+        <div class="ai-card-body ai-card-loading" id="tour-ai-summary-text">Generating summary…</div>
+      </div>`);
+      function _loadTourAiSummary(force) {
+        const txt = document.getElementById('tour-ai-summary-text');
+        const btn = document.getElementById('tour-ai-summary-refresh');
+        if(txt) { txt.textContent = 'Generating summary…'; txt.classList.add('ai-card-loading'); }
+        if(btn) btn.style.opacity = '0.4';
+        const forceParam = force ? '&force=1' : '';
+        fetch(`/tours/${tourInfo.id}/ai-summary?model=${encodeURIComponent(tourCoachModel)}${forceParam}`)
+          .then(r => r.ok ? r.json() : null)
+          .then(d => {
+            const el2 = document.getElementById('tour-ai-summary-text');
+            const b   = document.getElementById('tour-ai-summary-refresh');
+            if(el2) {
+              if(d?.summary) { el2.textContent = d.summary; el2.classList.remove('ai-card-loading'); }
+              else { el2.textContent = 'Summary unavailable.'; el2.classList.remove('ai-card-loading'); }
+            }
+            if(b) b.style.opacity = '';
+          })
+          .catch(() => {
+            const el2 = document.getElementById('tour-ai-summary-text');
+            const b   = document.getElementById('tour-ai-summary-refresh');
+            if(el2) { el2.textContent = 'Summary unavailable.'; el2.classList.remove('ai-card-loading'); }
+            if(b) b.style.opacity = '';
+          });
+      }
+      window.refreshTourAiSummary = () => _loadTourAiSummary(true);
+      _loadTourAiSummary(false);
+    }
     return;
   }
 
@@ -654,7 +1021,9 @@ async function renderDetail(activeId) {
   const stageHead = `<div style="font-size:15px;font-weight:600;margin-bottom:10px">Stage ${stage.stage_num}: ${esc(stage.name)}</div>`;
 
   if(!stage.completion) {
-    // Non-completed: show estimated route + location
+    // Non-completed: draw elevation strip then show chips + location + forecast
+    drawStageElevation(_tourPointsCache[String(stage.id)]);
+
     const distP = U.metric?(+(stage.distance_mi*1.60934).toFixed(1))+' km':(+stage.distance_mi).toFixed(1)+' mi';
     const distS = U.metric?(+stage.distance_mi.toFixed(1))+' mi':(+(stage.distance_mi*1.60934).toFixed(1))+' km';
     const climP = U.metric?Math.round(stage.climb_ft*0.3048)+' m':Math.round(stage.climb_ft)+' ft';
@@ -662,35 +1031,106 @@ async function renderDetail(activeId) {
 
     let html = stageHead;
     html += `<div class="section-label" style="margin-bottom:6px">Estimated Route</div>`;
-    html += `<div class="stats-grid" style="max-width:300px;margin-bottom:14px">`;
+    html += `<div class="stats-grid" style="max-width:300px;margin-bottom:10px">`;
     html += mkStatChip('Distance', distP, distS);
     html += mkStatChip('Climb',    climP, climS);
     html += `</div>`;
-    html += `<div style="display:flex;align-items:baseline;gap:8px">
-      <span class="section-label" style="margin-bottom:0">Location</span>
-      <span id="stage-loc-text" style="font-size:12px;color:var(--muted)">Loading…</span>
-    </div>`;
+    html += `<div style="font-size:11px;color:var(--muted);min-height:1.4em"><span style="font-size:10px;text-transform:uppercase;letter-spacing:.06em">Trajectory:</span> <span id="stage-loc-text">Loading…</span></div>`;
+    html += `<div style="margin-top:6px;font-size:11px;color:var(--muted)"><span style="font-size:10px;text-transform:uppercase;letter-spacing:.06em">Forecast:</span> <span id="stage-forecast-text">Loading…</span></div>`;
     el.innerHTML = html;
 
-    // Async reverse-geocode
-    if(stage.start_lat != null && stage.start_lon != null) {
-      reverseGeocode(stage.start_lat, stage.start_lon).then(loc => {
-        const locEl = document.getElementById('stage-loc-text');
-        if(locEl) locEl.textContent = loc || '—';
-      });
-    } else {
+    // Trajectory — check localStorage cache first, else geocode client-side
+    const _locKey = `tour-stage-loc-${stage.id}`;
+    const _cached = (() => { try { return localStorage.getItem(_locKey); } catch(e) { return null; } })();
+    if(_cached) {
       const locEl = document.getElementById('stage-loc-text');
-      if(locEl) locEl.textContent = '—';
+      if(locEl) locEl.textContent = _cached;
+    } else {
+      geocodeAlongRoute(_tourPointsCache[String(stage.id)]).then(loc => {
+        if(loc) { try { localStorage.setItem(_locKey, loc); } catch(e) {} }
+        const locEl = document.getElementById('stage-loc-text');
+        if(locEl) locEl.textContent = loc || '';
+      });
+    }
+
+    // Forecast
+    fetch(`/tours/${tourInfo.id}/stages/${stage.id}/forecast`)
+      .then(r => r.json())
+      .then(d => {
+        const txt = document.getElementById('stage-forecast-text');
+        if(!txt) return;
+        if(d.out_of_range) { txt.textContent = 'unavailable'; return; }
+        const fc = d.forecast;
+        if(!fc) { txt.textContent = ''; return; }
+        const parts = [];
+        if(fc.description) parts.push(fc.description);
+        if(fc.temp_max_f != null && fc.temp_min_f != null)
+          parts.push(U.tempS(fc.temp_max_f) + ' / ' + U.tempS(fc.temp_min_f));
+        if(fc.wind_kph  != null) parts.push('Wind ' + U.windS(fc.wind_kph));
+        if(fc.precip_mm >  0)   parts.push(U.precipS(fc.precip_mm));
+        txt.textContent = parts.join(' · ');
+      })
+      .catch(() => {
+        const txt = document.getElementById('stage-forecast-text');
+        if(txt) txt.textContent = '';
+      });
+
+    // AI Coach Advice — only for the single next uncompleted stage after the last completed one
+    const _completedNums = tourStages.filter(s => s.completion).map(s => s.stage_num);
+    const _lastDoneNum   = _completedNums.length ? Math.max(..._completedNums) : 0;
+    const _nextStage     = tourStages
+      .filter(s => !s.completion && s.stage_num > _lastDoneNum)
+      .sort((a, b) => a.stage_num - b.stage_num)[0];
+    if(_nextStage && _nextStage.id === stage.id) {
+      el.insertAdjacentHTML('beforeend', `<div class="ai-card" id="stage-ai-advice-card">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
+          <div class="ai-card-label" style="margin-bottom:0">AI Coach Advice</div>
+          <button id="stage-ai-advice-refresh" title="Regenerate advice" onclick="refreshStageAiAdvice()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:13px;padding:0;line-height:1;flex-shrink:0">↺</button>
+        </div>
+        <div class="ai-card-body ai-card-loading" id="stage-ai-advice-text">Loading advice…</div>
+      </div>`);
+      const _stageIdForAdvice = stage.id;
+      function _loadStageAiAdvice(force) {
+        const txt = document.getElementById('stage-ai-advice-text');
+        const btn = document.getElementById('stage-ai-advice-refresh');
+        if(txt) { txt.textContent = 'Loading advice…'; txt.classList.add('ai-card-loading'); }
+        if(btn) btn.style.opacity = '0.4';
+        const muParam    = tourMatchUserId ? `&match_user_id=${tourMatchUserId}` : '';
+        const forceParam = force ? '&force=1' : '';
+        fetch(`/tours/${tourInfo.id}/stages/${_stageIdForAdvice}/ai-advice?model=${encodeURIComponent(tourCoachModel)}${muParam}${forceParam}`)
+          .then(r => r.ok ? r.json() : null)
+          .then(d => {
+            const el2 = document.getElementById('stage-ai-advice-text');
+            const b   = document.getElementById('stage-ai-advice-refresh');
+            if(el2) {
+              if(d?.advice) { el2.textContent = d.advice; el2.classList.remove('ai-card-loading'); }
+              else { el2.textContent = 'Advice unavailable.'; el2.classList.remove('ai-card-loading'); }
+            }
+            if(b) b.style.opacity = '';
+          })
+          .catch(() => {
+            const el2 = document.getElementById('stage-ai-advice-text');
+            const b   = document.getElementById('stage-ai-advice-refresh');
+            if(el2) { el2.textContent = 'Advice unavailable.'; el2.classList.remove('ai-card-loading'); }
+            if(b) b.style.opacity = '';
+          });
+      }
+      window.refreshStageAiAdvice = () => _loadStageAiAdvice(true);
+      _loadStageAiAdvice(false);
     }
     return;
   }
 
-  // Completed: fetch full activity data and render INFO-pane style
+  // Completed: hide elevation strip and render INFO-pane style
+  hideStageElevation();
   el.innerHTML = stageHead + `<div style="color:var(--muted);font-size:12px">Loading…</div>`;
   try {
     const act = await fetch(`/activities/${stage.completion.activity_id}/json`).then(r=>r.json());
     el.innerHTML = stageHead +
-      `<div style="font-size:11px;color:#22c55e;font-weight:500;margin-bottom:10px">✓ Completed ${stage.completion.date}</div>` +
+      `<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <div style="font-size:11px;color:#22c55e;font-weight:500">✓ Completed ${stage.completion.date}</div>
+        <button onclick="sessionStorage.setItem('selectActivityId','${act.id}');window.location='/activities'" style="font-size:10px;padding:2px 7px;border-radius:4px;border:1px solid var(--border2);background:var(--surface2);color:var(--muted);cursor:pointer;line-height:1.5">View on Activities page</button>
+      </div>` +
       buildStageActivityDetail(act);
     setTimeout(() => {
       loadStageActivityWx(act.id);
@@ -733,8 +1173,8 @@ async function loadStageActivityWx(actId) {
     if(wxEl && d.weather?.description) {
       const w=d.weather, parts=[w.description];
       if(w.avg_temp_f !=null) parts.push(U.tempS(w.avg_temp_f));
-      if(w.avg_wind_kph!=null) parts.push(`Wind ${Math.round(w.avg_wind_kph)} km/h`);
-      if(w.precip_mm  >  0)  parts.push(`${w.precip_mm}mm precip`);
+      if(w.avg_wind_kph!=null) parts.push('Wind ' + U.windS(w.avg_wind_kph));
+      if(w.precip_mm  >  0)  parts.push(U.precipS(w.precip_mm));
       wxEl.textContent = parts.join(' · ');
     }
     if(locEl && d.locations) locEl.textContent = d.locations;
@@ -949,16 +1389,14 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
-// ── Reverse-geocode a lat/lon via Nominatim ───────────────────────────────────
+// ── Reverse-geocode a lat/lon via BigDataCloud (no key, generous rate limit) ──
 async function reverseGeocode(lat, lon) {
   try {
     const r = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&zoom=10`,
-      { headers: {'Accept-Language':'en'} }
+      `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`
     );
     const d = await r.json();
-    const addr = d.address || {};
-    const parts = [addr.city||addr.town||addr.village||addr.county, addr.state||addr.region, addr.country].filter(Boolean);
+    const parts = [d.city||d.locality||d.principalSubdivision, d.countryName].filter(Boolean);
     return parts.slice(0,2).join(', ');
   } catch(e) { return null; }
 }
@@ -975,6 +1413,7 @@ function _openDefine() {
   document.getElementById('title-input').value = '';
   document.getElementById('start-input').value = '';
   document.getElementById('end-input').value   = '';
+  document.getElementById('shared-input').checked = true;
   document.getElementById('modal-status').textContent = '';
   document.getElementById('submit-btn').disabled = false;
   renderModalStages();
@@ -992,6 +1431,7 @@ function _openEdit() {
   document.getElementById('title-input').value = tourInfo.title;
   document.getElementById('start-input').value = tourInfo.start_date;
   document.getElementById('end-input').value   = tourInfo.end_date;
+  document.getElementById('shared-input').checked = tourInfo.shared !== false;
   document.getElementById('modal-status').textContent = '';
   document.getElementById('submit-btn').disabled = false;
   renderModalStages();
@@ -1176,6 +1616,7 @@ async function submitTour() {
       form.append('title', title);
       form.append('start_date', sd);
       form.append('end_date', ed);
+      form.append('shared', document.getElementById('shared-input').checked ? '1' : '0');
       // Append files in the order they appear in modalStages
       modalStages.forEach(s => form.append('files', s.file));
 
@@ -1204,6 +1645,7 @@ async function submitTour() {
       form.append('title', title);
       form.append('start_date', sd);
       form.append('end_date', ed);
+      form.append('shared', document.getElementById('shared-input').checked ? '1' : '0');
       form.append('stage_order', JSON.stringify(stageOrder));
       newStages.forEach(s => form.append('files', s.file));
 
@@ -1266,10 +1708,22 @@ document.addEventListener('DOMContentLoaded', () => {
 (async () => {
   await U.load();
   initMap();
+  await loadUsers();
   await loadTours();
-  // Restore last selected tour
+  // Restore persisted prefs
   try {
     const prefs = await fetch('/api/settings/ui-prefs').then(r=>r.json());
+    // Restore AI coach model preference
+    if(prefs['ascent-coach-model']) tourCoachModel = prefs['ascent-coach-model'];
+    // Restore selected user for activity matching
+    if(prefs.tour_match_user_id) {
+      const uSel = document.getElementById('tour-user-selector');
+      if(uSel.querySelector(`option[value="${prefs.tour_match_user_id}"]`)) {
+        uSel.value = String(prefs.tour_match_user_id);
+        tourMatchUserId = prefs.tour_match_user_id;
+      }
+    }
+    // Restore last selected tour
     const lastId = prefs.last_tour_id;
     if(lastId) {
       const sel = document.getElementById('tour-selector');
