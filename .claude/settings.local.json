@@ -26,7 +26,8 @@
       "Bash(python:*)",
       "Bash(pip install:*)",
       "Bash(pip3 install:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(sqlite3:*)"
     ]
   }
 }

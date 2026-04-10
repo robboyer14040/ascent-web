@@ -8,14 +8,15 @@ import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from typing import Callable, List, Optional
 
-from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Body, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from app.auth import get_session_user_id
 from app.routers.fitgpx import _haversine_m
 
 router    = APIRouter()
 db_getter: Callable = None
+templates = None
 
 M_TO_MI    = 0.000621371
 M_TO_FT    = 3.28084
@@ -152,66 +153,8 @@ def _parse_gpx_route(data: bytes, filename: str) -> dict:
 
 # ── Stage-to-activity matching ────────────────────────────────────────────────
 
-def _match_stage_activity(
-    con,
-    user_id: int,
-    start_date: str,
-    end_date: str,
-    start_lat: Optional[float],
-    start_lon: Optional[float],
-    stage_dist_mi: float,
-) -> Optional[dict]:
-    """Auto-pick the best activity for a stage: date-range + proximity + closest distance."""
-    try:
-        sd = datetime.fromisoformat(start_date).replace(tzinfo=timezone.utc)
-        ed = datetime.fromisoformat(end_date).replace(
-            hour=23, minute=59, second=59, tzinfo=timezone.utc
-        )
-        start_ts = int(sd.timestamp())
-        end_ts   = int(ed.timestamp())
-    except Exception:
-        return None
-
-    dist_lo = stage_dist_mi * 0.65
-    dist_hi = stage_dist_mi * 1.35
-
-    base_where = (
-        "user_id = ? "
-        "AND COALESCE(creation_time_override_s, creation_time_s) BETWEEN ? AND ? "
-        "AND distance_mi BETWEEN ? AND ?"
-    )
-    params: list = [user_id, start_ts, end_ts, dist_lo, dist_hi]
-
-    # Proximity: ~2 km bounding box around stage start.
-    # Include activities with no GPS (start_lat IS NULL) as fallback candidates.
-    if start_lat is not None and start_lon is not None:
-        lat_d = 2.0 / 111.0
-        lon_d = 2.0 / (111.0 * math.cos(math.radians(start_lat)))
-        prox_where = (
-            " AND (start_lat IS NULL"
-            "  OR (start_lat BETWEEN ? AND ? AND start_lon BETWEEN ? AND ?))"
-        )
-        base_where += prox_where
-        params += [
-            start_lat - lat_d, start_lat + lat_d,
-            start_lon - lon_d, start_lon + lon_d,
-        ]
-
-    rows = con.execute(
-        f"SELECT id, COALESCE(creation_time_override_s, creation_time_s), "
-        f"distance_mi, attributes_json "
-        f"FROM activities WHERE {base_where}",
-        params,
-    ).fetchall()
-
-    if not rows:
-        return None
-
-    # Pick closest distance match
-    best = min(rows, key=lambda r: abs((r[2] or 0) - stage_dist_mi))
-    act_id, ts, dist_mi, attrs_json = best
-
-    # Parse flat NSArray attributes_json
+def _parse_activity_attrs(attrs_json: Optional[str]) -> dict:
+    """Parse Ascent's flat NSArray attributes_json into a dict."""
     attrs: dict = {}
     if attrs_json:
         try:
@@ -221,33 +164,144 @@ def _match_stage_activity(
                     attrs[str(flat[i])] = flat[i + 1]
         except Exception:
             pass
+    return attrs
 
-    def _fa(key):
-        v = attrs.get(key)
-        if v is None:
-            return None
-        try:
-            return float(v)
-        except (TypeError, ValueError):
-            return None
 
+def _fa(attrs: dict, key: str) -> Optional[float]:
+    v = attrs.get(key)
+    if v is None:
+        return None
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
+def _build_completion(act_row: tuple) -> dict:
+    """Build a completion dict from a DB activity row (id, ts, dist, lat, lon, attrs_json)."""
+    act_id, ts, dist_mi, _lat, _lon, attrs_json = act_row
+    attrs = _parse_activity_attrs(attrs_json)
     date_str = datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%d")
-
     return {
         "activity_id":          act_id,
         "date":                 date_str,
         "distance_mi":          dist_mi,
-        "climb_ft":             _fa("totalClimb"),
-        "duration_s":           _fa("durationAsFloat"),
-        "moving_s":             _fa("movingDurationAsFloat"),
-        "avg_moving_speed_mph": _fa("avgMovingSpeed"),
-        "avg_hr":               _fa("avgHeartRate"),
-        "max_hr":               _fa("maxHeartRate"),
-        "avg_cadence":          _fa("avgCadence"),
-        "avg_power":            _fa("avgPower"),
-        "max_power":            _fa("maxPower"),
-        "suffer_score":         _fa("sufferScore") or _fa("suffer_score"),
-        "calories":             _fa("calories"),
+        "climb_ft":             _fa(attrs, "totalClimb"),
+        "duration_s":           _fa(attrs, "durationAsFloat"),
+        "moving_s":             _fa(attrs, "movingDurationAsFloat"),
+        "avg_moving_speed_mph": _fa(attrs, "avgMovingSpeed"),
+        "avg_hr":               _fa(attrs, "avgHeartRate"),
+        "max_hr":               _fa(attrs, "maxHeartRate"),
+        "avg_cadence":          _fa(attrs, "avgCadence"),
+        "avg_power":            _fa(attrs, "avgPower"),
+        "max_power":            _fa(attrs, "maxPower"),
+        "suffer_score":         _fa(attrs, "sufferScore") or _fa(attrs, "suffer_score"),
+        "calories":             _fa(attrs, "calories"),
+    }
+
+
+def _global_stage_matching(con, uid: int, start_date: str, end_date: str, stages: list) -> dict:
+    """
+    Assign activities to stages using global greedy scoring.
+
+    Scores each (stage, activity) pair on three factors:
+      - GPS proximity  (weight 2.0) — strong signal when both have coordinates
+      - Distance match (weight 1.0) — how close the distances are within ±35%
+      - Date order     (weight 0.5) — activity rank within the tour aligns with stage_num rank
+
+    The date-order factor resolves ambiguity for no-GPS activities: an activity that
+    happened on day 5 of the tour should beat a same-distance stage from day 17.
+
+    The tour date window is extended by ±1 day to catch activities recorded the day
+    before/after the official tour start/end (common when tour dates are approximate).
+
+    Returns dict: stage_id -> completion dict (or None if no match).
+    """
+    from datetime import timedelta
+
+    try:
+        sd = datetime.fromisoformat(start_date).replace(tzinfo=timezone.utc)
+        ed = datetime.fromisoformat(end_date).replace(
+            hour=23, minute=59, second=59, tzinfo=timezone.utc
+        )
+        start_ts = int((sd - timedelta(days=1)).timestamp())
+        end_ts   = int((ed + timedelta(days=1)).timestamp())
+    except Exception:
+        return {s["id"]: None for s in stages}
+
+    rows = con.execute(
+        "SELECT id, COALESCE(creation_time_override_s, creation_time_s), "
+        "distance_mi, start_lat, start_lon, attributes_json "
+        "FROM activities WHERE user_id=? "
+        "AND COALESCE(creation_time_override_s, creation_time_s) BETWEEN ? AND ? "
+        "ORDER BY COALESCE(creation_time_override_s, creation_time_s)",
+        (uid, start_ts, end_ts),
+    ).fetchall()
+
+    if not rows:
+        return {s["id"]: None for s in stages}
+
+    n_acts   = len(rows)
+    n_stages = len(stages)
+
+    candidates: list = []  # (score, stage_index, act_index)
+    for si, stage in enumerate(stages):
+        stage_dist = stage["distance_mi"]
+        slat       = stage["start_lat"]
+        slon       = stage["start_lon"]
+        dist_lo    = stage_dist * 0.65
+        dist_hi    = stage_dist * 1.35
+        stage_rank = (stage["stage_num"] - 1) / max(n_stages - 1, 1)
+
+        lat_d = lon_d = None
+        if slat is not None and slon is not None:
+            lat_d = 5.0 / 111.0
+            lon_d = 5.0 / (111.0 * math.cos(math.radians(slat)))
+
+        for ai, (act_id, act_ts, act_dist, act_lat, act_lon, _) in enumerate(rows):
+            act_dist_v = act_dist or 0.0
+            if not (dist_lo <= act_dist_v <= dist_hi):
+                continue
+
+            # GPS proximity
+            gps_score = 0.0
+            if act_lat is not None and act_lon is not None:
+                if lat_d is not None:
+                    if (slat - lat_d <= act_lat <= slat + lat_d and
+                            slon - lon_d <= act_lon <= slon + lon_d):
+                        gps_score = 2.0   # confirmed GPS match
+                    else:
+                        continue          # activity GPS outside this stage's area — skip
+                else:
+                    gps_score = 0.3       # activity has GPS but stage doesn't — mild bonus
+            # else: no GPS on activity — GPS-neutral (gps_score = 0)
+
+            # Distance score: 1.0 = perfect, 0.0 = at the ±35% edge
+            dist_score = 1.0 - abs(act_dist_v - stage_dist) / (stage_dist * 0.35)
+
+            # Date-order score: activity's chronological rank vs stage's positional rank
+            act_rank   = ai / max(n_acts - 1, 1)
+            date_score = 1.0 - abs(act_rank - stage_rank)
+
+            score = gps_score + dist_score + 0.5 * date_score
+            candidates.append((score, si, ai))
+
+    # Greedy assignment — highest score first; each stage and activity used at most once
+    candidates.sort(key=lambda x: -x[0])
+    used_stages: set = set()
+    used_acts:   set = set()
+    assignments: dict = {}  # stage_id -> row index into `rows`
+
+    for _score, si, ai in candidates:
+        if si in used_stages or ai in used_acts:
+            continue
+        assignments[stages[si]["id"]] = ai
+        used_stages.add(si)
+        used_acts.add(ai)
+
+    return {
+        stage["id"]: (_build_completion(rows[assignments[stage["id"]]]) if stage["id"] in assignments else None)
+        for stage in stages
     }
 
 
@@ -264,7 +318,7 @@ async def list_tours(request: Request):
         _ensure_tables(con)
         rows = con.execute(
             "SELECT id, created_by, title, start_date, end_date, created_at "
-            "FROM tours ORDER BY created_at DESC"
+            "FROM tours ORDER BY start_date DESC"
         ).fetchall()
         return JSONResponse([{
             "id":         r[0],
@@ -386,23 +440,22 @@ async def get_tour(tour_id: int, request: Request):
             (tour_id,),
         ).fetchall()
 
-        stages = []
-        for sr in stage_rows:
-            sid, snum, sname, sdist, sclimb, slat, slon = sr
-            completion = _match_stage_activity(
-                con, uid, tour["start_date"], tour["end_date"],
-                slat, slon, sdist,
-            )
-            stages.append({
-                "id":          sid,
-                "stage_num":   snum,
-                "name":        sname,
-                "distance_mi": sdist,
-                "climb_ft":    sclimb,
-                "start_lat":   slat,
-                "start_lon":   slon,
-                "completion":  completion,
-            })
+        stages = [{
+            "id":          sr[0],
+            "stage_num":   sr[1],
+            "name":        sr[2],
+            "distance_mi": sr[3],
+            "climb_ft":    sr[4],
+            "start_lat":   sr[5],
+            "start_lon":   sr[6],
+            "completion":  None,
+        } for sr in stage_rows]
+
+        completions = _global_stage_matching(
+            con, uid, tour["start_date"], tour["end_date"], stages
+        )
+        for stage in stages:
+            stage["completion"] = completions.get(stage["id"])
 
         tour["stages"] = stages
         return JSONResponse(tour)
@@ -468,3 +521,156 @@ async def delete_tour(tour_id: int, request: Request):
         return JSONResponse({"ok": True})
     finally:
         con.close()
+
+
+@router.patch("/tours/{tour_id}/stages/reorder")
+async def reorder_stages(tour_id: int, request: Request, body: dict = Body(...)):
+    uid = get_session_user_id(request)
+    if uid is None:
+        raise HTTPException(401, "Not authenticated")
+
+    stage_ids = body.get("stage_ids") or []
+    if not stage_ids:
+        raise HTTPException(400, "stage_ids required")
+
+    con = sqlite3.connect(db_getter().path, timeout=10)
+    try:
+        con.execute("PRAGMA foreign_keys=ON")
+        _ensure_tables(con)
+
+        row = con.execute(
+            "SELECT created_by FROM tours WHERE id=?", (tour_id,)
+        ).fetchone()
+        if not row:
+            raise HTTPException(404, "Tour not found")
+        if row[0] != uid:
+            raise HTTPException(403, "Only the tour creator can reorder stages")
+
+        for i, sid in enumerate(stage_ids):
+            con.execute(
+                "UPDATE tour_stages SET stage_num=? WHERE id=? AND tour_id=?",
+                (i + 1, sid, tour_id),
+            )
+        con.commit()
+        return JSONResponse({"ok": True})
+    finally:
+        con.close()
+
+
+@router.put("/tours/{tour_id}")
+async def update_tour(
+    tour_id:     int,
+    request:     Request,
+    title:       str                       = Form(...),
+    start_date:  str                       = Form(...),
+    end_date:    str                       = Form(...),
+    stage_order: str                       = Form(default="[]"),
+    files:       Optional[List[UploadFile]] = File(default=None),
+):
+    """Edit an existing tour: update metadata, reorder/remove/add stages."""
+    uid = get_session_user_id(request)
+    if uid is None:
+        raise HTTPException(401, "Not authenticated")
+
+    if not title.strip():
+        raise HTTPException(400, "Title is required")
+    try:
+        from datetime import date as _date
+        sd = _date.fromisoformat(start_date)
+        ed = _date.fromisoformat(end_date)
+    except ValueError:
+        raise HTTPException(400, "Invalid date format")
+    if ed < sd:
+        raise HTTPException(400, "End date must be on or after start date")
+
+    # Parse stage_order JSON
+    try:
+        order = json.loads(stage_order) if stage_order else []
+    except Exception:
+        raise HTTPException(400, "Invalid stage_order JSON")
+
+    # Parse any new GPX files (filter out empty uploads FastAPI may inject)
+    real_files = [f for f in (files or []) if f.filename]
+    new_stages: list = []
+    for i, f in enumerate(real_files):
+        data = await f.read()
+        try:
+            s = _parse_gpx_route(data, f.filename or f"Stage {i + 1}")
+        except ValueError as e:
+            raise HTTPException(400, f"File '{f.filename}': {e}")
+        new_stages.append(s)
+
+    con = sqlite3.connect(db_getter().path, timeout=30)
+    try:
+        con.execute("PRAGMA journal_mode=WAL")
+        con.execute("PRAGMA foreign_keys=ON")
+        _ensure_tables(con)
+
+        row = con.execute(
+            "SELECT created_by FROM tours WHERE id=?", (tour_id,)
+        ).fetchone()
+        if not row:
+            raise HTTPException(404, "Tour not found")
+        if row[0] != uid:
+            raise HTTPException(403, "Only the tour creator can edit it")
+
+        # Update metadata
+        con.execute(
+            "UPDATE tours SET title=?, start_date=?, end_date=? WHERE id=?",
+            (title.strip(), start_date, end_date, tour_id),
+        )
+
+        # Which existing stage IDs to keep
+        keep_ids = {int(item["id"]) for item in order if item.get("type") == "existing"}
+
+        # Delete removed stages (cascades to tour_stage_points)
+        for (sid,) in con.execute(
+            "SELECT id FROM tour_stages WHERE tour_id=?", (tour_id,)
+        ).fetchall():
+            if sid not in keep_ids:
+                con.execute("DELETE FROM tour_stages WHERE id=?", (sid,))
+
+        # Apply the new ordering: renumber existing stages, insert new ones
+        for pos, item in enumerate(order):
+            stage_num = pos + 1
+            if item.get("type") == "existing":
+                con.execute(
+                    "UPDATE tour_stages SET stage_num=? WHERE id=? AND tour_id=?",
+                    (stage_num, int(item["id"]), tour_id),
+                )
+            elif item.get("type") == "new":
+                idx = int(item.get("idx", 0))
+                if idx >= len(new_stages):
+                    continue
+                s = new_stages[idx]
+                cur = con.execute(
+                    "INSERT INTO tour_stages "
+                    "(tour_id, stage_num, name, distance_mi, climb_ft, start_lat, start_lon) "
+                    "VALUES (?,?,?,?,?,?,?)",
+                    (tour_id, stage_num, s["name"],
+                     s["distance_mi"], s["climb_ft"],
+                     s["start_lat"], s["start_lon"]),
+                )
+                stage_id = cur.lastrowid
+                con.executemany(
+                    "INSERT INTO tour_stage_points (stage_id, seq, lat, lon, alt_ft) "
+                    "VALUES (?,?,?,?,?)",
+                    [(stage_id, seq, lat, lon, alt_ft)
+                     for seq, (lat, lon, alt_ft) in enumerate(s["points"])],
+                )
+
+        con.commit()
+        return JSONResponse({"id": tour_id, "title": title.strip()})
+    except Exception:
+        con.rollback()
+        raise
+    finally:
+        con.close()
+
+
+@router.get("/tour", response_class=HTMLResponse)
+async def tour_page(request: Request):
+    uid = get_session_user_id(request)
+    if uid is None:
+        return RedirectResponse("/login?next=/tour", status_code=303)
+    return templates.TemplateResponse("tour.html", {"request": request})

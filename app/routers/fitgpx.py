@@ -13,7 +13,7 @@ from typing import Callable, Optional
 import zipfile
 
 from fastapi import APIRouter, Body, File, HTTPException, Request, UploadFile
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 from app.auth import get_session_user_id
 
@@ -299,10 +299,14 @@ async def export_gpx(activity_id: int, request: Request):
     safe = "".join(c if c.isalnum() or c in "-_ " else "_" for c in (act.get("name") or "activity"))
     filename = f"{safe.strip() or 'activity'}.gpx"
 
-    return StreamingResponse(
-        _gpx_chunks(act, pts),
+    body = b"".join(_gpx_chunks(act, pts))
+    return Response(
+        content=body,
         media_type="application/gpx+xml",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Content-Length": str(len(body)),
+        },
     )
 
 

@@ -1,0 +1,1285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tours — Ascent</title>
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#1c1c1e;--surface:#2c2c2e;--surface2:#3a3a3c;
+  --border:#3a3a3c;--border2:#48484a;
+  --text:#f2f2f7;--muted:#8e8e93;--muted2:#636366;
+  --accent:#f97316;
+}
+html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif;font-size:13px;background:var(--bg);color:var(--text)}
+button{cursor:pointer;border:none;background:none;color:inherit;font:inherit}
+input,select{font:inherit}
+a{color:var(--accent);text-decoration:none}
+
+/* ── Nav ── */
+nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 12px;flex-shrink:0}
+.nav-brand-name{font-size:14px;font-weight:700;color:var(--accent)}
+.nav-version{font-size:10px;color:var(--muted);margin-left:4px;letter-spacing:.02em}
+.nav-pages{display:flex;align-items:center;gap:2px;margin-left:14px}
+.nav-btn{padding:5px 10px;border-radius:6px;font-size:12px;font-weight:500;color:var(--muted);background:none;border:none;cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:4px;text-decoration:none;height:34px}
+.nav-btn:hover{color:var(--text);background:rgba(255,255,255,.06)}
+.nav-btn.nav-active{color:#fff;font-weight:700}
+.spacer{flex:1}
+
+/* ── Page layout ── */
+#page{display:flex;height:calc(100vh - 44px);overflow:hidden}
+
+/* ── Sidebar ── */
+#sidebar{width:320px;flex-shrink:0;display:flex;flex-direction:column;border-right:1px solid var(--border);overflow:hidden}
+#tour-controls{padding:10px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;flex-direction:column;gap:6px}
+#tour-selector{width:100%;font-size:12px;padding:5px 7px;background:var(--surface2);color:var(--text);border:1px solid var(--border2);border-radius:6px;outline:none}
+#tour-selector:focus{border-color:var(--accent)}
+#tour-btn-row{display:flex;gap:6px}
+.sb-btn{padding:5px 10px;border-radius:6px;font-size:12px;font-weight:500;background:var(--surface2);border:1px solid var(--border2);color:var(--text);white-space:nowrap;flex-shrink:0}
+.sb-btn:hover{background:var(--border2)}
+.sb-btn.full{width:100%;justify-content:center;display:flex}
+.sb-btn.danger{color:#ef4444;border-color:rgba(239,68,68,.35);background:rgba(239,68,68,.08)}
+.sb-btn.danger:hover{background:rgba(239,68,68,.18)}
+.sb-btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.sb-btn.primary:hover{background:#ea6c0a;border-color:#ea6c0a}
+.sb-btn.ghost{background:none;border:1px solid var(--border2)}
+.sb-btn.ghost:hover{background:var(--surface2)}
+#stage-list-wrap{flex:1;overflow-y:auto;overflow-x:hidden}
+#stage-list{padding:4px 0}
+
+/* ── Sidebar stage items (click-only, no drag) ── */
+.stage-item{display:flex;align-items:center;gap:7px;padding:7px 10px;cursor:pointer;border-left:3px solid transparent;user-select:none}
+.stage-item:hover{background:rgba(255,255,255,.04)}
+.stage-item.active{background:rgba(249,115,22,.1);border-left-color:var(--accent)}
+.stage-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.stage-item-body{flex:1;min-width:0}
+.stage-item-name{font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stage-item-sub{font-size:10px;color:var(--muted);margin-top:1px}
+.stage-item-check{font-size:11px;flex-shrink:0}
+.stage-status{text-align:right;flex-shrink:0;min-width:52px}
+.stage-status-done{font-size:12px;font-weight:600;color:#22c55e;line-height:1.2}
+.stage-status-date{font-size:10px;color:var(--muted)}
+.stage-status-none{font-size:14px;color:var(--muted2);line-height:1}
+#sidebar-empty{padding:20px 14px;color:var(--muted);font-size:12px;text-align:center}
+
+/* ── Main area ── */
+#main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+#map{width:100%;background:#1a2030;flex-shrink:0;position:relative}
+.map-style-btn{background:rgba(0,0,0,.6);color:#ccc;border:1px solid rgba(255,255,255,.15);border-radius:4px;padding:2px 7px;font-size:11px;cursor:pointer;backdrop-filter:blur(4px);transition:all .15s}
+.map-style-btn:hover{background:rgba(0,0,0,.8);color:#fff}
+.map-style-btn.active{background:#f97316;color:#fff;border-color:#f97316}
+#resize-handle{height:6px;background:var(--surface2);cursor:row-resize;flex-shrink:0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);transition:background .1s}
+#resize-handle:hover,#resize-handle.dragging{background:var(--accent);opacity:.5}
+#stage-detail{flex:1;overflow-y:auto;padding:16px 20px;min-height:0}
+#main-empty{flex:1;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:13px;text-align:center;line-height:1.9;padding:32px}
+
+/* ── Detail content ── */
+.section-label{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:7px}
+.chip-grid{display:flex;flex-wrap:wrap;gap:10px 24px;margin-bottom:14px}
+.chip-label{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+.chip-val{font-size:14px;font-weight:500;margin-top:2px}
+.chip-val strong{font-weight:700}
+.chip-val .sec{font-size:11px;color:var(--muted);font-weight:400;margin-left:3px}
+.wx-line{font-size:11px;color:var(--muted);margin-top:3px}
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(78px,1fr));gap:6px;align-content:start;margin-bottom:8px}
+.stat-chip{background:var(--surface2);border:1px solid var(--border2);border-radius:7px;padding:5px 4px;display:flex;flex-direction:column;align-items:center}
+.sc-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:1px}
+.sc-val{font-size:14px;font-weight:600;font-variant-numeric:tabular-nums}
+.sc-sub{font-size:10px;color:var(--muted);margin-top:2px;min-height:1.2em;font-variant-numeric:tabular-nums}
+.act-notes{font-size:12px;color:var(--text);background:var(--surface2);border-radius:6px;padding:8px;margin-bottom:8px;line-height:1.5;white-space:pre-wrap}
+.summary-table{width:100%;border-collapse:collapse;font-size:12px}
+.summary-table th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);padding:4px 8px 6px;border-bottom:1px solid var(--border)}
+.summary-table td{padding:7px 8px;border-bottom:1px solid var(--border);vertical-align:middle}
+.summary-table tr:last-child td{border-bottom:none}
+.summary-table tr:hover td{background:rgba(255,255,255,.03);cursor:pointer}
+
+/* ── Modal ── */
+#tour-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:500;align-items:center;justify-content:center}
+#tour-modal.open{display:flex}
+#modal-box{background:var(--surface);border:1px solid var(--border2);border-radius:12px;width:540px;max-width:96vw;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,.5)}
+.modal-head{padding:18px 20px 0;flex-shrink:0}
+.modal-title{font-size:15px;font-weight:600;margin-bottom:14px}
+.modal-body{padding:0 20px;overflow-y:auto;flex:1}
+.modal-foot{padding:14px 20px 18px;flex-shrink:0;display:flex;align-items:center;gap:8px;border-top:1px solid var(--border)}
+.form-row{display:flex;gap:12px;margin-bottom:10px;flex-wrap:wrap}
+.form-field{display:flex;flex-direction:column;gap:4px;flex:1;min-width:110px}
+.form-field label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.form-field input{padding:6px 9px;font-size:13px;background:var(--bg);color:var(--text);border:1px solid var(--border2);border-radius:6px;outline:none}
+.form-field input:focus{border-color:var(--accent)}
+.form-field input[type=date]{color-scheme:dark}
+
+/* Stage list in modal */
+#modal-stage-list{margin:8px 0 6px;min-height:24px}
+.ms-item{display:flex;align-items:center;gap:7px;padding:6px 8px;border-radius:6px;border:1px solid var(--border);margin-bottom:4px;background:var(--bg);user-select:none}
+.ms-item.dragging{opacity:.4}
+.ms-item.drop-above{border-top:2px solid var(--accent)}
+.ms-item.drop-below{border-bottom:2px solid var(--accent)}
+.ms-drag{color:var(--muted2);font-size:14px;cursor:grab;flex-shrink:0;line-height:1}
+.ms-drag:active{cursor:grabbing}
+.ms-num{font-size:10px;font-weight:700;color:var(--muted);width:18px;text-align:center;flex-shrink:0}
+.ms-name{flex:1;min-width:0;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ms-badge{font-size:10px;padding:1px 5px;border-radius:3px;background:var(--surface2);color:var(--muted);flex-shrink:0}
+.ms-done{font-size:11px;color:#22c55e;flex-shrink:0}
+.ms-remove{color:var(--muted2);font-size:14px;flex-shrink:0;padding:0 2px;line-height:1}
+.ms-remove:hover{color:#ef4444}
+#modal-drop-zone{border:2px dashed var(--border2);border-radius:7px;padding:12px;text-align:center;font-size:12px;color:var(--muted);cursor:pointer;margin-top:6px;transition:border-color .15s,color .15s}
+#modal-drop-zone:hover,#modal-drop-zone.drag-active{border-color:var(--accent);color:var(--text)}
+#modal-status{font-size:12px;color:var(--muted)}
+</style>
+</head>
+<body>
+
+<nav>
+  <div style="display:flex;align-items:center">
+    <span class="nav-brand-name">⛰ Ascent</span><span class="nav-version">{{ app_version }}</span>
+  </div>
+  <div class="nav-pages" style="margin-left:14px">
+    <a href="/activities" class="nav-btn">Activities</a>
+    <a href="/" class="nav-btn">Summary</a>
+    <a href="/activities" class="nav-btn" onclick="sessionStorage.setItem('openCoach','1')">Coach</a>
+    <a href="/tour" class="nav-btn nav-active">Tours</a>
+    <a href="/strava/sync" class="nav-btn">Sync</a>
+  </div>
+  <div class="spacer"></div>
+  <div class="nav-pages">
+    <a href="/settings" class="nav-btn">Settings</a>
+    <a href="/logout" class="nav-btn">Sign Out</a>
+  </div>
+</nav>
+
+<div id="page">
+
+  <!-- ── Sidebar ── -->
+  <div id="sidebar">
+    <div id="tour-controls">
+      <select id="tour-selector" onchange="onTourSelect(this.value)">
+        <option value="">— select a tour —</option>
+      </select>
+      <div id="tour-btn-row">
+        <button class="sb-btn primary" id="new-tour-btn"   onclick="openDefineModal()">New Tour…</button>
+        <button class="sb-btn"         id="edit-tour-btn"  style="display:none" onclick="openEditModal()">Edit…</button>
+        <button class="sb-btn danger"  id="delete-btn"     style="display:none" onclick="confirmDelete()">Delete</button>
+      </div>
+      <button class="sb-btn ghost full" id="view-all-btn" style="display:none" onclick="viewEntireTour()">View Entire Tour</button>
+    </div>
+    <div id="stage-list-wrap">
+      <div id="stage-list"></div>
+      <div id="sidebar-empty" style="display:none">No stages defined.</div>
+    </div>
+  </div>
+
+  <!-- ── Main ── -->
+  <div id="main">
+    <div id="main-empty"><div>Select a tour above, or click <strong>Define Tour…</strong> to create one.</div></div>
+    <div id="map-and-detail" style="display:none;flex:1;flex-direction:column;overflow:hidden">
+      <div id="map">
+        <div id="tour-map-style-bar" style="position:absolute;top:8px;right:8px;z-index:500;display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end">
+          <button class="map-style-btn" data-style="osm"         onclick="setTourMapStyle('osm')">Street</button>
+          <button class="map-style-btn" data-style="topo"        onclick="setTourMapStyle('topo')">Topo</button>
+          <button class="map-style-btn" data-style="carto-dark"  onclick="setTourMapStyle('carto-dark')">Dark</button>
+          <button class="map-style-btn" data-style="carto-light" onclick="setTourMapStyle('carto-light')">Light</button>
+          <button class="map-style-btn" data-style="esri-sat"    onclick="setTourMapStyle('esri-sat')">Satellite</button>
+        </div>
+      </div>
+      <div id="resize-handle" title="Drag to resize map"></div>
+      <div id="stage-detail"></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── Tour modal (Define / Edit) ── -->
+<div id="tour-modal">
+  <div id="modal-box">
+    <div class="modal-head">
+      <div class="modal-title" id="modal-title">Define New Tour</div>
+      <div class="form-row">
+        <div class="form-field" style="flex:2;min-width:200px">
+          <label>Tour Title *</label>
+          <input type="text" id="title-input" placeholder="e.g. Tour de France 2025">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-field">
+          <label>Start Date *</label>
+          <input type="date" id="start-input">
+        </div>
+        <div class="form-field">
+          <label>End Date *</label>
+          <input type="date" id="end-input">
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">Stages — drag to reorder</div>
+    </div>
+    <div class="modal-body">
+      <div id="modal-stage-list"></div>
+      <div id="modal-drop-zone">
+        Drop .gpx files here to add stages, or click to browse
+        <input type="file" id="gpx-input" accept=".gpx" multiple style="display:none">
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="sb-btn primary" id="submit-btn" onclick="submitTour()">OK</button>
+      <button class="sb-btn" onclick="closeModal()">Cancel</button>
+      <span id="modal-status"></span>
+    </div>
+  </div>
+</div>
+
+<!-- ── Photo lightbox ── -->
+<div id="tour-lightbox" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:9999;align-items:center;justify-content:center;flex-direction:column" onclick="closeTourLightbox()">
+  <img id="tlb-img" alt="" style="max-width:90vw;max-height:82vh;object-fit:contain;border-radius:6px">
+  <video id="tlb-vid" controls playsinline style="display:none;max-width:90vw;max-height:82vh;border-radius:6px;background:#000" onclick="event.stopPropagation()"></video>
+  <div style="display:flex;align-items:center;gap:1rem;margin-top:12px">
+    <button onclick="event.stopPropagation();tourLbNav(-1)" style="background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:6px;padding:6px 18px;cursor:pointer;font-size:18px">‹</button>
+    <span id="tlb-count" style="color:#aaa;font-size:13px"></span>
+    <button onclick="event.stopPropagation();tourLbNav(1)"  style="background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:6px;padding:6px 18px;cursor:pointer;font-size:18px">›</button>
+  </div>
+  <div style="color:#666;font-size:11px;margin-top:8px">Press Esc or click background to close · ← → to navigate</div>
+</div>
+
+<!-- ── Edit activity overlay (stage detail) ── -->
+<div id="tour-edit-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:3000;align-items:center;justify-content:center" onclick="if(event.target===this)closeTourEdit()">
+  <div style="background:#2c2c2e;border:1px solid #3a3a3c;border-radius:12px;padding:1.25rem;width:520px;max-width:calc(100vw - 2rem);box-shadow:0 20px 60px rgba(0,0,0,.5)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
+      <div style="font-size:14px;font-weight:600">Edit Activity</div>
+      <button onclick="closeTourEdit()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:18px;padding:0;line-height:1">✕</button>
+    </div>
+    <div style="margin-bottom:.75rem">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:3px">Title</div>
+      <input id="te-name" type="text" style="width:100%;background:var(--surface2);border:1px solid var(--border2);border-radius:6px;color:var(--text);padding:5px 8px;font-size:12.5px;font-family:inherit;outline:none;box-sizing:border-box">
+    </div>
+    <div style="margin-bottom:.75rem">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:3px">Description</div>
+      <textarea id="te-desc" rows="5" style="width:100%;background:var(--surface2);border:1px solid var(--border2);border-radius:6px;color:var(--text);padding:5px 8px;font-size:12.5px;font-family:inherit;outline:none;box-sizing:border-box;resize:vertical"></textarea>
+    </div>
+    <div style="margin-bottom:.75rem">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:6px">Perceived Effort <span id="te-rpe-label" style="color:var(--text);font-size:11px;margin-left:6px"></span></div>
+      <input id="te-rpe" type="range" min="1" max="10" style="width:100%;height:6px;border-radius:3px;outline:none;cursor:pointer;background:linear-gradient(to right,#22c55e,#eab308,#ef4444)">
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:2px"><span>Easy</span><span>Max Effort</span></div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:1rem">
+      <button id="te-save-btn" onclick="saveTourEdit()" style="font-size:12px;font-weight:600;padding:5px 16px;border-radius:6px;border:none;background:#f97316;color:#fff;cursor:pointer;font-family:inherit">Save</button>
+      <button onclick="closeTourEdit()" style="font-size:12px;font-weight:600;padding:5px 12px;border-radius:6px;border:1px solid var(--border2);background:none;color:var(--muted);cursor:pointer;font-family:inherit">Cancel</button>
+      <span id="te-status" style="font-size:11px;color:var(--muted)"></span>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+'use strict';
+
+// ── Units ─────────────────────────────────────────────────────────────────────
+const U = {
+  metric: false,
+  distS:  (mi) => U.metric ? (+(mi*1.60934).toFixed(2))+' km' : (+mi).toFixed(1)+' mi',
+  climbS: (ft) => U.metric ? Math.round(ft*0.3048)+' m' : Math.round(ft)+' ft',
+  speedS: (mph)=> U.metric ? (+(mph*1.60934).toFixed(1))+' km/h' : (+mph).toFixed(1)+' mph',
+  tempS:  (f)  => U.metric ? +((f-32)*5/9).toFixed(1)+' °C' : Math.round(f)+' °F',
+  async load() {
+    try { const p = await fetch('/api/settings/training-zones').then(r=>r.json()); U.metric=!!p.use_metric; }
+    catch(e) { U.metric=false; }
+  },
+};
+function bothDist(mi) {
+  const a=(+mi).toFixed(1)+' mi', b=(mi*1.60934).toFixed(1)+' km';
+  const [p,s]=U.metric?[b,a]:[a,b];
+  return `<strong>${p}</strong><span class="sec">${s}</span>`;
+}
+function bothClimb(ft) {
+  const a=Math.round(ft)+' ft', b=Math.round(ft*0.3048)+' m';
+  const [p,s]=U.metric?[b,a]:[a,b];
+  return `<strong>${p}</strong><span class="sec">${s}</span>`;
+}
+function fmtDur(s) {
+  if(s==null) return '—';
+  const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),ss=Math.floor(s%60);
+  return h>0?`${h}h ${m}m`:`${m}m ${ss}s`;
+}
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ── Color scheme ──────────────────────────────────────────────────────────────
+const C = {
+  done: ['#ef4444','#fca5a5'],  // red, light red
+  todo: ['#1e40af','#60a5fa'],  // dark blue,   light blue
+  sel:  '#ef4444',
+};
+function stageColor(stage, idx) { return (stage.completion ? C.done : C.todo)[idx % 2]; }
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let tourMap     = null;
+let routeGroup  = null;
+let tourInfo    = null;
+let tourStages  = [];
+let selectedId  = null;
+let mapH        = 0;
+
+// Modal state
+let modalMode   = 'define';   // 'define' | 'edit'
+// Each item: {type:'existing'|'new', id, name, completion, file}
+let modalStages = [];
+
+// ── Map styles ────────────────────────────────────────────────────────────────
+const MAP_STYLES = {
+  'osm':        { url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',                                               attr: '© OpenStreetMap' },
+  'topo':       { url: 'https://tile.opentopomap.org/{z}/{x}/{y}.png',                                                 attr: '© OpenStreetMap, © OpenTopoMap' },
+  'carto-dark': { url: 'https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',                                    attr: '© OpenStreetMap, © CARTO' },
+  'carto-light':{ url: 'https://basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',                                   attr: '© OpenStreetMap, © CARTO' },
+  'esri-sat':   { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', attr: '© Esri' },
+};
+let tourTileLayer = null;
+
+function setTourMapStyle(styleKey) {
+  const style = MAP_STYLES[styleKey] || MAP_STYLES['osm'];
+  if(tourTileLayer) tourMap.removeLayer(tourTileLayer);
+  tourTileLayer = L.tileLayer(style.url, { maxZoom:19, attribution:style.attr }).addTo(tourMap);
+  try { localStorage.setItem('ascent-map-style', styleKey); } catch(e) {}
+  document.querySelectorAll('#tour-map-style-bar .map-style-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.style === styleKey));
+}
+
+// ── Map init + resize ─────────────────────────────────────────────────────────
+function initMap() {
+  mapH = Math.round((window.innerHeight - 44) * 0.55);
+  document.getElementById('map').style.height = mapH + 'px';
+  tourMap = L.map('map', { zoomControl:true, attributionControl:false });
+  routeGroup = L.layerGroup().addTo(tourMap);
+  const savedStyle = (() => { try { return localStorage.getItem('ascent-map-style') || 'osm'; } catch(e) { return 'osm'; } })();
+  setTourMapStyle(savedStyle);
+}
+
+(function() {
+  const handle = document.getElementById('resize-handle');
+  let drag=false, startY=0, startH=0;
+  function startDrag(y) { drag=true; startY=y; startH=mapH; handle.classList.add('dragging'); document.body.style.cursor='row-resize'; }
+  function moveDrag(y)  { if(!drag) return; mapH=Math.max(120,Math.min(window.innerHeight-44-80,startH+(y-startY))); document.getElementById('map').style.height=mapH+'px'; tourMap&&tourMap.invalidateSize(); }
+  function endDrag()    { if(!drag) return; drag=false; handle.classList.remove('dragging'); document.body.style.cursor=''; tourMap&&tourMap.invalidateSize(); }
+  handle.addEventListener('mousedown', e => { startDrag(e.clientY); e.preventDefault(); });
+  document.addEventListener('mousemove', e => moveDrag(e.clientY));
+  document.addEventListener('mouseup',   endDrag);
+  handle.addEventListener('touchstart', e => { startDrag(e.touches[0].clientY); e.preventDefault(); }, {passive:false});
+  handle.addEventListener('touchmove',  e => { moveDrag(e.touches[0].clientY); e.preventDefault(); }, {passive:false});
+  handle.addEventListener('touchend',   endDrag);
+})();
+
+// ── Tour CRUD ─────────────────────────────────────────────────────────────────
+async function loadTours() {
+  try {
+    const tours = await fetch('/tours').then(r=>r.json());
+    const sel = document.getElementById('tour-selector');
+    const prev = sel.value;
+    sel.innerHTML = '<option value="">— select a tour —</option>';
+    tours.forEach(t => {
+      const o = document.createElement('option');
+      o.value = t.id;
+      o.textContent = `${t.title}  (${t.start_date} – ${t.end_date})`;
+      sel.appendChild(o);
+    });
+    if(prev && tours.find(t=>String(t.id)===prev)) sel.value=prev;
+  } catch(e) { console.error('loadTours',e); }
+}
+
+function _saveLastTour(id) {
+  fetch('/api/settings/ui-prefs', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({prefs: {last_tour_id: id || null}}),
+  }).catch(()=>{});
+}
+
+async function onTourSelect(id) {
+  _saveLastTour(id || null);
+  selectedId=null; tourInfo=null; tourStages=[];
+  routeGroup && routeGroup.clearLayers();
+  document.getElementById('delete-btn').style.display   = 'none';
+  document.getElementById('edit-tour-btn').style.display = 'none';
+  document.getElementById('view-all-btn').style.display  = 'none';
+  document.getElementById('stage-list').innerHTML = '';
+  document.getElementById('sidebar-empty').style.display = 'none';
+
+  if(!id) {
+    document.getElementById('main-empty').style.display     = 'flex';
+    document.getElementById('map-and-detail').style.display = 'none';
+    return;
+  }
+
+  try {
+    tourInfo   = await fetch(`/tours/${id}`).then(r=>r.json());
+    tourStages = tourInfo.stages || [];
+  } catch(e) { console.error('tour fetch',e); return; }
+
+  document.getElementById('delete-btn').style.display   = tourInfo.is_mine ? '' : 'none';
+  document.getElementById('edit-tour-btn').style.display = tourInfo.is_mine ? '' : 'none';
+  document.getElementById('view-all-btn').style.display  = '';
+
+  document.getElementById('main-empty').style.display     = 'none';
+  document.getElementById('map-and-detail').style.display = 'flex';
+  setTimeout(() => tourMap && tourMap.invalidateSize(), 80);
+
+  renderStageList();
+  await drawRoutes(null);
+  renderDetail(null);
+}
+
+async function confirmDelete() {
+  if(!tourInfo?.is_mine) return;
+  if(!confirm(`Delete tour "${tourInfo.title}"? This cannot be undone.`)) return;
+  await fetch(`/tours/${tourInfo.id}`, { method:'DELETE' });
+  _saveLastTour(null);
+  tourInfo=null; tourStages=[]; selectedId=null;
+  routeGroup && routeGroup.clearLayers();
+  document.getElementById('tour-selector').value = '';
+  document.getElementById('stage-list').innerHTML = '';
+  document.getElementById('delete-btn').style.display   = 'none';
+  document.getElementById('edit-tour-btn').style.display = 'none';
+  document.getElementById('view-all-btn').style.display  = 'none';
+  document.getElementById('main-empty').style.display    = 'flex';
+  document.getElementById('map-and-detail').style.display = 'none';
+  await loadTours();
+}
+
+// ── Sidebar stage list (click only) ──────────────────────────────────────────
+function renderStageList() {
+  const list = document.getElementById('stage-list');
+  list.innerHTML = '';
+  document.getElementById('sidebar-empty').style.display = tourStages.length ? 'none' : '';
+
+  tourStages.forEach((s, idx) => {
+    const item = document.createElement('div');
+    item.className = 'stage-item' + (String(s.id)===String(selectedId) ? ' active' : '');
+    item.dataset.id = s.id;
+
+    const dotColor = stageColor(s, idx);
+    const statusHtml = s.completion
+      ? `<div class="stage-status"><div class="stage-status-done">✓</div><div class="stage-status-date">${s.completion.date}</div></div>`
+      : `<div class="stage-status"><div class="stage-status-none">—</div></div>`;
+
+    item.innerHTML = `
+      <span class="stage-dot" style="background:${dotColor}"></span>
+      <div class="stage-item-body">
+        <div class="stage-item-name">${esc(s.name)}</div>
+        <div class="stage-item-sub">${U.distS(s.distance_mi)} · ${U.climbS(s.climb_ft)} climb</div>
+      </div>
+      ${statusHtml}`;
+
+    item.addEventListener('click', () => selectStage(String(s.id)));
+    list.appendChild(item);
+  });
+}
+
+// ── Stage selection + "View Entire Tour" ──────────────────────────────────────
+async function selectStage(id) {
+  selectedId = (id === selectedId) ? null : id;
+  renderStageList();
+  await drawRoutes(selectedId);
+  renderDetail(selectedId);
+}
+
+async function viewEntireTour() {
+  selectedId = null;
+  renderStageList();
+  await drawRoutes(null);
+  renderDetail(null);
+}
+
+// ── Map drawing ───────────────────────────────────────────────────────────────
+async function drawRoutes(activeId) {
+  if(!tourMap || !routeGroup || !tourInfo) return;
+  routeGroup.clearLayers();
+  try {
+    const byStage = await fetch(`/tours/${tourInfo.id}/points`).then(r=>r.json());
+    const allPts  = [];
+
+    tourStages.forEach((s, idx) => {
+      const pts = byStage[String(s.id)];
+      if(!pts?.length) return;
+      const isActive = activeId && String(s.id)===String(activeId);
+      L.polyline(pts, {
+        color:   isActive ? C.sel : stageColor(s, idx),
+        weight:  isActive ? 5 : 3,
+        opacity: activeId ? (isActive ? 1.0 : 0.18) : 0.85,
+      }).addTo(routeGroup);
+      allPts.push(...pts);
+    });
+
+    if(activeId) {
+      const pts = byStage[String(activeId)];
+      if(pts?.length) tourMap.fitBounds(L.latLngBounds(pts), { padding:[36,36] });
+    } else if(allPts.length) {
+      tourMap.fitBounds(L.latLngBounds(allPts), { padding:[24,24] });
+    }
+  } catch(e) { console.error('drawRoutes',e); }
+}
+
+// ── Date / time helpers ───────────────────────────────────────────────────────
+function fmtHMS(s) {
+  if(s == null) return '—';
+  const h=Math.floor(s/3600), m=Math.floor((s%3600)/60), ss=Math.floor(s%60);
+  if(h>0) return `${h}:${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
+  return `${m}:${String(ss).padStart(2,'0')}`;
+}
+function fmtDate(ts) {
+  if(!ts) return '—';
+  try { return new Date(parseInt(ts)*1000).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}); }
+  catch(e) { return String(ts); }
+}
+
+// ── Chip helpers ──────────────────────────────────────────────────────────────
+function mkChip(label, value) {
+  return `<div><div class="chip-label">${label}</div><div class="chip-val">${value}</div></div>`;
+}
+function mkStatChip(label, val, sub) {
+  return `<div class="stat-chip"><div class="sc-label">${label}</div><div class="sc-val">${val}</div><div class="sc-sub">${sub||''}</div></div>`;
+}
+
+// ── Build full activity detail HTML (INFO-pane layout, no AI summary) ─────────
+function buildStageActivityDetail(a) {
+  function altPaceStr(mph, perMile) {
+    if(!mph || mph<=0) return null;
+    const mins = perMile ? 60/mph : 60/(mph*1.60934);
+    const m=Math.floor(mins), s=Math.round((mins-m)*60);
+    return `${m}:${String(s).padStart(2,'0')}/${perMile?'mi':'km'}`;
+  }
+  const chips = [
+    ['Distance',  a.distance_mi       ? U.distS(a.distance_mi)  : null,
+                  a.distance_mi       ? (U.metric?(+(a.distance_mi).toFixed(2))+' mi':(+(a.distance_mi*1.60934).toFixed(2))+' km') : null],
+    ['Mov Time',  a.active_time       ? fmtHMS(a.active_time)   : null, null],
+    ['Duration',  a.duration          ? fmtHMS(a.duration)      : null, null],
+    ['Climb',     a.total_climb_ft    ? U.climbS(a.total_climb_ft)  : null,
+                  a.total_climb_ft    ? (U.metric?Math.round(a.total_climb_ft)+' ft':Math.round(a.total_climb_ft*0.3048)+' m') : null],
+    ['Descent',   a.total_descent_ft  ? U.climbS(a.total_descent_ft) : null,
+                  a.total_descent_ft  ? (U.metric?Math.round(a.total_descent_ft)+' ft':Math.round(a.total_descent_ft*0.3048)+' m') : null],
+    ['Mov Spd',   a.avg_speed_mph     ? U.speedS(a.avg_speed_mph) : null,
+                  a.avg_speed_mph     ? (U.metric?(+(a.avg_speed_mph).toFixed(1))+' mph':(+(a.avg_speed_mph*1.60934).toFixed(1))+' km/h') : null],
+    ['Avg Spd',   (a.duration&&a.distance_mi) ? U.speedS(+(a.distance_mi/(a.duration/3600)).toFixed(1)) : null,
+                  (a.duration&&a.distance_mi) ? (()=>{const mph=+(a.distance_mi/(a.duration/3600)).toFixed(1);return U.metric?mph+' mph':(+(mph*1.60934).toFixed(1))+' km/h';})() : null],
+    ['Avg Pace',  a.avg_speed_mph     ? altPaceStr(a.avg_speed_mph,!U.metric) : null,
+                  a.avg_speed_mph     ? altPaceStr(a.avg_speed_mph, U.metric) : null],
+    ['Avg HR',    a.avg_heartrate     ? Math.round(a.avg_heartrate)+' bpm'   : null, null],
+    ['Max HR',    a.max_heartrate     ? Math.round(a.max_heartrate)+' bpm'   : null, null],
+    ['Cadence',   a.avg_cadence       ? Math.round(a.avg_cadence)+' rpm'     : null, null],
+    ['Avg Pwr',   a.avg_power         ? Math.round(a.avg_power)+' W'         : null, null],
+    ['Suffer',    a.suffer_score      ? Math.round(a.suffer_score)+''        : null, null],
+    ['Type',      a.activity_type     ? esc(a.activity_type)                 : null, null],
+    ['Equipment', a.equipment         ? esc(a.equipment)                     : null, null],
+  ].filter(([,v])=>v);
+
+  let html = '';
+  // Activity title bar
+  html += `<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:6px">
+    <div style="flex:1;min-width:0;font-size:14px;font-weight:600">${esc(a.name||'(unnamed)')}</div>
+    <button onclick="openTourEdit(${a.id})" style="font-size:11px;font-weight:600;color:var(--text);border:1px solid var(--border2);border-radius:4px;padding:3px 8px;background:none;cursor:pointer;flex-shrink:0;white-space:nowrap;line-height:1.4">Edit…</button>
+    <a href="/activities/${a.id}/export/gpx" style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:4px;border:1px solid var(--border2);color:var(--muted);text-decoration:none;flex-shrink:0;white-space:nowrap">↓ GPX</a>
+  </div>`;
+  // Date + location/weather grid
+  html += `<div style="display:grid;grid-template-columns:auto 1fr;column-gap:20px;row-gap:3px;margin-bottom:8px;align-items:baseline">
+    <span style="font-size:11.5px;color:var(--muted)">${fmtDate(a.start_time)}</span>
+    <span id="sd-location" style="font-size:11px;color:var(--muted)"></span>
+    <span></span>
+    <span id="sd-weather"  style="font-size:11px;color:var(--muted)"></span>
+  </div>`;
+  // Notes / description
+  if(a.notes) html += `<div class="act-notes">${esc(a.notes)}</div>`;
+  // Kudos + Comments buttons (hidden until loaded)
+  if(a.strava_activity_id) {
+    html += `<div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
+      <button id="sd-kudos-btn"    onclick="toggleSdKudos(${a.id},event)"    style="display:none;border:1px solid var(--border2);border-radius:4px;padding:3px 7px;font-size:11px;font-weight:600;cursor:pointer;background:transparent;color:var(--text);align-items:center;gap:4px;line-height:1"></button>
+      <button id="sd-comments-btn" onclick="toggleSdComments(${a.id},event)" style="display:none;border:1px solid var(--border2);border-radius:4px;padding:3px 7px;font-size:11px;font-weight:600;cursor:pointer;background:transparent;color:var(--text);align-items:center;gap:4px;line-height:1"></button>
+    </div>`;
+  }
+  // Stats grid
+  if(chips.length) {
+    html += `<div class="stats-grid">`;
+    chips.forEach(([l,v,sub]) => {
+      const span = l==='Equipment' ? Math.min(6,Math.max(1,Math.ceil(v.length/14))) : 1;
+      const s = span>1 ? ` style="grid-column:span ${span}"` : '';
+      html += `<div class="stat-chip"${s}><div class="sc-label">${l}</div><div class="sc-val">${v}</div><div class="sc-sub">${sub||''}</div></div>`;
+    });
+    html += `</div>`;
+  }
+  // Photos placeholder
+  html += `<div id="sd-photos"></div>`;
+  return html;
+}
+
+// ── Detail panel ──────────────────────────────────────────────────────────────
+async function renderDetail(activeId) {
+  const el = document.getElementById('stage-detail');
+
+  if(!activeId) {
+    if(!tourStages.length) { el.innerHTML=''; return; }
+    const done       = tourStages.filter(s=>s.completion);
+    const totalDist  = tourStages.reduce((s,x)=>s+(x.distance_mi||0),0);
+    const totalClimb = tourStages.reduce((s,x)=>s+(x.climb_ft||0),0);
+    const doneDist   = done.reduce((s,x)=>s+(x.distance_mi||0),0);
+    const doneClimb  = done.reduce((s,x)=>s+(x.climb_ft||0),0);
+    const pctD = totalDist >0 ? Math.round(doneDist /totalDist *100) : 0;
+    const pctC = totalClimb>0 ? Math.round(doneClimb/totalClimb*100) : 0;
+
+    let html = `<div style="font-size:12px;color:var(--muted);margin-bottom:12px">${done.length} of ${tourStages.length} stages completed</div>`;
+    html += `<div class="stats-grid" style="max-width:380px;margin-bottom:14px">`;
+    html += `<div class="stat-chip"><div class="sc-label">Total Dist</div><div class="sc-val">${U.distS(totalDist)}</div><div class="sc-sub">${U.distS(doneDist)} done (${pctD}%)</div></div>`;
+    html += `<div class="stat-chip"><div class="sc-label">Total Climb</div><div class="sc-val">${U.climbS(totalClimb)}</div><div class="sc-sub">${U.climbS(doneClimb)} done (${pctC}%)</div></div>`;
+    html += `</div>`;
+
+    // Locations
+    const first = tourStages[0];
+    const last  = tourStages[tourStages.length-1];
+    const lastDone = done.length ? done[done.length-1] : null;
+    html += `<div style="display:flex;flex-direction:column;gap:6px">`;
+    if(first?.start_lat != null)
+      html += `<div style="font-size:12px"><span style="color:var(--muted);margin-right:6px">Start:</span><span id="ov-start-loc">Loading…</span></div>`;
+    if(last?.start_lat != null)
+      html += `<div style="font-size:12px"><span style="color:var(--muted);margin-right:6px">End:</span><span id="ov-end-loc">Loading…</span></div>`;
+    if(lastDone && lastDone.start_lat != null)
+      html += `<div style="font-size:12px"><span style="color:var(--muted);margin-right:6px">Last completed:</span><span id="ov-last-loc">Loading…</span></div>`;
+    html += `</div>`;
+    el.innerHTML = html;
+
+    if(first?.start_lat != null)
+      reverseGeocode(first.start_lat,first.start_lon).then(loc=>{ const e=document.getElementById('ov-start-loc'); if(e)e.textContent=loc||'—'; });
+    if(last?.start_lat != null)
+      reverseGeocode(last.start_lat,last.start_lon).then(loc=>{ const e=document.getElementById('ov-end-loc'); if(e)e.textContent=loc||'—'; });
+    if(lastDone?.start_lat != null)
+      reverseGeocode(lastDone.start_lat,lastDone.start_lon).then(loc=>{ const e=document.getElementById('ov-last-loc'); if(e)e.textContent=loc||'—'; });
+    return;
+  }
+
+  const stage = tourStages.find(s=>String(s.id)===String(activeId));
+  if(!stage) { el.innerHTML=''; return; }
+
+  const stageHead = `<div style="font-size:15px;font-weight:600;margin-bottom:10px">Stage ${stage.stage_num}: ${esc(stage.name)}</div>`;
+
+  if(!stage.completion) {
+    // Non-completed: show estimated route + location
+    const distP = U.metric?(+(stage.distance_mi*1.60934).toFixed(1))+' km':(+stage.distance_mi).toFixed(1)+' mi';
+    const distS = U.metric?(+stage.distance_mi.toFixed(1))+' mi':(+(stage.distance_mi*1.60934).toFixed(1))+' km';
+    const climP = U.metric?Math.round(stage.climb_ft*0.3048)+' m':Math.round(stage.climb_ft)+' ft';
+    const climS = U.metric?Math.round(stage.climb_ft)+' ft':Math.round(stage.climb_ft*0.3048)+' m';
+
+    let html = stageHead;
+    html += `<div class="section-label" style="margin-bottom:6px">Estimated Route</div>`;
+    html += `<div class="stats-grid" style="max-width:300px;margin-bottom:14px">`;
+    html += mkStatChip('Distance', distP, distS);
+    html += mkStatChip('Climb',    climP, climS);
+    html += `</div>`;
+    html += `<div style="display:flex;align-items:baseline;gap:8px">
+      <span class="section-label" style="margin-bottom:0">Location</span>
+      <span id="stage-loc-text" style="font-size:12px;color:var(--muted)">Loading…</span>
+    </div>`;
+    el.innerHTML = html;
+
+    // Async reverse-geocode
+    if(stage.start_lat != null && stage.start_lon != null) {
+      reverseGeocode(stage.start_lat, stage.start_lon).then(loc => {
+        const locEl = document.getElementById('stage-loc-text');
+        if(locEl) locEl.textContent = loc || '—';
+      });
+    } else {
+      const locEl = document.getElementById('stage-loc-text');
+      if(locEl) locEl.textContent = '—';
+    }
+    return;
+  }
+
+  // Completed: fetch full activity data and render INFO-pane style
+  el.innerHTML = stageHead + `<div style="color:var(--muted);font-size:12px">Loading…</div>`;
+  try {
+    const act = await fetch(`/activities/${stage.completion.activity_id}/json`).then(r=>r.json());
+    el.innerHTML = stageHead +
+      `<div style="font-size:11px;color:#22c55e;font-weight:500;margin-bottom:10px">✓ Completed ${stage.completion.date}</div>` +
+      buildStageActivityDetail(act);
+    setTimeout(() => {
+      loadStageActivityWx(act.id);
+      loadStagePhotos(act.id);
+      if(act.strava_activity_id) loadStageSocial(act.id);
+      if(act.strava_activity_id && !act.notes) loadStageDescription(act.id);
+    }, 0);
+  } catch(e) {
+    el.innerHTML = stageHead + `<div style="color:var(--muted);font-size:12px">Could not load activity data.</div>`;
+  }
+}
+
+// ── Lazy-fetch Strava description (only needed first time, before fetch-points runs) ──
+async function loadStageDescription(actId) {
+  try {
+    // fetch-points saves the Strava description as a side effect; reuse it here
+    const r = await fetch(`/api/activities/${actId}/fetch-points`, { method: 'POST' });
+    if(!r.ok) return;
+    // Re-fetch the activity to get the now-saved description
+    const act2 = await fetch(`/activities/${actId}/json`).then(r2 => r2.ok ? r2.json() : null);
+    if(!act2?.notes) return;
+    // Patch the description into the existing detail panel if still showing
+    const existing = document.querySelector('.act-notes');
+    if(existing) return; // already has a description box
+    // Insert description before the stats grid
+    const statsGrid = document.querySelector('#stage-detail .stats-grid');
+    const notesEl = document.createElement('div');
+    notesEl.className = 'act-notes';
+    notesEl.textContent = act2.notes;
+    if(statsGrid) statsGrid.before(notesEl);
+  } catch(e) {}
+}
+
+// ── Weather / location for stage detail ───────────────────────────────────────
+async function loadStageActivityWx(actId) {
+  try {
+    const d = await fetch(`/api/activities/${actId}/weather-location`).then(r=>r.json());
+    const wxEl  = document.getElementById('sd-weather');
+    const locEl = document.getElementById('sd-location');
+    if(wxEl && d.weather?.description) {
+      const w=d.weather, parts=[w.description];
+      if(w.avg_temp_f !=null) parts.push(U.tempS(w.avg_temp_f));
+      if(w.avg_wind_kph!=null) parts.push(`Wind ${Math.round(w.avg_wind_kph)} km/h`);
+      if(w.precip_mm  >  0)  parts.push(`${w.precip_mm}mm precip`);
+      wxEl.textContent = parts.join(' · ');
+    }
+    if(locEl && d.locations) locEl.textContent = d.locations;
+  } catch(e) {}
+}
+
+// ── Photos for stage detail ───────────────────────────────────────────────────
+let _tourLbMedia = [];
+let _tourLbIdx   = 0;
+
+async function loadStagePhotos(actId) {
+  const el = document.getElementById('sd-photos');
+  if(!el) return;
+  try {
+    const r = await fetch(`/activities/${actId}/photos`);
+    if(!r.ok) return;
+    const d = await r.json();
+    const media = d.media || (d.photos ? d.photos.map(f=>({url:d.base_url+f,type:'image'})) : []);
+    if(!media.length) return;
+    _tourLbMedia = media;
+    let html = `<div class="section-label" style="margin-top:12px;margin-bottom:6px">Photos</div>`;
+    html += `<div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:6px">`;
+    media.forEach((m, i) => {
+      if(m.type==='image') {
+        html += `<img src="${m.url}" loading="lazy" style="height:80px;width:80px;object-fit:cover;border-radius:5px;cursor:pointer;flex-shrink:0" onclick="openTourLightbox(${i})">`;
+      } else if(m.type==='video') {
+        html += `<div style="height:80px;width:80px;border-radius:5px;background:var(--surface2);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:24px;color:var(--muted)" onclick="openTourLightbox(${i})" title="View video">▶</div>`;
+      }
+    });
+    html += `</div>`;
+    el.innerHTML = html;
+  } catch(e) {}
+}
+
+function openTourLightbox(idx) {
+  if(!_tourLbMedia.length) return;
+  _tourLbIdx = idx;
+  _tourLbShow(_tourLbMedia[idx]);
+  const countEl = document.getElementById('tlb-count');
+  countEl.textContent = _tourLbMedia.length > 1 ? `${idx+1} / ${_tourLbMedia.length}` : '';
+  document.getElementById('tour-lightbox').style.display = 'flex';
+}
+
+function _tourLbShow(m) {
+  const img = document.getElementById('tlb-img');
+  const vid = document.getElementById('tlb-vid');
+  if(m.type==='video') {
+    img.style.display='none';
+    vid.style.display='';
+    vid.src = m.hls_url || m.url || '';
+  } else {
+    vid.pause(); vid.style.display='none';
+    img.src = m.url || '';
+    img.style.display='';
+  }
+}
+
+function tourLbNav(delta) {
+  if(!_tourLbMedia.length) return;
+  _tourLbIdx = (_tourLbIdx + delta + _tourLbMedia.length) % _tourLbMedia.length;
+  _tourLbShow(_tourLbMedia[_tourLbIdx]);
+  document.getElementById('tlb-count').textContent =
+    _tourLbMedia.length > 1 ? `${_tourLbIdx+1} / ${_tourLbMedia.length}` : '';
+}
+
+function closeTourLightbox() {
+  document.getElementById('tour-lightbox').style.display = 'none';
+  const vid = document.getElementById('tlb-vid');
+  vid.pause(); vid.style.display='none'; vid.removeAttribute('src');
+}
+
+// ── Social (kudos + comments) popovers ────────────────────────────────────────
+const _sdKudosCache    = new Map();
+const _sdCommentsCache = new Map();
+
+function _sdOpenPopover(id, anchorBtn) {
+  ['sd-kudos-pop','sd-comments-pop'].forEach(pid => { const el=document.getElementById(pid); if(el) el.remove(); });
+  const pop = document.createElement('div');
+  pop.id = id;
+  pop.style.cssText = 'position:fixed;z-index:2000;background:var(--surface2);border:1px solid var(--border2);border-radius:6px;padding:8px 0;box-shadow:0 4px 16px rgba(0,0,0,.6);font-size:12px;min-width:160px;max-height:240px;overflow-y:auto';
+  pop.innerHTML = '<div style="padding:4px 12px;color:var(--muted)">Loading…</div>';
+  document.body.appendChild(pop);
+  const rect = anchorBtn.getBoundingClientRect();
+  pop.style.left = rect.left + 'px';
+  pop.style.top  = (rect.bottom + 4) + 'px';
+  const closeHandler = e => {
+    if(!pop.contains(e.target) && e.target !== anchorBtn) {
+      pop.remove();
+      document.removeEventListener('click', closeHandler, true);
+    }
+  };
+  setTimeout(() => document.addEventListener('click', closeHandler, true), 0);
+  return pop;
+}
+
+async function loadStageSocial(actId) {
+  try {
+    const [ku, co] = await Promise.all([
+      fetch(`/api/activities/${actId}/strava-kudos`).then(r=>r.ok?r.json():null).catch(()=>null),
+      fetch(`/api/activities/${actId}/strava-comments`).then(r=>r.ok?r.json():null).catch(()=>null),
+    ]);
+    const kBtn = document.getElementById('sd-kudos-btn');
+    const cBtn = document.getElementById('sd-comments-btn');
+    if(kBtn && ku?.kudos_count != null) {
+      _sdKudosCache.set(actId, null); // mark as loaded (list fetched on click)
+      kBtn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:middle;flex-shrink:0"><path d="M1 21h4V9H1v12zm22-11c0-1.1-.9-2-2-2h-6.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L14.17 1 7.59 7.59C7.22 7.95 7 8.45 7 9v10c0 1.1.9 2 2 2h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-2z"/></svg> ${ku.kudos_count}`;
+      kBtn.style.display = 'inline-flex';
+    }
+    if(cBtn && co?.comment_count != null) {
+      cBtn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:middle;flex-shrink:0"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg> ${co.comment_count}`;
+      cBtn.style.display = 'inline-flex';
+    }
+  } catch(e) {}
+}
+
+async function toggleSdKudos(actId, event) {
+  event.stopPropagation();
+  if(document.getElementById('sd-kudos-pop')) { document.getElementById('sd-kudos-pop').remove(); return; }
+  const pop = _sdOpenPopover('sd-kudos-pop', event.currentTarget);
+  try {
+    let athletes = _sdKudosCache.get(actId);
+    if(!athletes) {
+      const r = await fetch(`/api/activities/${actId}/strava-kudos-list`);
+      if(!r.ok) { pop.innerHTML = '<div style="padding:4px 12px;color:var(--muted)">Unable to load</div>'; return; }
+      athletes = (await r.json()).athletes || [];
+      _sdKudosCache.set(actId, athletes);
+    }
+    if(!athletes.length) { pop.innerHTML = '<div style="padding:4px 12px;color:var(--muted)">No kudos yet</div>'; return; }
+    pop.innerHTML = athletes.map(a =>
+      `<div style="padding:3px 12px;color:var(--text);white-space:nowrap">${esc(a.firstname)} ${esc(a.lastname)}</div>`
+    ).join('');
+  } catch(e) { pop.innerHTML = '<div style="padding:4px 12px;color:var(--muted)">Error loading</div>'; }
+}
+
+async function toggleSdComments(actId, event) {
+  event.stopPropagation();
+  if(document.getElementById('sd-comments-pop')) { document.getElementById('sd-comments-pop').remove(); return; }
+  const pop = _sdOpenPopover('sd-comments-pop', event.currentTarget);
+  try {
+    let comments = _sdCommentsCache.get(actId);
+    if(!comments) {
+      const r = await fetch(`/api/activities/${actId}/strava-comments-list`);
+      if(!r.ok) { pop.innerHTML = '<div style="padding:4px 12px;color:var(--muted)">Unable to load</div>'; return; }
+      comments = (await r.json()).comments || [];
+      _sdCommentsCache.set(actId, comments);
+    }
+    if(!comments.length) { pop.innerHTML = '<div style="padding:4px 12px;color:var(--muted)">No comments yet</div>'; return; }
+    pop.innerHTML = comments.map((c, i) =>
+      `<div style="padding:5px 12px${i>0?';border-top:1px solid var(--border)':''}">
+        <div style="font-weight:600;color:var(--text);margin-bottom:2px">${esc(c.athlete_name)}</div>
+        <div style="color:var(--muted);line-height:1.4;white-space:pre-wrap">${esc(c.text)}</div>
+      </div>`
+    ).join('');
+  } catch(e) { pop.innerHTML = '<div style="padding:4px 12px;color:var(--muted)">Error loading</div>'; }
+}
+
+// ── Edit activity (tour stage) ────────────────────────────────────────────────
+let _teActId = null;
+const _rpeLabels = ['','Easy','Easy+','Moderate','Moderate+','Medium','Hard','Hard+','Very Hard','Max-','Max'];
+
+function openTourEdit(actId) {
+  _teActId = actId;
+  // Populate from what we just fetched (cached in the DOM is fine)
+  fetch(`/activities/${actId}/json`).then(r=>r.json()).then(a => {
+    document.getElementById('te-name').value = a.name || '';
+    document.getElementById('te-desc').value = a.notes || '';
+    const rpe = a.perceived_exertion;
+    const slider = document.getElementById('te-rpe');
+    if(rpe != null) { slider.value=rpe; document.getElementById('te-rpe-label').textContent=_rpeLabels[rpe]||rpe; }
+    else            { slider.value=5;   document.getElementById('te-rpe-label').textContent=''; }
+    slider._rpeSet = rpe != null;
+    document.getElementById('te-status').textContent='';
+    document.getElementById('te-save-btn').disabled=false;
+    document.getElementById('te-save-btn').textContent='Save';
+    document.getElementById('tour-edit-overlay').style.display='flex';
+  }).catch(()=>{});
+}
+
+function closeTourEdit() {
+  document.getElementById('tour-edit-overlay').style.display='none';
+  _teActId = null;
+}
+
+async function saveTourEdit() {
+  if(!_teActId) return;
+  const name = document.getElementById('te-name').value.trim();
+  if(!name) { document.getElementById('te-status').textContent='Title is required'; return; }
+  const desc   = document.getElementById('te-desc').value;
+  const slider = document.getElementById('te-rpe');
+  const body   = { name, description: desc, perceived_exertion: slider._rpeSet ? parseInt(slider.value) : null };
+  const btn    = document.getElementById('te-save-btn');
+  const stat   = document.getElementById('te-status');
+  btn.disabled=true; btn.textContent='Saving…';
+  try {
+    const r = await fetch(`/api/activities/${_teActId}/update`, {
+      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body),
+    });
+    if(!r.ok) { const e=await r.json().catch(()=>({})); stat.textContent='✗ '+(e.detail||r.statusText); return; }
+    closeTourEdit();
+    // Refresh the stage detail
+    if(selectedId) renderDetail(selectedId);
+  } catch(e) { stat.textContent='✗ '+e.message; }
+  finally { btn.disabled=false; btn.textContent='Save'; }
+}
+
+// RPE slider label update
+document.addEventListener('DOMContentLoaded', () => {
+  const slider = document.getElementById('te-rpe');
+  slider.addEventListener('input', () => {
+    slider._rpeSet=true;
+    document.getElementById('te-rpe-label').textContent=_rpeLabels[slider.value]||slider.value;
+  });
+});
+
+// ── Reverse-geocode a lat/lon via Nominatim ───────────────────────────────────
+async function reverseGeocode(lat, lon) {
+  try {
+    const r = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&zoom=10`,
+      { headers: {'Accept-Language':'en'} }
+    );
+    const d = await r.json();
+    const addr = d.address || {};
+    const parts = [addr.city||addr.town||addr.village||addr.county, addr.state||addr.region, addr.country].filter(Boolean);
+    return parts.slice(0,2).join(', ');
+  } catch(e) { return null; }
+}
+
+// ── Modal: Define / Edit ──────────────────────────────────────────────────────
+function openDefineModal() { _openDefine(); }
+function openEditModal()   { if(tourInfo?.is_mine) _openEdit(); }
+
+function _openDefine() {
+  modalMode   = 'define';
+  modalStages = [];
+  document.getElementById('modal-title').textContent   = 'Define New Tour';
+  document.getElementById('submit-btn').textContent    = 'OK';
+  document.getElementById('title-input').value = '';
+  document.getElementById('start-input').value = '';
+  document.getElementById('end-input').value   = '';
+  document.getElementById('modal-status').textContent = '';
+  document.getElementById('submit-btn').disabled = false;
+  renderModalStages();
+  document.getElementById('tour-modal').classList.add('open');
+}
+
+function _openEdit() {
+  modalMode = 'edit';
+  // Pre-populate from current tourStages (already in DB order)
+  modalStages = tourStages.map(s => ({
+    type: 'existing', id: s.id, name: s.name, completion: s.completion,
+  }));
+  document.getElementById('modal-title').textContent   = 'Edit Tour';
+  document.getElementById('submit-btn').textContent    = 'Save';
+  document.getElementById('title-input').value = tourInfo.title;
+  document.getElementById('start-input').value = tourInfo.start_date;
+  document.getElementById('end-input').value   = tourInfo.end_date;
+  document.getElementById('modal-status').textContent = '';
+  document.getElementById('submit-btn').disabled = false;
+  renderModalStages();
+  document.getElementById('tour-modal').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('tour-modal').classList.remove('open');
+}
+
+// ── Modal stage list rendering + drag-to-reorder ──────────────────────────────
+function renderModalStages() {
+  const list = document.getElementById('modal-stage-list');
+  list.innerHTML = '';
+  if(!modalStages.length) {
+    list.innerHTML = '<div style="color:var(--muted2);font-size:12px;padding:6px 4px">No stages yet — add GPX files below.</div>';
+    return;
+  }
+  modalStages.forEach((s, idx) => {
+    const item = document.createElement('div');
+    item.className = 'ms-item';
+    item.dataset.idx = idx;
+    item.draggable = true;
+
+    const badge = s.type === 'new'
+      ? `<span class="ms-badge">new</span>`
+      : (s.completion ? `<span class="ms-done">✓</span>` : '');
+
+    item.innerHTML = `
+      <span class="ms-drag" title="Drag to reorder">⠿</span>
+      <span class="ms-num">${idx+1}</span>
+      <span class="ms-name" title="${esc(s.name)}">${esc(s.name)}</span>
+      ${badge}
+      <button class="ms-remove" title="Remove" onclick="removeModalStage(${idx})">×</button>`;
+
+    _attachModalDrag(item);
+    list.appendChild(item);
+  });
+}
+
+let _mDragSrc = null;
+// Touch drag state
+let _mTouchSrc=null, _mTouchClone=null, _mTouchOffY=0;
+
+function _attachModalDrag(item) {
+  // ── Mouse drag (desktop) ──
+  item.addEventListener('dragstart', e => {
+    _mDragSrc = parseInt(item.dataset.idx);
+    e.dataTransfer.effectAllowed = 'move';
+    setTimeout(()=> item.classList.add('dragging'), 0);
+  });
+  item.addEventListener('dragend', () => {
+    item.classList.remove('dragging');
+    document.querySelectorAll('.ms-item').forEach(el =>
+      el.classList.remove('drop-above','drop-below'));
+    _mDragSrc = null;
+  });
+  item.addEventListener('dragover', e => {
+    e.preventDefault();
+    const rect = item.getBoundingClientRect();
+    const above = e.clientY < rect.top + rect.height / 2;
+    document.querySelectorAll('.ms-item').forEach(el =>
+      el.classList.remove('drop-above','drop-below'));
+    item.classList.toggle('drop-above', above);
+    item.classList.toggle('drop-below', !above);
+  });
+  item.addEventListener('dragleave', () =>
+    item.classList.remove('drop-above','drop-below'));
+  item.addEventListener('drop', e => {
+    e.preventDefault();
+    item.classList.remove('drop-above','drop-below');
+    if(_mDragSrc === null) return;
+    const dest = parseInt(item.dataset.idx);
+    if(_mDragSrc === dest) return;
+    const rect    = item.getBoundingClientRect();
+    const before  = e.clientY < rect.top + rect.height / 2;
+    const moved   = modalStages.splice(_mDragSrc, 1)[0];
+    let ins = dest > _mDragSrc ? dest - 1 : dest;
+    if(!before && ins < modalStages.length) ins++;
+    modalStages.splice(ins, 0, moved);
+    renderModalStages();
+  });
+
+  // ── Touch drag (iPad / mobile) ──
+  const handle = item.querySelector('.ms-drag');
+  if(handle) handle.addEventListener('touchstart', e => _mTouchStart(e, item), {passive:false});
+}
+
+function _mTouchStart(e, item) {
+  e.preventDefault();
+  _mTouchSrc = parseInt(item.dataset.idx);
+  const rect = item.getBoundingClientRect();
+  _mTouchOffY = e.touches[0].clientY - rect.top;
+  // Clone for visual feedback
+  _mTouchClone = item.cloneNode(true);
+  _mTouchClone.style.cssText = `position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;opacity:.8;z-index:9000;pointer-events:none;background:#2c2c2e;border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,.5)`;
+  document.body.appendChild(_mTouchClone);
+  item.classList.add('dragging');
+  document.addEventListener('touchmove', _mTouchMove, {passive:false});
+  document.addEventListener('touchend',  _mTouchEnd);
+}
+
+function _mTouchMove(e) {
+  e.preventDefault();
+  if(_mTouchClone) {
+    _mTouchClone.style.top = (e.touches[0].clientY - _mTouchOffY)+'px';
+  }
+  // Highlight drop target
+  const y = e.touches[0].clientY;
+  document.querySelectorAll('.ms-item').forEach(el => {
+    el.classList.remove('drop-above','drop-below');
+    if(parseInt(el.dataset.idx)===_mTouchSrc) return;
+    const r = el.getBoundingClientRect();
+    if(y >= r.top && y <= r.bottom) {
+      el.classList.toggle('drop-above', y < r.top+r.height/2);
+      el.classList.toggle('drop-below', y >= r.top+r.height/2);
+    }
+  });
+}
+
+function _mTouchEnd(e) {
+  document.removeEventListener('touchmove', _mTouchMove);
+  document.removeEventListener('touchend',  _mTouchEnd);
+  if(_mTouchClone) { _mTouchClone.remove(); _mTouchClone=null; }
+  document.querySelectorAll('.ms-item').forEach(el=>el.classList.remove('dragging','drop-above','drop-below'));
+  if(_mTouchSrc===null) return;
+  const y = e.changedTouches[0].clientY;
+  let dest=-1, before=true;
+  document.querySelectorAll('.ms-item').forEach(el => {
+    const r=el.getBoundingClientRect();
+    if(y>=r.top && y<=r.bottom) { dest=parseInt(el.dataset.idx); before=y<r.top+r.height/2; }
+  });
+  if(dest!==-1 && dest!==_mTouchSrc) {
+    const moved=modalStages.splice(_mTouchSrc,1)[0];
+    let ins=dest>_mTouchSrc?dest-1:dest;
+    if(!before && ins<modalStages.length) ins++;
+    modalStages.splice(ins,0,moved);
+    renderModalStages();
+  }
+  _mTouchSrc=null;
+}
+
+function removeModalStage(idx) {
+  modalStages.splice(idx, 1);
+  renderModalStages();
+}
+
+function addFilesToModal(fileList) {
+  const files = [...fileList].filter(f => f.name.toLowerCase().endsWith('.gpx'));
+  if(!files.length) return;
+  files.sort((a,b) => a.name.localeCompare(b.name));
+  files.forEach(f => modalStages.push({ type:'new', name:f.name, file:f }));
+  renderModalStages();
+  document.getElementById('gpx-input').value = '';
+}
+
+// ── Submit (create or update) ─────────────────────────────────────────────────
+async function submitTour() {
+  const title = document.getElementById('title-input').value.trim();
+  const sd    = document.getElementById('start-input').value;
+  const ed    = document.getElementById('end-input').value;
+  const stat  = document.getElementById('modal-status');
+
+  if(!title)              { stat.textContent='Title is required.'; return; }
+  if(!sd)                 { stat.textContent='Start date is required.'; return; }
+  if(!ed)                 { stat.textContent='End date is required.'; return; }
+  if(ed < sd)             { stat.textContent='End date must be on or after start date.'; return; }
+  if(!modalStages.length) { stat.textContent='At least one stage is required.'; return; }
+
+  const newStages = modalStages.filter(s => s.type === 'new');
+  if(modalMode === 'define' && !newStages.length) {
+    stat.textContent = 'Add at least one GPX file.'; return;
+  }
+
+  stat.textContent = modalMode === 'define' ? 'Creating…' : 'Saving…';
+  document.getElementById('submit-btn').disabled = true;
+
+  try {
+    if(modalMode === 'define') {
+      // POST — files passed in current modal order
+      const form = new FormData();
+      form.append('title', title);
+      form.append('start_date', sd);
+      form.append('end_date', ed);
+      // Append files in the order they appear in modalStages
+      modalStages.forEach(s => form.append('files', s.file));
+
+      const resp = await fetch('/tours', { method:'POST', body:form });
+      if(!resp.ok) {
+        const err = await resp.json().catch(()=>({}));
+        stat.textContent = err.detail || 'Error creating tour.';
+        document.getElementById('submit-btn').disabled = false;
+        return;
+      }
+      const data = await resp.json();
+      closeModal();
+      await loadTours();
+      document.getElementById('tour-selector').value = data.id;
+      await onTourSelect(data.id);
+
+    } else {
+      // PUT — send stage_order + new files
+      let newIdx = 0;
+      const stageOrder = modalStages.map(s =>
+        s.type === 'existing'
+          ? { type:'existing', id:s.id }
+          : { type:'new', idx:newIdx++ }
+      );
+      const form = new FormData();
+      form.append('title', title);
+      form.append('start_date', sd);
+      form.append('end_date', ed);
+      form.append('stage_order', JSON.stringify(stageOrder));
+      newStages.forEach(s => form.append('files', s.file));
+
+      const resp = await fetch(`/tours/${tourInfo.id}`, { method:'PUT', body:form });
+      if(!resp.ok) {
+        const err = await resp.json().catch(()=>({}));
+        stat.textContent = err.detail || 'Error saving tour.';
+        document.getElementById('submit-btn').disabled = false;
+        return;
+      }
+      closeModal();
+      await loadTours();
+      document.getElementById('tour-selector').value = tourInfo.id;
+      await onTourSelect(tourInfo.id);
+    }
+  } catch(e) {
+    stat.textContent = 'Network error.';
+    document.getElementById('submit-btn').disabled = false;
+  }
+}
+
+// ── Drop zone wiring ──────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  const zone = document.getElementById('modal-drop-zone');
+  const inp  = document.getElementById('gpx-input');
+  zone.addEventListener('click', e => { if(e.target!==inp) inp.click(); });
+  zone.addEventListener('dragover',  e => { e.preventDefault(); zone.classList.add('drag-active'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag-active'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault();
+    zone.classList.remove('drag-active');
+    addFilesToModal(e.dataTransfer.files);
+  });
+  inp.addEventListener('change', () => addFilesToModal(inp.files));
+
+  document.getElementById('tour-modal').addEventListener('click', function(e) {
+    if(e.target === this) closeModal();
+  });
+
+  // Lightbox keyboard navigation
+  document.addEventListener('keydown', e => {
+    const lb = document.getElementById('tour-lightbox');
+    if(lb.style.display==='flex') {
+      if(e.key==='ArrowRight') tourLbNav(1);
+      else if(e.key==='ArrowLeft') tourLbNav(-1);
+      else if(e.key==='Escape') closeTourLightbox();
+    }
+  });
+
+  // Lightbox touch swipe
+  let _lbTouchX=0;
+  document.getElementById('tour-lightbox').addEventListener('touchstart',e=>{_lbTouchX=e.touches[0].clientX;},{passive:true});
+  document.getElementById('tour-lightbox').addEventListener('touchend',e=>{
+    const dx=e.changedTouches[0].clientX-_lbTouchX;
+    if(Math.abs(dx)>40) tourLbNav(dx<0?1:-1);
+  },{passive:true});
+});
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+(async () => {
+  await U.load();
+  initMap();
+  await loadTours();
+  // Restore last selected tour
+  try {
+    const prefs = await fetch('/api/settings/ui-prefs').then(r=>r.json());
+    const lastId = prefs.last_tour_id;
+    if(lastId) {
+      const sel = document.getElementById('tour-selector');
+      if(sel.querySelector(`option[value="${lastId}"]`)) {
+        sel.value = String(lastId);
+        await onTourSelect(String(lastId));
+      }
+    }
+  } catch(e) {}
+})();
+</script>
+</body>
+</html>

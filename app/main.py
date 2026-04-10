@@ -127,7 +127,7 @@ def type_badge(t):
 
 templates.env.filters["fmt_date"]   = fmt_date
 templates.env.filters["type_badge"] = type_badge
-templates.env.globals["app_version"] = "v0.3.80"
+templates.env.globals["app_version"] = "v0.3.96"
 
 # ── wire routers ──────────────────────────────────────────────────────────────
 activities.db_getter = get_db
@@ -159,7 +159,8 @@ auth_router.templates = templates
 fitgpx.db_getter = get_db
 app.include_router(fitgpx.router)
 
-tours.db_getter = get_db
+tours.db_getter  = get_db
+tours.templates  = templates
 app.include_router(tours.router)
 
 @app.get("/favicon.ico", include_in_schema=False)
