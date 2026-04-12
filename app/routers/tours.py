@@ -13,6 +13,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from app.auth import get_session_user_id
 from app.routers.fitgpx import _haversine_m
+from app.db import build_activity
 
 router    = APIRouter()
 db_getter: Callable = None
@@ -44,6 +45,14 @@ def _ensure_tables(con):
         pass
     try:
         con.execute("ALTER TABLE tours ADD COLUMN ai_summary TEXT")
+    except Exception:
+        pass
+    try:
+        con.execute("ALTER TABLE tours ADD COLUMN share_token TEXT")
+    except Exception:
+        pass
+    try:
+        con.execute("ALTER TABLE tours ADD COLUMN share_user_id INTEGER")
     except Exception:
         pass
     con.execute("""
@@ -440,20 +449,21 @@ async def get_tour(tour_id: int, request: Request, match_user_id: Optional[int] 
         _ensure_tables(con)
 
         row = con.execute(
-            "SELECT id, created_by, title, start_date, end_date, shared FROM tours WHERE id=?",
+            "SELECT id, created_by, title, start_date, end_date, shared, share_token FROM tours WHERE id=?",
             (tour_id,),
         ).fetchone()
         if not row:
             raise HTTPException(404, "Tour not found")
 
         tour = {
-            "id":         row[0],
-            "created_by": row[1],
-            "title":      row[2],
-            "start_date": row[3],
-            "end_date":   row[4],
-            "shared":     bool(row[5]) if row[5] is not None else True,
-            "is_mine":    row[1] == uid,
+            "id":          row[0],
+            "created_by":  row[1],
+            "title":       row[2],
+            "start_date":  row[3],
+            "end_date":    row[4],
+            "shared":      bool(row[5]) if row[5] is not None else True,
+            "is_mine":     row[1] == uid,
+            "share_token": row[6],
         }
 
         stage_rows = con.execute(
@@ -909,13 +919,31 @@ async def get_stage_ai_advice(
     match_user_id: Optional[int] = Query(default=None),
     model: Optional[str] = Query(default=None),
     force: bool = Query(default=False),
+    readonly: bool = Query(default=False),
 ):
-    """Return AI coach advice for an uncompleted tour stage."""
+    """Return AI coach advice for an uncompleted tour stage.
+    readonly=true returns cached advice only ({"advice": null} if none exists).
+    """
     import os, httpx
     from app.routers.coach import MODELS, DEFAULT_MODEL
     uid = get_session_user_id(request)
     if uid is None:
         raise HTTPException(401, "Not authenticated")
+
+    actual_uid = match_user_id if match_user_id is not None else uid
+
+    # Readonly: return cache only, never generate
+    if readonly:
+        con_ro = sqlite3.connect(db_getter().path, timeout=10)
+        try:
+            _ensure_tables(con_ro)
+            row = con_ro.execute(
+                "SELECT advice FROM tour_stage_ai_advice WHERE stage_id=? AND user_id=?",
+                (stage_id, actual_uid),
+            ).fetchone()
+            return JSONResponse({"advice": row[0] if row else None})
+        finally:
+            con_ro.close()
 
     db = db_getter()
     api_key = (db.get_user(uid) or {}).get("anthropic_api_key") or ""
@@ -949,8 +977,6 @@ async def get_stage_ai_advice(
         ).fetchall()
     finally:
         con.close()
-
-    actual_uid = match_user_id if match_user_id is not None else uid
 
     # Check per-user cache
     con_cache = sqlite3.connect(db.path, timeout=10)
@@ -1036,9 +1062,396 @@ async def get_stage_ai_advice(
     return JSONResponse({"advice": advice})
 
 
+def _resolve_share_token(con, token: str):
+    """Return (tour_id, share_user_id) for a valid token, or raise 404."""
+    row = con.execute(
+        "SELECT id, share_user_id FROM tours WHERE share_token=?", (token,)
+    ).fetchone()
+    if not row:
+        raise HTTPException(404, "Share link not found or revoked")
+    return row[0], row[1]
+
+
+@router.post("/tours/{tour_id}/publish")
+async def publish_tour(tour_id: int, request: Request):
+    """Generate (or return existing) share token for a tour."""
+    import secrets
+    uid = get_session_user_id(request)
+    if uid is None:
+        raise HTTPException(401, "Not authenticated")
+    con = sqlite3.connect(db_getter().path, timeout=10)
+    try:
+        _ensure_tables(con)
+        row = con.execute(
+            "SELECT created_by, share_token FROM tours WHERE id=?", (tour_id,)
+        ).fetchone()
+        if not row:
+            raise HTTPException(404, "Tour not found")
+        if row[0] != uid:
+            raise HTTPException(403, "Not your tour")
+        token = row[1] or secrets.token_hex(20)
+        con.execute(
+            "UPDATE tours SET share_token=?, share_user_id=? WHERE id=?",
+            (token, uid, tour_id),
+        )
+        con.commit()
+        return JSONResponse({"token": token})
+    finally:
+        con.close()
+
+
+@router.delete("/tours/{tour_id}/publish")
+async def revoke_tour_publish(tour_id: int, request: Request):
+    """Revoke the share token for a tour."""
+    uid = get_session_user_id(request)
+    if uid is None:
+        raise HTTPException(401, "Not authenticated")
+    con = sqlite3.connect(db_getter().path, timeout=10)
+    try:
+        _ensure_tables(con)
+        row = con.execute("SELECT created_by FROM tours WHERE id=?", (tour_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "Tour not found")
+        if row[0] != uid:
+            raise HTTPException(403, "Not your tour")
+        con.execute(
+            "UPDATE tours SET share_token=NULL, share_user_id=NULL WHERE id=?", (tour_id,)
+        )
+        con.commit()
+        return JSONResponse({"ok": True})
+    finally:
+        con.close()
+
+
+@router.get("/tours/share/{token}", response_class=HTMLResponse)
+async def tour_share_page(token: str, request: Request):
+    """Public share page — no auth required."""
+    con = sqlite3.connect(db_getter().path, timeout=10)
+    try:
+        _ensure_tables(con)
+        tour_row = con.execute(
+            "SELECT id, title, start_date, end_date, share_user_id FROM tours WHERE share_token=?",
+            (token,),
+        ).fetchone()
+        if not tour_row:
+            raise HTTPException(404, "Share link not found or revoked")
+        tour_id, title, start_date, end_date, share_uid = tour_row
+        user_row = con.execute(
+            "SELECT username FROM users WHERE id=?", (share_uid,)
+        ).fetchone()
+        display_name = user_row[0] if user_row else "Unknown"
+    finally:
+        con.close()
+    return templates.TemplateResponse("tour_share.html", {
+        "request":      request,
+        "token":        token,
+        "tour_title":   title,
+        "display_name": display_name,
+    })
+
+
+@router.get("/tours/share/{token}/data")
+async def tour_share_data(token: str):
+    """Public endpoint — tour info + stages + completions for the share user."""
+    con = sqlite3.connect(db_getter().path, timeout=15)
+    try:
+        _ensure_tables(con)
+        tour_row = con.execute(
+            "SELECT id, title, start_date, end_date, share_user_id FROM tours WHERE share_token=?",
+            (token,),
+        ).fetchone()
+        if not tour_row:
+            raise HTTPException(404, "Share link not found or revoked")
+        tour_id, title, start_date, end_date, share_uid = tour_row
+
+        stage_rows = con.execute(
+            "SELECT id, stage_num, name, distance_mi, climb_ft, start_lat, start_lon "
+            "FROM tour_stages WHERE tour_id=? ORDER BY stage_num",
+            (tour_id,),
+        ).fetchall()
+        stages = [{
+            "id":          sr[0],
+            "stage_num":   sr[1],
+            "name":        sr[2],
+            "distance_mi": sr[3],
+            "climb_ft":    sr[4],
+            "start_lat":   sr[5],
+            "start_lon":   sr[6],
+            "completion":  None,
+        } for sr in stage_rows]
+
+        completions = _global_stage_matching(con, share_uid, start_date, end_date, stages)
+        for stage in stages:
+            stage["completion"] = completions.get(stage["id"])
+
+        return JSONResponse({
+            "id":         tour_id,
+            "title":      title,
+            "start_date": start_date,
+            "end_date":   end_date,
+            "stages":     stages,
+        })
+    finally:
+        con.close()
+
+
+@router.get("/tours/share/{token}/points")
+async def tour_share_points(token: str):
+    """Public endpoint — stage route points for the shared tour."""
+    con = sqlite3.connect(db_getter().path, timeout=10)
+    try:
+        _ensure_tables(con)
+        tour_row = con.execute(
+            "SELECT id FROM tours WHERE share_token=?", (token,)
+        ).fetchone()
+        if not tour_row:
+            raise HTTPException(404, "Share link not found or revoked")
+        tour_id = tour_row[0]
+
+        rows = con.execute(
+            "SELECT ts.id, tp.lat, tp.lon, tp.alt_ft "
+            "FROM tour_stages ts "
+            "JOIN tour_stage_points tp ON tp.stage_id = ts.id "
+            "WHERE ts.tour_id=? ORDER BY ts.stage_num, tp.seq",
+            (tour_id,),
+        ).fetchall()
+        by_stage: dict = {}
+        for stage_id, lat, lon, alt_ft in rows:
+            key = str(stage_id)
+            if key not in by_stage:
+                by_stage[key] = []
+            by_stage[key].append([lat, lon, alt_ft])
+        return JSONResponse(by_stage)
+    finally:
+        con.close()
+
+
+@router.get("/tours/share/{token}/stages/{stage_id}/forecast")
+async def tour_share_forecast(token: str, stage_id: int):
+    """Public endpoint — forecast for an uncompleted stage on a shared tour."""
+    from datetime import date as _date, timedelta
+    import httpx
+
+    con = sqlite3.connect(db_getter().path, timeout=10)
+    try:
+        _ensure_tables(con)
+        tour_row = con.execute(
+            "SELECT id FROM tours WHERE share_token=?", (token,)
+        ).fetchone()
+        if not tour_row:
+            raise HTTPException(404, "Share link not found or revoked")
+        tour_id = tour_row[0]
+
+        stage_row = con.execute(
+            "SELECT ts.stage_num, ts.start_lat, ts.start_lon, t.start_date, t.end_date "
+            "FROM tour_stages ts JOIN tours t ON t.id = ts.tour_id "
+            "WHERE ts.id=? AND ts.tour_id=?",
+            (stage_id, tour_id),
+        ).fetchone()
+        if not stage_row:
+            raise HTTPException(404, "Stage not found")
+        stage_num, start_lat, start_lon, tour_start, tour_end = stage_row
+        total_stages = con.execute(
+            "SELECT COUNT(*) FROM tour_stages WHERE tour_id=?", (tour_id,)
+        ).fetchone()[0]
+    finally:
+        con.close()
+
+    if start_lat is None or start_lon is None:
+        return JSONResponse({"forecast": None, "out_of_range": False})
+    try:
+        sd = _date.fromisoformat(tour_start)
+        ed = _date.fromisoformat(tour_end)
+        tour_days  = (ed - sd).days
+        offset     = round((stage_num - 1) * tour_days / max(total_stages - 1, 1)) if total_stages > 1 else 0
+        stage_date = sd + timedelta(days=offset)
+    except Exception:
+        return JSONResponse({"forecast": None, "out_of_range": False})
+
+    today = datetime.now(timezone.utc).date()
+    delta = (stage_date - today).days
+    if not (0 <= delta <= 16):
+        return JSONResponse({"forecast": None, "out_of_range": True})
+
+    params = {
+        "latitude": round(start_lat, 4), "longitude": round(start_lon, 4),
+        "daily": "weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max",
+        "start_date": stage_date.isoformat(), "end_date": stage_date.isoformat(),
+        "temperature_unit": "fahrenheit", "wind_speed_unit": "kmh", "timezone": "UTC",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.get("https://api.open-meteo.com/v1/forecast", params=params)
+            if r.status_code != 200:
+                return JSONResponse({"forecast": None})
+            data = r.json()
+    except Exception:
+        return JSONResponse({"forecast": None})
+
+    daily  = data.get("daily", {})
+    codes  = daily.get("weather_code",       [None])
+    t_max  = daily.get("temperature_2m_max", [None])
+    t_min  = daily.get("temperature_2m_min", [None])
+    precip = daily.get("precipitation_sum",  [None])
+    wind   = daily.get("wind_speed_10m_max", [None])
+    from app.routers.weather import wmo_desc
+    return JSONResponse({"forecast": {
+        "stage_date":  stage_date.isoformat(),
+        "description": wmo_desc(codes[0]) if codes[0] is not None else None,
+        "temp_max_f":  round(t_max[0],  1) if t_max[0]  is not None else None,
+        "temp_min_f":  round(t_min[0],  1) if t_min[0]  is not None else None,
+        "precip_mm":   round(precip[0], 1) if precip[0] is not None else None,
+        "wind_kph":    round(wind[0],   1) if wind[0]   is not None else None,
+    }})
+
+
+def _stage_gpx_response(stage_name: str, pts: list) -> bytes:
+    """Build a GPX route from stage points. pts = [(lat, lon, alt_ft), ...]"""
+    lines = [
+        '<?xml version="1.0" encoding="UTF-8"?>\n',
+        '<gpx version="1.1" creator="Ascent Web"\n',
+        '  xmlns="http://www.topografix.com/GPX/1/1"\n',
+        '  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"\n',
+        '  xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd">\n',
+        f'  <rte>\n',
+        f'    <name>{stage_name}</name>\n',
+    ]
+    for lat, lon, alt_ft in pts:
+        alt_m = round(alt_ft * 0.3048, 1)
+        lines.append(f'    <rtept lat="{lat}" lon="{lon}"><ele>{alt_m}</ele></rtept>\n')
+    lines.append('  </rte>\n</gpx>\n')
+    return ''.join(lines).encode('utf-8')
+
+
+@router.get("/tours/stages/{stage_id}/export/gpx")
+async def tour_stage_export_gpx(stage_id: int, request: Request):
+    """Authenticated — download route GPX for a tour stage."""
+    uid = get_session_user_id(request)
+    if uid is None:
+        raise HTTPException(401, "Not authenticated")
+    con = sqlite3.connect(db_getter().path, timeout=10)
+    try:
+        _ensure_tables(con)
+        row = con.execute(
+            "SELECT ts.name, t.created_by, t.shared "
+            "FROM tour_stages ts JOIN tours t ON t.id = ts.tour_id "
+            "WHERE ts.id=?", (stage_id,)
+        ).fetchone()
+        if not row:
+            raise HTTPException(404, "Stage not found")
+        stage_name, created_by, shared = row
+        if created_by != uid and not shared:
+            raise HTTPException(403, "Not authorised")
+        pts = con.execute(
+            "SELECT lat, lon, alt_ft FROM tour_stage_points WHERE stage_id=? ORDER BY seq",
+            (stage_id,)
+        ).fetchall()
+    finally:
+        con.close()
+    if not pts:
+        raise HTTPException(404, "No route points for this stage")
+    safe = "".join(c for c in stage_name if c.isalnum() or c in " -_")
+    from fastapi.responses import Response
+    return Response(
+        content=_stage_gpx_response(stage_name, pts),
+        media_type="application/gpx+xml",
+        headers={"Content-Disposition": f'attachment; filename="{safe.strip() or "stage"}.gpx"'},
+    )
+
+
+@router.get("/tours/share/{token}/stages/{stage_id}/export/gpx")
+async def tour_share_stage_export_gpx(token: str, stage_id: int):
+    """Public — download route GPX for a stage on a shared tour."""
+    con = sqlite3.connect(db_getter().path, timeout=10)
+    try:
+        _ensure_tables(con)
+        tour_row = con.execute(
+            "SELECT id FROM tours WHERE share_token=?", (token,)
+        ).fetchone()
+        if not tour_row:
+            raise HTTPException(404, "Share link not found or revoked")
+        tour_id = tour_row[0]
+        row = con.execute(
+            "SELECT ts.name FROM tour_stages ts WHERE ts.id=? AND ts.tour_id=?",
+            (stage_id, tour_id)
+        ).fetchone()
+        if not row:
+            raise HTTPException(404, "Stage not found")
+        stage_name = row[0]
+        pts = con.execute(
+            "SELECT lat, lon, alt_ft FROM tour_stage_points WHERE stage_id=? ORDER BY seq",
+            (stage_id,)
+        ).fetchall()
+    finally:
+        con.close()
+    if not pts:
+        raise HTTPException(404, "No route points for this stage")
+    safe = "".join(c for c in stage_name if c.isalnum() or c in " -_")
+    from fastapi.responses import Response
+    return Response(
+        content=_stage_gpx_response(stage_name, pts),
+        media_type="application/gpx+xml",
+        headers={"Content-Disposition": f'attachment; filename="{safe.strip() or "stage"}.gpx"'},
+    )
+
+
+@router.get("/tours/share/{token}/activities/{activity_id}")
+async def tour_share_activity(token: str, activity_id: int):
+    """Public endpoint — full activity detail for a completed stage on a shared tour."""
+    import sqlite3 as _sq
+    con = _sq.connect(db_getter().path, timeout=10)
+    con.row_factory = _sq.Row
+    try:
+        _ensure_tables(con)
+        tour_row = con.execute(
+            "SELECT id, share_user_id FROM tours WHERE share_token=?", (token,)
+        ).fetchone()
+        if not tour_row:
+            raise HTTPException(404, "Share link not found or revoked")
+        share_uid = tour_row["share_user_id"]
+
+        act_row = con.execute(
+            "SELECT * FROM activities WHERE id=? AND user_id=?", (activity_id, share_uid)
+        ).fetchone()
+        if not act_row:
+            raise HTTPException(404, "Activity not found")
+
+        act = build_activity(act_row)
+        return JSONResponse({
+            "id":              act["id"],
+            "name":            act.get("name") or "",
+            "notes":           act.get("notes") or "",
+            "start_time":      act.get("start_time"),
+            "activity_type":   act.get("activity_type") or "",
+            "equipment":       act.get("equipment") or "",
+            "distance_mi":     act.get("distance_mi", 0),
+            "total_climb_ft":  act.get("total_climb_ft", 0),
+            "total_descent_ft":act.get("total_descent_ft", 0),
+            "duration":        act.get("duration", 0),
+            "active_time":     act.get("active_time", 0),
+            "avg_speed_mph":   act.get("avg_speed_mph", 0),
+            "avg_overall_speed_mph": act.get("avg_overall_speed_mph", 0),
+            "avg_heartrate":   act.get("avg_heartrate", 0),
+            "max_heartrate":   act.get("max_heartrate", 0),
+            "calories":        act.get("calories", 0),
+            "avg_cadence":     act.get("avg_cadence", 0),
+            "avg_power":       act.get("avg_power", 0),
+            "max_power":       act.get("max_power", 0),
+            "suffer_score":    act.get("suffer_score", 0),
+        })
+    finally:
+        con.close()
+
+
 @router.get("/tour", response_class=HTMLResponse)
 async def tour_page(request: Request):
     uid = get_session_user_id(request)
     if uid is None:
         return RedirectResponse("/login?next=/tour", status_code=303)
-    return templates.TemplateResponse("tour.html", {"request": request})
+    user = db_getter().get_user(uid)
+    is_admin = bool(user and user.get("is_admin"))
+    return templates.TemplateResponse("tour.html", {
+        "request": request,
+        "current_user_id": uid,
+        "is_admin": is_admin,
+    })

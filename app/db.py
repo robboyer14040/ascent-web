@@ -1810,5 +1810,182 @@ class AscentDB:
         )
         return user_id
 
+    # ── User Routes ───────────────────────────────────────────────────────────
+
+    def _ensure_routes_table(self):
+        self._con.execute("""
+            CREATE TABLE IF NOT EXISTS user_routes (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id     INTEGER NOT NULL,
+                name        TEXT NOT NULL,
+                profile     TEXT NOT NULL DEFAULT 'bicycle',
+                points      TEXT NOT NULL,
+                distance_km REAL,
+                duration_s  REAL,
+                climb_m     REAL,
+                source      TEXT DEFAULT 'manual',
+                strava_id   TEXT,
+                created_at  INTEGER NOT NULL
+            )
+        """)
+        # Add columns if missing (migrations for existing tables)
+        cols = [r[1] for r in self._con.execute(
+            "PRAGMA table_info(user_routes)").fetchall()]
+        if 'thumbnail' not in cols:
+            self._con.execute(
+                "ALTER TABLE user_routes ADD COLUMN thumbnail BLOB")
+        if 'starred' not in cols:
+            self._con.execute(
+                "ALTER TABLE user_routes ADD COLUMN starred INTEGER NOT NULL DEFAULT 0")
+        if 'local_starred' not in cols:
+            self._con.execute(
+                "ALTER TABLE user_routes ADD COLUMN local_starred INTEGER NOT NULL DEFAULT 0")
+        self._con.commit()
+
+    def save_route(self, user_id: int, name: str, profile: str, points: list,
+                   distance_km: float = None, duration_s: float = None,
+                   climb_m: float = None, source: str = 'manual',
+                   strava_id: str = None, starred: bool = False,
+                   local_starred: bool = False) -> int:
+        import json as _json, time as _time
+        self._ensure_routes_table()
+        cur = self._con.execute("""
+            INSERT INTO user_routes
+                (user_id, name, profile, points, distance_km, duration_s,
+                 climb_m, source, strava_id, starred, local_starred, created_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+        """, (user_id, name, profile, _json.dumps(points),
+              distance_km, duration_s, climb_m, source, strava_id,
+              1 if starred else 0, 1 if local_starred else 0, int(_time.time())))
+        self._con.commit()
+        return cur.lastrowid
+
+    def get_routes(self, user_id: int) -> list:
+        import json as _json
+        self._ensure_routes_table()
+        rows = self._con.execute("""
+            SELECT id, name, profile, points, distance_km, duration_s,
+                   climb_m, source, strava_id, starred, local_starred, created_at
+            FROM user_routes WHERE user_id=? ORDER BY created_at DESC
+        """, (user_id,)).fetchall()
+        result = []
+        for row in rows:
+            d = dict(row)
+            try:
+                all_pts = _json.loads(d['points'])
+            except Exception:
+                all_pts = []
+            # Return a subsample for thumbnail rendering (max 150 points)
+            n = len(all_pts)
+            if n > 150:
+                step = n // 150
+                all_pts = all_pts[::step]
+            d['points'] = all_pts
+            result.append(d)
+        return result
+
+    def delete_route(self, route_id: int, user_id: int) -> bool:
+        self._ensure_routes_table()
+        cur = self._con.execute(
+            "DELETE FROM user_routes WHERE id=? AND user_id=?",
+            (route_id, user_id))
+        self._con.commit()
+        return cur.rowcount > 0
+
+    def get_route_thumbnail(self, route_id: int, user_id: int):
+        self._ensure_routes_table()
+        row = self._con.execute(
+            "SELECT thumbnail FROM user_routes WHERE id=? AND user_id=?",
+            (route_id, user_id)).fetchone()
+        if row and row['thumbnail']:
+            return bytes(row['thumbnail'])
+        return None
+
+    def save_route_thumbnail(self, route_id: int, user_id: int, data: bytes) -> bool:
+        self._ensure_routes_table()
+        cur = self._con.execute(
+            "UPDATE user_routes SET thumbnail=? WHERE id=? AND user_id=?",
+            (data, route_id, user_id))
+        self._con.commit()
+        return cur.rowcount > 0
+
+    def get_route(self, route_id: int, user_id: int) -> dict | None:
+        import json as _json
+        self._ensure_routes_table()
+        row = self._con.execute("""
+            SELECT id, name, profile, points, distance_km, duration_s,
+                   climb_m, source, strava_id, created_at
+            FROM user_routes WHERE id=? AND user_id=?
+        """, (route_id, user_id)).fetchone()
+        if not row:
+            return None
+        d = dict(row)
+        try:
+            d['points'] = _json.loads(d['points'])
+        except Exception:
+            d['points'] = []
+        return d
+
+    def clear_all_thumbnails(self, user_id: int) -> int:
+        self._ensure_routes_table()
+        cur = self._con.execute(
+            "UPDATE user_routes SET thumbnail=NULL WHERE user_id=?", (user_id,))
+        self._con.commit()
+        return cur.rowcount
+
+    def update_route(self, route_id: int, user_id: int, name: str, profile: str,
+                     points: list, distance_km: float = None,
+                     duration_s: float = None, climb_m: float = None) -> bool:
+        import json as _json
+        self._ensure_routes_table()
+        cur = self._con.execute("""
+            UPDATE user_routes
+            SET name=?, profile=?, points=?, distance_km=?, duration_s=?,
+                climb_m=?, thumbnail=NULL
+            WHERE id=? AND user_id=?
+        """, (name, profile, _json.dumps(points), distance_km, duration_s,
+              climb_m, route_id, user_id))
+        self._con.commit()
+        return cur.rowcount > 0
+
+    def strava_route_exists(self, user_id: int, strava_id: str) -> bool:
+        self._ensure_routes_table()
+        row = self._con.execute(
+            "SELECT 1 FROM user_routes WHERE user_id=? AND strava_id=?",
+            (user_id, str(strava_id))).fetchone()
+        return row is not None
+
+    def update_route_starred(self, user_id: int, strava_id: str, starred: bool) -> bool:
+        self._ensure_routes_table()
+        cur = self._con.execute(
+            "UPDATE user_routes SET starred=? WHERE user_id=? AND strava_id=?",
+            (1 if starred else 0, user_id, str(strava_id)))
+        self._con.commit()
+        return cur.rowcount > 0
+
+    def set_local_starred(self, route_id: int, user_id: int, starred: bool) -> bool:
+        self._ensure_routes_table()
+        cur = self._con.execute(
+            "UPDATE user_routes SET local_starred=? WHERE id=? AND user_id=?",
+            (1 if starred else 0, route_id, user_id))
+        self._con.commit()
+        return cur.rowcount > 0
+
+    def get_strava_route_ids(self, user_id: int) -> set:
+        """Return set of strava_id strings for all Strava-sourced routes for this user."""
+        self._ensure_routes_table()
+        rows = self._con.execute(
+            "SELECT strava_id FROM user_routes WHERE user_id=? AND source='strava' AND strava_id IS NOT NULL",
+            (user_id,)).fetchall()
+        return {row[0] for row in rows}
+
+    def delete_route_by_strava_id(self, user_id: int, strava_id: str) -> bool:
+        self._ensure_routes_table()
+        cur = self._con.execute(
+            "DELETE FROM user_routes WHERE user_id=? AND strava_id=?",
+            (user_id, str(strava_id)))
+        self._con.commit()
+        return cur.rowcount > 0
+
 
 

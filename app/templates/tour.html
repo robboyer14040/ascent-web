@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Tours — Ascent</title>
 <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+<link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -39,8 +40,8 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
 #tour-selector:focus{border-color:var(--accent)}
 #tour-user-selector{width:100%;font-size:11px;padding:4px 7px;background:var(--surface2);color:var(--accent);border:1px solid var(--border2);border-radius:6px;outline:none;font-weight:600}
 #tour-user-selector:focus{border-color:var(--accent)}
-#tour-btn-row{display:flex;gap:6px}
-.sb-btn{padding:5px 10px;border-radius:6px;font-size:12px;font-weight:500;background:var(--surface2);border:1px solid var(--border2);color:var(--text);white-space:nowrap;flex-shrink:0}
+#tour-btn-row{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;width:100%}
+.sb-btn{padding:5px 10px;border-radius:6px;font-size:12px;font-weight:500;background:var(--surface2);border:1px solid var(--border2);color:var(--text);white-space:nowrap;flex-shrink:0;text-align:center}
 .sb-btn:hover{background:var(--border2)}
 .sb-btn.full{width:100%;justify-content:center;display:flex}
 .sb-btn.danger{color:#ef4444;border-color:rgba(239,68,68,.35);background:rgba(239,68,68,.08)}
@@ -49,6 +50,7 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
 .sb-btn.primary:hover{background:#ea6c0a;border-color:#ea6c0a}
 .sb-btn.ghost{background:none;border:1px solid var(--border2)}
 .sb-btn.ghost:hover{background:var(--surface2)}
+.sb-btn:disabled{opacity:0.35;cursor:not-allowed;pointer-events:none}
 #stage-list-wrap{flex:1;overflow-y:auto;overflow-x:hidden}
 #stage-list{padding:4px 0}
 
@@ -86,7 +88,7 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
 .chip-val strong{font-weight:700}
 .chip-val .sec{font-size:11px;color:var(--muted);font-weight:400;margin-left:3px}
 .wx-line{font-size:11px;color:var(--muted);margin-top:3px}
-.stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(78px,1fr));gap:6px;align-content:start;margin-bottom:8px}
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:6px;align-content:start;margin-bottom:8px}
 .stat-chip{background:var(--surface2);border:1px solid var(--border2);border-radius:7px;padding:5px 4px;display:flex;flex-direction:column;align-items:center}
 .sc-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:1px}
 .sc-val{font-size:14px;font-weight:600;font-variant-numeric:tabular-nums}
@@ -142,18 +144,20 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
 
 <nav>
   <div style="display:flex;align-items:center">
-    <span class="nav-brand-name">⛰ Ascent</span><span class="nav-version">{{ app_version }}</span>
+    <img src="/static/favicon.svg" style="width:20px;height:20px;border-radius:4px;margin-right:6px;vertical-align:middle"><span class="nav-brand-name">Ascent</span><span class="nav-version">{{ app_version }}</span>
   </div>
   <div class="nav-pages" style="margin-left:14px">
     <a href="/activities" class="nav-btn">Activities</a>
     <a href="/" class="nav-btn">Summary</a>
     <a href="/activities" class="nav-btn" onclick="sessionStorage.setItem('openCoach','1')">Coach</a>
     <a href="/tour" class="nav-btn nav-active">Tours</a>
+    <a href="/routes" class="nav-btn">Routes</a>
     <a href="/strava/sync" class="nav-btn">Sync</a>
   </div>
   <div class="spacer"></div>
   <div class="nav-pages">
     <a href="/settings" class="nav-btn">Settings</a>
+    <button class="nav-btn" onclick="openAbout()">About</button>
     <a href="/logout" class="nav-btn">Sign Out</a>
   </div>
 </nav>
@@ -168,8 +172,9 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
       </select>
       <div id="tour-btn-row">
         <button class="sb-btn primary" id="new-tour-btn"   onclick="openDefineModal()">New Tour…</button>
-        <button class="sb-btn"         id="edit-tour-btn"  style="display:none" onclick="openEditModal()">Edit…</button>
-        <button class="sb-btn danger"  id="delete-btn"     style="display:none" onclick="confirmDelete()">Delete</button>
+        <button class="sb-btn"         id="edit-tour-btn"  style="visibility:hidden" onclick="openEditModal()">Edit…</button>
+        <button class="sb-btn"         id="publish-btn"    style="visibility:hidden" onclick="openPublishModal()">Share…</button>
+        <button class="sb-btn danger"  id="delete-btn"     style="visibility:hidden" onclick="confirmDelete()">Delete…</button>
       </div>
       <select id="tour-user-selector" onchange="onUserSelect(this.value)">
         <option value="">Match activities for…</option>
@@ -194,6 +199,7 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
           <button class="map-style-btn" data-style="carto-light" onclick="setTourMapStyle('carto-light')">Light</button>
           <button class="map-style-btn" data-style="esri-sat"    onclick="setTourMapStyle('esri-sat')">Satellite</button>
         </div>
+        <button onclick="resetMapZoom()" title="Reset zoom to fit route" style="position:absolute;bottom:24px;left:8px;z-index:500;background:rgba(0,0,0,.6);color:#ccc;border:1px solid rgba(255,255,255,.15);border-radius:4px;padding:3px 6px;font-size:13px;line-height:1;cursor:pointer;backdrop-filter:blur(4px)"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1 5V1h4M9 1h4v4M13 9v4H9M5 13H1V9"/></svg></button>
       </div>
       <div id="resize-handle" title="Drag to resize map"></div>
       <div id="stage-elev-strip" style="display:none;height:100px;flex-shrink:0;background:var(--bg);border-bottom:1px solid var(--border);position:relative">
@@ -249,14 +255,38 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
   </div>
 </div>
 
+<!-- ── Publish / Share modal ── -->
+<div id="publish-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:500;align-items:center;justify-content:center" onclick="if(event.target===this)closePublishModal()">
+  <div style="background:var(--surface);border:1px solid var(--border2);border-radius:12px;padding:22px 24px;width:420px;max-width:96vw;box-shadow:0 8px 40px rgba(0,0,0,.5)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div style="font-size:15px;font-weight:600">Share Tour</div>
+      <button onclick="closePublishModal()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:18px;padding:0;line-height:1">✕</button>
+    </div>
+    <div id="publish-unpublished">
+      <div style="font-size:13px;color:var(--muted);margin-bottom:14px">Create a public link anyone can use to view your progress on this tour. No sign-in required.</div>
+      <button class="sb-btn primary" onclick="doPublish()">Generate Share Link</button>
+    </div>
+    <div id="publish-published" style="display:none">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em">Share link</div>
+      <div style="display:flex;gap:6px;margin-bottom:14px">
+        <input id="publish-url" readonly style="flex:1;font-size:12px;padding:6px 8px;background:var(--surface2);border:1px solid var(--border2);border-radius:5px;color:var(--text);outline:none" onclick="this.select()">
+        <button onclick="copyShareUrl()" style="padding:5px 10px;font-size:12px;background:var(--surface2);border:1px solid var(--border2);border-radius:5px;color:var(--text);cursor:pointer;white-space:nowrap">Copy</button>
+      </div>
+      <button onclick="doRevoke()" style="font-size:12px;color:#f87171;background:none;border:none;cursor:pointer;padding:0">Revoke link</button>
+    </div>
+    <div id="publish-status" style="font-size:12px;color:var(--muted);margin-top:8px"></div>
+  </div>
+</div>
+
 <!-- ── Photo lightbox ── -->
 <div id="tour-lightbox" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:9999;align-items:center;justify-content:center;flex-direction:column" onclick="closeTourLightbox()">
   <img id="tlb-img" alt="" style="max-width:90vw;max-height:82vh;object-fit:contain;border-radius:6px">
   <video id="tlb-vid" controls playsinline style="display:none;max-width:90vw;max-height:82vh;border-radius:6px;background:#000" onclick="event.stopPropagation()"></video>
-  <div style="display:flex;align-items:center;gap:1rem;margin-top:12px">
-    <button onclick="event.stopPropagation();tourLbNav(-1)" style="background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:6px;padding:6px 18px;cursor:pointer;font-size:18px">‹</button>
-    <span id="tlb-count" style="color:#aaa;font-size:13px"></span>
-    <button onclick="event.stopPropagation();tourLbNav(1)"  style="background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:6px;padding:6px 18px;cursor:pointer;font-size:18px">›</button>
+  <div style="display:flex;align-items:center;gap:1rem;margin-top:12px" onclick="event.stopPropagation()">
+    <button onclick="tourLbNav(-1)" style="background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:6px;padding:6px 18px;cursor:pointer;font-size:18px">‹</button>
+    <span id="tlb-count" style="color:#aaa;font-size:13px;min-width:50px;text-align:center"></span>
+    <button onclick="tourLbNav(1)"  style="background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:6px;padding:6px 18px;cursor:pointer;font-size:18px">›</button>
+    <a id="tlb-download" href="#" download style="font-size:12px;font-weight:600;color:#f97316;border:1px solid #f97316;border-radius:4px;padding:3px 10px;text-decoration:none">↓ Download</a>
   </div>
   <div style="color:#666;font-size:11px;margin-top:8px">Press Esc or click background to close · ← → to navigate</div>
 </div>
@@ -356,6 +386,7 @@ const _endIcon = L.divIcon({
 });
 
 // ── State ─────────────────────────────────────────────────────────────────────
+const _currentUserId = {{ current_user_id | tojson }};
 let tourCoachModel   = 'claude-haiku-4-5-20251001';
 let tourMap          = null;
 let routeGroup       = null;
@@ -364,6 +395,7 @@ let tourStages       = [];
 let selectedId       = null;
 let mapH             = 0;
 let _tourPointsCache = {};   // byStage points for current tour, keyed by stage_id string
+let _lastRouteBounds = null; // { bounds, opts } — used by resetMapZoom
 let _stageElevChart  = null; // Chart.js instance for the elevation strip
 let _stageElevRawPts = null; // [[lat,lon,alt_ft], ...] parallel to chartPts for hover lookup
 let _stageHoverDot   = null; // Leaflet marker for yellow hover dot on map
@@ -474,8 +506,9 @@ async function onTourSelect(id) {
   _saveLastTour(id || null);
   selectedId=null; tourInfo=null; tourStages=[];
   routeGroup && routeGroup.clearLayers();
-  document.getElementById('delete-btn').style.display   = 'none';
-  document.getElementById('edit-tour-btn').style.display = 'none';
+  document.getElementById('delete-btn').style.visibility   = 'hidden';
+  document.getElementById('edit-tour-btn').style.visibility = 'hidden';
+  document.getElementById('publish-btn').style.visibility  = 'hidden';
   document.getElementById('view-all-btn').style.display  = 'none';
   document.getElementById('stage-list').innerHTML = '';
   document.getElementById('sidebar-empty').style.display = 'none';
@@ -492,9 +525,12 @@ async function onTourSelect(id) {
     tourStages = tourInfo.stages || [];
   } catch(e) { console.error('tour fetch',e); return; }
 
-  document.getElementById('delete-btn').style.display   = tourInfo.is_mine ? '' : 'none';
-  document.getElementById('edit-tour-btn').style.display = tourInfo.is_mine ? '' : 'none';
-  document.getElementById('view-all-btn').style.display  = '';
+  document.getElementById('delete-btn').style.visibility   = tourInfo.is_mine ? 'visible' : 'hidden';
+  document.getElementById('edit-tour-btn').style.visibility = tourInfo.is_mine ? 'visible' : 'hidden';
+  document.getElementById('publish-btn').style.visibility  = tourInfo.is_mine ? 'visible' : 'hidden';
+  const vab = document.getElementById('view-all-btn');
+  vab.style.display  = '';
+  vab.disabled = true;
 
   document.getElementById('main-empty').style.display     = 'none';
   document.getElementById('map-and-detail').style.display = 'flex';
@@ -514,8 +550,9 @@ async function confirmDelete() {
   routeGroup && routeGroup.clearLayers();
   document.getElementById('tour-selector').value = '';
   document.getElementById('stage-list').innerHTML = '';
-  document.getElementById('delete-btn').style.display   = 'none';
-  document.getElementById('edit-tour-btn').style.display = 'none';
+  document.getElementById('delete-btn').style.visibility   = 'hidden';
+  document.getElementById('edit-tour-btn').style.visibility = 'hidden';
+  document.getElementById('publish-btn').style.visibility  = 'hidden';
   document.getElementById('view-all-btn').style.display  = 'none';
   document.getElementById('main-empty').style.display    = 'flex';
   document.getElementById('map-and-detail').style.display = 'none';
@@ -554,6 +591,7 @@ function renderStageList() {
 // ── Stage selection + "View Entire Tour" ──────────────────────────────────────
 async function selectStage(id) {
   selectedId = (id === selectedId) ? null : id;
+  document.getElementById('view-all-btn').disabled = !selectedId;
   renderStageList();
   await drawRoutes(selectedId);
   renderDetail(selectedId);
@@ -561,6 +599,7 @@ async function selectStage(id) {
 
 async function viewEntireTour() {
   selectedId = null;
+  document.getElementById('view-all-btn').disabled = true;
   renderStageList();
   await drawRoutes(null);
   renderDetail(null);
@@ -617,12 +656,21 @@ async function drawRoutes(activeId) {
       if(pts?.length) {
         L.marker(pts[0],            { icon: _startIcon, zIndexOffset: 200, interactive: false }).addTo(routeGroup);
         L.marker(pts[pts.length-1], { icon: _endIcon,   zIndexOffset: 200, interactive: false }).addTo(routeGroup);
-        tourMap.fitBounds(L.latLngBounds(pts), { padding:[36,36] });
+        const b = L.latLngBounds(pts);
+        _lastRouteBounds = { bounds: b, opts: { padding:[36,36] } };
+        tourMap.fitBounds(b, { padding:[36,36] });
       }
     } else if(allPts.length) {
-      tourMap.fitBounds(L.latLngBounds(allPts), { padding:[24,24] });
+      const b = L.latLngBounds(allPts);
+      _lastRouteBounds = { bounds: b, opts: { padding:[24,24] } };
+      tourMap.fitBounds(b, { padding:[24,24] });
     }
   } catch(e) { console.error('drawRoutes',e); }
+}
+
+function resetMapZoom() {
+  if(_lastRouteBounds && tourMap)
+    tourMap.fitBounds(_lastRouteBounds.bounds, _lastRouteBounds.opts);
 }
 
 // ── Date / time helpers ───────────────────────────────────────────────────────
@@ -644,6 +692,71 @@ function mkChip(label, value) {
 }
 function mkStatChip(label, val, sub) {
   return `<div class="stat-chip"><div class="sc-label">${label}</div><div class="sc-val">${val}</div><div class="sc-sub">${sub||''}</div></div>`;
+}
+
+// Returns {gainFt, startKm} for the biggest climb in a [[lat,lon,alt_ft],...] array.
+// A climb begins when gradient exceeds 3% and ends when gradient is flat/negative
+// for more than 250 ft of horizontal distance. Altitude is smoothed (5-pt moving
+// average) before gradient calculation to suppress GPS noise.
+function biggestClimbInfo(pts) {
+  if(!pts?.length || pts[0].length < 3) return {gainFt:0, startKm:0};
+
+  // 5-point moving-average altitude smoothing
+  const raw  = pts.map(p => p[2] || 0);
+  const half = 2;
+  const alts = raw.map((_, i) => {
+    let s = 0, c = 0;
+    for(let j = Math.max(0,i-half); j <= Math.min(raw.length-1,i+half); j++) { s+=raw[j]; c++; }
+    return s/c;
+  });
+
+  // Cumulative distance in km, one entry per point
+  const cumKm = [0];
+  for(let i = 1; i < pts.length; i++)
+    cumKm.push(cumKm[i-1] + _haversineMi(pts[i-1][0],pts[i-1][1],pts[i][0],pts[i][1]) * 1.60934);
+
+  const START_GRAD  = 3;    // % gradient required to begin a climb
+  const END_DIST_FT = 250;  // ft of flat/negative gradient before climb is considered over
+
+  let bestGain = 0, bestStartKm = 0;
+  let inClimb = false;
+  let climbStartKm = 0, climbStartAlt = 0, climbMaxAlt = 0;
+  let flatFt = 0;
+
+  for(let i = 1; i < pts.length; i++) {
+    const dAltFt  = alts[i] - alts[i-1];
+    const dDistFt = (cumKm[i] - cumKm[i-1]) * 3280.84;  // km → ft
+    const grad    = dDistFt > 0 ? (dAltFt / dDistFt) * 100 : 0;
+
+    if(!inClimb) {
+      if(grad > START_GRAD) {
+        inClimb       = true;
+        climbStartKm  = cumKm[i-1];
+        climbStartAlt = alts[i-1];
+        climbMaxAlt   = Math.max(alts[i-1], alts[i]);
+        flatFt        = 0;
+      }
+    } else {
+      if(grad > 0) {
+        flatFt      = 0;
+        climbMaxAlt = Math.max(climbMaxAlt, alts[i]);
+      } else {
+        flatFt += dDistFt;
+        if(flatFt > END_DIST_FT) {
+          const gain = climbMaxAlt - climbStartAlt;
+          if(gain > bestGain) { bestGain = gain; bestStartKm = climbStartKm; }
+          inClimb = false; flatFt = 0;
+        }
+      }
+    }
+  }
+  // Flush a climb that runs all the way to the end of the route
+  if(inClimb) {
+    const gain = climbMaxAlt - climbStartAlt;
+    if(gain > bestGain) { bestGain = gain; bestStartKm = climbStartKm; }
+  }
+
+  return {gainFt: bestGain, startKm: bestStartKm};
 }
 
 // ── Build full activity detail HTML (INFO-pane layout, no AI summary) ─────────
@@ -932,11 +1045,28 @@ async function renderDetail(activeId) {
     const doneClimb  = done.reduce((s,x)=>s+(x.climb_ft||0),0);
     const pctD = totalDist >0 ? Math.round(doneDist /totalDist *100) : 0;
     const pctC = totalClimb>0 ? Math.round(doneClimb/totalClimb*100) : 0;
+    const n            = tourStages.length || 1;
+    const avgDist      = totalDist  / n;
+    const avgClimb     = totalClimb / n;
+    const maxDistIdx   = tourStages.reduce((mi,x,i)=>(x.distance_mi||0)>(tourStages[mi].distance_mi||0)?i:mi, 0);
+    const maxClimbIdx  = tourStages.reduce((mi,x,i)=>(x.climb_ft||0)>(tourStages[mi].climb_ft||0)?i:mi, 0);
+    const maxDist      = tourStages[maxDistIdx]?.distance_mi || 0;
+    const maxClimb     = tourStages[maxClimbIdx]?.climb_ft   || 0;
+    const altDistStr   = U.metric ? totalDist.toFixed(1)+' mi'   : (totalDist*1.60934).toFixed(1)+' km';
+    const altClimbStr  = U.metric ? Math.round(totalClimb)+' ft' : Math.round(totalClimb*0.3048)+' m';
+    const altAvgDStr   = U.metric ? avgDist.toFixed(1)+' mi'     : (avgDist*1.60934).toFixed(1)+' km';
+    const altAvgCStr   = U.metric ? Math.round(avgClimb)+' ft'   : Math.round(avgClimb*0.3048)+' m';
+    const altMaxDStr   = U.metric ? maxDist.toFixed(1)+' mi'     : (maxDist*1.60934).toFixed(1)+' km';
+    const altMaxCStr   = U.metric ? Math.round(maxClimb)+' ft'   : Math.round(maxClimb*0.3048)+' m';
 
-    let html = `<div class="stats-grid" style="max-width:380px;margin-bottom:14px">`;
-    html += `<div class="stat-chip"><div class="sc-label">Stages</div><div class="sc-val">${done.length} / ${tourStages.length}</div><div class="sc-sub">completed</div></div>`;
-    html += `<div class="stat-chip"><div class="sc-label">Total Dist</div><div class="sc-val">${U.distS(totalDist)}</div><div class="sc-sub">${U.distS(doneDist)} done (${pctD}%)</div></div>`;
-    html += `<div class="stat-chip"><div class="sc-label">Total Climb</div><div class="sc-val">${U.climbS(totalClimb)}</div><div class="sc-sub">${U.climbS(doneClimb)} done (${pctC}%)</div></div>`;
+    let html = `<div class="stats-grid" style="grid-template-columns:repeat(7,1fr);margin-bottom:14px">`;
+    html += `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Stages</div><div class="sc-val">${done.length} / ${tourStages.length}</div><div class="sc-sub">completed</div></div>`;
+    html += `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Total Dist</div><div class="sc-val">${U.distS(totalDist)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${altDistStr}</div><div class="sc-sub">${U.distS(doneDist)} done (${pctD}%)</div></div>`;
+    html += `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Total Climb</div><div class="sc-val">${U.climbS(totalClimb)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${altClimbStr}</div><div class="sc-sub">${U.climbS(doneClimb)} done (${pctC}%)</div></div>`;
+    html += `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Avg Dist</div><div class="sc-val">${U.distS(avgDist)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${altAvgDStr}</div><div class="sc-sub">per stage</div></div>`;
+    html += `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Avg Climb</div><div class="sc-val">${U.climbS(avgClimb)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${altAvgCStr}</div><div class="sc-sub">per stage</div></div>`;
+    html += `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Max Stage Dist</div><div class="sc-val">${U.distS(maxDist)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${altMaxDStr}</div><div class="sc-sub">Stage ${maxDistIdx+1}</div></div>`;
+    html += `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Max Ascent</div><div class="sc-val">${U.climbS(maxClimb)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${altMaxCStr}</div><div class="sc-sub">Stage ${maxClimbIdx+1}</div></div>`;
     html += `</div>`;
 
     // Locations
@@ -1029,13 +1159,35 @@ async function renderDetail(activeId) {
     const climP = U.metric?Math.round(stage.climb_ft*0.3048)+' m':Math.round(stage.climb_ft)+' ft';
     const climS = U.metric?Math.round(stage.climb_ft)+' ft':Math.round(stage.climb_ft*0.3048)+' m';
 
+    const _stagePts        = _tourPointsCache[String(stage.id)];
+    const {gainFt: bigClimbFt, startKm: bigClimbStartKm} = biggestClimbInfo(_stagePts);
+    const bigClimbP        = U.metric ? Math.round(bigClimbFt*0.3048)+' m' : Math.round(bigClimbFt)+' ft';
+    const bigClimbS        = U.metric ? Math.round(bigClimbFt)+' ft'       : Math.round(bigClimbFt*0.3048)+' m';
+    const bigClimbAtStr    = U.metric
+      ? `at ${bigClimbStartKm.toFixed(1)} km`
+      : `at ${(bigClimbStartKm * 0.621371).toFixed(1)} mi`;
+
+    // 4-line chip helper: label / primary val / alt-unit sub / bottom line
+    const chip4 = (label, val, altSub, bot) =>
+      `<div class="stat-chip" style="white-space:nowrap">` +
+        `<div class="sc-label">${label}</div>` +
+        `<div class="sc-val">${val}</div>` +
+        `<div class="sc-sub" style="font-size:10px;opacity:.65">${altSub}</div>` +
+        `<div class="sc-sub">${bot}</div>` +
+      `</div>`;
+
     let html = stageHead;
     html += `<div class="section-label" style="margin-bottom:6px">Estimated Route</div>`;
-    html += `<div class="stats-grid" style="max-width:300px;margin-bottom:10px">`;
-    html += mkStatChip('Distance', distP, distS);
-    html += mkStatChip('Climb',    climP, climS);
+    html += `<div class="stats-grid" style="grid-template-columns:repeat(${bigClimbFt>0?3:2},1fr);margin-bottom:10px">`;
+    html += chip4('Distance',     distP, distS,     '&nbsp;');
+    html += chip4('Total Climb',  climP, climS,     '&nbsp;');
+    if(bigClimbFt > 0)
+      html += chip4('Biggest Climb', bigClimbP, bigClimbS, bigClimbAtStr);
     html += `</div>`;
-    html += `<div style="font-size:11px;color:var(--muted);min-height:1.4em"><span style="font-size:10px;text-transform:uppercase;letter-spacing:.06em">Trajectory:</span> <span id="stage-loc-text">Loading…</span></div>`;
+    html += `<div style="display:flex;align-items:baseline;gap:10px;min-height:1.4em">
+      <div style="flex:1;font-size:11px;color:var(--muted)"><span style="font-size:10px;text-transform:uppercase;letter-spacing:.06em">Trajectory:</span> <span id="stage-loc-text">Loading…</span></div>
+      <a href="/tours/stages/${stage.id}/export/gpx" download style="flex-shrink:0;font-size:11px;font-weight:600;color:#f97316;border:1px solid #f97316;border-radius:4px;padding:2px 8px;text-decoration:none;line-height:1.6">↓ GPX</a>
+    </div>`;
     html += `<div style="margin-top:6px;font-size:11px;color:var(--muted)"><span style="font-size:10px;text-transform:uppercase;letter-spacing:.06em">Forecast:</span> <span id="stage-forecast-text">Loading…</span></div>`;
     el.innerHTML = html;
 
@@ -1082,26 +1234,28 @@ async function renderDetail(activeId) {
       .filter(s => !s.completion && s.stage_num > _lastDoneNum)
       .sort((a, b) => a.stage_num - b.stage_num)[0];
     if(_nextStage && _nextStage.id === stage.id) {
-      el.insertAdjacentHTML('beforeend', `<div class="ai-card" id="stage-ai-advice-card">
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
-          <div class="ai-card-label" style="margin-bottom:0">AI Coach Advice</div>
-          <button id="stage-ai-advice-refresh" title="Regenerate advice" onclick="refreshStageAiAdvice()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:13px;padding:0;line-height:1;flex-shrink:0">↺</button>
-        </div>
-        <div class="ai-card-body ai-card-loading" id="stage-ai-advice-text">Loading advice…</div>
-      </div>`);
+      const _isOwner       = !tourMatchUserId || tourMatchUserId === _currentUserId;
       const _stageIdForAdvice = stage.id;
+      const muParam        = tourMatchUserId ? `&match_user_id=${tourMatchUserId}` : '';
+
       function _loadStageAiAdvice(force) {
         const txt = document.getElementById('stage-ai-advice-text');
         const btn = document.getElementById('stage-ai-advice-refresh');
         if(txt) { txt.textContent = 'Loading advice…'; txt.classList.add('ai-card-loading'); }
         if(btn) btn.style.opacity = '0.4';
-        const muParam    = tourMatchUserId ? `&match_user_id=${tourMatchUserId}` : '';
-        const forceParam = force ? '&force=1' : '';
-        fetch(`/tours/${tourInfo.id}/stages/${_stageIdForAdvice}/ai-advice?model=${encodeURIComponent(tourCoachModel)}${muParam}${forceParam}`)
+        const forceParam    = force ? '&force=1' : '';
+        const readonlyParam = _isOwner ? '' : '&readonly=1';
+        fetch(`/tours/${tourInfo.id}/stages/${_stageIdForAdvice}/ai-advice?model=${encodeURIComponent(tourCoachModel)}${muParam}${forceParam}${readonlyParam}`)
           .then(r => r.ok ? r.json() : null)
           .then(d => {
-            const el2 = document.getElementById('stage-ai-advice-text');
-            const b   = document.getElementById('stage-ai-advice-refresh');
+            const card = document.getElementById('stage-ai-advice-card');
+            const el2  = document.getElementById('stage-ai-advice-text');
+            const b    = document.getElementById('stage-ai-advice-refresh');
+            if(!_isOwner && !d?.advice) {
+              // No stored advice for another user — remove the card entirely
+              if(card) card.remove();
+              return;
+            }
             if(el2) {
               if(d?.advice) { el2.textContent = d.advice; el2.classList.remove('ai-card-loading'); }
               else { el2.textContent = 'Advice unavailable.'; el2.classList.remove('ai-card-loading'); }
@@ -1109,12 +1263,24 @@ async function renderDetail(activeId) {
             if(b) b.style.opacity = '';
           })
           .catch(() => {
-            const el2 = document.getElementById('stage-ai-advice-text');
-            const b   = document.getElementById('stage-ai-advice-refresh');
+            const card = document.getElementById('stage-ai-advice-card');
+            const el2  = document.getElementById('stage-ai-advice-text');
+            const b    = document.getElementById('stage-ai-advice-refresh');
+            if(!_isOwner) { if(card) card.remove(); return; }
             if(el2) { el2.textContent = 'Advice unavailable.'; el2.classList.remove('ai-card-loading'); }
             if(b) b.style.opacity = '';
           });
       }
+
+      // Insert card — refresh button only shown for the owner
+      el.insertAdjacentHTML('beforeend', `<div class="ai-card" id="stage-ai-advice-card">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
+          <div class="ai-card-label" style="margin-bottom:0">AI Coach Advice</div>
+          ${_isOwner ? `<button id="stage-ai-advice-refresh" title="Regenerate advice" onclick="refreshStageAiAdvice()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:13px;padding:0;line-height:1;flex-shrink:0">↺</button>` : ''}
+        </div>
+        <div class="ai-card-body ai-card-loading" id="stage-ai-advice-text">Loading advice…</div>
+      </div>`);
+
       window.refreshStageAiAdvice = () => _loadStageAiAdvice(true);
       _loadStageAiAdvice(false);
     }
@@ -1201,7 +1367,16 @@ async function loadStagePhotos(actId) {
       if(m.type==='image') {
         html += `<img src="${m.url}" loading="lazy" style="height:80px;width:80px;object-fit:cover;border-radius:5px;cursor:pointer;flex-shrink:0" onclick="openTourLightbox(${i})">`;
       } else if(m.type==='video') {
-        html += `<div style="height:80px;width:80px;border-radius:5px;background:var(--surface2);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:24px;color:var(--muted)" onclick="openTourLightbox(${i})" title="View video">▶</div>`;
+        html += `<div style="position:relative;height:80px;width:80px;border-radius:5px;overflow:hidden;flex-shrink:0;cursor:pointer;background:#000" onclick="openTourLightbox(${i})">
+          <video src="${m.hls_url||m.url}" muted preload="metadata" playsinline
+            style="width:100%;height:100%;object-fit:cover;pointer-events:none"
+            onloadedmetadata="this.currentTime=0.1"></video>
+          <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none">
+            <div style="width:28px;height:28px;border-radius:50%;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center">
+              <span style="font-size:13px;margin-left:2px">▶</span>
+            </div>
+          </div>
+        </div>`;
       }
     });
     html += `</div>`;
@@ -1221,6 +1396,7 @@ function openTourLightbox(idx) {
 function _tourLbShow(m) {
   const img = document.getElementById('tlb-img');
   const vid = document.getElementById('tlb-vid');
+  const dl  = document.getElementById('tlb-download');
   if(m.type==='video') {
     img.style.display='none';
     vid.style.display='';
@@ -1230,6 +1406,7 @@ function _tourLbShow(m) {
     img.src = m.url || '';
     img.style.display='';
   }
+  if(dl) { dl.href = (m.url||'') + '/download'; dl.download = m.url.split('/').pop(); }
 }
 
 function tourLbNav(delta) {
@@ -1734,6 +1911,62 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   } catch(e) {}
 })();
+
+// ── Publish / Share ───────────────────────────────────────────────────────────
+function openPublishModal() {
+  if(!tourInfo?.is_mine) return;
+  const modal    = document.getElementById('publish-modal');
+  const unpub    = document.getElementById('publish-unpublished');
+  const pub      = document.getElementById('publish-published');
+  const urlInput = document.getElementById('publish-url');
+  const status   = document.getElementById('publish-status');
+  status.textContent = '';
+  if(tourInfo.share_token) {
+    urlInput.value = `${location.origin}/tours/share/${tourInfo.share_token}`;
+    unpub.style.display = 'none';
+    pub.style.display   = '';
+  } else {
+    unpub.style.display = '';
+    pub.style.display   = 'none';
+  }
+  modal.style.display = 'flex';
+}
+function closePublishModal() {
+  document.getElementById('publish-modal').style.display = 'none';
+}
+async function doPublish() {
+  const status = document.getElementById('publish-status');
+  status.textContent = 'Generating…';
+  try {
+    const d = await fetch(`/tours/${tourInfo.id}/publish`, {method:'POST'}).then(r=>r.json());
+    tourInfo.share_token = d.token;
+    document.getElementById('publish-url').value = `${location.origin}/tours/share/${d.token}`;
+    document.getElementById('publish-unpublished').style.display = 'none';
+    document.getElementById('publish-published').style.display   = '';
+    status.textContent = '';
+  } catch(e) { status.textContent = 'Error generating link.'; }
+}
+async function doRevoke() {
+  if(!confirm('Revoke the share link? Anyone with the current URL will no longer be able to access it.')) return;
+  const status = document.getElementById('publish-status');
+  status.textContent = 'Revoking…';
+  try {
+    await fetch(`/tours/${tourInfo.id}/publish`, {method:'DELETE'});
+    tourInfo.share_token = null;
+    document.getElementById('publish-unpublished').style.display = '';
+    document.getElementById('publish-published').style.display   = 'none';
+    status.textContent = 'Link revoked.';
+  } catch(e) { status.textContent = 'Error revoking link.'; }
+}
+function copyShareUrl() {
+  const url = document.getElementById('publish-url').value;
+  navigator.clipboard.writeText(url).then(() => {
+    const status = document.getElementById('publish-status');
+    status.textContent = 'Copied!';
+    setTimeout(() => { status.textContent = ''; }, 2000);
+  });
+}
 </script>
+{% include '_about.html' %}
 </body>
 </html>

@@ -17,7 +17,7 @@ templates = None
 STRAVA_AUTH_URL  = "https://www.strava.com/oauth/authorize"
 STRAVA_TOKEN_URL = "https://www.strava.com/oauth/token"
 STRAVA_API_BASE  = "https://www.strava.com/api/v3"
-STRAVA_SCOPE     = "read,profile:read_all,activity:read,activity:read_all,activity:write"
+STRAVA_SCOPE     = "read,activity:read,activity:read_all,activity:write,route:write"
 
 # ── token helpers ─────────────────────────────────────────────────────────────
 
@@ -221,6 +221,7 @@ async def strava_sync_page(request: Request):
         from datetime import datetime
         last_sync_str = datetime.fromtimestamp(last_ts).strftime("%b %-d, %Y")
 
+    user = db.get_user(uid)
     return templates.TemplateResponse("strava_sync.html", {
         "request":       request,
         "authorized":    bool(tokens.get("refresh_token")),
@@ -228,6 +229,7 @@ async def strava_sync_page(request: Request):
         "last_sync":     last_ts,
         "last_sync_str": last_sync_str,
         "db_count":      db.count_activities(user_id=uid),
+        "is_admin":      bool(user and user.get("is_admin")),
     })
 
 # ── Gear map helper ───────────────────────────────────────────────────────────
@@ -412,17 +414,24 @@ async def strava_webhook_event(request: Request):
     log.info(f"[webhook] object_type={object_type} aspect_type={aspect_type} owner_id={owner_id}")
 
     # Deauthorization event: athlete has revoked app access
+    # Per Strava API Agreement: must immediately delete all stored data for that athlete.
     if object_type == "athlete" and aspect_type == "delete" and owner_id:
         try:
             db = db_getter()
             user = db.get_user_by_strava_athlete_id(str(owner_id))
             if user:
                 uid = user["id"]
+                # Delete all activities imported from Strava for this user
+                cur = db._con.execute(
+                    "DELETE FROM activities WHERE user_id=? AND strava_activity_id IS NOT NULL",
+                    (uid,))
+                deleted_count = cur.rowcount
+                # Clear Strava credentials
                 db._con.execute(
                     "UPDATE users SET strava_tokens_json=NULL, strava_athlete_id=NULL WHERE id=?",
                     (uid,))
                 db._con.commit()
-                log.info(f"[webhook] Cleared Strava tokens for user id={uid} (athlete {owner_id})")
+                log.info(f"[webhook] Deauth athlete {owner_id}: deleted {deleted_count} activities and cleared tokens for user id={uid}")
             else:
                 log.info(f"[webhook] No user found for Strava athlete {owner_id} — nothing to clear")
         except Exception as e:

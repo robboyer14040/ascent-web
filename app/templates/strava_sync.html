@@ -96,17 +96,20 @@ p:last-child{margin-bottom:0}
 <body>
 <nav>
   <div style="display:flex;align-items:center">
-    <span class="nav-brand-name">⛰ Ascent</span><span class="nav-version">{{ app_version }}</span>
+    <img src="/static/favicon.svg" style="width:20px;height:20px;border-radius:4px;margin-right:6px;vertical-align:middle"><span class="nav-brand-name">Ascent</span><span class="nav-version">{{ app_version }}</span>
   </div>
   <div class="nav-pages">
     <a href="/activities" class="nav-btn">Activities</a>
     <a href="/" class="nav-btn">Summary</a>
     <a href="/activities" class="nav-btn" onclick="sessionStorage.setItem('openCoach','1')">Coach</a>
+    <a href="/tour" class="nav-btn">Tours</a>
+    <a href="/routes" class="nav-btn">Routes</a>
     <button class="nav-btn nav-active">Sync</button>
   </div>
   <div style="flex:1"></div>
   <div class="nav-pages">
     <a href="/settings" class="nav-btn">Settings</a>
+    <button class="nav-btn" onclick="openAbout()">About</button>
     <a href="/logout" class="nav-btn">Sign Out</a>
   </div>
 </nav>
@@ -189,9 +192,18 @@ p:last-child{margin-bottom:0}
     </ol>
     <a href="/strava/connect" class="btn btn-strava">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169"/></svg>
-      Connect Strava
+      Connect with Strava
     </a>
     {% endif %}
+  </div>
+
+  <div style="text-align:center;margin-bottom:.75rem">
+    <a href="https://www.strava.com" target="_blank" rel="noopener"
+       style="display:inline-flex;align-items:center;gap:6px;text-decoration:none;
+              color:#fc4c02;font-size:11px;font-weight:600;letter-spacing:.04em;opacity:.8">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="#fc4c02"><path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169"/></svg>
+      Powered by Strava
+    </a>
   </div>
 
   <div class="card" id="progress-section">
@@ -343,5 +355,6 @@ function updateCounts(i, s) {
     `${i} imported, ${s} already in DB`;
 }
 </script>
+{% include '_about.html' %}
 </body>
 </html>

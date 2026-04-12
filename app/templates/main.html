@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Ascent</title>
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+<link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
@@ -328,11 +330,11 @@ select.edit-act-input{appearance:none;-webkit-appearance:none;cursor:pointer;pad
   flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;
 }
 #coach-goal-label{
-  font-size:10px;font-weight:600;color:var(--muted2);text-transform:uppercase;letter-spacing:.05em;
+  font-size:10px;font-weight:600;color:#f97316;text-transform:uppercase;letter-spacing:.05em;
 }
 #coach-goal-text{
-  font-size:12px;color:var(--text);line-height:1.5;
-  max-height:calc(12px * 1.5 * 3);overflow-y:auto;word-break:break-word;
+  font-size:13px;color:var(--text);line-height:1.5;
+  max-height:calc(13px * 1.5 * 3);overflow-y:auto;word-break:break-word;
 }
 #coach-header-actions{display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0}
 #coach-change-goal-btn{
@@ -912,6 +914,29 @@ select.edit-act-input{appearance:none;-webkit-appearance:none;cursor:pointer;pad
 <body>
 <div id="autosync-toast"></div>
 
+<!-- ── Save as Route dialog ── -->
+<div id="save-route-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:3000;align-items:center;justify-content:center" onclick="if(event.target===this)closeSaveRouteDialog()">
+  <div style="background:#2c2c2e;border:1px solid #3a3a3c;border-radius:12px;padding:1.25rem;width:380px;max-width:calc(100vw - 2rem);box-shadow:0 20px 60px rgba(0,0,0,.5)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
+      <div style="font-size:14px;font-weight:600">Save as Route</div>
+      <button onclick="closeSaveRouteDialog()" style="background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;line-height:1;padding:0 2px">✕</button>
+    </div>
+    <div style="margin-bottom:12px">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em">Route Name</div>
+      <input id="save-route-name" type="text" style="width:100%;padding:6px 9px;font-size:13px;background:#1c1c1e;border:1px solid #3a3a3c;border-radius:6px;color:#f2f2f7;outline:none;box-sizing:border-box">
+    </div>
+    <div style="margin-bottom:12px;display:flex;align-items:center;gap:8px">
+      <input type="checkbox" id="save-route-favorite" checked style="width:15px;height:15px;accent-color:#f97316;cursor:pointer;flex-shrink:0">
+      <label for="save-route-favorite" style="font-size:12px;color:var(--text);cursor:pointer;user-select:none">Mark as favorite</label>
+    </div>
+    <div id="save-route-msg" style="font-size:11px;margin-bottom:10px;display:none"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button onclick="closeSaveRouteDialog()" style="font-size:12px;font-weight:600;padding:5px 14px;border-radius:7px;border:1px solid #3a3a3c;background:#3a3a3c;color:#f2f2f7;cursor:pointer">Cancel</button>
+      <button id="save-route-confirm" onclick="confirmSaveAsRoute()" style="font-size:12px;font-weight:600;padding:5px 14px;border-radius:7px;border:none;background:#f97316;color:#fff;cursor:pointer">Save</button>
+    </div>
+  </div>
+</div>
+
 <div id="edit-activity-overlay" onclick="if(event.target===this)cancelEditActivity()">
   <div id="edit-activity-modal">
     <div class="edit-modal-hdr">
@@ -968,18 +993,20 @@ select.edit-act-input{appearance:none;-webkit-appearance:none;cursor:pointer;pad
 
 <div id="toolbar">
   <div style="display:flex;align-items:center">
-    <span class="nav-brand-name">⛰ Ascent</span><span class="nav-version">{{ app_version }}</span>
+    <img src="/static/favicon.svg" style="width:20px;height:20px;border-radius:4px;margin-right:6px;vertical-align:middle"><span class="nav-brand-name">Ascent</span><span class="nav-version">{{ app_version }}</span>
   </div>
   <div class="nav-pages" style="margin-left:14px">
     <button class="nav-btn nav-active" data-page="activities" onclick="closeCoach()">Activities</button>
     <button class="nav-btn" data-page="summary" onclick="window.location='/'">Summary</button>
     <button class="nav-btn" data-page="coach" id="coach-nav-btn" onclick="openCoach()">Coach<span id="coach-new-dot" class="coach-dot" style="display:none"></span></button>
     <a href="/tour" class="nav-btn" data-page="tour">Tours</a>
+    <a href="/routes" class="nav-btn" data-page="routes">Routes</a>
     <button class="nav-btn" data-page="sync" onclick="window.location='/strava/sync'">Sync</button>
   </div>
   <div style="flex:1"></div>
   <div class="nav-pages">
     <button class="nav-btn" data-page="settings" onclick="window.location='/settings'">Settings</button>
+    <button class="nav-btn" onclick="openAbout()">About</button>
     <button class="nav-btn" onclick="window.location='/logout'">Sign Out</button>
   </div>
 </div>
@@ -1062,7 +1089,7 @@ select.edit-act-input{appearance:none;-webkit-appearance:none;cursor:pointer;pad
             <span id="photo-count" style="color:#fff;font-size:11px"></span>
             <button onclick="event.stopPropagation();photoNav(1)" style="background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:14px">›</button>
           </div>
-          <button id="photo-dl-btn" onclick="event.stopPropagation();downloadCurrentMedia()" style="display:none;position:absolute;bottom:6px;right:6px;background:rgba(0,0,0,.55);border:none;color:#fff;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:13px;line-height:1.4" title="Download">···</button>
+          <button id="photo-dl-btn" onclick="event.stopPropagation();downloadCurrentMedia()" style="display:none;position:absolute;bottom:6px;right:6px;background:rgba(0,0,0,.55);border:none;color:#fff;border-radius:4px;padding:4px 6px;cursor:pointer;line-height:1" title="Download"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
         </div>
       </div>
       </div><!-- .stats-content -->
@@ -1237,8 +1264,8 @@ select.edit-act-input{appearance:none;-webkit-appearance:none;cursor:pointer;pad
 <!-- ── MOBILE CHROME — hidden on desktop ─────────────────────────────────── -->
 <div id="mob-header">
   <button id="mob-back-btn" onclick="mobileGoBack()"><span>‹</span><span>Back</span></button>
-  <div style="display:flex;align-items:baseline;gap:5px;flex-shrink:0">
-    <span id="mob-header-title">⛰ Ascent</span><span id="mob-header-version" style="font-size:10px;font-weight:400;color:var(--muted);letter-spacing:.02em">{{ app_version }}</span>
+  <div style="display:flex;align-items:center;gap:5px;flex-shrink:0">
+    <img src="/static/favicon.svg" style="width:18px;height:18px;border-radius:3px;flex-shrink:0"><span id="mob-header-title">Ascent</span><span id="mob-header-version" style="font-size:10px;font-weight:400;color:var(--muted);letter-spacing:.02em">{{ app_version }}</span>
   </div>
   <div style="flex:1"></div>
   <button id="mob-user-btn" onclick="openUserPicker()" title="Switch user" style="display:none;align-items:center;justify-content:center;min-height:36px;padding:0 10px;margin-left:8px;border-radius:8px;background:none;border:1px solid #f97316;color:#f97316;font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></button>
@@ -1331,7 +1358,7 @@ function mobileGoBack() {
   document.body.classList.remove('mob-detail-active');
   const titleEl = document.getElementById('mob-header-title');
   const backBtn = document.getElementById('mob-back-btn');
-  if (titleEl) titleEl.textContent = '⛰ Ascent';
+  if (titleEl) titleEl.textContent = 'Ascent';
   if (backBtn) backBtn.style.display = 'none';
   if (typeof animStop === 'function') animStop();
   if (typeof _panelDetach === 'function') _panelDetach();
@@ -3220,6 +3247,9 @@ function buildDetailHTML(a) {
     ? `<button class="edit-btn" id="edit-act-btn" onclick="startEditActivity(${a.id})" title="Edit title, description, type & equipment">Edit…</button>`
     : '';
   const exportBtn = `<a href="/activities/${a.id}/export/gpx" class="edit-btn" style="text-decoration:none" title="Download as GPX file">↓ GPX</a>`;
+  const saveRouteBtn = (a.points_count > 0 || a.points_saved)
+    ? `<button class="edit-btn" id="save-route-btn" onclick="openSaveRouteDialog()" title="Save GPS track as a route">+ Route</button>`
+    : '';
 
   // pace string helper: mph → "M:SS/mi" or "M:SS/km"
   function altPaceStr(mph, perMile) {
@@ -3316,7 +3346,7 @@ function buildDetailHTML(a) {
   return `
     <div class="act-title-bar">
       <div style="display:flex;align-items:flex-start;min-width:0;flex:1">${avatarHtml}<div class="act-title">${escHtml(a.name||'(unnamed)')}${isDirty?'<span style="color:#f97316;font-size:10px;margin-left:5px;font-weight:400;vertical-align:middle">edited</span>':''}</div></div>
-      <div class="act-title-links">${editBtn}${resyncBtn}${exportBtn}${stravaLink}</div>
+      <div class="act-title-links">${editBtn}${resyncBtn}${exportBtn}${saveRouteBtn}${stravaLink}</div>
     </div>
     ${rpeKudosHtml}
     <div style="display:grid;grid-template-columns:auto 1fr;column-gap:20px;row-gap:4px;margin-bottom:6px;align-items:baseline">
@@ -4862,9 +4892,15 @@ function coachShowConversation() {
   document.getElementById('coach-change-goal-btn').style.display  = 'inline-block';
   // Show full goal text in the header card
   const goalEl = document.getElementById('coach-goal-text');
-  const dateLabel = coach.targetDate ? `  ·  Target: ${coach.targetDate}` : '';
-  goalEl.textContent = (coach.goalText || '') + dateLabel;
+  goalEl.textContent = coach.goalText || '';
   goalEl.style.display = 'block';
+  const targetDateEl = document.getElementById('coach-goal-target-date');
+  if (coach.targetDate) {
+    targetDateEl.textContent = 'Target Date: ' + coach.targetDate;
+    targetDateEl.style.display = 'block';
+  } else {
+    targetDateEl.style.display = 'none';
+  }
   // Restore saved model selection
   coachRestoreModel();
   // Load usage summary quietly
@@ -5550,6 +5586,57 @@ async function saveEditActivity() {
     status.style.color = '#ef4444';
   } finally {
     if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save'; }
+  }
+}
+
+let _saveRouteActId = null;
+
+function openSaveRouteDialog() {
+  if (!currentAct) return;
+  _saveRouteActId = currentAct.id;
+  document.getElementById('save-route-name').value = currentAct.name || 'Route';
+  const msg = document.getElementById('save-route-msg');
+  msg.style.display = 'none'; msg.textContent = '';
+  const btn = document.getElementById('save-route-confirm');
+  btn.disabled = false; btn.textContent = 'Save';
+  document.getElementById('save-route-overlay').style.display = 'flex';
+  setTimeout(() => document.getElementById('save-route-name').select(), 50);
+}
+
+function closeSaveRouteDialog() {
+  document.getElementById('save-route-overlay').style.display = 'none';
+  _saveRouteActId = null;
+}
+
+async function confirmSaveAsRoute() {
+  if (!_saveRouteActId) return;
+  const name          = document.getElementById('save-route-name').value.trim() || 'Route';
+  const local_starred = document.getElementById('save-route-favorite').checked;
+  const confirmBtn = document.getElementById('save-route-confirm');
+  const msg        = document.getElementById('save-route-msg');
+  confirmBtn.disabled = true; confirmBtn.textContent = 'Saving…';
+  msg.style.display = 'none';
+  try {
+    const resp = await fetch(`/api/activities/${_saveRouteActId}/save-as-route`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, local_starred }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.detail || resp.status);
+    closeSaveRouteDialog();
+    // Flash the button green
+    const routeBtn = document.getElementById('save-route-btn');
+    if (routeBtn) {
+      routeBtn.textContent = '✓ Saved';
+      routeBtn.style.color = '#22c55e';
+      routeBtn.style.borderColor = '#22c55e';
+    }
+  } catch(e) {
+    msg.style.display = 'block';
+    msg.style.color = '#ef4444';
+    msg.textContent = `Error: ${e.message}`;
+    confirmBtn.disabled = false; confirmBtn.textContent = 'Save';
   }
 }
 
@@ -7510,10 +7597,11 @@ async function applyUserSelection() {
       <div id="coach-goal-block">
         <span id="coach-goal-label">Goal</span>
         <div id="coach-goal-text"></div>
+        <div id="coach-goal-target-date" style="display:none;font-size:11px;color:var(--muted);margin-top:2px"></div>
       </div>
       <div id="coach-header-actions">
         <button id="coach-close-btn" onclick="closeCoach()" title="Close">✕</button>
-        <button id="coach-change-goal-btn" onclick="coachChangeGoal()" style="display:none">Change Goal…</button>
+        <button id="coach-change-goal-btn" onclick="coachChangeGoal()" style="display:none;font-weight:700;color:#fff">Update…</button>
       </div>
     </div>
 
@@ -7528,10 +7616,9 @@ async function applyUserSelection() {
       <h2 id="coach-setup-title">Set Your Training Goal</h2>
       <p id="coach-setup-desc">Tell your AI coach what you're working toward. Be as specific as you like — event type, date, daily distances, terrain, anything that helps.</p>
       <textarea id="coach-goal-input" placeholder="e.g. I'm training for a 3-week bike tour in Spain starting June 15. Average day is 62 miles and 6,000ft of climbing. I have about 10 weeks to prepare."></textarea>
-      <div style="display:flex;align-items:center;gap:8px;margin-top:8px;align-self:flex-start">
-        <span style="font-size:12px;color:var(--muted)">Target date:</span>
+      <div style="display:flex;flex-direction:column;gap:4px;margin-top:8px;align-self:flex-start">
+        <span style="font-size:12px;color:var(--muted)">Target Date <span style="font-size:11px;color:var(--muted2)">(optional)</span></span>
         <input type="date" id="coach-target-date" style="background:var(--surface2);border:1px solid var(--border2);border-radius:6px;color:var(--text);font:inherit;font-size:12px;padding:3px 8px;outline:none;cursor:pointer" title="Optional: the date of your event or goal deadline">
-        <span style="font-size:11px;color:var(--muted2)">(optional)</span>
       </div>
       <div style="display:flex;align-items:center;gap:8px;margin-top:4px;align-self:flex-start">
         <span style="font-size:12px;color:var(--muted)">Model:</span>
@@ -7631,6 +7718,9 @@ async function applyUserSelection() {
     </div>
   </div>
 </div>
+
+<!-- ── ABOUT MODAL ──────────────────────────────────────────────────────── -->
+{% include '_about.html' %}
 
 <!-- ── IMPORT MODAL ─────────────────────────────────────────────────────── -->
 <div id="import-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9000;align-items:center;justify-content:center">

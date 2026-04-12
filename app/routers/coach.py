@@ -175,9 +175,69 @@ def _build_activity_summary(db, user_id: Optional[int] = None) -> str:
     return summary
 
 
-def _build_system_prompt(goal_text: str, activity_summary: str, target_date: Optional[str] = None) -> str:
+def _build_tour_summary(db, user_id: Optional[int] = None) -> str:
+    """Query tours accessible to the user and return a compact text summary for the coach prompt."""
+    if user_id is None:
+        return ""
+    try:
+        from app.routers.tours import _global_stage_matching, _ensure_tables
+        con = sqlite3.connect(db.path, timeout=10)
+        con.row_factory = sqlite3.Row
+        try:
+            _ensure_tables(con)
+            tour_rows = con.execute(
+                "SELECT id, title, start_date, end_date FROM tours "
+                "WHERE created_by=? OR shared=1 ORDER BY start_date DESC LIMIT 5",
+                (user_id,),
+            ).fetchall()
+            if not tour_rows:
+                return ""
+            sections = []
+            for tour in tour_rows:
+                stage_rows = con.execute(
+                    "SELECT id, stage_num, name, distance_mi, climb_ft, start_lat, start_lon "
+                    "FROM tour_stages WHERE tour_id=? ORDER BY stage_num",
+                    (tour["id"],),
+                ).fetchall()
+                if not stage_rows:
+                    continue
+                stages = [
+                    {"id": r["id"], "stage_num": r["stage_num"], "name": r["name"],
+                     "distance_mi": r["distance_mi"], "climb_ft": r["climb_ft"],
+                     "start_lat": r["start_lat"], "start_lon": r["start_lon"]}
+                    for r in stage_rows
+                ]
+                completions = _global_stage_matching(
+                    con, user_id, tour["start_date"], tour["end_date"], stages
+                )
+                n_done      = sum(1 for s in stages if completions.get(s["id"]))
+                total_dist  = sum(s["distance_mi"] for s in stages)
+                total_climb = sum(s["climb_ft"] for s in stages)
+                lines = [
+                    f'Tour: "{tour["title"]}" ({tour["start_date"]} to {tour["end_date"]})',
+                    f'Progress: {n_done}/{len(stages)} stages complete',
+                    f'Total route: {round(total_dist, 1)} mi, {round(total_climb):,} ft climb',
+                    'Stages:',
+                ]
+                for s in stages:
+                    comp   = completions.get(s["id"])
+                    status = f'✓ completed {comp["date"]}' if comp else '○ pending'
+                    lines.append(
+                        f'  Stage {s["stage_num"]}: {s["name"]} — '
+                        f'{round(s["distance_mi"], 1)} mi, {round(s["climb_ft"]):,} ft — {status}'
+                    )
+                sections.append('\n'.join(lines))
+            return ("TOUR / MULTI-STAGE EVENT DATA\n" + "\n\n".join(sections)) if sections else ""
+        finally:
+            con.close()
+    except Exception:
+        return ""
+
+
+def _build_system_prompt(goal_text: str, activity_summary: str, tour_summary: str = "", target_date: Optional[str] = None) -> str:
     today = datetime.now().strftime("%B %d, %Y")
     target_line = f"\nTarget date: {target_date}" if target_date else ""
+    tour_section = f"\n{tour_summary}\n" if tour_summary else ""
     return f"""You are an expert endurance sports coach embedded in Ascent, a training log app. \
 You have access to the athlete's real training data and a specific goal they're working toward.
 
@@ -187,7 +247,7 @@ ATHLETE'S GOAL:
 {goal_text}{target_line}
 
 {activity_summary}
-
+{tour_section}
 YOUR ROLE:
 - Analyse the athlete's actual training data in relation to their goal
 - Give specific, data-driven coaching advice (reference their actual mileage, climbing, trends)
@@ -770,7 +830,8 @@ async def _call_claude(
         raise HTTPException(500, "No Anthropic API key set. Add your key in Settings.")
 
     activity_summary = _build_activity_summary(db, user_id=user_id)
-    system_prompt    = _build_system_prompt(goal_text, activity_summary, target_date=target_date)
+    tour_summary     = _build_tour_summary(db, user_id=user_id)
+    system_prompt    = _build_system_prompt(goal_text, activity_summary, tour_summary=tour_summary, target_date=target_date)
 
     # Build messages array for the API (skip system-role rows)
     messages = []

@@ -1,0 +1,1156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Routes — Ascent</title>
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+<link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#1c1c1e;--surface:#2c2c2e;--surface2:#3a3a3c;
+  --border:#3a3a3c;--border2:#48484a;
+  --text:#f2f2f7;--muted:#8e8e93;--muted2:#636366;
+  --accent:#f97316;
+}
+html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif;font-size:13px;background:var(--bg);color:var(--text)}
+button{cursor:pointer;border:none;background:none;color:inherit;font:inherit}
+a{color:var(--accent);text-decoration:none}
+input{font:inherit}
+
+/* ── Nav ── */
+nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 12px;flex-shrink:0;z-index:10;position:relative}
+.nav-brand-name{font-size:14px;font-weight:700;color:var(--accent)}
+.nav-version{font-size:10px;color:var(--muted);margin-left:4px;letter-spacing:.02em}
+.nav-pages{display:flex;align-items:center;gap:2px;margin-left:14px}
+.nav-btn{padding:5px 10px;border-radius:6px;font-size:12px;font-weight:500;color:var(--muted);background:none;border:none;cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:4px;text-decoration:none;height:34px}
+.nav-btn:hover{color:var(--text);background:rgba(255,255,255,.06)}
+.nav-btn.nav-active{color:#fff;font-weight:700}
+.spacer{flex:1}
+
+/* ── Routes list page ── */
+#list-page{display:flex;flex-direction:column;height:calc(100vh - 44px);overflow:hidden}
+#list-header{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;flex-shrink:0}
+#list-header h1{font-size:15px;font-weight:600;flex:1}
+.hdr-btn{padding:6px 12px;border-radius:7px;font-size:12px;font-weight:600;border:1px solid var(--border2);background:var(--surface2);color:var(--text)}
+.hdr-btn:hover{background:var(--border2)}
+.hdr-btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.hdr-btn.primary:hover{background:#ea6c0a}
+#strava-msg{font-size:11px;color:var(--muted);margin-left:4px}
+.filter-btn{width:30px;height:30px;border-radius:7px;border:1px solid var(--border2);background:var(--surface2);color:var(--muted);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.filter-btn:hover{color:var(--text);background:var(--border2)}
+.filter-btn.active{border-color:var(--accent);background:rgba(249,115,22,.18);color:var(--accent)}
+#route-grid{flex:1;overflow-y:auto;padding:16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;align-content:start}
+#empty-state{display:none;flex:1;align-items:center;justify-content:center;color:var(--muted);font-size:13px;text-align:center;line-height:2}
+
+/* ── Route thumbnail ── */
+.route-thumb{background:var(--surface);border:1px solid var(--border2);border-radius:10px;display:flex;flex-direction:column;position:relative}
+.route-thumb:hover{border-color:var(--accent)}
+.thumb-map{display:block;width:100%;border-radius:10px 10px 0 0;background:var(--surface2)}
+.thumb-info{padding:8px 10px 10px}
+.thumb-name{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:3px}
+.thumb-stats{font-size:11px;color:var(--muted)}
+.thumb-profile{font-size:10px;color:var(--muted2);margin-top:2px;text-transform:capitalize}
+.thumb-del{position:absolute;top:6px;right:6px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;font-size:12px;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s}
+.route-thumb:hover .thumb-del{opacity:1}
+.thumb-del:hover{background:rgba(239,68,68,.8)}
+.thumb-gpx{position:absolute;top:6px;left:6px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s}
+.route-thumb:hover .thumb-gpx{opacity:1}
+.thumb-gpx:hover{background:rgba(249,115,22,.8)}
+/* Strava star link — always shown for Strava routes, clickable */
+.thumb-strava-star{position:absolute;bottom:8px;right:8px;width:24px;height:24px;border-radius:50%;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;cursor:pointer;text-decoration:none;transition:background .15s}
+.thumb-strava-star:hover{background:rgba(0,0,0,.8)}
+.thumb-strava-star svg{width:13px;height:13px;flex-shrink:0}
+/* Local favorite — toggleable, bottom-right just left of Strava star */
+.thumb-fav{position:absolute;bottom:8px;right:38px;width:24px;height:24px;border-radius:50%;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;transition:background .15s;opacity:0}
+.route-thumb:hover .thumb-fav{opacity:1}
+.thumb-fav.is-fav{opacity:1}
+.thumb-fav:hover{background:rgba(0,0,0,.8)}
+.thumb-fav svg{width:13px;height:13px;flex-shrink:0}
+/* ── GPX dialog ── */
+#gpx-dialog{display:none;position:fixed;inset:0;z-index:400;background:rgba(0,0,0,.6);align-items:center;justify-content:center}
+#gpx-dialog.open{display:flex}
+#gpx-dialog-box{background:var(--surface);border:1px solid var(--border2);border-radius:12px;padding:20px 22px;width:300px;display:flex;flex-direction:column;gap:14px}
+#gpx-dialog-title{font-size:14px;font-weight:600}
+#gpx-dialog-name{font-size:12px;color:var(--muted);line-height:1.4;word-break:break-word}
+#gpx-dialog-actions{display:flex;gap:8px;justify-content:flex-end}
+
+/* ── Create overlay ── */
+#create-overlay{display:none;position:fixed;inset:0;z-index:200;flex-direction:column;background:var(--bg)}
+#create-overlay.open{display:flex}
+#overlay-header{height:48px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 12px;gap:8px;flex-shrink:0}
+#overlay-title{font-size:14px;font-weight:600;flex:1}
+.ov-btn{padding:5px 14px;border-radius:7px;font-size:12px;font-weight:600;border:1px solid var(--border2);background:var(--surface2);color:var(--text)}
+.ov-btn:hover{background:var(--border2)}
+.ov-btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.ov-btn.primary:hover{background:#ea6c0a}
+.ov-btn.primary:disabled{opacity:.4;cursor:not-allowed}
+#overlay-body{display:flex;flex:1;overflow:hidden}
+
+/* ── Sidebar ── */
+#sidebar{width:260px;flex-shrink:0;display:flex;flex-direction:column;border-right:1px solid var(--border);overflow:hidden;background:var(--surface)}
+#sidebar-top{padding:12px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:8px}
+.sb-section-label{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:3px}
+.profile-btns{display:flex;gap:5px}
+.profile-btn{flex:1;padding:5px 6px;border-radius:6px;font-size:11px;font-weight:500;background:var(--surface2);border:1px solid var(--border2);color:var(--muted);text-align:center}
+.profile-btn:hover{color:var(--text)}
+.profile-btn.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.sb-btn{padding:5px 10px;border-radius:6px;font-size:12px;font-weight:500;background:var(--surface2);border:1px solid var(--border2);color:var(--text);width:100%;text-align:center}
+.sb-btn:hover{background:var(--border2)}
+.sb-btn.danger{color:#ef4444;border-color:rgba(239,68,68,.35);background:rgba(239,68,68,.08)}
+.sb-btn.danger:hover{background:rgba(239,68,68,.18)}
+.sb-btn:disabled{opacity:.4;cursor:not-allowed;pointer-events:none}
+#stats-area{padding:10px 12px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:5px}
+.stat-row{display:flex;justify-content:space-between;align-items:baseline}
+.stat-key{font-size:11px;color:var(--muted)}
+.stat-val{font-size:13px;font-weight:600;font-variant-numeric:tabular-nums}
+#waypoint-list-wrap{flex:1;overflow-y:auto}
+#waypoint-list{padding:4px 0}
+.wp-item{display:flex;align-items:center;gap:7px;padding:5px 10px;font-size:11px}
+.wp-dot{width:16px;height:16px;border-radius:50%;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.4);flex-shrink:0}
+.wp-coord{flex:1;color:var(--muted);font-variant-numeric:tabular-nums}
+.wp-del{color:var(--muted2);font-size:13px;padding:2px 5px;border-radius:3px;line-height:1}
+.wp-del:hover{color:#ef4444;background:rgba(239,68,68,.12)}
+#sidebar-hint{padding:12px;font-size:11px;color:var(--muted);line-height:1.6;border-top:1px solid var(--border);flex-shrink:0}
+#engine-badge{font-size:10px;padding:2px 6px;border-radius:4px;background:var(--surface2);border:1px solid var(--border2);color:var(--muted2);display:inline-block}
+
+/* ── Map ── */
+#map-wrap{flex:1;position:relative;overflow:hidden}
+#map{width:100%;height:100%}
+#map-status{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.75);color:#fff;font-size:11px;padding:4px 12px;border-radius:5px;pointer-events:none;backdrop-filter:blur(4px);white-space:nowrap;z-index:500;display:none}
+#map-status.show{display:block}
+#cursor-hint{position:absolute;top:10px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.6);color:#ccc;font-size:11px;padding:4px 12px;border-radius:5px;pointer-events:none;backdrop-filter:blur(4px);z-index:500;transition:opacity .2s}
+#locate-btn{position:absolute;top:80px;left:10px;z-index:500;width:30px;height:30px;background:#fff;border:2px solid rgba(0,0,0,.3);border-radius:4px;font-size:16px;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 1px 5px rgba(0,0,0,.4)}
+#locate-btn:hover{background:#f4f4f4}
+</style>
+</head>
+<body>
+
+<nav>
+  <div style="display:flex;align-items:center">
+    <img src="/static/favicon.svg" style="width:20px;height:20px;border-radius:4px;margin-right:6px;vertical-align:middle"><span class="nav-brand-name">Ascent</span><span class="nav-version">{{ app_version }}</span>
+  </div>
+  <div class="nav-pages" style="margin-left:14px">
+    <a href="/activities" class="nav-btn">Activities</a>
+    <a href="/" class="nav-btn">Summary</a>
+    <a href="/activities" class="nav-btn" onclick="sessionStorage.setItem('openCoach','1')">Coach</a>
+    <a href="/tour" class="nav-btn">Tours</a>
+    <a href="/routes" class="nav-btn nav-active">Routes</a>
+    <a href="/strava/sync" class="nav-btn">Sync</a>
+  </div>
+  <div class="spacer"></div>
+  <div class="nav-pages">
+    <a href="/settings" class="nav-btn">Settings</a>
+    <button class="nav-btn" onclick="openAbout()">About</button>
+    <a href="/logout" class="nav-btn">Sign Out</a>
+  </div>
+</nav>
+
+<!-- ── Routes list page ── -->
+<div id="list-page">
+  <div id="list-header">
+    <h1>Routes</h1>
+    <input id="route-search" type="search" placeholder="Search routes…"
+           oninput="renderRoutes()"
+           style="padding:5px 10px;font-size:12px;background:var(--surface2);border:1px solid var(--border2);border-radius:7px;color:var(--text);outline:none;width:180px">
+    <button id="filter-strava-btn" class="filter-btn" onclick="toggleFilter('strava')" title="Show Strava favorites only">
+      <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <polygon points="7,1 8.8,5.5 13.5,5.9 10,9 11.1,13.5 7,11 2.9,13.5 4,9 0.5,5.9 5.2,5.5"/>
+      </svg>
+    </button>
+    <button id="filter-local-btn" class="filter-btn" onclick="toggleFilter('local')" title="Show local favorites only">
+      <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 1.5h8v11l-4-2.5-4 2.5V1.5z"/>
+      </svg>
+    </button>
+    <div class="spacer"></div>
+    <button class="hdr-btn primary" onclick="openCreateOverlay()">+ Create Route…</button>
+    <button class="hdr-btn" id="strava-btn" onclick="openStravaSync()">⬇ Download Strava routes</button>
+    <button class="hdr-btn" id="regen-btn" onclick="regenThumbnails()" title="Regenerate all map thumbnails" style="display:none">↺ Thumbnails</button>
+    <span id="strava-msg"></span>
+  </div>
+  <div id="route-grid"></div>
+  <div id="empty-state"></div>
+</div>
+
+<!-- ── GPX download dialog ── -->
+<div id="gpx-dialog">
+  <div id="gpx-dialog-box">
+    <div id="gpx-dialog-title">Download GPX</div>
+    <div id="gpx-dialog-name"></div>
+    <div id="gpx-dialog-actions">
+      <button class="ov-btn" onclick="closeGpxDialog()">Cancel</button>
+      <button class="ov-btn primary" onclick="confirmGpxDownload()">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;vertical-align:middle"><line x1="6" y1="1" x2="6" y2="8"/><polyline points="3,5 6,8 9,5"/><line x1="1" y1="11" x2="11" y2="11"/></svg>Download
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Strava Sync dialog ── -->
+<div id="strava-sync-dialog" style="display:none;position:fixed;inset:0;z-index:400;background:rgba(0,0,0,.6);align-items:center;justify-content:center">
+  <div style="background:var(--surface);border:1px solid var(--border2);border-radius:12px;padding:20px 22px;width:340px;display:flex;flex-direction:column;gap:16px">
+    <div style="font-size:14px;font-weight:600">Sync with Strava</div>
+    <div style="font-size:12px;color:var(--muted);line-height:1.5">Fetch your latest routes from Strava, add any new ones, and update starred status.</div>
+    <label style="display:flex;align-items:flex-start;gap:10px;font-size:12px;cursor:pointer">
+      <input type="checkbox" id="strava-sync-delete" checked style="margin-top:2px;accent-color:var(--accent)">
+      <span>Delete routes that have been deleted on Strava</span>
+    </label>
+    <div id="strava-sync-msg" style="font-size:11px;color:var(--muted);min-height:14px"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="ov-btn" onclick="closeStravaSync()">Cancel</button>
+      <button class="ov-btn primary" id="strava-sync-save-btn" onclick="runStravaSync()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Create Route overlay ── -->
+<div id="create-overlay">
+  <div id="overlay-header">
+    <span id="overlay-title">Create Route</span>
+    <div class="spacer"></div>
+    <button class="ov-btn" id="gpx-overlay-btn" style="display:none;padding:5px 10px" title="Download GPX" onclick="openGpxDialog(editingRouteId, document.getElementById('route-name-input').value)">
+      <svg width="13" height="13" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px"><line x1="6" y1="1" x2="6" y2="8"/><polyline points="3,5 6,8 9,5"/><line x1="1" y1="11" x2="11" y2="11"/></svg>GPX
+    </button>
+    <button class="ov-btn" id="save-as-new-btn" style="display:none" onclick="saveAsNew()">Save as New</button>
+    <button class="ov-btn primary" id="save-btn" disabled onclick="saveRoute()">Save Route</button>
+    <button class="ov-btn" onclick="closeOverlay()">✕ Cancel</button>
+  </div>
+  <div id="overlay-body">
+    <div id="sidebar">
+      <div id="sidebar-top">
+        <div>
+          <div class="sb-section-label">Route Name</div>
+          <input id="route-name-input" type="text" placeholder="Route name…" value="My Route"
+                 oninput="_onNameInput()"
+                 style="width:100%;padding:5px 8px;font-size:12px;background:var(--surface2);border:1px solid var(--border2);border-radius:6px;color:var(--text);outline:none">
+        </div>
+        <div>
+          <div class="sb-section-label">Profile</div>
+          <div class="profile-btns">
+            <button class="profile-btn" data-profile="pedestrian" onclick="setProfile('pedestrian')">Hike</button>
+            <button class="profile-btn active" data-profile="bicycle" onclick="setProfile('bicycle')">Bike</button>
+            <button class="profile-btn" data-profile="auto" onclick="setProfile('auto')">Drive</button>
+          </div>
+        </div>
+        <button id="undo-btn" class="sb-btn" disabled onclick="undoLast()">↩ Undo Last Point</button>
+        <button id="clear-btn" class="sb-btn danger" disabled onclick="clearRoute()">✕ Clear Route</button>
+      </div>
+
+      <div id="stats-area">
+        <div class="stat-row">
+          <span class="stat-key">Waypoints</span>
+          <span class="stat-val" id="stat-waypoints">0</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-key">Route Distance</span>
+          <span class="stat-val" id="stat-distance">—</span>
+        </div>
+        <div class="stat-row" id="stat-climb-row" style="display:none">
+          <span class="stat-key">Cumulative Climb</span>
+          <span class="stat-val" id="stat-climb">—</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-key">Est. Time</span>
+          <span class="stat-val" id="stat-time">—</span>
+        </div>
+      </div>
+
+      <div id="waypoint-list-wrap">
+        <div id="waypoint-list"></div>
+      </div>
+
+      <div id="sidebar-hint">
+        Click the map to place waypoints. The route snaps to roads and trails automatically.<br><br>
+        Engine: <span id="engine-badge">{{ 'Stadia Maps' if has_stadia_key else 'Public Valhalla' }}</span>
+        {% if not has_stadia_key %}
+        <br><span style="color:var(--muted2);font-size:10px;margin-top:4px;display:block">Add <code>STADIA_API_KEY</code> to .env for production use.</span>
+        {% endif %}
+      </div>
+    </div>
+
+    <div id="map-wrap">
+      <div id="map"></div>
+      <div id="map-status"></div>
+      <div id="cursor-hint">Click map to add waypoints</div>
+      <button id="locate-btn" onclick="locateMe()" title="Go to my location">
+        <svg id="locate-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#333" stroke-width="1.5" stroke-linecap="round">
+          <circle cx="8" cy="8" r="3"/>
+          <line x1="8" y1="1" x2="8" y2="4"/>
+          <line x1="8" y1="12" x2="8" y2="15"/>
+          <line x1="1" y1="8" x2="4" y2="8"/>
+          <line x1="12" y1="8" x2="15" y2="8"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+// ── Constants ──────────────────────────────────────────────────────────────────
+const DOT_COLORS = { start: '#22c55e', mid: '#f97316', end: '#ef4444' };
+const TILE_URL = '{{ tile_url }}';
+
+// ── Units ─────────────────────────────────────────────────────────────────────
+let useMetric = false;
+fetch('/api/settings/training-zones').then(r => r.json()).then(p => {
+  useMetric = !!p.use_metric;
+  renderRoutes();   // re-render stats with correct units after pref loads
+}).catch(() => {});
+
+// ── Route builder state ───────────────────────────────────────────────────────
+let waypoints    = [];
+let routeLayer   = null;
+let routePoints  = [];
+let routeDistKm  = null;
+let routeDurS    = null;
+let routeClimbM  = null;
+let profile      = 'bicycle';
+let _routeAbort  = null;
+let _routeGen    = 0;
+
+// ── Edit mode state ───────────────────────────────────────────────────────────
+let editingRouteId = null;   // null = create mode, int = edit mode
+let _routeChanged  = false;  // true once user has modified the route in edit mode
+
+// ── Saved routes state ────────────────────────────────────────────────────────
+let savedRoutes = [];
+let routePointsMap = {};
+let filterStrava = false;
+let filterLocal  = false;
+
+function toggleFilter(type) {
+  if (type === 'strava') {
+    filterStrava = !filterStrava;
+    document.getElementById('filter-strava-btn').classList.toggle('active', filterStrava);
+  } else {
+    filterLocal = !filterLocal;
+    document.getElementById('filter-local-btn').classList.toggle('active', filterLocal);
+  }
+  renderRoutes();
+}
+
+// ── Thumbnail tile queue ──────────────────────────────────────────────────────
+const _thumbQueue = [];
+let   _thumbBusy  = false;
+
+function queueThumb(imgEl, id) {
+  imgEl.onerror = null;
+  // Show neutral placeholder while generating
+  imgEl.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+  _thumbQueue.push({imgEl, id});
+  _processThumbQueue();
+}
+
+async function _processThumbQueue() {
+  if (_thumbBusy) return;
+  _thumbBusy = true;
+  while (_thumbQueue.length) {
+    const {imgEl, id} = _thumbQueue.shift();
+    await _generateThumb(imgEl, id);
+    await new Promise(r => setTimeout(r, 250)); // be polite to tile server
+  }
+  _thumbBusy = false;
+}
+
+// ── Tile math ─────────────────────────────────────────────────────────────────
+function _latLonToAbsPx(lat, lon, z) {
+  const n = Math.pow(2, z) * 256;
+  const x = (lon + 180) / 360 * n;
+  const lr = lat * Math.PI / 180;
+  const y = (1 - Math.log(Math.tan(lr) + 1 / Math.cos(lr)) / Math.PI) / 2 * n;
+  return {x, y};
+}
+
+function _fitZoom(minLat, maxLat, minLon, maxLon) {
+  for (let z = 15; z >= 0; z--) {
+    const tl = _latLonToAbsPx(maxLat, minLon, z);
+    const br = _latLonToAbsPx(minLat, maxLon, z);
+    const tw = Math.floor(br.x / 256) - Math.floor(tl.x / 256) + 1;
+    const th = Math.floor(br.y / 256) - Math.floor(tl.y / 256) + 1;
+    if (tw * th <= 16) return z;
+  }
+  return 1;
+}
+
+async function _generateThumb(imgEl, routeId) {
+  const points = routePointsMap[routeId];
+  if (!points?.length) return;
+
+  const W = 440, H = 280; // 2× retina
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#a8c8f0';
+  ctx.fillRect(0, 0, W, H);
+
+  const lats = points.map(p => p[0]), lons = points.map(p => p[1]);
+  let minLat = lats.reduce((a,b) => Math.min(a,b), lats[0]);
+  let maxLat = lats.reduce((a,b) => Math.max(a,b), lats[0]);
+  let minLon = lons.reduce((a,b) => Math.min(a,b), lons[0]);
+  let maxLon = lons.reduce((a,b) => Math.max(a,b), lons[0]);
+  const lp = (maxLat - minLat) * 0.12 || 0.005;
+  const op = (maxLon - minLon) * 0.12 || 0.005;
+  minLat -= lp; maxLat += lp; minLon -= op; maxLon += op;
+
+  const zoom = _fitZoom(minLat, maxLat, minLon, maxLon);
+  const tl   = _latLonToAbsPx(maxLat, minLon, zoom);
+  const br   = _latLonToAbsPx(minLat, maxLon, zoom);
+  const bW   = br.x - tl.x, bH = br.y - tl.y;
+  const scale = Math.min(W / bW, H / bH);
+  const offX  = (W - bW * scale) / 2;
+  const offY  = (H - bH * scale) / 2;
+
+  // Expand tile range to cover the full canvas, not just the route bbox.
+  // offX/offY are the canvas margins when the route bbox is narrower than the
+  // canvas; dividing by scale converts canvas px back to absolute map px.
+  const maxTileIdx = (1 << zoom) - 1;
+  const minTX = Math.max(0,          Math.floor((tl.x - offX / scale) / 256));
+  const maxTX = Math.min(maxTileIdx, Math.floor((tl.x + (W - offX) / scale) / 256));
+  const minTY = Math.max(0,          Math.floor((tl.y - offY / scale) / 256));
+  const maxTY = Math.min(maxTileIdx, Math.floor((tl.y + (H - offY) / scale) / 256));
+
+  await Promise.all(
+    Array.from({length: (maxTX-minTX+1)*(maxTY-minTY+1)}, (_, i) => {
+      const tx = minTX + (i % (maxTX-minTX+1));
+      const ty = minTY + Math.floor(i / (maxTX-minTX+1));
+      const url = TILE_URL.replace('{z}',zoom).replace('{x}',tx).replace('{y}',ty);
+      return new Promise(resolve => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+          try {
+            ctx.drawImage(img,
+              (tx*256 - tl.x)*scale + offX,
+              (ty*256 - tl.y)*scale + offY,
+              256*scale, 256*scale);
+          } catch(e) {}
+          resolve();
+        };
+        img.onerror = resolve;
+        img.src = url;
+      });
+    })
+  );
+
+  // Draw route path on top
+  ctx.strokeStyle = '#f97316';
+  ctx.lineWidth   = 3;
+  ctx.lineJoin    = 'round';
+  ctx.lineCap     = 'round';
+  ctx.beginPath();
+  points.forEach(([lat, lon], i) => {
+    const p = _latLonToAbsPx(lat, lon, zoom);
+    const x = (p.x - tl.x) * scale + offX;
+    const y = (p.y - tl.y) * scale + offY;
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+
+  // Show immediately from canvas
+  imgEl.src = canvas.toDataURL('image/png');
+
+  // Persist to server
+  canvas.toBlob(async blob => {
+    try {
+      await fetch(`/api/routes/${routeId}/thumbnail`, {
+        method: 'POST', body: blob,
+        headers: {'Content-Type': 'image/png'}
+      });
+    } catch(e) {}
+  }, 'image/png');
+}
+
+// ── Map (lazy init when overlay opens) ───────────────────────────────────────
+let map = null;
+let mapInitialized = false;
+
+function initMap() {
+  if (mapInitialized) return;
+  mapInitialized = true;
+  map = L.map('map', { zoomControl: true }).setView([37.8, -122.4], 11);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+  }).addTo(map);
+  map.on('click', e => addWaypoint(e.latlng.lat, e.latlng.lng));
+}
+
+// ── Overlay open/close ────────────────────────────────────────────────────────
+function openCreateOverlay() {
+  editingRouteId = null;
+  _routeChanged  = false;
+  document.getElementById('overlay-title').textContent = 'Create Route';
+  document.getElementById('save-btn').textContent = 'Save Route';
+  document.getElementById('save-as-new-btn').style.display = 'none';
+  document.getElementById('gpx-overlay-btn').style.display = 'none';
+  document.getElementById('route-name-input').value = 'My Route';
+  clearRoute();
+  document.getElementById('create-overlay').classList.add('open');
+  document.getElementById('list-page').style.display = 'none';
+  initMap();
+  setTimeout(() => {
+    map.invalidateSize();
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        pos => map.setView([pos.coords.latitude, pos.coords.longitude], 14),
+        () => {}
+      );
+    }
+  }, 50);
+}
+
+function closeOverlay() {
+  editingRouteId = null;
+  _routeChanged  = false;
+  clearRoute();
+  // Reset overlay to create mode
+  document.getElementById('overlay-title').textContent = 'Create Route';
+  document.getElementById('save-btn').textContent = 'Save Route';
+  document.getElementById('save-btn').disabled = true;
+  document.getElementById('save-as-new-btn').style.display = 'none';
+  document.getElementById('gpx-overlay-btn').style.display = 'none';
+  document.getElementById('create-overlay').classList.remove('open');
+  document.getElementById('list-page').style.display = 'flex';
+}
+
+// ── Open edit overlay ─────────────────────────────────────────────────────────
+async function openEditOverlay(id) {
+  let route;
+  try {
+    const resp = await fetch(`/api/routes/${id}`);
+    if (!resp.ok) { alert('Failed to load route'); return; }
+    route = await resp.json();
+  } catch(e) {
+    alert(`Failed to load route: ${e.message}`);
+    return;
+  }
+
+  editingRouteId = id;
+  _routeChanged  = false;
+
+  document.getElementById('create-overlay').classList.add('open');
+  document.getElementById('list-page').style.display = 'none';
+  initMap();
+
+  // Populate name and profile
+  document.getElementById('route-name-input').value = route.name;
+  setProfile(route.profile || 'bicycle');
+
+  // Update header for edit mode
+  document.getElementById('overlay-title').textContent = 'Edit Route';
+  document.getElementById('save-as-new-btn').style.display = '';
+  document.getElementById('gpx-overlay-btn').style.display = '';
+
+  // Display stored polyline immediately
+  waypoints.forEach(w => map.removeLayer(w.marker));
+  waypoints = [];
+  if (routeLayer) { map.removeLayer(routeLayer); routeLayer = null; }
+
+  const pts = route.points || [];
+  routePoints = pts;
+  routeDistKm = route.distance_km ?? null;
+  routeDurS   = route.duration_s ?? null;
+  routeClimbM = route.climb_m ?? null;
+
+  if (pts.length) {
+    routeLayer = L.polyline(pts, { color: '#f97316', weight: 4, opacity: 0.88 }).addTo(map);
+    setTimeout(() => {
+      map.invalidateSize();
+      map.fitBounds(routeLayer.getBounds(), { padding: [30, 30] });
+    }, 60);
+  } else {
+    setTimeout(() => map.invalidateSize(), 60);
+  }
+
+  // Place ~10 evenly-spaced waypoints as editable handles (no rerouting yet)
+  const n = pts.length;
+  if (n > 0) {
+    const numWP = Math.min(10, n);
+    for (let i = 0; i < numWP; i++) {
+      const idx = numWP === 1 ? 0 : Math.round(i * (n - 1) / (numWP - 1));
+      _addWaypointSilent(pts[idx][0], pts[idx][1]);
+    }
+    refreshMarkerColors();
+  }
+
+  updateStats(routeDistKm, routeDurS, routeClimbM);
+  updateUI();
+  _updateSaveBtn();
+}
+
+// ── Save button state helper ──────────────────────────────────────────────────
+function _updateSaveBtn() {
+  const btn = document.getElementById('save-btn');
+  if (editingRouteId) {
+    btn.textContent = 'Update';
+    btn.disabled = !_routeChanged || !routePoints.length;
+  } else {
+    btn.textContent = 'Save Route';
+    btn.disabled = !routePoints.length;
+  }
+}
+
+function _onNameInput() {
+  if (editingRouteId) {
+    _routeChanged = true;
+    _updateSaveBtn();
+  }
+}
+
+// ── Save route ────────────────────────────────────────────────────────────────
+async function saveRoute() {
+  if (editingRouteId) {
+    await _performUpdate(editingRouteId);
+  } else {
+    await _performSave();
+  }
+}
+
+async function _performSave() {
+  if (!routePoints.length) return;
+  const name = document.getElementById('route-name-input').value.trim() || 'Route';
+  const btn  = document.getElementById('save-btn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    const resp = await fetch('/api/routes/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, profile, points: routePoints,
+        distance_km: routeDistKm, duration_s: routeDurS, climb_m: routeClimbM }),
+    });
+    if (!resp.ok) throw new Error((await resp.json()).detail || resp.status);
+    closeOverlay();
+    await loadRoutes();
+  } catch(e) {
+    alert(`Save failed: ${e.message}`);
+    btn.disabled = false; btn.textContent = 'Save Route';
+  }
+}
+
+async function _performUpdate(routeId) {
+  if (!routePoints.length) return;
+  const name = document.getElementById('route-name-input').value.trim() || 'Route';
+  const btn  = document.getElementById('save-btn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    const resp = await fetch(`/api/routes/${routeId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, profile, points: routePoints,
+        distance_km: routeDistKm, duration_s: routeDurS, climb_m: routeClimbM }),
+    });
+    if (!resp.ok) throw new Error((await resp.json()).detail || resp.status);
+    closeOverlay();
+    await loadRoutes();
+  } catch(e) {
+    alert(`Save failed: ${e.message}`);
+    _updateSaveBtn();
+  }
+}
+
+async function saveAsNew() {
+  if (!routePoints.length) return;
+  const baseName = document.getElementById('route-name-input').value.trim() || 'Route';
+  const name = editingRouteId ? baseName + ' (copy)' : baseName;
+  const btn  = document.getElementById('save-as-new-btn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    const resp = await fetch('/api/routes/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, profile, points: routePoints,
+        distance_km: routeDistKm, duration_s: routeDurS, climb_m: routeClimbM }),
+    });
+    if (!resp.ok) throw new Error((await resp.json()).detail || resp.status);
+    closeOverlay();
+    await loadRoutes();
+  } catch(e) {
+    alert(`Save failed: ${e.message}`);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Save as New';
+  }
+}
+
+// ── Load & render saved routes ────────────────────────────────────────────────
+async function loadRoutes() {
+  try {
+    const resp = await fetch('/api/routes/list');
+    savedRoutes = await resp.json();
+  } catch(e) {
+    savedRoutes = [];
+  }
+  renderRoutes();
+}
+
+function renderRoutes() {
+  const grid   = document.getElementById('route-grid');
+  const empty  = document.getElementById('empty-state');
+  const query  = (document.getElementById('route-search')?.value || '').trim().toLowerCase();
+  let routes = query
+    ? savedRoutes.filter(r => r.name.toLowerCase().includes(query))
+    : savedRoutes;
+  if (filterStrava || filterLocal) {
+    routes = routes.filter(r =>
+      (filterStrava && r.source === 'strava' && r.starred) ||
+      (filterLocal  && r.local_starred)
+    );
+  }
+
+  if (!routes.length) {
+    grid.innerHTML = '';
+    grid.style.display = 'none';
+    empty.style.display = 'flex';
+    empty.innerHTML = savedRoutes.length
+      ? `No routes match "<strong>${escHtml(query)}</strong>".`
+      : 'No routes yet.<br>Click <strong>+ Create Route…</strong> to draw your first route.';
+    return;
+  }
+  grid.style.display = 'grid';
+  empty.style.display = 'none';
+  routePointsMap = {};
+  grid.innerHTML = routes.map(r => {
+    routePointsMap[r.id] = r.points;
+    const dist  = r.distance_km != null
+      ? (useMetric ? r.distance_km.toFixed(1) + ' km' : (r.distance_km * 0.621371).toFixed(1) + ' mi')
+      : null;
+    const climb = r.climb_m != null
+      ? (useMetric ? Math.round(r.climb_m) + ' m' : Math.round(r.climb_m * 3.28084) + ' ft')
+      : null;
+    const stats = [dist, climb].filter(Boolean).join(' · ') || '—';
+    const profileLabel = { pedestrian: 'Hike', bicycle: 'Bike', auto: 'Drive' }[r.profile] || r.profile;
+    const source = r.source === 'strava' ? ' · Strava' : '';
+    // Strava star — always shown for Strava routes; orange=starred, gray=not starred; links to route on Strava
+    const stravaStarEl = r.source === 'strava' && r.strava_id
+      ? `<a class="thumb-strava-star" href="https://www.strava.com/routes/${r.strava_id}" target="_blank" rel="noopener"
+            title="${r.starred ? 'Starred on Strava' : 'Not starred on Strava'}" onclick="event.stopPropagation()">
+           <svg viewBox="0 0 14 14" fill="${r.starred ? '#f97316' : 'none'}" stroke="${r.starred ? '#f97316' : '#8e8e93'}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+             <polygon points="7,1 8.8,5.5 13.5,5.9 10,9 11.1,13.5 7,11 2.9,13.5 4,9 0.5,5.9 5.2,5.5"/>
+           </svg>
+         </a>`
+      : '';
+    // Local favorite — toggleable bookmark, bottom-left, all routes
+    const favFill  = r.local_starred ? '#f97316' : 'none';
+    const favStroke = r.local_starred ? '#f97316' : '#8e8e93';
+    const favEl = `<button class="thumb-fav${r.local_starred ? ' is-fav' : ''}" data-route-id="${r.id}" data-fav="${r.local_starred ? '1' : '0'}"
+         onclick="toggleFav(this,event)" title="${r.local_starred ? 'Remove from local favorites' : 'Add to local favorites'}">
+         <svg viewBox="0 0 14 14" fill="${favFill}" stroke="${favStroke}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+           <path d="M3 1.5h8v11l-4-2.5-4 2.5V1.5z"/>
+         </svg>
+       </button>`;
+    return `<div class="route-thumb" style="cursor:pointer" onclick="openEditOverlay(${r.id})">
+      <img class="thumb-map" data-route-id="${r.id}"
+           src="/api/routes/${r.id}/thumbnail"
+           onerror="queueThumb(this,${r.id})"
+           width="440" height="280"
+           style="width:100%;height:auto;border-radius:10px 10px 0 0;display:block" alt="">
+      <div class="thumb-info">
+        <div class="thumb-name" title="${escHtml(r.name)}">${escHtml(r.name)}</div>
+        <div class="thumb-stats">${stats}</div>
+        <div class="thumb-profile">${profileLabel}${source}</div>
+      </div>
+      <button class="thumb-gpx" onclick="openGpxDialog(${r.id},'${escHtml(r.name)}',event)" title="Download GPX">
+        <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="1" x2="6" y2="8"/><polyline points="3,5 6,8 9,5"/><line x1="1" y1="11" x2="11" y2="11"/></svg>
+      </button>
+      <button class="thumb-del" onclick="deleteRoute(${r.id},event)" title="Delete">✕</button>
+      ${stravaStarEl}
+      ${favEl}
+    </div>`;
+  }).join('');
+}
+
+async function regenThumbnails() {
+  const btn = document.getElementById('regen-btn');
+  btn.disabled = true; btn.textContent = '↺ …';
+  await fetch('/api/routes/thumbnails', { method: 'DELETE' });
+  await loadRoutes(); // re-renders grid, populates routePointsMap
+  // Directly queue all thumbnails — don't rely on onerror since the
+  // browser caches the old images and won't fire it after a DB clear.
+  document.querySelectorAll('img.thumb-map[data-route-id]').forEach(img => {
+    queueThumb(img, +img.dataset.routeId);
+  });
+  btn.disabled = false; btn.textContent = '↺ Thumbnails';
+}
+
+async function deleteRoute(id, event) {
+  event.stopPropagation();
+  if (!confirm('Delete this route?')) return;
+  await fetch(`/api/routes/${id}`, { method: 'DELETE' });
+  await loadRoutes();
+}
+
+// ── Thumbnail SVG renderer ────────────────────────────────────────────────────
+function routeSvg(points, w, h) {
+  if (!Array.isArray(points) || !points.length) return '<svg></svg>';
+  // Sample for performance
+  const step = Math.max(1, Math.floor(points.length / 300));
+  const pts  = points.filter((_, i) => i % step === 0);
+  if (!pts.length) return '<svg></svg>';
+  const lats = pts.map(p => Array.isArray(p) ? p[0] : p.lat);
+  const lons = pts.map(p => Array.isArray(p) ? p[1] : p.lon);
+  if (isNaN(lats[0]) || isNaN(lons[0])) return '<svg></svg>';
+  const minLat = lats.reduce((a, b) => Math.min(a, b), lats[0]);
+  const maxLat = lats.reduce((a, b) => Math.max(a, b), lats[0]);
+  const minLon = lons.reduce((a, b) => Math.min(a, b), lons[0]);
+  const maxLon = lons.reduce((a, b) => Math.max(a, b), lons[0]);
+  const pad = 12;
+  const latR = maxLat - minLat || 0.001;
+  const lonR = maxLon - minLon || 0.001;
+  // Preserve aspect ratio with lat correction (~cos(lat))
+  const cosLat = Math.cos((minLat + maxLat) / 2 * Math.PI / 180);
+  const scaleX = (w - pad*2) / lonR;
+  const scaleY = (h - pad*2) / (latR / cosLat);
+  const scale  = Math.min(scaleX, scaleY);
+  const offX   = (w - lonR * scale) / 2;
+  const offY   = (h - (latR / cosLat) * scale) / 2;
+  const d = pts.map((p, i) => {
+    const lat = Array.isArray(p) ? p[0] : p.lat;
+    const lon = Array.isArray(p) ? p[1] : p.lon;
+    const x = offX + (lon - minLon) * scale;
+    const y = offY + (maxLat - lat) / cosLat * scale;
+    return (i === 0 ? 'M' : 'L') + x.toFixed(1) + ',' + y.toFixed(1);
+  }).join(' ');
+  return `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg">
+    <rect width="${w}" height="${h}" fill="#111113"/>
+    <path d="${d}" fill="none" stroke="#f97316" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>`;
+}
+
+// ── Strava sync ───────────────────────────────────────────────────────────────
+function openStravaSync() {
+  document.getElementById('strava-sync-msg').textContent = '';
+  document.getElementById('strava-sync-save-btn').disabled = false;
+  document.getElementById('strava-sync-dialog').style.display = 'flex';
+}
+function closeStravaSync() {
+  document.getElementById('strava-sync-dialog').style.display = 'none';
+}
+async function runStravaSync() {
+  const saveBtn = document.getElementById('strava-sync-save-btn');
+  const msg = document.getElementById('strava-sync-msg');
+  const deleteRemoved = document.getElementById('strava-sync-delete').checked;
+  saveBtn.disabled = true;
+  msg.textContent = 'Syncing…';
+  try {
+    const resp = await fetch('/api/routes/strava-sync', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ delete_removed: deleteRemoved }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) { msg.textContent = `Error: ${data.detail || resp.status}`; saveBtn.disabled = false; return; }
+    const parts = [];
+    if (data.added)   parts.push(`${data.added} added`);
+    if (data.deleted) parts.push(`${data.deleted} deleted`);
+    msg.textContent = parts.length ? parts.join(', ') + '.' : 'Up to date.';
+    await loadRoutes();
+    setTimeout(closeStravaSync, 1500);
+  } catch(e) {
+    msg.textContent = `Error: ${e.message}`;
+    saveBtn.disabled = false;
+  }
+}
+
+// ── Local favorite toggle ─────────────────────────────────────────────────────
+async function toggleFav(btn, event) {
+  event.stopPropagation();
+  const routeId  = btn.dataset.routeId;
+  const wasFav   = btn.dataset.fav === '1';
+  const nowFav   = !wasFav;
+  // Optimistic UI update
+  btn.dataset.fav = nowFav ? '1' : '0';
+  btn.classList.toggle('is-fav', nowFav);
+  btn.title = nowFav ? 'Remove from local favorites' : 'Add to local favorites';
+  const svg = btn.querySelector('svg');
+  svg.setAttribute('fill',   nowFav ? '#f97316' : 'none');
+  svg.setAttribute('stroke', nowFav ? '#f97316' : '#8e8e93');
+  // Update in-memory state so renderRoutes() reflects the change
+  const route = savedRoutes.find(r => String(r.id) === String(routeId));
+  if (route) route.local_starred = nowFav;
+  try {
+    const resp = await fetch(`/api/routes/${routeId}/favorite`, {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ starred: nowFav }),
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  } catch(e) {
+    // Revert on failure
+    if (route) route.local_starred = wasFav;
+    btn.dataset.fav = wasFav ? '1' : '0';
+    btn.classList.toggle('is-fav', wasFav);
+    btn.title = wasFav ? 'Remove from local favorites' : 'Add to local favorites';
+    svg.setAttribute('fill',   wasFav ? '#f97316' : 'none');
+    svg.setAttribute('stroke', wasFav ? '#f97316' : '#8e8e93');
+    console.error('Favorite toggle failed:', e.message);
+  }
+}
+
+// ── Polyline decoder — Valhalla precision 6 ───────────────────────────────────
+function decodePolyline(str) {
+  let i = 0, lat = 0, lng = 0, out = [];
+  while (i < str.length) {
+    let b, s = 0, r = 0;
+    do { b = str.charCodeAt(i++) - 63; r |= (b & 0x1f) << s; s += 5; } while (b >= 0x20);
+    lat += (r & 1) ? ~(r >> 1) : r >> 1;
+    s = 0; r = 0;
+    do { b = str.charCodeAt(i++) - 63; r |= (b & 0x1f) << s; s += 5; } while (b >= 0x20);
+    lng += (r & 1) ? ~(r >> 1) : r >> 1;
+    out.push([lat / 1e6, lng / 1e6]);
+  }
+  return out;
+}
+
+// ── Marker helpers ─────────────────────────────────────────────────────────────
+function dotIcon(color) {
+  return L.divIcon({
+    className: '',
+    html: `<div style="width:14px;height:14px;border-radius:50%;background:${color};border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.55)"></div>`,
+    iconSize: [14, 14], iconAnchor: [7, 7],
+  });
+}
+
+function refreshMarkerColors() {
+  waypoints.forEach((w, i) => {
+    const color = i === 0 ? DOT_COLORS.start
+                : i === waypoints.length - 1 ? DOT_COLORS.end
+                : DOT_COLORS.mid;
+    w.marker.setIcon(dotIcon(color));
+  });
+}
+
+// ── Add / remove waypoints ─────────────────────────────────────────────────────
+
+// Silent add: place marker without triggering a reroute (used when loading an existing route)
+function _addWaypointSilent(lat, lon) {
+  const marker = L.marker([lat, lon], {
+    icon: dotIcon(DOT_COLORS.mid),
+    draggable: true,
+  }).addTo(map);
+  const index = waypoints.length;
+  marker.on('dragend', () => {
+    const p = marker.getLatLng();
+    waypoints[index].lat = p.lat;
+    waypoints[index].lon = p.lng;
+    _routeChanged = true;
+    _updateSaveBtn();
+    rerouteAll();
+  });
+  waypoints.push({ lat, lon, marker });
+}
+
+function addWaypoint(lat, lon) {
+  const marker = L.marker([lat, lon], {
+    icon: dotIcon(waypoints.length === 0 ? DOT_COLORS.start : DOT_COLORS.end),
+    draggable: true,
+  }).addTo(map);
+  const index = waypoints.length;
+  marker.on('dragend', () => {
+    const p = marker.getLatLng();
+    waypoints[index].lat = p.lat;
+    waypoints[index].lon = p.lng;
+    if (editingRouteId) { _routeChanged = true; _updateSaveBtn(); }
+    rerouteAll();
+  });
+  waypoints.push({ lat, lon, marker });
+  refreshMarkerColors();
+  updateUI();
+  if (editingRouteId) { _routeChanged = true; _updateSaveBtn(); }
+  if (waypoints.length >= 2) rerouteAll();
+}
+
+function removeWaypoint(index) {
+  map.removeLayer(waypoints[index].marker);
+  waypoints.splice(index, 1);
+  refreshMarkerColors();
+  updateUI();
+  if (editingRouteId) { _routeChanged = true; _updateSaveBtn(); }
+  if (waypoints.length >= 2) rerouteAll();
+  else { clearRouteLayer(); updateStats(null, null, null); }
+}
+
+// ── Profile ───────────────────────────────────────────────────────────────────
+function setProfile(p) {
+  profile = p;
+  document.querySelectorAll('.profile-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.profile === p));
+  if (waypoints.length >= 2) rerouteAll();
+}
+
+// ── Undo / Clear ──────────────────────────────────────────────────────────────
+function undoLast() {
+  if (!waypoints.length) return;
+  map.removeLayer(waypoints.pop().marker);
+  refreshMarkerColors();
+  updateUI();
+  if (editingRouteId) { _routeChanged = true; _updateSaveBtn(); }
+  if (waypoints.length >= 2) rerouteAll();
+  else { clearRouteLayer(); updateStats(null, null, null); }
+}
+
+function clearRoute() {
+  waypoints.forEach(w => map.removeLayer(w.marker));
+  waypoints = [];
+  clearRouteLayer();
+  updateUI();
+  updateStats(null, null, null);
+}
+
+function clearRouteLayer() {
+  if (routeLayer) { map.removeLayer(routeLayer); routeLayer = null; }
+  routePoints = [];
+  routeDistKm = routeDurS = routeClimbM = null;
+  _updateSaveBtn();
+}
+
+// ── Routing ───────────────────────────────────────────────────────────────────
+async function rerouteAll() {
+  if (waypoints.length < 2) return;
+  if (_routeAbort) _routeAbort.abort();
+  const abortCtrl = new AbortController();
+  _routeAbort = abortCtrl;
+  const gen = ++_routeGen;
+  const locs = waypoints.map(w => [w.lat, w.lon]);
+  console.log(`[route] gen=${gen} sending ${locs.length} locations`);
+  setStatus(`Routing ${locs.length} pts…`);
+  try {
+    const resp = await fetch('/api/routes/snap', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ locations: locs, costing: profile }),
+      signal: abortCtrl.signal,
+    });
+    if (gen !== _routeGen) return;
+    const data = await resp.json();
+    if (gen !== _routeGen) return;
+    if (!resp.ok) { setStatus(`Routing error: ${data.detail || resp.status}`); return; }
+    console.log(`[route] gen=${gen} success: ${data.distance_km?.toFixed(1)} km, ${data.points?.length} points`);
+    clearRouteLayer();
+    routePoints  = data.points;
+    routeDistKm  = data.distance_km;
+    routeDurS    = data.duration_s;
+    routeClimbM  = data.climb_m ?? null;
+    routeLayer   = L.polyline(routePoints, { color: '#f97316', weight: 4, opacity: 0.88 }).addTo(map);
+    updateStats(routeDistKm, routeDurS, routeClimbM);
+    _updateSaveBtn();
+    clearStatus();
+  } catch(e) {
+    if (e.name === 'AbortError' || gen !== _routeGen) return;
+    console.error(`[route] gen=${gen} exception:`, e);
+    setStatus(`Routing error: ${e.message}`);
+  } finally {
+    if (_routeAbort === abortCtrl) _routeAbort = null;
+  }
+}
+
+// ── Status bar ────────────────────────────────────────────────────────────────
+function setStatus(msg) {
+  const el = document.getElementById('map-status');
+  el.textContent = msg; el.classList.add('show');
+}
+function clearStatus() {
+  document.getElementById('map-status').classList.remove('show');
+}
+
+// ── Stats ─────────────────────────────────────────────────────────────────────
+function updateStats(distKm, durS, climbM) {
+  document.getElementById('stat-distance').textContent =
+    distKm != null
+      ? (useMetric ? distKm.toFixed(1) + ' km' : (distKm * 0.621371).toFixed(1) + ' mi')
+      : '—';
+  document.getElementById('stat-time').textContent = durS != null ? fmtDur(durS) : '—';
+  const climbRow = document.getElementById('stat-climb-row');
+  if (climbM != null) {
+    document.getElementById('stat-climb').textContent =
+      useMetric ? Math.round(climbM) + ' m' : Math.round(climbM * 3.28084) + ' ft';
+    climbRow.style.display = '';
+  } else {
+    climbRow.style.display = 'none';
+  }
+}
+
+function fmtDur(s) {
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
+function updateUI() {
+  const n = waypoints.length;
+  document.getElementById('stat-waypoints').textContent = n;
+  document.getElementById('undo-btn').disabled  = n === 0;
+  document.getElementById('clear-btn').disabled = n === 0;
+  document.getElementById('cursor-hint').style.opacity = n === 0 ? '1' : '0';
+  document.getElementById('waypoint-list').innerHTML = waypoints.map((w, i) => {
+    const color = i === 0 ? DOT_COLORS.start : i === n - 1 ? DOT_COLORS.end : DOT_COLORS.mid;
+    return `<div class="wp-item">
+      <div class="wp-dot" style="background:${color}"></div>
+      <div class="wp-coord">${w.lat.toFixed(4)}, ${w.lon.toFixed(4)}</div>
+      <button class="wp-del" onclick="removeWaypoint(${i})" title="Remove">✕</button>
+    </div>`;
+  }).join('');
+}
+
+// ── Locate me ─────────────────────────────────────────────────────────────────
+function locateMe() {
+  if (!navigator.geolocation) { setStatus('Geolocation not supported'); return; }
+  const btn  = document.getElementById('locate-btn');
+  const icon = document.getElementById('locate-icon');
+  icon.style.display = 'none';
+  btn.insertAdjacentText('beforeend', '…');
+  btn.style.opacity = '.5';
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      map.setView([pos.coords.latitude, pos.coords.longitude], 14);
+      btn.lastChild.remove(); icon.style.display = ''; btn.style.opacity = '';
+    },
+    err => {
+      setStatus(`Location unavailable: ${err.message}`, true);
+      btn.lastChild.remove(); icon.style.display = ''; btn.style.opacity = '';
+    },
+    { timeout: 10000 }
+  );
+}
+
+// ── GPX dialog ────────────────────────────────────────────────────────────────
+let _gpxRouteId = null;
+
+function openGpxDialog(id, name, event) {
+  if (event) event.stopPropagation();
+  _gpxRouteId = id;
+  document.getElementById('gpx-dialog-name').textContent = name;
+  document.getElementById('gpx-dialog').classList.add('open');
+}
+
+function closeGpxDialog() {
+  document.getElementById('gpx-dialog').classList.remove('open');
+  _gpxRouteId = null;
+}
+
+function confirmGpxDownload() {
+  if (!_gpxRouteId) return;
+  const a = document.createElement('a');
+  a.href = `/api/routes/${_gpxRouteId}/gpx`;
+  a.download = '';
+  a.click();
+  closeGpxDialog();
+}
+
+// Close dialog on backdrop click
+document.getElementById('gpx-dialog').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeGpxDialog();
+});
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+loadRoutes();
+</script>
+{% include '_about.html' %}
+</body>
+</html>

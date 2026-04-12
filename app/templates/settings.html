@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+<link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Settings — Ascent</title>
 <style>
@@ -115,19 +116,21 @@ input[readonly]{color:#8e8e93;cursor:default}
 <body>
 <nav>
   <div style="display:flex;align-items:center">
-    <span class="nav-brand-name">⛰ Ascent</span><span class="nav-version">{{ app_version }}</span>
+    <img src="/static/favicon.svg" style="width:20px;height:20px;border-radius:4px;margin-right:6px;vertical-align:middle"><span class="nav-brand-name">Ascent</span><span class="nav-version">{{ app_version }}</span>
   </div>
   <div class="nav-pages">
     <a href="/activities" class="nav-btn">Activities</a>
     <a href="/" class="nav-btn">Summary</a>
     <a href="/activities" class="nav-btn" onclick="sessionStorage.setItem('openCoach','1')">Coach</a>
     <a href="/tour" class="nav-btn">Tours</a>
+    <a href="/routes" class="nav-btn">Routes</a>
     <a href="/strava/sync" class="nav-btn">Sync</a>
   </div>
   <div class="spacer"></div>
   <div class="nav-pages">
     {% if current_user and current_user.is_admin %}<a href="/admin/invites" class="nav-btn">Admin</a>{% endif %}
     <a href="/settings" class="nav-btn nav-active">Settings</a>
+    <button class="nav-btn" onclick="openAbout()">About</button>
     <a href="/logout" class="nav-btn">Sign Out</a>
   </div>
 </nav>
@@ -778,6 +781,7 @@ async function saveCroppedAvatar() {
   btn.disabled = false; btn.textContent = 'Save Photo';
 }
 </script>
+{% include '_about.html' %}
 </body>
 </html>
 

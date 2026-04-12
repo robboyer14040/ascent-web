@@ -27,7 +27,8 @@
       "Bash(pip install:*)",
       "Bash(pip3 install:*)",
       "Bash(grep:*)",
-      "Bash(sqlite3:*)"
+      "Bash(sqlite3:*)",
+      "WebFetch(domain:www.graphhopper.com)"
     ]
   }
 }

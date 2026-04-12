@@ -73,6 +73,100 @@ async def activity_geojson(activity_id: int):
     return db.get_track_points_geojson(activity_id)
 
 
+@router.post("/activities/{activity_id}/save-as-route")
+async def save_activity_as_route(activity_id: int, request: Request):
+    """Save an activity's GPS track as a local route, optionally uploading to Strava."""
+    import httpx, xml.etree.ElementTree as ET
+    uid = get_session_user_id(request)
+    if uid is None:
+        raise HTTPException(401)
+
+    body     = await request.json()
+    name     = body.get("name", "Route").strip() or "Route"
+    to_strava = bool(body.get("upload_to_strava", False))
+    local_starred = bool(body.get("local_starred", False))
+
+    db  = db_getter()
+    geo = db.get_track_points_geojson(activity_id)
+    coords = (geo.get("geometry") or {}).get("coordinates") or []
+    if not coords:
+        raise HTTPException(422, "No GPS points found for this activity")
+
+    # GeoJSON coords are [lon, lat, alt] → route points are [lat, lon]
+    points = [[c[1], c[0]] for c in coords]
+
+    # Infer activity type for profile default
+    act = db.get_activity(activity_id)
+    act_type = ""
+    if act:
+        try:
+            attrs = json.loads(act.get("attributes_json") or "[]")
+            kv = dict(zip(attrs[::2], attrs[1::2]))
+            act_type = (kv.get("activity") or "").lower()
+        except Exception:
+            pass
+    profile = "pedestrian" if "run" in act_type or "hike" in act_type else "bicycle"
+
+    route_id = db.save_route(
+        user_id=uid,
+        name=name,
+        profile=profile,
+        points=points,
+        distance_km=act.get("distance_km") or None,
+        duration_s=act.get("active_time") or None,
+        climb_m=act.get("total_climb_m") or None,
+        local_starred=local_starred,
+    )
+
+    strava_result = None
+    if to_strava:
+        try:
+            from app.routers.strava import load_tokens, refresh_tokens, tokens_are_fresh, save_tokens
+            tokens = load_tokens(user_id=uid)
+            if not tokens.get("access_token"):
+                strava_result = {"error": "Strava not connected — reconnect Strava to enable uploads"}
+            else:
+                if not tokens_are_fresh(tokens):
+                    tokens = await refresh_tokens(tokens, user_id=uid)
+                    save_tokens(tokens, user_id=uid)
+
+                # Check scope
+                scope = tokens.get("scope", "")
+                if "route:write" not in scope:
+                    strava_result = {"error": "Missing route:write scope — disconnect and reconnect Strava to grant route upload permission"}
+                else:
+                    # Build GPX
+                    gpx = ET.Element("gpx", {
+                        "version": "1.1", "creator": "Ascent",
+                        "xmlns": "http://www.topografix.com/GPX/1/1",
+                    })
+                    trk = ET.SubElement(gpx, "trk")
+                    ET.SubElement(trk, "name").text = name
+                    seg = ET.SubElement(trk, "trkseg")
+                    for lat, lon in points:
+                        ET.SubElement(seg, "trkpt", {"lat": f"{lat:.7f}", "lon": f"{lon:.7f}"})
+                    gpx_bytes = ('<?xml version="1.0" encoding="UTF-8"?>\n'
+                                 + ET.tostring(gpx, encoding="unicode")).encode()
+
+                    # POST to Strava uploads — creates a new Strava activity from the GPX
+                    import io
+                    async with httpx.AsyncClient(timeout=30.0) as client:
+                        resp = await client.post(
+                            "https://www.strava.com/api/v3/uploads",
+                            headers={"Authorization": f"Bearer {tokens['access_token']}"},
+                            files={"file": ("route.gpx", io.BytesIO(gpx_bytes), "application/gpx+xml")},
+                            data={"data_type": "gpx", "name": name},
+                        )
+                    if resp.status_code in (200, 201):
+                        strava_result = {"ok": True, "upload_id": resp.json().get("id")}
+                    else:
+                        strava_result = {"error": f"Strava upload failed: {resp.text[:200]}"}
+        except Exception as e:
+            strava_result = {"error": str(e)}
+
+    return {"route_id": route_id, "strava": strava_result}
+
+
 @router.get("/activities/{activity_id}/charts")
 async def activity_charts(activity_id: int):
     db = db_getter()
@@ -269,22 +363,27 @@ async def activity_ai_summary(activity_id: int, request: Request, model: str = "
     act_type  = act.get("activity_type", "")
 
     # ── Fetch applicable coach goal ───────────────────────────────────────────
-    # Apply the nearest goal whose target_date is still after this activity's date.
+    # Apply the nearest goal whose target_date is within 6 months of this activity.
+    # Goals more than 6 months away are too distant to be relevant — just summarize the ride.
     goal_text = None
     act_date_str = datetime.utcfromtimestamp(act_start).strftime("%Y-%m-%d") if act_start else None
     try:
-        # Find the nearest upcoming goal whose target_date is after this activity's date.
-        # No created_at gate — a goal set after an activity should still apply if the
-        # target date is still in the future relative to the activity.
-        rows = con.execute(
-            "SELECT goal_text, target_date FROM coach_goals "
-            "WHERE user_id=? AND target_date IS NOT NULL "
-            "  AND target_date > ? "
-            "ORDER BY target_date ASC LIMIT 1",
-            (uid, act_date_str)
-        ).fetchall()
-        if rows:
-            goal_text = rows[0][0]
+        if act_date_str:
+            act_date = datetime.strptime(act_date_str, "%Y-%m-%d")
+            # 6-month cutoff: roughly 183 days
+            from datetime import timedelta
+            cutoff_date = act_date + timedelta(days=183)
+            cutoff_str  = cutoff_date.strftime("%Y-%m-%d")
+            rows = con.execute(
+                "SELECT goal_text, target_date FROM coach_goals "
+                "WHERE user_id=? AND target_date IS NOT NULL "
+                "  AND target_date > ? "
+                "  AND target_date <= ? "
+                "ORDER BY target_date ASC LIMIT 1",
+                (uid, act_date_str, cutoff_str)
+            ).fetchall()
+            if rows:
+                goal_text = rows[0][0]
     except Exception:
         pass
 

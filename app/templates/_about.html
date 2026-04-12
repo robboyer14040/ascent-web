@@ -1,0 +1,22 @@
+<div id="about-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9500;align-items:center;justify-content:center" onclick="if(event.target===this)closeAbout()">
+  <div style="position:relative;background:var(--surface);border:1px solid var(--border2);border-radius:16px;padding:36px 40px;width:320px;max-width:95vw;box-shadow:0 8px 40px rgba(0,0,0,.7);text-align:center">
+    <button onclick="closeAbout()" style="position:absolute;background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;line-height:1;padding:0;right:14px;top:10px">×</button>
+    <img src="/static/favicon.svg" alt="Ascent" style="width:96px;height:96px;border-radius:18px;margin-bottom:16px">
+    <div style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:4px">Ascent</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:20px">{{ app_version }}</div>
+    <div style="border-top:1px solid var(--border);padding-top:16px;margin-bottom:16px">
+      <div style="display:flex;align-items:center;justify-content:center;gap:6px;font-size:12px;font-weight:700;color:#FC4C02;letter-spacing:.02em;margin-bottom:12px"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14"><path fill="#FC4C02" d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169"/></svg>Powered by Strava</div>
+      <div style="font-size:11px;color:var(--muted);line-height:2;text-align:left">
+        <span style="color:var(--muted2)">Weather:</span>&ensp;Open-Meteo<br>
+        <span style="color:var(--muted2)">Location:</span>&ensp;OpenStreetMap · Nominatim<br>
+        <span style="color:var(--muted2)">Routes:</span>&ensp;Stadia Maps · Valhalla<br>
+        <span style="color:var(--muted2)">Maps:</span>&ensp;OpenStreetMap · OpenTopoMap · CARTO · Esri · Waymarked Trails
+      </div>
+    </div>
+    <div style="font-size:12px;color:var(--muted);border-top:1px solid var(--border);padding-top:14px">Created by Rob Boyer<br>Santa Cruz Mountains, California, USA</div>
+  </div>
+</div>
+<script>
+function openAbout(){document.getElementById('about-overlay').style.display='flex'}
+function closeAbout(){document.getElementById('about-overlay').style.display='none'}
+</script>
