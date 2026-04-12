@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Ascent Web is a FastAPI + Jinja2 web app that reads from Ascent macOS fitness tracker SQLite databases and provides a multi-user browser interface with maps, charts, Strava sync, and AI coaching.
+Ascent Web is a FastAPI + Jinja2 web app that provides a multi-user browser interface to user fitness activities with maps, charts, Strava sync, and AI coaching.
 
 ## Development Commands
 
