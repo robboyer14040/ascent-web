@@ -113,6 +113,7 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="/static/map_utils.js"></script>
 <script>
 const TOKEN = {{ token | tojson }};
 
@@ -182,6 +183,7 @@ function initMap() {
   L.control.zoom({position:'bottomright'}).addTo(shareMap);
   setMapStyle('osm', true);
   routeGroup = L.featureGroup().addTo(shareMap);
+  MapUtils.addScale(shareMap, U.metric);
 }
 function setMapStyle(key, init=false) {
   document.querySelectorAll('.map-style-btn').forEach(b=>{

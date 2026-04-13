@@ -71,6 +71,8 @@
 		D48FB5392F8C8E9C009570CD /* altitude_chart.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = altitude_chart.js; sourceTree = "<group>"; };
 		D48FB53A2F8C8EA1009570CD /* activity_edit.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = activity_edit.js; sourceTree = "<group>"; };
 		D48FB53B2F8C8EAE009570CD /* photos.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = photos.js; sourceTree = "<group>"; };
+		D48FB53C2F8D38BB009570CD /* activity_detail.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = activity_detail.js; sourceTree = "<group>"; };
+		D48FB53D2F8D7423009570CD /* strava_sync_btn.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = strava_sync_btn.js; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -134,6 +136,7 @@
 			isa = PBXGroup;
 			children = (
 				D48FB5392F8C8E9C009570CD /* altitude_chart.js */,
+				D48FB53C2F8D38BB009570CD /* activity_detail.js */,
 				D48FB53A2F8C8EA1009570CD /* activity_edit.js */,
 				D48FB5142F8C69D1009570CD /* apple-touch-icon.png */,
 				D48FB5152F8C69D1009570CD /* favicon.svg */,
@@ -143,6 +146,7 @@
 				D48FB5382F8C8E90009570CD /* coach.js */,
 				D48FB5362F8C70AA009570CD /* compare.js */,
 				D48FB53B2F8C8EAE009570CD /* photos.js */,
+				D48FB53D2F8D7423009570CD /* strava_sync_btn.js */,
 			);
 			path = static;
 			sourceTree = "<group>";

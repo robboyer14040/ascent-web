@@ -25,13 +25,16 @@
 
 <!-- Pass server-rendered data to static JS -->
 <script>window._UI_PREFS_INITIAL = {{ ui_prefs | tojson | safe }};</script>
+<script src="/static/activity_detail.js?v={{ app_version }}" defer></script>
 <script src="/static/main_mobile.js?v={{ app_version }}" defer></script>
+<script src="/static/map_utils.js?v={{ app_version }}" defer></script>
 <script src="/static/main.js?v={{ app_version }}" defer></script>
 <script src="/static/compare.js?v={{ app_version }}" defer></script>
 <script src="/static/altitude_chart.js?v={{ app_version }}" defer></script>
 <script src="/static/photos.js?v={{ app_version }}" defer></script>
 <script src="/static/coach.js?v={{ app_version }}" defer></script>
 <script src="/static/activity_edit.js?v={{ app_version }}" defer></script>
+<script src="/static/strava_sync_btn.js?v={{ app_version }}" defer></script>
 
 {% include '_html_overlays.html' %}
 <!-- ── ABOUT MODAL ──────────────────────────────────────────────────────── -->

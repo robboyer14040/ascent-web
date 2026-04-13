@@ -88,7 +88,7 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
 .chip-val strong{font-weight:700}
 .chip-val .sec{font-size:11px;color:var(--muted);font-weight:400;margin-left:3px}
 .wx-line{font-size:11px;color:var(--muted);margin-top:3px}
-.stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:6px;align-content:start;margin-bottom:8px}
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:6px;align-content:start;margin-bottom:8px;flex:1;min-width:0}
 .stat-chip{background:var(--surface2);border:1px solid var(--border2);border-radius:7px;padding:5px 4px;display:flex;flex-direction:column;align-items:center}
 .sc-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:1px}
 .sc-val{font-size:14px;font-weight:600;font-variant-numeric:tabular-nums}
@@ -138,6 +138,25 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
 .ai-card-label{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--accent);margin-bottom:5px;font-weight:600}
 .ai-card-body{font-size:12px;color:var(--text);line-height:1.6}
 .ai-card-loading{font-size:11px;color:var(--muted);font-style:italic}
+/* ── Activity title bar (INFO-pane style) ── */
+.act-title-bar{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px}
+.act-title{font-size:15px;font-weight:600;line-height:1.3}
+.act-title-links{display:flex;gap:6px;flex-shrink:0;margin-left:8px;margin-top:2px}
+.act-title-links a{font-size:11px;font-weight:600;color:var(--text);border:1px solid var(--border2);border-radius:4px;padding:3.5px 8px;text-decoration:none;line-height:1.4}
+.act-title-links a:hover{color:#f97316;border-color:#f97316}
+.act-title-links a.strava{color:#fc4c02;border-color:rgba(252,76,2,.4)}
+.edit-btn{font-size:11px;font-weight:600;color:var(--text);border:1px solid var(--border2);border-radius:4px;padding:3.5px 8px;background:none;cursor:pointer;line-height:1.4;transition:color .15s,border-color .15s}
+.edit-btn:hover{color:#f97316;border-color:#f97316}
+.resync-btn{font-size:11px;font-weight:600;color:var(--text);border:1px solid var(--border2);border-radius:4px;padding:3.5px 8px;background:none;cursor:pointer;line-height:1.4;transition:color .15s,border-color .15s}
+.resync-btn:hover{color:#f97316;border-color:#f97316}
+.resync-btn:disabled{opacity:.4;cursor:default}
+.resync-btn.dirty::after{content:'●';color:#f97316;font-size:7px;vertical-align:super;margin-left:2px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.resync-btn.spinning .resync-icon{display:inline-block;animation:spin .7s linear infinite}
+.meta-row{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:4px}
+.meta-field{display:flex;flex-direction:column}
+.mf-label{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+.mf-val{font-size:12px;color:var(--text);margin-top:1px}
 </style>
 </head>
 <body>
@@ -291,6 +310,29 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
   <div style="color:#666;font-size:11px;margin-top:8px">Press Esc or click background to close · ← → to navigate</div>
 </div>
 
+<!-- ── Save as Route dialog (stage detail) ── -->
+<div id="sd-save-route-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:3000;align-items:center;justify-content:center" onclick="if(event.target===this)closeStageSaveRouteDialog()">
+  <div style="background:#2c2c2e;border:1px solid #3a3a3c;border-radius:12px;padding:1.25rem;width:380px;max-width:calc(100vw - 2rem);box-shadow:0 20px 60px rgba(0,0,0,.5)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
+      <div style="font-size:14px;font-weight:600">Save as Route</div>
+      <button onclick="closeStageSaveRouteDialog()" style="background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;line-height:1;padding:0 2px">✕</button>
+    </div>
+    <div style="margin-bottom:12px">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em">Route Name</div>
+      <input id="sd-save-route-name" type="text" style="width:100%;padding:6px 9px;font-size:13px;background:#1c1c1e;border:1px solid #3a3a3c;border-radius:6px;color:#f2f2f7;outline:none;box-sizing:border-box">
+    </div>
+    <div style="margin-bottom:12px;display:flex;align-items:center;gap:8px">
+      <input type="checkbox" id="sd-save-route-favorite" checked style="width:15px;height:15px;accent-color:#f97316;cursor:pointer;flex-shrink:0">
+      <label for="sd-save-route-favorite" style="font-size:12px;color:var(--text);cursor:pointer;user-select:none">Mark as favorite</label>
+    </div>
+    <div id="sd-save-route-msg" style="font-size:11px;margin-bottom:10px;display:none"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button onclick="closeStageSaveRouteDialog()" style="font-size:12px;font-weight:600;padding:5px 14px;border-radius:7px;border:1px solid #3a3a3c;background:#3a3a3c;color:#f2f2f7;cursor:pointer">Cancel</button>
+      <button id="sd-save-route-confirm" onclick="confirmStageSaveAsRoute()" style="font-size:12px;font-weight:600;padding:5px 14px;border-radius:7px;border:none;background:#f97316;color:#fff;cursor:pointer">Save</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── Edit activity overlay (stage detail) ── -->
 <div id="tour-edit-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:3000;align-items:center;justify-content:center" onclick="if(event.target===this)closeTourEdit()">
   <div style="background:#2c2c2e;border:1px solid #3a3a3c;border-radius:12px;padding:1.25rem;width:520px;max-width:calc(100vw - 2rem);box-shadow:0 20px 60px rgba(0,0,0,.5)">
@@ -321,6 +363,9 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="/static/activity_detail.js?v={{ app_version }}"></script>
+<script src="/static/map_utils.js?v={{ app_version }}"></script>
+<script src="/static/strava_sync_btn.js?v={{ app_version }}" defer></script>
 <script>
 'use strict';
 
@@ -386,7 +431,8 @@ const _endIcon = L.divIcon({
 });
 
 // ── State ─────────────────────────────────────────────────────────────────────
-const _currentUserId = {{ current_user_id | tojson }};
+const _currentUserId  = {{ current_user_id | tojson }};
+const _hasAnthropicKey = {{ has_anthropic_key | tojson }};
 let tourCoachModel   = 'claude-haiku-4-5-20251001';
 let tourMap          = null;
 let routeGroup       = null;
@@ -432,6 +478,7 @@ function initMap() {
   routeGroup = L.layerGroup().addTo(tourMap);
   const savedStyle = (() => { try { return localStorage.getItem('ascent-map-style') || 'osm'; } catch(e) { return 'osm'; } })();
   setTourMapStyle(savedStyle);
+  MapUtils.addScale(tourMap, U.metric);
 }
 
 (function() {
@@ -450,6 +497,7 @@ function initMap() {
 
 // ── User selector ─────────────────────────────────────────────────────────────
 let tourMatchUserId = null;
+let _tourUserMap    = {};  // userId → {avatar_url, username}
 
 async function loadUsers() {
   try {
@@ -457,6 +505,7 @@ async function loadUsers() {
     const sel = document.getElementById('tour-user-selector');
     sel.innerHTML = '';
     users.forEach(u => {
+      _tourUserMap[u.id] = { avatar_url: u.avatar_url || null, username: u.username };
       const o = document.createElement('option');
       o.value = u.id;
       o.textContent = u.username;
@@ -759,74 +808,143 @@ function biggestClimbInfo(pts) {
   return {gainFt: bestGain, startKm: bestStartKm};
 }
 
-// ── Build full activity detail HTML (INFO-pane layout, no AI summary) ─────────
+// ── Build full activity detail HTML — delegates to shared module ──────────────
 function buildStageActivityDetail(a) {
-  function altPaceStr(mph, perMile) {
-    if(!mph || mph<=0) return null;
-    const mins = perMile ? 60/mph : 60/(mph*1.60934);
-    const m=Math.floor(mins), s=Math.round((mins-m)*60);
-    return `${m}:${String(s).padStart(2,'0')}/${perMile?'mi':'km'}`;
-  }
-  const chips = [
-    ['Distance',  a.distance_mi       ? U.distS(a.distance_mi)  : null,
-                  a.distance_mi       ? (U.metric?(+(a.distance_mi).toFixed(2))+' mi':(+(a.distance_mi*1.60934).toFixed(2))+' km') : null],
-    ['Mov Time',  a.active_time       ? fmtHMS(a.active_time)   : null, null],
-    ['Duration',  a.duration          ? fmtHMS(a.duration)      : null, null],
-    ['Climb',     a.total_climb_ft    ? U.climbS(a.total_climb_ft)  : null,
-                  a.total_climb_ft    ? (U.metric?Math.round(a.total_climb_ft)+' ft':Math.round(a.total_climb_ft*0.3048)+' m') : null],
-    ['Descent',   a.total_descent_ft  ? U.climbS(a.total_descent_ft) : null,
-                  a.total_descent_ft  ? (U.metric?Math.round(a.total_descent_ft)+' ft':Math.round(a.total_descent_ft*0.3048)+' m') : null],
-    ['Mov Spd',   a.avg_speed_mph     ? U.speedS(a.avg_speed_mph) : null,
-                  a.avg_speed_mph     ? (U.metric?(+(a.avg_speed_mph).toFixed(1))+' mph':(+(a.avg_speed_mph*1.60934).toFixed(1))+' km/h') : null],
-    ['Avg Spd',   (a.duration&&a.distance_mi) ? U.speedS(+(a.distance_mi/(a.duration/3600)).toFixed(1)) : null,
-                  (a.duration&&a.distance_mi) ? (()=>{const mph=+(a.distance_mi/(a.duration/3600)).toFixed(1);return U.metric?mph+' mph':(+(mph*1.60934).toFixed(1))+' km/h';})() : null],
-    ['Avg Pace',  a.avg_speed_mph     ? altPaceStr(a.avg_speed_mph,!U.metric) : null,
-                  a.avg_speed_mph     ? altPaceStr(a.avg_speed_mph, U.metric) : null],
-    ['Avg HR',    a.avg_heartrate     ? Math.round(a.avg_heartrate)+' bpm'   : null, null],
-    ['Max HR',    a.max_heartrate     ? Math.round(a.max_heartrate)+' bpm'   : null, null],
-    ['Cadence',   a.avg_cadence       ? Math.round(a.avg_cadence)+' rpm'     : null, null],
-    ['Avg Pwr',   a.avg_power         ? Math.round(a.avg_power)+' W'         : null, null],
-    ['Suffer',    a.suffer_score      ? Math.round(a.suffer_score)+''        : null, null],
-    ['Type',      a.activity_type     ? esc(a.activity_type)                 : null, null],
-    ['Equipment', a.equipment         ? esc(a.equipment)                     : null, null],
-  ].filter(([,v])=>v);
+  return buildActivityDetailHTML(a, {
+    currentUserId:    _currentUserId,
+    editCallback:     'openTourEdit',
+    resyncCallback:   'resyncStageActivity',
+    saveRouteCb:      'openStageSaveRouteDialog',
+    resyncBtnId:      'sd-resync-btn',
+    kudosBtnId:       'sd-kudos-btn',
+    kudosToggleCb:    'toggleSdKudos',
+    commentsBtnId:    'sd-comments-btn',
+    commentsToggleCb: 'toggleSdComments',
+    weatherElId:      'sd-weather',
+    locationElId:     'sd-location',
+    userMap:          _tourUserMap,
+    showAiSummary:    _hasAnthropicKey,
+    aiRefreshCb:      'loadStageAiSummary',
+    escFn:            esc,
+    fmtDateFn:        fmtDate,
+    fmtHMSFn:         fmtHMS,
+    U,
+  }) + `<div id="sd-photos"></div>`;
+}
 
-  let html = '';
-  // Activity title bar
-  html += `<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:6px">
-    <div style="flex:1;min-width:0;font-size:14px;font-weight:600">${esc(a.name||'(unnamed)')}</div>
-    <button onclick="openTourEdit(${a.id})" style="font-size:11px;font-weight:600;color:var(--text);border:1px solid var(--border2);border-radius:4px;padding:3px 8px;background:none;cursor:pointer;flex-shrink:0;white-space:nowrap;line-height:1.4">Edit…</button>
-    <a href="/activities/${a.id}/export/gpx" style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:4px;border:1px solid var(--border2);color:var(--muted);text-decoration:none;flex-shrink:0;white-space:nowrap">↓ GPX</a>
-  </div>`;
-  // Date + location/weather grid
-  html += `<div style="display:grid;grid-template-columns:auto 1fr;column-gap:20px;row-gap:3px;margin-bottom:8px;align-items:baseline">
-    <span style="font-size:11.5px;color:var(--muted)">${fmtDate(a.start_time)}</span>
-    <span id="sd-location" style="font-size:11px;color:var(--muted)"></span>
-    <span></span>
-    <span id="sd-weather"  style="font-size:11px;color:var(--muted)"></span>
-  </div>`;
-  // Notes / description
-  if(a.notes) html += `<div class="act-notes">${esc(a.notes)}</div>`;
-  // Kudos + Comments buttons (hidden until loaded)
-  if(a.strava_activity_id) {
-    html += `<div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
-      <button id="sd-kudos-btn"    onclick="toggleSdKudos(${a.id},event)"    style="display:none;border:1px solid var(--border2);border-radius:4px;padding:3px 7px;font-size:11px;font-weight:600;cursor:pointer;background:transparent;color:var(--text);align-items:center;gap:4px;line-height:1"></button>
-      <button id="sd-comments-btn" onclick="toggleSdComments(${a.id},event)" style="display:none;border:1px solid var(--border2);border-radius:4px;padding:3px 7px;font-size:11px;font-weight:600;cursor:pointer;background:transparent;color:var(--text);align-items:center;gap:4px;line-height:1"></button>
-    </div>`;
+// ── Resync stage activity from Strava ─────────────────────────────────────────
+async function resyncStageActivity(activityId) {
+  const btn = document.getElementById('sd-resync-btn');
+  if (!btn || btn.disabled) return;
+  const hadPendingEdits = btn.classList.contains('dirty');
+  btn.disabled = true;
+  btn.classList.add('spinning');
+  try {
+    const resp = await fetch(`/api/activities/${activityId}/resync`, { method: 'POST' });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      btn.disabled = false;
+      btn.classList.remove('spinning');
+      alert('Sync failed: ' + (err.detail || resp.statusText));
+      return;
+    }
+    // Re-render the stage detail (this replaces the DOM including the button)
+    if (selectedId) await renderDetail(selectedId);
+    const newBtn = document.getElementById('sd-resync-btn');
+    if (newBtn) {
+      newBtn.classList.remove('spinning');
+      newBtn.disabled = false;
+      newBtn.innerHTML = hadPendingEdits ? '✓ Pushed & Synced' : '✓ Synced';
+      newBtn.style.color = '#30d158';
+      newBtn.style.borderColor = '#30d158';
+      setTimeout(() => {
+        newBtn.innerHTML = '<span class="resync-icon">↻</span> Sync';
+        newBtn.style.color = '';
+        newBtn.style.borderColor = '';
+      }, 2000);
+    }
+  } catch(e) {
+    alert('Sync error: ' + e.message);
+    const b = document.getElementById('sd-resync-btn');
+    if (b) { b.disabled = false; b.classList.remove('spinning'); }
   }
-  // Stats grid
-  if(chips.length) {
-    html += `<div class="stats-grid">`;
-    chips.forEach(([l,v,sub]) => {
-      const span = l==='Equipment' ? Math.min(6,Math.max(1,Math.ceil(v.length/14))) : 1;
-      const s = span>1 ? ` style="grid-column:span ${span}"` : '';
-      html += `<div class="stat-chip"${s}><div class="sc-label">${l}</div><div class="sc-val">${v}</div><div class="sc-sub">${sub||''}</div></div>`;
+}
+
+// ── AI Summary for completed stage activity ───────────────────────────────────
+async function loadStageAiSummary(actId, refresh = false) {
+  if (!_hasAnthropicKey) return;
+  const el   = document.getElementById('ai-summary-text');
+  const chip = document.getElementById('ai-summary-chip');
+  const btn  = document.getElementById('ai-summary-refresh');
+  if (!el || !chip) return;
+  if (refresh) {
+    el.textContent = 'Generating…';
+    if (btn) btn.disabled = true;
+  }
+  try {
+    const url = `/api/activities/${actId}/ai-summary?model=${encodeURIComponent(tourCoachModel)}${refresh ? '&refresh=true' : ''}`;
+    const r = await fetch(url);
+    if (r.status === 403) { chip.style.display = 'none'; return; }
+    if (!r.ok) { el.textContent = '—'; return; }
+    const d = await r.json();
+    chip.style.display = '';
+    el.style.color = 'var(--text)';
+    el.textContent = d.summary || '—';
+  } catch(e) {
+    el.textContent = '—';
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+// ── Save as Route (stage detail) ──────────────────────────────────────────────
+let _stageRouteActId = null;
+
+function openStageSaveRouteDialog(actId, actName) {
+  _stageRouteActId = actId;
+  document.getElementById('sd-save-route-name').value = actName || 'Route';
+  const msg = document.getElementById('sd-save-route-msg');
+  msg.style.display = 'none'; msg.textContent = '';
+  const btn = document.getElementById('sd-save-route-confirm');
+  btn.disabled = false; btn.textContent = 'Save';
+  document.getElementById('sd-save-route-overlay').style.display = 'flex';
+  setTimeout(() => document.getElementById('sd-save-route-name').select(), 50);
+}
+
+function closeStageSaveRouteDialog() {
+  document.getElementById('sd-save-route-overlay').style.display = 'none';
+  _stageRouteActId = null;
+}
+
+async function confirmStageSaveAsRoute() {
+  if (!_stageRouteActId) return;
+  const name          = document.getElementById('sd-save-route-name').value.trim() || 'Route';
+  const local_starred = document.getElementById('sd-save-route-favorite').checked;
+  const confirmBtn = document.getElementById('sd-save-route-confirm');
+  const msg        = document.getElementById('sd-save-route-msg');
+  confirmBtn.disabled = true; confirmBtn.textContent = 'Saving…';
+  msg.style.display = 'none';
+  try {
+    const resp = await fetch(`/api/activities/${_stageRouteActId}/save-as-route`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, local_starred }),
     });
-    html += `</div>`;
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.detail || resp.status);
+    closeStageSaveRouteDialog();
+    const routeBtn = document.getElementById('save-route-btn');
+    if (routeBtn) {
+      routeBtn.textContent = '✓ Saved';
+      routeBtn.style.color = '#22c55e';
+      routeBtn.style.borderColor = '#22c55e';
+    }
+  } catch(e) {
+    msg.style.display = 'block';
+    msg.style.color = '#ef4444';
+    msg.textContent = `Error: ${e.message}`;
+    confirmBtn.disabled = false; confirmBtn.textContent = 'Save';
   }
-  // Photos placeholder
-  html += `<div id="sd-photos"></div>`;
-  return html;
 }
 
 // ── Stage elevation profile ───────────────────────────────────────────────────
@@ -1227,6 +1345,45 @@ async function renderDetail(activeId) {
         if(txt) txt.textContent = '';
       });
 
+    // AI Stage Summary — shown for all uncompleted stages
+    if(_hasAnthropicKey) {
+      el.insertAdjacentHTML('beforeend', `<div class="ai-card" id="stage-ai-summary-card">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
+          <div class="ai-card-label" style="margin-bottom:0">AI Stage Summary</div>
+          <button id="stage-ai-summary-refresh" title="Regenerate summary" onclick="refreshStageSummary()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:13px;padding:0;line-height:1;flex-shrink:0">↺</button>
+        </div>
+        <div class="ai-card-body ai-card-loading" id="stage-ai-summary-text">Generating summary…</div>
+      </div>`);
+
+      const _stageIdForSummary = stage.id;
+      function _loadStageSummary(force) {
+        const txt = document.getElementById('stage-ai-summary-text');
+        const btn = document.getElementById('stage-ai-summary-refresh');
+        if(txt) { txt.textContent = 'Generating summary…'; txt.classList.add('ai-card-loading'); }
+        if(btn) btn.style.opacity = '0.4';
+        const forceParam = force ? '&force=1' : '';
+        fetch(`/tours/${tourInfo.id}/stages/${_stageIdForSummary}/ai-summary?model=${encodeURIComponent(tourCoachModel)}${forceParam}`)
+          .then(r => r.ok ? r.json() : null)
+          .then(d => {
+            const el2 = document.getElementById('stage-ai-summary-text');
+            const b   = document.getElementById('stage-ai-summary-refresh');
+            if(el2) {
+              if(d?.summary) { el2.textContent = d.summary; el2.classList.remove('ai-card-loading'); }
+              else { el2.textContent = 'Summary unavailable.'; el2.classList.remove('ai-card-loading'); }
+            }
+            if(b) b.style.opacity = '';
+          })
+          .catch(() => {
+            const el2 = document.getElementById('stage-ai-summary-text');
+            const b   = document.getElementById('stage-ai-summary-refresh');
+            if(el2) { el2.textContent = 'Summary unavailable.'; el2.classList.remove('ai-card-loading'); }
+            if(b) b.style.opacity = '';
+          });
+      }
+      window.refreshStageSummary = () => _loadStageSummary(true);
+      _loadStageSummary(false);
+    }
+
     // AI Coach Advice — only for the single next uncompleted stage after the last completed one
     const _completedNums = tourStages.filter(s => s.completion).map(s => s.stage_num);
     const _lastDoneNum   = _completedNums.length ? Math.max(..._completedNums) : 0;
@@ -1301,6 +1458,7 @@ async function renderDetail(activeId) {
     setTimeout(() => {
       loadStageActivityWx(act.id);
       loadStagePhotos(act.id);
+      loadStageAiSummary(act.id);
       if(act.strava_activity_id) loadStageSocial(act.id);
       if(act.strava_activity_id && !act.notes) loadStageDescription(act.id);
     }, 0);
@@ -1510,7 +1668,6 @@ async function toggleSdComments(actId, event) {
 
 // ── Edit activity (tour stage) ────────────────────────────────────────────────
 let _teActId = null;
-const _rpeLabels = ['','Easy','Easy+','Moderate','Moderate+','Medium','Hard','Hard+','Very Hard','Max-','Max'];
 
 function openTourEdit(actId) {
   _teActId = actId;
@@ -1520,7 +1677,7 @@ function openTourEdit(actId) {
     document.getElementById('te-desc').value = a.notes || '';
     const rpe = a.perceived_exertion;
     const slider = document.getElementById('te-rpe');
-    if(rpe != null) { slider.value=rpe; document.getElementById('te-rpe-label').textContent=_rpeLabels[rpe]||rpe; }
+    if(rpe != null) { slider.value=rpe; document.getElementById('te-rpe-label').textContent=_actRpeLabels[rpe]||rpe; }
     else            { slider.value=5;   document.getElementById('te-rpe-label').textContent=''; }
     slider._rpeSet = rpe != null;
     document.getElementById('te-status').textContent='';
@@ -1562,7 +1719,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const slider = document.getElementById('te-rpe');
   slider.addEventListener('input', () => {
     slider._rpeSet=true;
-    document.getElementById('te-rpe-label').textContent=_rpeLabels[slider.value]||slider.value;
+    document.getElementById('te-rpe-label').textContent=_actRpeLabels[slider.value]||slider.value;
   });
 });
 

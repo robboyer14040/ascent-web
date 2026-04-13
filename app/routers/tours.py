@@ -2,6 +2,7 @@
 
 import json
 import math
+import os
 import sqlite3
 import time as _time
 import xml.etree.ElementTree as ET
@@ -61,6 +62,12 @@ def _ensure_tables(con):
             user_id  INTEGER NOT NULL,
             advice   TEXT    NOT NULL,
             PRIMARY KEY (stage_id, user_id)
+        )
+    """)
+    con.execute("""
+        CREATE TABLE IF NOT EXISTS tour_stage_ai_summary (
+            stage_id INTEGER NOT NULL PRIMARY KEY,
+            summary  TEXT    NOT NULL
         )
     """)
     con.execute("""
@@ -658,6 +665,11 @@ async def update_tour(
             "(SELECT id FROM tour_stages WHERE tour_id=?)",
             (tour_id,),
         )
+        con.execute(
+            "DELETE FROM tour_stage_ai_summary WHERE stage_id IN "
+            "(SELECT id FROM tour_stages WHERE tour_id=?)",
+            (tour_id,),
+        )
 
         # Which existing stage IDs to keep
         keep_ids = {int(item["id"]) for item in order if item.get("type") == "existing"}
@@ -1062,6 +1074,119 @@ async def get_stage_ai_advice(
     return JSONResponse({"advice": advice})
 
 
+@router.get("/tours/{tour_id}/stages/{stage_id}/ai-summary")
+async def get_stage_ai_summary(
+    tour_id: int,
+    stage_id: int,
+    request: Request,
+    model: Optional[str] = Query(default=None),
+    force: bool = Query(default=False),
+):
+    """Return an AI-generated summary of a tour stage in the context of the overall tour."""
+    import os, httpx
+    from app.routers.coach import MODELS, DEFAULT_MODEL
+    uid = get_session_user_id(request)
+    if uid is None:
+        raise HTTPException(401, "Not authenticated")
+
+    db = db_getter()
+    api_key = (db.get_user(uid) or {}).get("anthropic_api_key") or ""
+    if not api_key:
+        api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        raise HTTPException(503, "No Anthropic API key configured")
+
+    con = sqlite3.connect(db.path, timeout=10)
+    try:
+        _ensure_tables(con)
+        tour_row = con.execute(
+            "SELECT title, start_date, end_date FROM tours WHERE id=?", (tour_id,)
+        ).fetchone()
+        if not tour_row:
+            raise HTTPException(404, "Tour not found")
+        tour_title, start_date, end_date = tour_row
+
+        target_row = con.execute(
+            "SELECT stage_num, name, distance_mi, climb_ft "
+            "FROM tour_stages WHERE id=? AND tour_id=?",
+            (stage_id, tour_id),
+        ).fetchone()
+        if not target_row:
+            raise HTTPException(404, "Stage not found")
+
+        cache_row = con.execute(
+            "SELECT summary FROM tour_stage_ai_summary WHERE stage_id=?", (stage_id,)
+        ).fetchone()
+        if cache_row and not force:
+            return JSONResponse({"summary": cache_row[0]})
+
+        all_stage_rows = con.execute(
+            "SELECT id, stage_num, name, distance_mi, climb_ft "
+            "FROM tour_stages WHERE tour_id=? ORDER BY stage_num",
+            (tour_id,),
+        ).fetchall()
+    finally:
+        con.close()
+
+    stage_num, stage_name, dist_mi, climb_ft = target_row
+    total_stages = len(all_stage_rows)
+    total_dist   = sum(r[3] for r in all_stage_rows)
+    total_climb  = sum(r[4] for r in all_stage_rows)
+    avg_dist     = total_dist  / total_stages if total_stages else 0
+    avg_climb    = total_climb / total_stages if total_stages else 0
+
+    stage_lines = [
+        f"  Stage {r[1]}: {r[2]} — {r[3]:.1f}mi, {r[4]:.0f}ft climb"
+        + (" ← THIS STAGE" if r[0] == stage_id else "")
+        for r in all_stage_rows
+    ]
+
+    prompt = (
+        f"Tour: {tour_title} ({start_date} to {end_date})\n"
+        f"Total: {total_stages} stages, {total_dist:.1f}mi, {total_climb:.0f}ft climb\n"
+        f"Average per stage: {avg_dist:.1f}mi, {avg_climb:.0f}ft climb\n\n"
+        "All stages:\n" + "\n".join(stage_lines) + "\n\n"
+        f"Describe Stage {stage_num}: {stage_name} ({dist_mi:.1f}mi, {climb_ft:.0f}ft climb) "
+        "in the context of the overall tour. "
+        "In 2-3 sentences: characterize what kind of stage it is (e.g. short/long, flat/hilly, "
+        "hard/moderate relative to the tour average), and where it sits in the tour arc "
+        "(early/mid/late, after or before harder stages, etc.). "
+        "Be specific and factual. Do not give training advice or coaching tips."
+    )
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={
+                "x-api-key":         api_key,
+                "anthropic-version": "2023-06-01",
+                "content-type":      "application/json",
+            },
+            json={
+                "model":      model if model in MODELS else DEFAULT_MODEL,
+                "max_tokens": 250,
+                "messages":   [{"role": "user", "content": prompt}],
+            },
+        )
+
+    if resp.status_code != 200:
+        raise HTTPException(502, f"Claude API error: {resp.status_code}")
+
+    summary = resp.json()["content"][0]["text"].strip()
+
+    con2 = sqlite3.connect(db.path, timeout=10)
+    try:
+        con2.execute(
+            "INSERT OR REPLACE INTO tour_stage_ai_summary (stage_id, summary) VALUES (?,?)",
+            (stage_id, summary),
+        )
+        con2.commit()
+    finally:
+        con2.close()
+
+    return JSONResponse({"summary": summary})
+
+
 def _resolve_share_token(con, token: str):
     """Return (tour_id, share_user_id) for a valid token, or raise 404."""
     row = con.execute(
@@ -1454,4 +1579,5 @@ async def tour_page(request: Request):
         "request": request,
         "current_user_id": uid,
         "is_admin": is_admin,
+        "has_anthropic_key": bool((user or {}).get("anthropic_api_key") or os.environ.get("ANTHROPIC_API_KEY")),
     })

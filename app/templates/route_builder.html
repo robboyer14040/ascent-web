@@ -289,6 +289,8 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="/static/map_utils.js"></script>
+<script src="/static/strava_sync_btn.js?v={{ app_version }}" defer></script>
 <script>
 // ── Constants ──────────────────────────────────────────────────────────────────
 const DOT_COLORS = { start: '#22c55e', mid: '#f97316', end: '#ef4444' };
@@ -476,6 +478,7 @@ function initMap() {
     maxZoom: 19,
     attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
   }).addTo(map);
+  MapUtils.addScale(map, useMetric);
   map.on('click', e => addWaypoint(e.latlng.lat, e.latlng.lng));
 }
 

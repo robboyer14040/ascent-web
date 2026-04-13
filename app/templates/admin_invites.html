@@ -78,7 +78,16 @@ td{padding:.5rem;border-bottom:1px solid #2a2a2c;vertical-align:middle;white-spa
       <tr><th>Username</th><th>Email</th><th>Role</th><th>Joined</th><th>Last Active</th><th></th></tr>
       {% for u in users %}
       <tr>
-        <td>{{ u.username }}</td>
+        <td>
+          <div style="display:flex;align-items:center;gap:.5rem">
+            <img src="/api/avatar/{{ u.id }}?thumb=1"
+                 style="width:26px;height:26px;border-radius:50%;object-fit:cover;flex-shrink:0"
+                 onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"
+                 alt="">
+            <div style="display:none;width:26px;height:26px;border-radius:50%;background:#3a3a3c;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex-shrink:0">{{ ((u.username or u.email or '?')[0] | upper) }}</div>
+            {{ u.username }}
+          </div>
+        </td>
         <td style="color:#8e8e93">{{ u.email }}</td>
         <td>
           {% if u.is_admin %}<span class="badge badge-admin">Admin</span>{% endif %}

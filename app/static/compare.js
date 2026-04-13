@@ -239,6 +239,7 @@ async function initCompareMapManual(actIds) {
   // Overview map
   cmp.map = L.map(mapEl, {zoomControl:true, attributionControl:false});
   cmp.tileLayer = L.tileLayer(style.url, {maxZoom:19}).addTo(cmp.map);
+  MapUtils.addScale(cmp.map, U.metric);
 
   // Chase-cam map (no interaction)
   if (zoomEl) {
@@ -530,6 +531,7 @@ function initCompareMapBrowse() {
   const _cmpStyle = MAP_STYLES[_uiPrefsGet('ascent-map-style') || 'osm'] || MAP_STYLES['osm'];
   cmp.tileLayer = L.tileLayer(_cmpStyle.url, {maxZoom:19});
   cmp.tileLayer.addTo(cmp.map);
+  MapUtils.addScale(cmp.map, U.metric);
 
   // Draw the full activity track
   if (splitsState.geo) {
@@ -616,6 +618,7 @@ function initCompareMap() {
   const _cmpStyle = MAP_STYLES[_uiPrefsGet('ascent-map-style') || 'osm'] || MAP_STYLES['osm'];
   cmp.tileLayer = L.tileLayer(_cmpStyle.url, {maxZoom:19});
   cmp.tileLayer.addTo(cmp.map);
+  MapUtils.addScale(cmp.map, U.metric);
 
   cmp.tracks  = [];
   cmp.markers = [];

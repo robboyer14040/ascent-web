@@ -224,10 +224,12 @@ async function saveEditActivity() {
 
 let _saveRouteActId = null;
 
-function openSaveRouteDialog() {
-  if (!currentAct) return;
-  _saveRouteActId = currentAct.id;
-  document.getElementById('save-route-name').value = currentAct.name || 'Route';
+function openSaveRouteDialog(actId, actName) {
+  const id   = actId   != null ? actId   : (currentAct ? currentAct.id   : null);
+  const name = actName != null ? actName : (currentAct ? currentAct.name : 'Route');
+  if (!id) return;
+  _saveRouteActId = id;
+  document.getElementById('save-route-name').value = name || 'Route';
   const msg = document.getElementById('save-route-msg');
   msg.style.display = 'none'; msg.textContent = '';
   const btn = document.getElementById('save-route-confirm');

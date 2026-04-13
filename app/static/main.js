@@ -129,6 +129,11 @@ const U = {
     if (altLbl) altLbl.textContent = U.altUnit();
     if (dstLbl) dstLbl.textContent = U.distUnit();
     if (spdLbl) spdLbl.textContent = U.speedUnit();
+    // Map scale — update units if scale already exists (map has been viewed)
+    if (leafMap && leafScaleCtrl && leafMap._loaded) {
+      leafScaleCtrl.remove();
+      leafScaleCtrl = MapUtils.addScale(leafMap, U.metric);
+    }
   },
 };
 
@@ -416,7 +421,7 @@ async function loadAll() {
 }
 
 // ── MAP ───────────────────────────────────────────────────────────────────────
-let leafMap=null, trackLayer=null, startMark=null, endMark=null, tileLayer=null;
+let leafMap=null, trackLayer=null, startMark=null, endMark=null, tileLayer=null, leafScaleCtrl=null;
 
 function refitMap() {
   if (!leafMap) return;
@@ -438,6 +443,11 @@ const DEFAULT_STYLE = _uiPrefsGet('ascent-map-style') || 'osm';
 function initMap() {
   leafMap = L.map('map',{zoomControl:true,attributionControl:false});
   setMapStyle(DEFAULT_STYLE, false);
+  // Add scale once the map has a valid view (first fitBounds/setView call).
+  // Adding it before that causes Leaflet to throw '_checkIfLoaded' in _update().
+  leafMap.once('load', function() {
+    leafScaleCtrl = MapUtils.addScale(leafMap, U.metric);
+  });
 }
 
 function setMapStyle(styleKey, save=true) {
@@ -774,142 +784,26 @@ async function selectActivity(id) {
 }
 
 function buildDetailHTML(a) {
-  const stravaLink = a.strava_activity_id
-    ? `<a href="https://www.strava.com/activities/${a.strava_activity_id}" target="_blank" class="strava">View on Strava ↗</a>`
-    : '';
-  // kudos + comments buttons — hidden until load functions populate counts
-  const kudosBtn = a.strava_activity_id
-    ? `<button id="kudos-btn" onclick="toggleKudosList(${a.id}, event)" style="display:none;border:1px solid var(--border2);border-radius:4px;padding:3px 7px;font-size:11px;font-weight:600;cursor:pointer;background:transparent;color:var(--text);align-items:center;gap:4px;line-height:1;vertical-align:middle"></button>`
-    : '';
-  const commentsBtn = a.strava_activity_id
-    ? `<button id="comments-btn" onclick="toggleCommentsList(${a.id}, event)" style="display:none;border:1px solid var(--border2);border-radius:4px;padding:3px 7px;font-size:11px;font-weight:600;cursor:pointer;background:transparent;color:var(--text);align-items:center;gap:4px;line-height:1;vertical-align:middle"></button>`
-    : '';
-  const isDirty  = Boolean(a.local_edited_at);
-  const isOwner  = a.user_id === viewState.myId;
-  const resyncBtn = a.strava_activity_id
-    ? (isOwner
-        ? `<button class="resync-btn${isDirty ? ' dirty' : ''}" id="resync-btn" onclick="resyncActivity(${a.id})" title="${isDirty ? 'Push local edits then re-sync from Strava' : 'Re-sync metadata from Strava'}"><span class="resync-icon">↻</span> Sync</button>`
-        : `<button class="resync-btn" id="resync-btn" onclick="resyncActivity(${a.id})" title="Re-sync from Strava"><span class="resync-icon">↻</span> Sync</button>`)
-    : '';
-  const editBtn = (a.strava_activity_id && isOwner)
-    ? `<button class="edit-btn" id="edit-act-btn" onclick="startEditActivity(${a.id})" title="Edit title, description, type & equipment">Edit…</button>`
-    : '';
-  const exportBtn = `<a href="/activities/${a.id}/export/gpx" class="edit-btn" style="text-decoration:none" title="Download as GPX file">↓ GPX</a>`;
-  const saveRouteBtn = (a.points_count > 0 || a.points_saved)
-    ? `<button class="edit-btn" id="save-route-btn" onclick="openSaveRouteDialog()" title="Save GPS track as a route">+ Route</button>`
-    : '';
-
-  // pace string helper: mph → "M:SS/mi" or "M:SS/km"
-  function altPaceStr(mph, perMile) {
-    if (!mph || mph <= 0) return null;
-    const mins = perMile ? 60 / mph : 60 / (mph * 1.60934);
-    const m = Math.floor(mins);
-    const s = Math.round((mins - m) * 60);
-    return `${m}:${String(s).padStart(2,'0')}/${perMile ? 'mi' : 'km'}`;
-  }
-
-  // chips: [label, primaryVal, secondaryVal|null]
-  // secondaryVal is the alternate-unit line shown smaller below
-  const chips = [
-    ['Distance',  a.distance_mi       ? U.distS(a.distance_mi)                                         : null,
-                  a.distance_mi       ? (U.metric ? (+a.distance_mi.toFixed(2))+' mi'
-                                                  : (+(a.distance_mi*1.60934).toFixed(2))+' km') : null],
-    ['Mov Time',  a.active_time       ? fmtHMS(a.active_time)                                          : null, null],
-    ['Duration',  a.duration          ? fmtHMS(a.duration)                                             : null, null],
-    ['Climb',     a.total_climb_ft    ? U.climbS(a.total_climb_ft)                                     : null,
-                  a.total_climb_ft    ? (U.metric ? Math.round(a.total_climb_ft)+' ft'
-                                                  : Math.round(a.total_climb_ft*0.3048)+' m') : null],
-    ['Descent',   a.total_descent_ft  ? U.climbS(a.total_descent_ft)                                   : null,
-                  a.total_descent_ft  ? (U.metric ? Math.round(a.total_descent_ft)+' ft'
-                                                  : Math.round(a.total_descent_ft*0.3048)+' m') : null],
-    ['Mov Spd',   a.avg_speed_mph     ? U.speedS(a.avg_speed_mph)                                      : null,
-                  a.avg_speed_mph     ? (U.metric ? (+a.avg_speed_mph.toFixed(1))+' mph'
-                                                  : (+(a.avg_speed_mph*1.60934).toFixed(1))+' km/h') : null],
-    ['Avg Spd',   (a.duration&&a.distance_mi) ? U.speedS(+(a.distance_mi/(a.duration/3600)).toFixed(1)) : null,
-                  (a.duration&&a.distance_mi) ? (()=>{ const mph=+(a.distance_mi/(a.duration/3600)).toFixed(1);
-                                                        return U.metric ? mph+' mph' : (+(mph*1.60934).toFixed(1))+' km/h'; })() : null],
-    ['Avg Pace',  a.avg_speed_mph     ? altPaceStr(a.avg_speed_mph, !U.metric)                         : null,
-                  a.avg_speed_mph     ? altPaceStr(a.avg_speed_mph,  U.metric)                         : null],
-    ['Avg HR',    a.avg_heartrate     ? Math.round(a.avg_heartrate)+' bpm'                             : null, null],
-    ['Max HR',    a.max_heartrate     ? Math.round(a.max_heartrate)+' bpm'                             : null, null],
-    ['Cadence',   a.avg_cadence       ? Math.round(a.avg_cadence)+' rpm'                               : null, null],
-    ['Avg Pwr',   a.avg_power         ? Math.round(a.avg_power)+' W'                                   : null, null],
-    ['Suffer',    a.suffer_score      ? Math.round(a.suffer_score)+''                                  : null, null],
-    ['Type',      a.activity_type    ? escHtml(a.activity_type)                                        : null, null],
-    ['Equipment', a.equipment        ? escHtml(a.equipment)                                            : null, null],
-  ].filter(([,v])=>v);
-
-  const meta = [
-    ['Effort',   a.effort],
-    ['Keyword 1',a.keyword1],['Keyword 2',a.keyword2],['Notes tag',a.custom],
-  ].filter(([,v])=>v&&v!=='null'&&v!=='0');
-
-  // Visibility display
-  const visMap = {everyone:'Public', followers_only:'Followers Only', only_me:'Private'};
-  const visIcon = {everyone:'🌍', followers_only:'👥', only_me:'🔒'};
-  const effVis = a.strava_visibility || a.effective_visibility;
-  const stravaEditLink = a.strava_activity_id ? `<a href="https://www.strava.com/activities/${a.strava_activity_id}/edit" target="_blank" style="opacity:.5;color:inherit;text-decoration:underline;text-underline-offset:2px">(change on Strava)</a>` : `<span style="opacity:.5">(change on Strava)</span>`;
-  const visHtml = effVis ? `<div style="font-size:11px;color:var(--muted);margin-bottom:6px">${visIcon[effVis]||''} ${visMap[effVis]||effVis} ${stravaEditLink}</div>` : '';
-
-  // Perceived exertion color: green→yellow→red across 1–10
-  function rpeColor(v) {
-    v = Math.max(1, Math.min(10, v));
-    const t = (v - 1) / 9; // 0→1
-    let r, g, b;
-    if (t <= 0.5) {
-      const u = t / 0.5;
-      r = Math.round(0x22 + u * (0xea - 0x22));
-      g = Math.round(0xc5 + u * (0xb3 - 0xc5));
-      b = Math.round(0x5e + u * (0x08 - 0x5e));
-    } else {
-      const u = (t - 0.5) / 0.5;
-      r = Math.round(0xea + u * (0xef - 0xea));
-      g = Math.round(0xb3 + u * (0x44 - 0xb3));
-      b = Math.round(0x08 + u * (0x44 - 0x08));
-    }
-    return `rgb(${r},${g},${b})`;
-  }
-
-  let rpeKudosHtml = '';
-  if (a.perceived_exertion != null) {
-    const v   = a.perceived_exertion;
-    const col = rpeColor(v);
-    const lbl = _rpeText(v).replace(/\s*\(\d+\)/, '');
-    rpeKudosHtml = `<div style="display:flex;align-items:center;gap:7px;margin-bottom:5px">
-      <div style="width:14px;height:14px;border-radius:3px;background:${col};flex-shrink:0"></div>
-      <span style="font-size:12px;color:var(--text);font-weight:500">${lbl}</span>
-      <span style="font-size:11px;color:var(--muted)">(${v}/10)</span>
-      ${kudosBtn}${commentsBtn}
-    </div>`;
-  } else if (kudosBtn || commentsBtn) {
-    rpeKudosHtml = `<div style="display:flex;align-items:center;gap:4px;margin-bottom:5px">${kudosBtn}${commentsBtn}</div>`;
-  }
-
-  const ownerAvatarUrl = a.user_id && userMap[a.user_id]?.avatar_url
-    ? userMap[a.user_id].avatar_url.replace('?thumb=1', '') + '?thumb=1'
-    : null;
-  const avatarHtml = ownerAvatarUrl
-    ? `<img src="${ownerAvatarUrl}" alt="" style="width:32px;height:32px;object-fit:cover;border-radius:4px;flex-shrink:0;margin-right:9px;margin-top:1px">`
-    : '';
-  return `
-    <div class="act-title-bar">
-      <div style="display:flex;align-items:flex-start;min-width:0;flex:1">${avatarHtml}<div class="act-title">${escHtml(a.name||'(unnamed)')}${isDirty?'<span style="color:#f97316;font-size:10px;margin-left:5px;font-weight:400;vertical-align:middle">edited</span>':''}</div></div>
-      <div class="act-title-links">${editBtn}${resyncBtn}${exportBtn}${saveRouteBtn}${stravaLink}</div>
-    </div>
-    ${rpeKudosHtml}
-    <div style="display:grid;grid-template-columns:auto 1fr;column-gap:20px;row-gap:4px;margin-bottom:6px;align-items:baseline">
-      <span style="font-size:11.5px;color:var(--muted)">${fmtDate(a.start_time)}</span>
-      <span id="wx-weather-text" style="font-size:11px;color:var(--muted)"></span>
-      <span style="font-size:11px;color:var(--muted)">${effVis?`${visIcon[effVis]||''} ${visMap[effVis]||effVis} ${stravaEditLink}`:''}</span>
-      <span id="wx-location-text" style="font-size:11px;color:var(--muted)"></span>
-    </div>
-    ${a.notes?`<div class="act-notes" style="margin-bottom:8px">${escHtml(a.notes)}</div>`:''}
-    <div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:8px;max-width:100%;overflow:hidden">
-      <div class="stats-grid">${chips.map(([l,v,sub])=>{const span=l==='Equipment'?Math.min(6,Math.max(1,Math.ceil(v.length/14))):1;const s=span>1?` style="grid-column:span ${span}"`:'';;return`<div class="stat-chip"${s}><div class="sc-label">${l}</div><div class="sc-val">${v}</div><div class="sc-sub">${sub||''}</div></div>`}).join('')}</div>
-      ${_hasAnthropicKey?`<div class="stat-chip" id="ai-summary-chip" style="width:252px;flex-shrink:0;align-items:flex-start;justify-content:flex-start;padding:6px 8px;overflow-y:auto;box-sizing:border-box${isOwner?'':';display:none'}"><div class="sc-label" style="margin-bottom:3px;display:flex;align-items:center;justify-content:space-between;width:100%"><span>✦ AI Summary</span>${isOwner?`<button id="ai-summary-refresh" onclick="loadAISummary(${a.id},true)" title="Regenerate summary" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:11px;padding:0;line-height:1" tabindex="-1">↺</button>`:''}</div><div id="ai-summary-text" style="font-size:11px;color:var(--muted);line-height:1.45">${isOwner?'Loading…':''}</div></div>`:''}
-    </div>
-    ${meta.length?`<div class="meta-row" style="margin-top:4px">${meta.map(([l,v])=>`<div class="meta-field"><div class="mf-label">${l}</div><div class="mf-val">${escHtml(String(v))}</div></div>`).join('')}</div>`:''}
-  `;
+  return buildActivityDetailHTML(a, {
+    currentUserId:    viewState.myId,
+    editCallback:     'startEditActivity',
+    resyncCallback:   'resyncActivity',
+    saveRouteCb:      'openSaveRouteDialog',
+    resyncBtnId:      'resync-btn',
+    kudosBtnId:       'kudos-btn',
+    kudosToggleCb:    'toggleKudosList',
+    commentsBtnId:    'comments-btn',
+    commentsToggleCb: 'toggleCommentsList',
+    weatherElId:      'wx-weather-text',
+    locationElId:     'wx-location-text',
+    userMap,
+    showAiSummary:    _hasAnthropicKey,
+    aiRefreshCb:      'loadAISummary',
+    escFn:            escHtml,
+    fmtDateFn:        fmtDate,
+    fmtHMSFn:         fmtHMS,
+    U,
+  });
 }
 
 // ── FILTER CONTROLS ───────────────────────────────────────────────────────────
@@ -1926,6 +1820,7 @@ async function applyUserSelection() {
   }
 
   async function runAutoSync() {
+    if (window.stravaSync?.isRunning) return;
     if (syncRunning) return;
     try {
       const r = await fetch('/strava/status');
@@ -1935,6 +1830,7 @@ async function applyUserSelection() {
     } catch(e) { return; }
 
     syncRunning = true;
+    window.stravaSync?.spin?.(true);
     showToast('<div class="dot-spin"></div> Checking for new Strava activities…', 0);
 
     let imported = 0;
@@ -1952,6 +1848,7 @@ async function applyUserSelection() {
       });
     } catch(e) {}
 
+    window.stravaSync?.spin?.(false);
     syncRunning = false;
     localStorage.removeItem(STORAGE_KEY);  // reset after every sync attempt
 
@@ -1982,8 +1879,14 @@ async function applyUserSelection() {
   });
   window.addEventListener('pagehide', saveHiddenTime);
 
-  // Page load / refresh: always sync
-  checkAndSync(true);
+  // Reload activity list when navbar sync button completes
+  document.addEventListener('stravasynccomplete', async (e) => {
+    if (e.detail?.imported > 0) await loadAll();
+  });
+
+  // Force sync on browser refresh (CMD-R); respect 30-min threshold on normal navigation
+  const _navType = performance.getEntriesByType('navigation')[0]?.type;
+  checkAndSync(_navType === 'reload');
 })();
 
 function openImportModal() {
