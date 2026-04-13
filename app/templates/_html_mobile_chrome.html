@@ -1,0 +1,27 @@
+<!-- ── MOBILE CHROME — hidden on desktop ─────────────────────────────────── -->
+<div id="mob-header">
+  <button id="mob-back-btn" onclick="mobileGoBack()"><span>‹</span><span>Back</span></button>
+  <div style="display:flex;align-items:center;gap:5px;flex-shrink:0">
+    <img src="/static/favicon.svg" style="width:18px;height:18px;border-radius:3px;flex-shrink:0"><span id="mob-header-title">Ascent</span><span id="mob-header-version" style="font-size:10px;font-weight:400;color:var(--muted);letter-spacing:.02em">{{ app_version }}</span>
+  </div>
+  <div style="flex:1"></div>
+  <button id="mob-user-btn" onclick="openUserPicker()" title="Switch user" style="display:none;align-items:center;justify-content:center;min-height:36px;padding:0 10px;margin-left:8px;border-radius:8px;background:none;border:1px solid #f97316;color:#f97316;font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></button>
+</div>
+
+<div id="mob-global-nav">
+  <button class="mob-nav-btn active"><span>≡</span><span>Activities</span></button>
+  <button class="mob-nav-btn" onclick="openCoach()"><span></span><span>Coach</span></button>
+  <a href="/" class="mob-nav-btn"><span></span><span>Summary</span></a>
+  <a href="/strava/sync" class="mob-nav-btn"><span></span><span>Sync</span></a>
+  <a href="/settings" class="mob-nav-btn"><span></span><span>Settings</span></a>
+</div>
+
+<!-- User picker — at body level so position:fixed works inside transformed ancestors -->
+<div id="user-picker-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9998;align-items:center;justify-content:center" onclick="if(event.target===this)closeUserPicker()">
+  <div style="background:#1c1c1e;border-radius:12px;padding:20px;min-width:260px;max-width:90vw;box-shadow:0 8px 32px rgba(0,0,0,.6)" onclick="event.stopPropagation()">
+    <div style="font-weight:600;font-size:15px;margin-bottom:14px;color:#f5f5f7">Show activities for…</div>
+    <div id="user-picker-list" style="display:flex;flex-direction:column;gap:8px;max-height:60vh;overflow-y:auto"></div>
+    <button onclick="closeUserPicker()" style="margin-top:8px;width:100%;padding:8px;background:#3a3a3c;border:none;border-radius:8px;color:#f5f5f7;cursor:pointer;font-size:13px">Cancel</button>
+  </div>
+</div>
+

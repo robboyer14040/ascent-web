@@ -1,0 +1,19 @@
+<div id="toolbar">
+  <div style="display:flex;align-items:center">
+    <img src="/static/favicon.svg" style="width:20px;height:20px;border-radius:4px;margin-right:6px;vertical-align:middle"><span class="nav-brand-name">Ascent</span><span class="nav-version">{{ app_version }}</span>
+  </div>
+  <div class="nav-pages" style="margin-left:14px">
+    <button class="nav-btn nav-active" data-page="activities" onclick="closeCoach()">Activities</button>
+    <button class="nav-btn" data-page="summary" onclick="window.location='/'">Summary</button>
+    <button class="nav-btn" data-page="coach" id="coach-nav-btn" onclick="openCoach()">Coach<span id="coach-new-dot" class="coach-dot" style="display:none"></span></button>
+    <a href="/tour" class="nav-btn" data-page="tour">Tours</a>
+    <a href="/routes" class="nav-btn" data-page="routes">Routes</a>
+    <button class="nav-btn" data-page="sync" onclick="window.location='/strava/sync'">Sync</button>
+  </div>
+  <div style="flex:1"></div>
+  <div class="nav-pages">
+    <button class="nav-btn" data-page="settings" onclick="window.location='/settings'">Settings</button>
+    <button class="nav-btn" onclick="openAbout()">About</button>
+    <button class="nav-btn" onclick="window.location='/logout'">Sign Out</button>
+  </div>
+</div>

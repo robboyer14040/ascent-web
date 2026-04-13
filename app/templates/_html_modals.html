@@ -1,0 +1,77 @@
+<!-- ── Save as Route dialog ── -->
+<div id="save-route-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:3000;align-items:center;justify-content:center" onclick="if(event.target===this)closeSaveRouteDialog()">
+  <div style="background:#2c2c2e;border:1px solid #3a3a3c;border-radius:12px;padding:1.25rem;width:380px;max-width:calc(100vw - 2rem);box-shadow:0 20px 60px rgba(0,0,0,.5)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
+      <div style="font-size:14px;font-weight:600">Save as Route</div>
+      <button onclick="closeSaveRouteDialog()" style="background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;line-height:1;padding:0 2px">✕</button>
+    </div>
+    <div style="margin-bottom:12px">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em">Route Name</div>
+      <input id="save-route-name" type="text" style="width:100%;padding:6px 9px;font-size:13px;background:#1c1c1e;border:1px solid #3a3a3c;border-radius:6px;color:#f2f2f7;outline:none;box-sizing:border-box">
+    </div>
+    <div style="margin-bottom:12px;display:flex;align-items:center;gap:8px">
+      <input type="checkbox" id="save-route-favorite" checked style="width:15px;height:15px;accent-color:#f97316;cursor:pointer;flex-shrink:0">
+      <label for="save-route-favorite" style="font-size:12px;color:var(--text);cursor:pointer;user-select:none">Mark as favorite</label>
+    </div>
+    <div id="save-route-msg" style="font-size:11px;margin-bottom:10px;display:none"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button onclick="closeSaveRouteDialog()" style="font-size:12px;font-weight:600;padding:5px 14px;border-radius:7px;border:1px solid #3a3a3c;background:#3a3a3c;color:#f2f2f7;cursor:pointer">Cancel</button>
+      <button id="save-route-confirm" onclick="confirmSaveAsRoute()" style="font-size:12px;font-weight:600;padding:5px 14px;border-radius:7px;border:none;background:#f97316;color:#fff;cursor:pointer">Save</button>
+    </div>
+  </div>
+</div>
+
+<div id="edit-activity-overlay" onclick="if(event.target===this)cancelEditActivity()">
+  <div id="edit-activity-modal">
+    <div class="edit-modal-hdr">
+      <div class="edit-modal-title">Edit Activity</div>
+      <button class="edit-modal-close" onclick="cancelEditActivity()">✕</button>
+    </div>
+    <div class="edit-modal-field">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
+        <span class="edit-modal-label" style="margin-bottom:0">Title</span>
+        <button id="suggest-title-btn" onclick="suggestTitle()" style="font-size:10px;padding:2px 8px;border-radius:4px;border:1px solid #48484a;background:#3a3a3c;color:var(--text);cursor:pointer;line-height:1.5">✨ Suggest</button>
+        <button onclick="toggleSuggestHelp(event)" title="How does this work?" style="font-size:10px;width:16px;height:16px;border-radius:50%;border:1px solid #636366;background:none;color:#636366;cursor:pointer;line-height:1;padding:0;flex-shrink:0">?</button>
+      </div>
+      <div id="suggest-help-text" style="display:none;font-size:11px;color:var(--muted);background:#3a3a3c;border-radius:6px;padding:6px 8px;margin-bottom:6px;line-height:1.5">
+        <strong style="color:var(--text)">✨ AI Title Suggestion</strong> uses Anthropic Claude to generate a witty title based on your activity stats.<br>
+        Requires an Anthropic API key — add yours in <strong>Settings → Anthropic API Key</strong>.
+      </div>
+      <div id="edit-act-name-display" class="edit-act-name-display" onclick="activateTitleEdit()" title="Click to edit title"></div>
+      <input id="edit-act-name" type="text" class="edit-act-input" style="display:none" onblur="deactivateTitleEdit()">
+    </div>
+    <div class="edit-modal-field">
+      <div class="edit-modal-label">Description</div>
+      <textarea id="edit-act-textarea" class="edit-act-input" rows="6"></textarea>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:.75rem">
+      <div>
+        <div class="edit-modal-label">Activity Type</div>
+        <select id="edit-act-type" class="edit-act-input"></select>
+      </div>
+      <div>
+        <div class="edit-modal-label">Equipment</div>
+        <select id="edit-act-gear" class="edit-act-input"><option value="__keep__">Loading…</option></select>
+      </div>
+    </div>
+    <div class="rpe-field">
+      <div class="rpe-header">
+        <span class="rpe-label">Perceived Exertion</span>
+        <span id="rpe-val-label" class="rpe-val-label"></span>
+        <button class="rpe-clear-btn" onclick="clearRpe()">Clear Entry</button>
+      </div>
+      <input type="range" id="rpe-slider" min="1" max="10" step="1" class="rpe-unset" oninput="onRpeInput(this.value)">
+      <div class="rpe-ticks">
+        <span class="rpe-tick">Easy</span>
+        <span class="rpe-tick">Moderate</span>
+        <span class="rpe-tick">Max Effort</span>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:1rem">
+      <button class="edit-save-btn"   id="edit-save-btn"   onclick="saveEditActivity()">Save</button>
+      <button class="edit-cancel-btn" onclick="cancelEditActivity()">Cancel</button>
+      <span id="edit-act-status" style="font-size:11px;color:var(--muted)"></span>
+    </div>
+  </div>
+</div>
+

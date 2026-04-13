@@ -1,0 +1,411 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXFileReference section */
+		D48FB4F62F8C69D1009570CD /* __init__.cpython-312.pyc */ = {isa = PBXFileReference; lastKnownFileType = file; path = "__init__.cpython-312.pyc"; sourceTree = "<group>"; };
+		D48FB4F72F8C69D1009570CD /* auth.cpython-312.pyc */ = {isa = PBXFileReference; lastKnownFileType = file; path = "auth.cpython-312.pyc"; sourceTree = "<group>"; };
+		D48FB4F82F8C69D1009570CD /* db.cpython-312.pyc */ = {isa = PBXFileReference; lastKnownFileType = file; path = "db.cpython-312.pyc"; sourceTree = "<group>"; };
+		D48FB4F92F8C69D1009570CD /* main.cpython-312.pyc */ = {isa = PBXFileReference; lastKnownFileType = file; path = "main.cpython-312.pyc"; sourceTree = "<group>"; };
+		D48FB4FA2F8C69D1009570CD /* strava_importer.cpython-312.pyc */ = {isa = PBXFileReference; lastKnownFileType = file; path = "strava_importer.cpython-312.pyc"; sourceTree = "<group>"; };
+		D48FB4FC2F8C69D1009570CD /* __init__.cpython-312.pyc */ = {isa = PBXFileReference; lastKnownFileType = file; path = "__init__.cpython-312.pyc"; sourceTree = "<group>"; };
+		D48FB4FD2F8C69D1009570CD /* activities.cpython-312.pyc */ = {isa = PBXFileReference; lastKnownFileType = file; path = "activities.cpython-312.pyc"; sourceTree = "<group>"; };
+		D48FB4FE2F8C69D1009570CD /* api.cpython-312.pyc */ = {isa = PBXFileReference; lastKnownFileType = file; path = "api.cpython-312.pyc"; sourceTree = "<group>"; };
+		D48FB4FF2F8C69D1009570CD /* auth.cpython-312.pyc */ = {isa = PBXFileReference; lastKnownFileType = file; path = "auth.cpython-312.pyc"; sourceTree = "<group>"; };
+		D48FB5002F8C69D1009570CD /* coach.cpython-312.pyc */ = {isa = PBXFileReference; lastKnownFileType = file; path = "coach.cpython-312.pyc"; sourceTree = "<group>"; };
+		D48FB5012F8C69D1009570CD /* fitgpx.cpython-312.pyc */ = {isa = PBXFileReference; lastKnownFileType = file; path = "fitgpx.cpython-312.pyc"; sourceTree = "<group>"; };
+		D48FB5022F8C69D1009570CD /* photos.cpython-312.pyc */ = {isa = PBXFileReference; lastKnownFileType = file; path = "photos.cpython-312.pyc"; sourceTree = "<group>"; };
+		D48FB5032F8C69D1009570CD /* settings.cpython-312.pyc */ = {isa = PBXFileReference; lastKnownFileType = file; path = "settings.cpython-312.pyc"; sourceTree = "<group>"; };
+		D48FB5042F8C69D1009570CD /* strava.cpython-312.pyc */ = {isa = PBXFileReference; lastKnownFileType = file; path = "strava.cpython-312.pyc"; sourceTree = "<group>"; };
+		D48FB5052F8C69D1009570CD /* weather.cpython-312.pyc */ = {isa = PBXFileReference; lastKnownFileType = file; path = "weather.cpython-312.pyc"; sourceTree = "<group>"; };
+		D48FB5072F8C69D1009570CD /* __init__.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = __init__.py; sourceTree = "<group>"; };
+		D48FB5082F8C69D1009570CD /* activities.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = activities.py; sourceTree = "<group>"; };
+		D48FB5092F8C69D1009570CD /* api.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = api.py; sourceTree = "<group>"; };
+		D48FB50A2F8C69D1009570CD /* auth.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = auth.py; sourceTree = "<group>"; };
+		D48FB50B2F8C69D1009570CD /* coach.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = coach.py; sourceTree = "<group>"; };
+		D48FB50C2F8C69D1009570CD /* fitgpx.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = fitgpx.py; sourceTree = "<group>"; };
+		D48FB50D2F8C69D1009570CD /* photos.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = photos.py; sourceTree = "<group>"; };
+		D48FB50E2F8C69D1009570CD /* route_builder.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = route_builder.py; sourceTree = "<group>"; };
+		D48FB50F2F8C69D1009570CD /* settings.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = settings.py; sourceTree = "<group>"; };
+		D48FB5102F8C69D1009570CD /* strava.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = strava.py; sourceTree = "<group>"; };
+		D48FB5112F8C69D1009570CD /* tours.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = tours.py; sourceTree = "<group>"; };
+		D48FB5122F8C69D1009570CD /* weather.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = weather.py; sourceTree = "<group>"; };
+		D48FB5142F8C69D1009570CD /* apple-touch-icon.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "apple-touch-icon.png"; sourceTree = "<group>"; };
+		D48FB5152F8C69D1009570CD /* favicon.svg */ = {isa = PBXFileReference; lastKnownFileType = text; path = favicon.svg; sourceTree = "<group>"; };
+		D48FB5162F8C69D1009570CD /* main.css */ = {isa = PBXFileReference; lastKnownFileType = text.css; path = main.css; sourceTree = "<group>"; };
+		D48FB5172F8C69D1009570CD /* main.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = main.js; sourceTree = "<group>"; };
+		D48FB5192F8C69D1009570CD /* _about.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = _about.html; sourceTree = "<group>"; };
+		D48FB51A2F8C69D1009570CD /* _html_body.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = _html_body.html; sourceTree = "<group>"; };
+		D48FB51B2F8C69D1009570CD /* _html_import.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = _html_import.html; sourceTree = "<group>"; };
+		D48FB51C2F8C69D1009570CD /* _html_mobile_chrome.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = _html_mobile_chrome.html; sourceTree = "<group>"; };
+		D48FB51D2F8C69D1009570CD /* _html_modals.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = _html_modals.html; sourceTree = "<group>"; };
+		D48FB51E2F8C69D1009570CD /* _html_overlays.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = _html_overlays.html; sourceTree = "<group>"; };
+		D48FB51F2F8C69D1009570CD /* _html_toolbar.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = _html_toolbar.html; sourceTree = "<group>"; };
+		D48FB5202F8C69D1009570CD /* _strava_and_error.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = _strava_and_error.html; sourceTree = "<group>"; };
+		D48FB5212F8C69D1009570CD /* admin_invites.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = admin_invites.html; sourceTree = "<group>"; };
+		D48FB5222F8C69D1009570CD /* dashboard.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = dashboard.html; sourceTree = "<group>"; };
+		D48FB5232F8C69D1009570CD /* error.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = error.html; sourceTree = "<group>"; };
+		D48FB5242F8C69D1009570CD /* login.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = login.html; sourceTree = "<group>"; };
+		D48FB5252F8C69D1009570CD /* main.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = main.html; sourceTree = "<group>"; };
+		D48FB5262F8C69D1009570CD /* register.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = register.html; sourceTree = "<group>"; };
+		D48FB5272F8C69D1009570CD /* route_builder.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = route_builder.html; sourceTree = "<group>"; };
+		D48FB5282F8C69D1009570CD /* settings.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = settings.html; sourceTree = "<group>"; };
+		D48FB5292F8C69D1009570CD /* strava_connected.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = strava_connected.html; sourceTree = "<group>"; };
+		D48FB52A2F8C69D1009570CD /* strava_sync.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = strava_sync.html; sourceTree = "<group>"; };
+		D48FB52B2F8C69D1009570CD /* tour.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = tour.html; sourceTree = "<group>"; };
+		D48FB52C2F8C69D1009570CD /* tour_share.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = tour_share.html; sourceTree = "<group>"; };
+		D48FB52E2F8C69D1009570CD /* __init__.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = __init__.py; sourceTree = "<group>"; };
+		D48FB52F2F8C69D1009570CD /* auth.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = auth.py; sourceTree = "<group>"; };
+		D48FB5302F8C69D1009570CD /* create_db.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = create_db.py; sourceTree = "<group>"; };
+		D48FB5312F8C69D1009570CD /* db.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = db.py; sourceTree = "<group>"; };
+		D48FB5322F8C69D1009570CD /* mailer.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = mailer.py; sourceTree = "<group>"; };
+		D48FB5332F8C69D1009570CD /* main.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = main.py; sourceTree = "<group>"; };
+		D48FB5342F8C69D1009570CD /* strava_importer.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = strava_importer.py; sourceTree = "<group>"; };
+		D48FB5362F8C70AA009570CD /* compare.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = compare.js; sourceTree = "<group>"; };
+		D48FB5372F8C8E87009570CD /* main_mobile.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = main_mobile.js; sourceTree = "<group>"; };
+		D48FB5382F8C8E90009570CD /* coach.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = coach.js; sourceTree = "<group>"; };
+		D48FB5392F8C8E9C009570CD /* altitude_chart.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = altitude_chart.js; sourceTree = "<group>"; };
+		D48FB53A2F8C8EA1009570CD /* activity_edit.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = activity_edit.js; sourceTree = "<group>"; };
+		D48FB53B2F8C8EAE009570CD /* photos.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = photos.js; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		D48FB4EB2F8C68FD009570CD = {
+			isa = PBXGroup;
+			children = (
+				D48FB5352F8C69D1009570CD /* app */,
+			);
+			sourceTree = "<group>";
+		};
+		D48FB4FB2F8C69D1009570CD /* __pycache__ */ = {
+			isa = PBXGroup;
+			children = (
+				D48FB4F62F8C69D1009570CD /* __init__.cpython-312.pyc */,
+				D48FB4F72F8C69D1009570CD /* auth.cpython-312.pyc */,
+				D48FB4F82F8C69D1009570CD /* db.cpython-312.pyc */,
+				D48FB4F92F8C69D1009570CD /* main.cpython-312.pyc */,
+				D48FB4FA2F8C69D1009570CD /* strava_importer.cpython-312.pyc */,
+			);
+			path = __pycache__;
+			sourceTree = "<group>";
+		};
+		D48FB5062F8C69D1009570CD /* __pycache__ */ = {
+			isa = PBXGroup;
+			children = (
+				D48FB4FC2F8C69D1009570CD /* __init__.cpython-312.pyc */,
+				D48FB4FD2F8C69D1009570CD /* activities.cpython-312.pyc */,
+				D48FB4FE2F8C69D1009570CD /* api.cpython-312.pyc */,
+				D48FB4FF2F8C69D1009570CD /* auth.cpython-312.pyc */,
+				D48FB5002F8C69D1009570CD /* coach.cpython-312.pyc */,
+				D48FB5012F8C69D1009570CD /* fitgpx.cpython-312.pyc */,
+				D48FB5022F8C69D1009570CD /* photos.cpython-312.pyc */,
+				D48FB5032F8C69D1009570CD /* settings.cpython-312.pyc */,
+				D48FB5042F8C69D1009570CD /* strava.cpython-312.pyc */,
+				D48FB5052F8C69D1009570CD /* weather.cpython-312.pyc */,
+			);
+			path = __pycache__;
+			sourceTree = "<group>";
+		};
+		D48FB5132F8C69D1009570CD /* routers */ = {
+			isa = PBXGroup;
+			children = (
+				D48FB5062F8C69D1009570CD /* __pycache__ */,
+				D48FB5072F8C69D1009570CD /* __init__.py */,
+				D48FB5082F8C69D1009570CD /* activities.py */,
+				D48FB5092F8C69D1009570CD /* api.py */,
+				D48FB50A2F8C69D1009570CD /* auth.py */,
+				D48FB50B2F8C69D1009570CD /* coach.py */,
+				D48FB50C2F8C69D1009570CD /* fitgpx.py */,
+				D48FB50D2F8C69D1009570CD /* photos.py */,
+				D48FB50E2F8C69D1009570CD /* route_builder.py */,
+				D48FB50F2F8C69D1009570CD /* settings.py */,
+				D48FB5102F8C69D1009570CD /* strava.py */,
+				D48FB5112F8C69D1009570CD /* tours.py */,
+				D48FB5122F8C69D1009570CD /* weather.py */,
+			);
+			path = routers;
+			sourceTree = "<group>";
+		};
+		D48FB5182F8C69D1009570CD /* static */ = {
+			isa = PBXGroup;
+			children = (
+				D48FB5392F8C8E9C009570CD /* altitude_chart.js */,
+				D48FB53A2F8C8EA1009570CD /* activity_edit.js */,
+				D48FB5142F8C69D1009570CD /* apple-touch-icon.png */,
+				D48FB5152F8C69D1009570CD /* favicon.svg */,
+				D48FB5162F8C69D1009570CD /* main.css */,
+				D48FB5172F8C69D1009570CD /* main.js */,
+				D48FB5372F8C8E87009570CD /* main_mobile.js */,
+				D48FB5382F8C8E90009570CD /* coach.js */,
+				D48FB5362F8C70AA009570CD /* compare.js */,
+				D48FB53B2F8C8EAE009570CD /* photos.js */,
+			);
+			path = static;
+			sourceTree = "<group>";
+		};
+		D48FB52D2F8C69D1009570CD /* templates */ = {
+			isa = PBXGroup;
+			children = (
+				D48FB5192F8C69D1009570CD /* _about.html */,
+				D48FB51A2F8C69D1009570CD /* _html_body.html */,
+				D48FB51B2F8C69D1009570CD /* _html_import.html */,
+				D48FB51C2F8C69D1009570CD /* _html_mobile_chrome.html */,
+				D48FB51D2F8C69D1009570CD /* _html_modals.html */,
+				D48FB51E2F8C69D1009570CD /* _html_overlays.html */,
+				D48FB51F2F8C69D1009570CD /* _html_toolbar.html */,
+				D48FB5202F8C69D1009570CD /* _strava_and_error.html */,
+				D48FB5212F8C69D1009570CD /* admin_invites.html */,
+				D48FB5222F8C69D1009570CD /* dashboard.html */,
+				D48FB5232F8C69D1009570CD /* error.html */,
+				D48FB5242F8C69D1009570CD /* login.html */,
+				D48FB5252F8C69D1009570CD /* main.html */,
+				D48FB5262F8C69D1009570CD /* register.html */,
+				D48FB5272F8C69D1009570CD /* route_builder.html */,
+				D48FB5282F8C69D1009570CD /* settings.html */,
+				D48FB5292F8C69D1009570CD /* strava_connected.html */,
+				D48FB52A2F8C69D1009570CD /* strava_sync.html */,
+				D48FB52B2F8C69D1009570CD /* tour.html */,
+				D48FB52C2F8C69D1009570CD /* tour_share.html */,
+			);
+			path = templates;
+			sourceTree = "<group>";
+		};
+		D48FB5352F8C69D1009570CD /* app */ = {
+			isa = PBXGroup;
+			children = (
+				D48FB4FB2F8C69D1009570CD /* __pycache__ */,
+				D48FB5132F8C69D1009570CD /* routers */,
+				D48FB5182F8C69D1009570CD /* static */,
+				D48FB52D2F8C69D1009570CD /* templates */,
+				D48FB52E2F8C69D1009570CD /* __init__.py */,
+				D48FB52F2F8C69D1009570CD /* auth.py */,
+				D48FB5302F8C69D1009570CD /* create_db.py */,
+				D48FB5312F8C69D1009570CD /* db.py */,
+				D48FB5322F8C69D1009570CD /* mailer.py */,
+				D48FB5332F8C69D1009570CD /* main.py */,
+				D48FB5342F8C69D1009570CD /* strava_importer.py */,
+			);
+			name = app;
+			path = ../app;
+			sourceTree = SOURCE_ROOT;
+		};
+/* End PBXGroup section */
+
+/* Begin PBXLegacyTarget section */
+		D48FB4F02F8C68FE009570CD /* ascent-web */ = {
+			isa = PBXLegacyTarget;
+			buildArgumentsString = "$(ACTION)";
+			buildConfigurationList = D48FB4F32F8C68FE009570CD /* Build configuration list for PBXLegacyTarget "ascent-web" */;
+			buildPhases = (
+			);
+			buildToolPath = /usr/bin/make;
+			dependencies = (
+			);
+			name = "ascent-web";
+			packageProductDependencies = (
+			);
+			passBuildSettingsInEnvironment = 1;
+			productName = "ascent-web";
+		};
+/* End PBXLegacyTarget section */
+
+/* Begin PBXProject section */
+		D48FB4EC2F8C68FD009570CD /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastUpgradeCheck = 2620;
+				TargetAttributes = {
+					D48FB4F02F8C68FE009570CD = {
+						CreatedOnToolsVersion = 26.2;
+					};
+				};
+			};
+			buildConfigurationList = D48FB4EF2F8C68FD009570CD /* Build configuration list for PBXProject "ascent-web" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = D48FB4EB2F8C68FD009570CD;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				D48FB4F02F8C68FE009570CD /* ascent-web */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin XCBuildConfiguration section */
+		D48FB4F12F8C68FE009570CD /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = F3GH78PJ2M;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+			};
+			name = Debug;
+		};
+		D48FB4F22F8C68FE009570CD /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = F3GH78PJ2M;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+			};
+			name = Release;
+		};
+		D48FB4F42F8C68FE009570CD /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEBUGGING_SYMBOLS = YES;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = F3GH78PJ2M;
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				OTHER_CFLAGS = "";
+				OTHER_LDFLAGS = "";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Debug;
+		};
+		D48FB4F52F8C68FE009570CD /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = F3GH78PJ2M;
+				OTHER_CFLAGS = "";
+				OTHER_LDFLAGS = "";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		D48FB4EF2F8C68FD009570CD /* Build configuration list for PBXProject "ascent-web" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D48FB4F12F8C68FE009570CD /* Debug */,
+				D48FB4F22F8C68FE009570CD /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		D48FB4F32F8C68FE009570CD /* Build configuration list for PBXLegacyTarget "ascent-web" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D48FB4F42F8C68FE009570CD /* Debug */,
+				D48FB4F52F8C68FE009570CD /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = D48FB4EC2F8C68FD009570CD /* Project object */;
+}

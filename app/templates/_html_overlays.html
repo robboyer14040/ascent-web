@@ -1,0 +1,206 @@
+<!-- ── Compare Panel ─────────────────────────────────────────────────────── -->
+<div id="compare-overlay">
+  <div id="cmp-backdrop"></div>
+  <div id="compare-panel" style="position:relative">
+    <div id="cmp-loading" style="display:none">
+      <span id="cmp-loading-text">Searching activities…</span>
+      <div id="cmp-progress-wrap"><div id="cmp-progress-bar"></div></div>
+    </div>
+    <div id="compare-header">
+      <span id="compare-title">Segment Compare</span>
+      <button id="compare-close-btn" onclick="closeCompare()">✕</button>
+    </div>
+    <div id="cmp-seg-bar">
+      <label>Segment:</label>
+      <input id="cmp-seg-name" type="text" placeholder="Name this segment…" maxlength="80" oninput="cmpUpdateSaveBtn()">
+      <button id="cmp-seg-save" onclick="cmpSaveSegment()" disabled>Save</button>
+      <label style="margin-left:6px">Saved:</label>
+      <select id="cmp-seg-select" onchange="cmpLoadSavedSegment(this.value)" title="Switch to a saved segment">
+        <option value="">— choose —</option>
+      </select>
+      <button class="cmp-t-btn" onclick="cmpDeleteSegment()" title="Delete selected segment" style="padding:3px 7px;font-size:12px;color:#f87171">🗑</button>
+      <label style="margin-left:10px;display:flex;align-items:center;gap:4px;font-size:12px;color:var(--muted);cursor:pointer" title="Include activities from friends who have sharing enabled">
+        <input type="checkbox" id="cmp-include-friends" style="accent-color:#f97316"
+               onchange="_uiPrefsSet('ascent-cmp-friends',this.checked?'1':'0')">
+        Friends
+      </label>
+    </div>
+    <div id="compare-body">
+      <div id="compare-maps">
+        <div id="compare-map" style="position:relative">
+          <div id="cmp-map-style-bar" style="position:absolute;top:8px;right:8px;z-index:500;display:flex;gap:3px;flex-wrap:wrap;justify-content:flex-end">
+            <button class="map-style-btn" data-style="osm"          onclick="setCmpMapStyle('osm')">Street</button>
+            <button class="map-style-btn" data-style="topo"         onclick="setCmpMapStyle('topo')">Topo</button>
+            <button class="map-style-btn" data-style="carto-dark"   onclick="setCmpMapStyle('carto-dark')">Dark</button>
+            <button class="map-style-btn" data-style="carto-light"  onclick="setCmpMapStyle('carto-light')">Light</button>
+            <button class="map-style-btn" data-style="esri-sat"     onclick="setCmpMapStyle('esri-sat')">Satellite</button>
+          </div>
+        </div>
+        <div id="compare-zoom"></div>
+      </div>
+      <div id="cmp-maps-handle"></div>
+      <div id="compare-profile"><canvas id="cmp-profile-canvas"></canvas></div>
+      <div id="compare-legend"></div>
+    </div>
+    <div id="cmp-corner-handle"></div>
+    <div id="compare-transport">
+      <button class="cmp-t-btn" id="cmp-play"  onclick="cmpPlay()"  title="Play"><svg viewBox="0 0 14 14" width="13" height="13" fill="currentColor"><polygon points="2,1 12,7 2,13"/></svg></button>
+      <button class="cmp-t-btn" id="cmp-stop"  onclick="cmpStop()"  title="Stop"><svg viewBox="0 0 14 14" width="13" height="13" fill="currentColor"><rect x="2" y="2" width="10" height="10"/></svg></button>
+      <button class="cmp-t-btn" id="cmp-start" onclick="cmpJump(0)" title="Go to start"><svg viewBox="0 0 14 14" width="13" height="13" fill="currentColor"><rect x="1" y="1" width="2" height="12"/><polygon points="13,1 5,7 13,13"/></svg></button>
+      <span id="cmp-time">0:00:00</span>
+      <input type="range" id="cmp-scrub" min="0" max="1000" value="0" oninput="cmpScrub(this.value)">
+      <select id="cmp-speed" onchange="cmpSetSpeed(this.value)" title="Playback speed" style="background:var(--surface2);border:1px solid var(--border2);color:var(--text);border-radius:6px;padding:3px 6px;font-size:12px;font:inherit">
+        <option value="1">1×</option>
+        <option value="5">5×</option>
+        <option value="10">10×</option>
+        <option value="25" selected>25×</option>
+        <option value="50">50×</option>
+        <option value="100">100×</option>
+      </select>
+    </div>
+  </div>
+</div>
+
+<!-- ── Zones Panel ───────────────────────────────────────────────────────── -->
+<div id="zones-overlay" onclick="if(event.target===this)closeZones()">
+  <div id="zones-panel">
+    <div id="zones-header">
+      <span id="zones-title">Heart Rate &amp; Power Zones</span>
+      <button id="zones-close-btn" onclick="closeZones()">✕</button>
+    </div>
+    <div id="zones-body"></div>
+  </div>
+</div>
+
+
+<!-- ── AI Coach Panel ─────────────────────────────────────────────────────── -->
+<div id="coach-overlay" onclick="coachOverlayClick(event)">
+  <div id="coach-panel">
+
+    <!-- Header -->
+    <div id="coach-header">
+      <div id="coach-goal-block">
+        <span id="coach-goal-label">Goal</span>
+        <div id="coach-goal-text"></div>
+        <div id="coach-goal-target-date" style="display:none;font-size:11px;color:var(--muted);margin-top:2px"></div>
+      </div>
+      <div id="coach-header-actions">
+        <button id="coach-close-btn" onclick="closeCoach()" title="Close">✕</button>
+        <button id="coach-change-goal-btn" onclick="coachChangeGoal()" style="display:none;font-weight:700;color:#fff">Update…</button>
+      </div>
+    </div>
+
+    <!-- New-activity banner -->
+    <div id="coach-new-activity-banner">
+      <span>🚴</span>
+      <span>New activities logged since your last coaching session — your coach will notice!</span>
+    </div>
+
+    <!-- Goal setup screen (shown when no goal set, or when editing existing goal) -->
+    <div id="coach-setup">
+      <h2 id="coach-setup-title">Set Your Training Goal</h2>
+      <p id="coach-setup-desc">Tell your AI coach what you're working toward. Be as specific as you like — event type, date, daily distances, terrain, anything that helps.</p>
+      <textarea id="coach-goal-input" placeholder="e.g. I'm training for a 3-week bike tour in Spain starting June 15. Average day is 62 miles and 6,000ft of climbing. I have about 10 weeks to prepare."></textarea>
+      <div style="display:flex;flex-direction:column;gap:4px;margin-top:8px;align-self:flex-start">
+        <span style="font-size:12px;color:var(--muted)">Target Date <span style="font-size:11px;color:var(--muted2)">(optional)</span></span>
+        <input type="date" id="coach-target-date" style="background:var(--surface2);border:1px solid var(--border2);border-radius:6px;color:var(--text);font:inherit;font-size:12px;padding:3px 8px;outline:none;cursor:pointer" title="Optional: the date of your event or goal deadline">
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:4px;align-self:flex-start">
+        <span style="font-size:12px;color:var(--muted)">Model:</span>
+        <select id="coach-setup-model" style="background:var(--surface2);border:1px solid var(--border2);border-radius:6px;color:var(--text);font:inherit;font-size:12px;padding:3px 8px;outline:none;cursor:pointer">
+          <option value="claude-haiku-4-5-20251001">Haiku 4.5 — fast &amp; cheap</option>
+          <option value="claude-sonnet-4-5-20250929">Sonnet 4.5 — smarter, recommended</option>
+          <option value="claude-sonnet-4-20250514">Sonnet 4 — most capable</option>
+        </select>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button id="coach-set-goal-btn" onclick="coachSetGoal()">Start Coaching →</button>
+        <button id="coach-cancel-goal-btn" onclick="coachShowConversation()" style="display:none;background:var(--surface2);color:var(--muted);border:1px solid var(--border2);border-radius:8px;padding:10px 18px;font-size:13px;font-weight:600;cursor:pointer">Cancel</button>
+      </div>
+    </div>
+
+    <!-- Conversation (shown when goal exists) -->
+    <div id="coach-conversation" style="display:none;flex:1;display:none;flex-direction:column;overflow:hidden">
+
+      <!-- Toolbar: model selector + training plan button -->
+      <div id="coach-toolbar">
+        <span class="coach-model-label">Model:</span>
+        <select id="coach-model-select" onchange="coachSaveModel(this.value)" title="Choose AI model">
+          <option value="claude-haiku-4-5-20251001">Haiku 4.5 — fast &amp; cheap</option>
+          <option value="claude-sonnet-4-5-20250929">Sonnet 4.5 — smarter, recommended</option>
+          <option value="claude-sonnet-4-20250514">Sonnet 4 — most capable</option>
+        </select>
+        <button class="coach-plan-btn" id="coach-plan-btn" onclick="coachRequestPlan()" title="Generate a detailed training plan based on your goal and recent data">
+          📋 Generate training plan
+        </button>
+        <button class="coach-today-btn" id="coach-today-btn" onclick="coachAskToday()" title="Get AI advice on what workout to do today, with suggested routes from your history">
+          📍 What should I do today?
+        </button>
+      </div>
+
+      <div id="coach-messages"></div>
+
+      <!-- Usage widget -->
+      <div id="coach-usage-bar">
+        <button id="coach-usage-toggle" onclick="coachToggleUsage(this)">
+          <span>💰</span>
+          <span id="coach-usage-summary">Loading usage…</span>
+          <span class="u-caret">▼</span>
+        </button>
+        <div id="coach-usage-detail">
+          <div class="u-row">
+            <span class="u-label">This month</span>
+            <span class="u-val" id="u-month-cost">—</span>
+          </div>
+          <div class="u-bar-track"><div class="u-bar-fill" id="u-bar-fill" style="width:0%"></div></div>
+          <div class="u-row">
+            <span class="u-label">Queries this month</span>
+            <span class="u-val" id="u-month-queries">—</span>
+          </div>
+          <div class="u-row">
+            <span class="u-label">Tokens this month</span>
+            <span class="u-val" id="u-month-tokens">—</span>
+          </div>
+          <div class="u-divider"></div>
+          <div class="u-row" style="margin-bottom:4px">
+            <span class="u-label">Monthly spend (last 6 months)</span>
+          </div>
+          <div class="u-monthly-chart" id="u-monthly-chart"></div>
+          <div class="u-monthly-labels" id="u-monthly-labels"></div>
+          <div class="u-divider"></div>
+          <div class="u-row">
+            <span class="u-label">All-time spend</span>
+            <span class="u-val" id="u-alltime-cost">—</span>
+          </div>
+          <div class="u-row">
+            <span class="u-label">All-time queries</span>
+            <span class="u-val" id="u-alltime-queries">—</span>
+          </div>
+          <div class="u-row" style="margin-top:4px">
+            <span class="u-label">Model: claude-haiku-4-5 · $0.25/$1.25 per M tokens</span>
+            <a class="u-link" href="https://console.anthropic.com/settings/billing" target="_blank">Top up ↗</a>
+          </div>
+        </div>
+      </div>
+
+      <div id="coach-input-bar">
+        <textarea id="coach-input" rows="1" placeholder="Ask your coach anything…" onkeydown="coachInputKeydown(event)" oninput="coachInputResize(this)"></textarea>
+        <button id="coach-send-btn" onclick="coachSend()" title="Send">↑</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Delete confirmation dialog -->
+<div id="delete-confirm-overlay">
+  <div id="delete-confirm-box">
+    <h3>Delete Activity</h3>
+    <p id="delete-confirm-msg"></p>
+    <div class="dcb-btns">
+      <button class="dcb-cancel" onclick="document.getElementById('delete-confirm-overlay').classList.remove('open')">Cancel</button>
+      <button class="dcb-delete" id="dcb-delete-btn">Delete</button>
+    </div>
+  </div>
+</div>
+
