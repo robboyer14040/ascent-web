@@ -99,6 +99,10 @@ async def settings_page(request: Request):
 
     user = db_getter().get_user(uid) if uid else {}
     anthropic_key = (user or {}).get("anthropic_api_key") or _read_env_key("ANTHROPIC_API_KEY") or ""
+    try:
+        ui_prefs = db_getter().get_ui_prefs(uid)
+    except Exception:
+        ui_prefs = {}
 
     return templates.TemplateResponse("settings.html", {
         "request":         request,
@@ -107,6 +111,7 @@ async def settings_page(request: Request):
         "activity_count":  activity_count,
         "username":        getpass.getuser(),
         "anthropic_key_masked":  _mask_key(anthropic_key) if anthropic_key else "",
+        "ui_prefs":        ui_prefs,
     })
 
 
@@ -369,6 +374,7 @@ async def get_avatar(user_id: int, thumb: int = 0):
         path = avatar_dir / f"{user_id}.jpg"
     if not path.exists():
         raise HTTPException(404, "No avatar")
-    return FileResponse(str(path), media_type="image/jpeg")
+    return FileResponse(str(path), media_type="image/jpeg",
+                        headers={"Cache-Control": "no-store"})
 
 

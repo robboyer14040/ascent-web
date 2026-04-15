@@ -1,0 +1,284 @@
+<!-- ── Define Segment Modal ───────────────────────────────────────────────── -->
+<style>
+#seg-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 3100;
+  align-items: center;
+  justify-content: center;
+}
+#seg-overlay.open { display: flex; }
+#seg-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.6);
+  backdrop-filter: blur(3px);
+}
+#seg-panel {
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 14px;
+  width: calc(100vw - 60px);
+  height: calc(100vh - 60px);
+  max-height: calc(100vh - 60px);
+  min-height: 420px;
+  min-width: 320px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 24px 64px rgba(0,0,0,.7);
+  overflow: hidden;
+  position: relative;
+  z-index: 1;
+}
+#seg-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px 10px;
+  border-bottom: 1px solid var(--border2);
+  flex-shrink: 0;
+}
+#seg-header span {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+#seg-close-btn {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 18px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  line-height: 1;
+}
+#seg-close-btn:hover { color: var(--text); background: var(--surface2); }
+#seg-map {
+  flex: 1;
+  min-height: 100px;
+  background: var(--surface2);
+  position: relative;
+}
+#seg-chart-area {
+  position: relative;
+  height: 140px;
+  flex-shrink: 0;
+  overflow: visible;
+  border-top: 1px solid var(--border2);
+  cursor: default;
+  user-select: none;
+}
+#seg-chart {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.seg-handle {
+  position: absolute;
+  width: 12px;
+  height: 24px;
+  background: #ef4444;
+  border: 2px solid #fff;
+  border-radius: 3px;
+  cursor: ew-resize;
+  z-index: 10;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 1px 6px rgba(0,0,0,.6);
+  touch-action: none;
+}
+.seg-handle:hover { background: #dc2626; }
+.seg-handle-label {
+  position: absolute;
+  top: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 9px;
+  font-weight: 600;
+  color: #ef4444;
+  white-space: nowrap;
+  pointer-events: none;
+  text-shadow: 0 1px 2px rgba(0,0,0,.8);
+  letter-spacing: .03em;
+}
+#seg-zoom-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px 4px;
+  flex-shrink: 0;
+  border-top: 1px solid var(--border2);
+}
+#seg-zoom-row label {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+#seg-zoom-slider {
+  flex: 1;
+  accent-color: #ef4444;
+}
+#seg-footer {
+  padding: 10px 14px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+  border-top: 1px solid var(--border2);
+}
+#seg-stats {
+  display: flex;
+  gap: 18px;
+  font-size: 12px;
+  color: var(--muted);
+}
+#seg-stats b { color: var(--text); }
+#seg-name-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+#seg-name-input {
+  flex: 1;
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 13px;
+}
+#seg-name-input:focus { outline: none; border-color: #ef4444; }
+#seg-btn-row {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.seg-action-btn {
+  padding: 6px 16px;
+  border-radius: 7px;
+  border: none;
+  font-size: 13px;
+  cursor: pointer;
+  font-weight: 500;
+}
+#seg-save-btn {
+  background: #ef4444;
+  color: #fff;
+}
+#seg-save-btn:hover { background: #dc2626; }
+#seg-save-btn:disabled { background: var(--surface2); color: var(--muted); cursor: not-allowed; }
+#seg-update-btn {
+  background: #3b82f6;
+  color: #fff;
+}
+#seg-update-btn:hover { background: #2563eb; }
+#seg-update-btn:disabled { background: var(--surface2); color: var(--muted); cursor: not-allowed; }
+#seg-cancel-btn {
+  background: var(--surface2);
+  color: var(--text);
+  border: 1px solid var(--border2);
+}
+#seg-cancel-btn:hover { background: var(--border2); }
+#seg-delete-btn {
+  background: transparent;
+  color: #ef4444;
+  border: 1px solid #ef4444;
+}
+#seg-delete-btn:hover { background: #ef444422; }
+#seg-resize-handle {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 22px;
+  height: 22px;
+  cursor: nwse-resize;
+  z-index: 20;
+  opacity: 0.4;
+  background:
+    linear-gradient(135deg,
+      transparent 33%, var(--muted) 33%, var(--muted) 40%, transparent 40%,
+      transparent 56%, var(--muted) 56%, var(--muted) 63%, transparent 63%,
+      transparent 76%, var(--muted) 76%, var(--muted) 83%, transparent 83%
+    );
+}
+#seg-resize-handle:hover { opacity: 0.75; }
+</style>
+
+<!-- ── Segment: Save as New mini-dialog ───────────────────────────────────── -->
+<div id="seg-saveas-overlay" style="display:none;position:fixed;inset:0;z-index:3200;align-items:center;justify-content:center">
+  <div style="position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(2px)" onclick="segSaveAsClose()"></div>
+  <div style="position:relative;z-index:1;background:var(--surface);border:1px solid var(--border2);border-radius:12px;padding:20px 22px;width:360px;max-width:calc(100vw - 2rem);box-shadow:0 20px 60px rgba(0,0,0,.6)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div style="font-size:14px;font-weight:600;color:var(--text)">Save as New Segment</div>
+      <button onclick="segSaveAsClose()" style="background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;line-height:1;padding:0 2px">✕</button>
+    </div>
+    <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Segment Name</div>
+    <input id="seg-saveas-input" type="text" maxlength="80"
+      style="width:100%;padding:6px 10px;font-size:13px;background:var(--surface2);border:1px solid var(--border2);border-radius:6px;color:var(--text);outline:none;box-sizing:border-box"
+      onfocus="this.style.borderColor='#ef4444'" onblur="this.style.borderColor=''"
+      onkeydown="if(event.key==='Enter')segSaveAsConfirm();if(event.key==='Escape')segSaveAsClose()">
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+      <button onclick="segSaveAsClose()" style="font-size:12px;font-weight:600;padding:6px 16px;border-radius:7px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);cursor:pointer">Cancel</button>
+      <button onclick="segSaveAsConfirm()" style="font-size:12px;font-weight:600;padding:6px 16px;border-radius:7px;border:none;background:#ef4444;color:#fff;cursor:pointer">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Segment: Delete confirmation mini-dialog ───────────────────────────── -->
+<div id="seg-del-overlay" style="display:none;position:fixed;inset:0;z-index:3200;align-items:center;justify-content:center">
+  <div style="position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(2px)" onclick="segDelClose()"></div>
+  <div style="position:relative;z-index:1;background:var(--surface);border:1px solid var(--border2);border-radius:12px;padding:20px 22px;width:340px;max-width:calc(100vw - 2rem);box-shadow:0 20px 60px rgba(0,0,0,.6)">
+    <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:10px">Delete Segment?</div>
+    <div id="seg-del-msg" style="font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.5"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button onclick="segDelClose()" style="font-size:12px;font-weight:600;padding:6px 16px;border-radius:7px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);cursor:pointer">Cancel</button>
+      <button onclick="segDelConfirm()" style="font-size:12px;font-weight:600;padding:6px 16px;border-radius:7px;border:none;background:#ef4444;color:#fff;cursor:pointer">Delete</button>
+    </div>
+  </div>
+</div>
+
+<div id="seg-overlay">
+  <div id="seg-backdrop" onclick="closeDefineSegment()"></div>
+  <div id="seg-panel">
+    <div id="seg-header">
+      <span>Define Segment</span>
+      <button id="seg-close-btn" onclick="closeDefineSegment()">✕</button>
+    </div>
+    <div id="seg-map">
+      <div id="seg-map-style-bar" style="position:absolute;top:8px;right:8px;z-index:500;display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end">
+        <button class="map-style-btn" data-style="osm"          onclick="setSegMapStyle('osm')">Street</button>
+        <button class="map-style-btn" data-style="topo"         onclick="setSegMapStyle('topo')">Topo</button>
+        <button class="map-style-btn" data-style="carto-dark"   onclick="setSegMapStyle('carto-dark')">Dark</button>
+        <button class="map-style-btn" data-style="carto-light"  onclick="setSegMapStyle('carto-light')">Light</button>
+        <button class="map-style-btn" data-style="esri-sat"     onclick="setSegMapStyle('esri-sat')">Satellite</button>
+      </div>
+      <button onclick="segFitMap()" title="Re-center map" style="position:absolute;bottom:8px;left:8px;z-index:500;background:rgba(0,0,0,.6);color:#ccc;border:1px solid rgba(255,255,255,.15);border-radius:4px;padding:3px 6px;font-size:13px;line-height:1;cursor:pointer;backdrop-filter:blur(4px)"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1 5V1h4M9 1h4v4M13 9v4H9M5 13H1V9"/></svg></button>
+    </div>
+    <div id="seg-chart-area">
+      <canvas id="seg-chart"></canvas>
+      <div class="seg-handle" id="seg-handle-start"><span class="seg-handle-label">Start</span></div>
+      <div class="seg-handle" id="seg-handle-end"><span class="seg-handle-label">End</span></div>
+    </div>
+    <div id="seg-zoom-row">
+      <label>Zoom:</label>
+      <input id="seg-zoom-slider" type="range" min="0" max="100" step="1" value="50" oninput="segOnZoom(this.value)">
+    </div>
+    <div id="seg-footer">
+      <div id="seg-stats">
+        <span>Length: <b id="seg-stat-len">—</b></span>
+        <span>Climb: <b id="seg-stat-climb">—</b></span>
+      </div>
+      <div id="seg-name-row">
+        <input id="seg-name-input" type="text" placeholder="Name this segment…" maxlength="80">
+      </div>
+      <div id="seg-btn-row">
+        <button class="seg-action-btn" id="seg-cancel-btn" onclick="closeDefineSegment()">Cancel</button>
+        <button class="seg-action-btn" id="seg-delete-btn" onclick="segDelete()" style="display:none;margin-right:auto">Delete…</button>
+        <button class="seg-action-btn" id="seg-update-btn" onclick="segUpdate()" style="display:none">Update</button>
+        <button class="seg-action-btn" id="seg-save-btn" onclick="segSave()">Save</button>
+      </div>
+    </div>
+    <div id="seg-resize-handle"></div>
+  </div>
+</div>

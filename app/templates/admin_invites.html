@@ -6,35 +6,44 @@
 <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Admin — Ascent</title>
+<script>(function(){var t={{ ui_prefs.get('theme','') | tojson }};if(t)document.documentElement.dataset.theme=t;})();</script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#1c1c1e;--surface:#2c2c2e;--surface2:#3a3a3c;--border:#3a3a3c;--border2:#48484a;--text:#f2f2f7;--muted:#8e8e93;--muted2:#636366;--accent:#f97316;--nav-hover:rgba(255,255,255,.06)}
+[data-theme="light"]{--bg:#f2f2f7;--surface:#ffffff;--surface2:#e5e5ea;--border:#d1d1d6;--border2:#c7c7cc;--text:#1c1c1e;--muted:#6c6c70;--muted2:#8e8e93;--accent:#f97316;--nav-hover:rgba(0,0,0,.05)}
+@media(prefers-color-scheme:light){:root:not([data-theme]){--bg:#f2f2f7;--surface:#ffffff;--surface2:#e5e5ea;--border:#d1d1d6;--border2:#c7c7cc;--text:#1c1c1e;--muted:#6c6c70;--muted2:#8e8e93;--accent:#f97316;--nav-hover:rgba(0,0,0,.05)}}
 body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif;
-  font-size:14px;background:#1c1c1e;color:#f2f2f7;min-height:100vh}
+  font-size:14px;background:var(--bg);color:var(--text);min-height:100vh}
 nav{display:flex;align-items:center;gap:1rem;padding:.65rem 1.25rem;
-  background:#2c2c2e;border-bottom:1px solid #3a3a3c}
-.brand{font-size:1rem;font-weight:700;color:#f97316;text-decoration:none}
-nav a{color:#8e8e93;font-size:.85rem;text-decoration:none}
-nav a:hover{color:#f2f2f7}
+  background:var(--surface);border-bottom:1px solid var(--border)}
+.brand{font-size:1rem;font-weight:700;color:var(--accent);text-decoration:none}
+nav a{color:var(--muted);font-size:.85rem;text-decoration:none}
+nav a:hover{color:var(--text)}
 .spacer{flex:1}
 .container{max-width:960px;margin:2rem auto;padding:0 1.25rem 4rem}
 h1{font-size:1.15rem;font-weight:600;margin-bottom:1.25rem}
-h2{font-size:.95rem;font-weight:600;margin-bottom:.75rem;color:#8e8e93;
-   text-transform:uppercase;letter-spacing:.05em;font-size:11px}
-.card{background:#2c2c2e;border:1px solid #3a3a3c;border-radius:12px;
+h2{font-size:11px;font-weight:600;margin-bottom:.75rem;color:var(--muted);
+   text-transform:uppercase;letter-spacing:.05em}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;
   padding:1.25rem;margin-bottom:1rem;overflow:hidden}
 .row{display:flex;align-items:center;gap:.75rem;margin-bottom:.5rem}
-input[type=email]{flex:1;background:#1c1c1e;border:1px solid #3a3a3c;border-radius:8px;
-  color:#f2f2f7;padding:.5rem .75rem;font-size:13px;font-family:inherit;outline:none}
-input[type=email]:focus{border-color:#f97316}
-.btn{background:#f97316;color:#fff;border:none;border-radius:8px;
+input[type=email]{flex:1;background:var(--bg);border:1px solid var(--border);border-radius:8px;
+  color:var(--text);padding:.5rem .75rem;font-size:13px;font-family:inherit;outline:none}
+input[type=email]:focus{border-color:var(--accent)}
+.btn{background:var(--accent);color:#fff;border:none;border-radius:8px;
   padding:.5rem 1rem;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap}
 .btn:hover{background:#ea6c0a}
-.btn-del{background:#3a1010;color:#fca5a5;border:1px solid #7f1d1d}
-.btn-del:hover{background:#4a1515}
+.btn-del{background:rgba(239,68,68,.12);color:#ef4444;border:1px solid rgba(239,68,68,.35)}
+.btn-del:hover{background:rgba(239,68,68,.22)}
+.btn-admin{background:rgba(10,132,255,.12);color:#0a84ff;border:1px solid rgba(10,132,255,.35)}
+.btn-admin:hover{background:rgba(10,132,255,.22)}
+.btn-remove-admin{background:rgba(255,159,10,.12);color:#ff9f0a;border:1px solid rgba(255,159,10,.35)}
+.btn-remove-admin:hover{background:rgba(255,159,10,.22)}
+.card-divider{border-top:1px solid var(--border);margin-top:1.25rem;padding-top:1.25rem}
 .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -1.25rem;padding:0 1.25rem}
 table{width:100%;border-collapse:collapse;font-size:12px}
-th{color:#636366;text-align:left;padding:.4rem .5rem;border-bottom:1px solid #3a3a3c;font-weight:500;white-space:nowrap}
-td{padding:.5rem;border-bottom:1px solid #2a2a2c;vertical-align:middle;white-space:nowrap}
+th{color:var(--muted2);text-align:left;padding:.4rem .5rem;border-bottom:1px solid var(--border);font-weight:500;white-space:nowrap}
+td{padding:.5rem;border-bottom:1px solid var(--border);vertical-align:middle;white-space:nowrap}
 @media(max-width:480px){
   .container{padding:0 .75rem 4rem}
   .card{padding:1rem}
@@ -44,16 +53,16 @@ td{padding:.5rem;border-bottom:1px solid #2a2a2c;vertical-align:middle;white-spa
 .badge-used{background:#1a3a1a;color:#4ade80}
 .badge-open{background:#3a3010;color:#fbbf24}
 .badge-admin{background:#1a2a3a;color:#60a5fa}
-.invite-url{font-family:monospace;font-size:11px;background:#1c1c1e;
-  border:1px solid #3a3a3c;border-radius:6px;padding:.5rem .75rem;
-  color:#f97316;word-break:break-all;margin-top:.75rem}
-.copy-btn{background:#3a3a3c;color:#f2f2f7;border:none;border-radius:6px;
+.invite-url{font-family:monospace;font-size:11px;background:var(--bg);
+  border:1px solid var(--border);border-radius:6px;padding:.5rem .75rem;
+  color:var(--accent);word-break:break-all;margin-top:.75rem}
+.copy-btn{background:var(--surface2);color:var(--text);border:none;border-radius:6px;
   padding:.3rem .6rem;font-size:11px;cursor:pointer;margin-left:.5rem;font-family:inherit}
-.copy-btn:hover{background:#4a4a4e}
-.btn-primary{background:#f97316;color:#fff}.btn-primary:hover{background:#ea6c0a}
-.btn-ghost{background:#3a3a3c;color:#f2f2f7}.btn-ghost:hover{background:#48484a}
+.copy-btn:hover{background:var(--border2)}
+.btn-primary{background:var(--accent);color:#fff}.btn-primary:hover{background:#ea6c0a}
+.btn-ghost{background:var(--surface2);color:var(--text)}.btn-ghost:hover{background:var(--border2)}
 .btn-row{display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;margin-top:1rem}
-.current-db{font-family:"SF Mono","Fira Code",monospace;font-size:.8rem;color:#f97316;background:#1c1c1e;border:1px solid #3a3a3c;border-radius:6px;padding:.4rem .7rem;word-break:break-all}
+.current-db{font-family:"SF Mono","Fira Code",monospace;font-size:.8rem;color:var(--accent);background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:.4rem .7rem;word-break:break-all}
 .result{margin-top:.75rem;padding:.65rem .9rem;border-radius:8px;font-size:.875rem;display:none}
 .result-ok{background:rgba(48,209,88,.12);border:1px solid rgba(48,209,88,.3);color:#30d158}
 .result-err{background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);color:#ef4444}
@@ -80,27 +89,28 @@ td{padding:.5rem;border-bottom:1px solid #2a2a2c;vertical-align:middle;white-spa
       <tr>
         <td>
           <div style="display:flex;align-items:center;gap:.5rem">
+            {% set _colors = ['#3b82f6','#ef4444','#22c55e','#a855f7','#ec4899','#14b8a6','#f59e0b','#8b5cf6'] %}
             <img src="/api/avatar/{{ u.id }}?thumb=1"
                  style="width:26px;height:26px;border-radius:50%;object-fit:cover;flex-shrink:0"
                  onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"
                  alt="">
-            <div style="display:none;width:26px;height:26px;border-radius:50%;background:#3a3a3c;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex-shrink:0">{{ ((u.username or u.email or '?')[0] | upper) }}</div>
+            <div style="display:none;width:26px;height:26px;border-radius:50%;background:{{ _colors[u.id % _colors|length] }};color:#fff;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex-shrink:0">{{ ((u.username or u.email or '?')[0] | upper) }}</div>
             {{ u.username }}
           </div>
         </td>
-        <td style="color:#8e8e93">{{ u.email }}</td>
+        <td style="color:var(--muted)">{{ u.email }}</td>
         <td>
           {% if u.is_admin %}<span class="badge badge-admin">Admin</span>{% endif %}
         </td>
-        <td style="color:#8e8e93">{{ u.created_at | fmt_date }}</td>
-        <td style="color:#8e8e93">{{ u.last_active_at | fmt_date }}</td>
+        <td style="color:var(--muted)">{{ u.created_at | fmt_date }}</td>
+        <td style="color:var(--muted)">{{ u.last_active_at | fmt_date }}</td>
         <td style="display:flex;gap:.4rem;justify-content:flex-end">
           {% if current_user and current_user.is_admin %}
           {% if not u.is_admin %}
           <form method="post" action="/admin/users/toggle-admin" style="display:inline">
             <input type="hidden" name="user_id" value="{{ u.id }}">
             <input type="hidden" name="make_admin" value="1">
-            <button type="submit" class="btn" style="font-size:11px;padding:.25rem .6rem;background:#1a2a3a;color:#60a5fa;border:1px solid #1e3a5f" onclick="return confirm('Make {{ u.username }} an admin?')">Make Admin</button>
+            <button type="submit" class="btn btn-admin" style="font-size:11px;padding:.25rem .6rem" onclick="return confirm('Make {{ u.username }} an admin?')">Make Admin</button>
           </form>
           <form method="post" action="/admin/users/delete" style="display:inline">
             <input type="hidden" name="user_id" value="{{ u.id }}">
@@ -110,7 +120,7 @@ td{padding:.5rem;border-bottom:1px solid #2a2a2c;vertical-align:middle;white-spa
           <form method="post" action="/admin/users/toggle-admin" style="display:inline">
             <input type="hidden" name="user_id" value="{{ u.id }}">
             <input type="hidden" name="make_admin" value="0">
-            <button type="submit" class="btn" style="font-size:11px;padding:.25rem .6rem;background:#2a1a1a;color:#f87171;border:1px solid #5f1e1e" onclick="return confirm('Remove admin from {{ u.username }}?')">Remove Admin</button>
+            <button type="submit" class="btn btn-remove-admin" style="font-size:11px;padding:.25rem .6rem" onclick="return confirm('Remove admin from {{ u.username }}?')">Remove Admin</button>
           </form>
           {% endif %}
           {% endif %}
@@ -120,7 +130,7 @@ td{padding:.5rem;border-bottom:1px solid #2a2a2c;vertical-align:middle;white-spa
     </table>
     </div>
     {% else %}
-    <div style="color:#636366;font-size:12px">No users yet.</div>
+    <div style="color:var(--muted2);font-size:12px">No users yet.</div>
     {% endif %}
   </div>
 
@@ -167,7 +177,7 @@ td{padding:.5rem;border-bottom:1px solid #2a2a2c;vertical-align:middle;white-spa
           <span class="badge badge-open">Open</span>
           {% endif %}
         </td>
-        <td style="color:#8e8e93">{{ inv.created_at | fmt_date }}</td>
+        <td style="color:var(--muted)">{{ inv.created_at | fmt_date }}</td>
         <td>
           {% if not inv.used_at %}
           <form method="post" action="/admin/invites/delete" style="display:inline">
@@ -181,7 +191,7 @@ td{padding:.5rem;border-bottom:1px solid #2a2a2c;vertical-align:middle;white-spa
     </table>
     </div>
     {% else %}
-    <div style="color:#636366;font-size:12px">No invites yet.</div>
+    <div style="color:var(--muted2);font-size:12px">No invites yet.</div>
     {% endif %}
   </div>
 
@@ -195,10 +205,10 @@ td{padding:.5rem;border-bottom:1px solid #2a2a2c;vertical-align:middle;white-spa
     <p style="margin-top:.75rem">Activities: <strong>{{ activity_count }}</strong></p>
     <div style="margin-top:1rem">
       <a href="/admin/backup-db" class="btn" style="display:inline-flex;align-items:center;gap:.4rem;text-decoration:none;font-size:12px;padding:.4rem .9rem">↓ Download Backup</a>
-      <div style="color:#636366;font-size:11px;margin-top:.5rem">Downloads the database as a gzip-compressed file. May take a minute for large databases.</div>
+      <div style="color:var(--muted2);font-size:11px;margin-top:.5rem">Downloads the database as a gzip-compressed file. May take a minute for large databases.</div>
     </div>
 
-    <div style="margin-top:1.25rem;padding-top:1.25rem;border-top:1px solid #3a3a3c">
+    <div class="card-divider">
       <h2>Create New Database</h2>
       <p>Creates a fresh empty Ascent database at the path you specify. The app will switch to it immediately. Use Strava Sync to populate it with your activities.</p>
       <br>
@@ -206,19 +216,19 @@ td{padding:.5rem;border-bottom:1px solid #2a2a2c;vertical-align:middle;white-spa
       <input type="text" id="newDbPath"
              placeholder="/Users/you/Desktop/ascent_new.ascentdb"
              value="/Users/{{ username }}/Desktop/ascent_new.ascentdb"
-             style="width:100%;background:#1c1c1e;border:1px solid #3a3a3c;border-radius:8px;color:#f2f2f7;padding:.5rem .75rem;font-size:13px;font-family:inherit;outline:none;margin-top:.5rem">
+             style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:.5rem .75rem;font-size:13px;font-family:inherit;outline:none;margin-top:.5rem">
       <div class="btn-row">
         <button class="btn btn-primary" onclick="createDb()">Create New Database</button>
       </div>
       <div class="result" id="createResult"></div>
     </div>
 
-    <div style="margin-top:1.25rem;padding-top:1.25rem;border-top:1px solid #3a3a3c">
+    <div class="card-divider">
       <h2>Segment Compare Cache</h2>
       <p>Precomputed summaries speed up the Compare feature by avoiding full point loads for non-matching activities.</p>
       <p style="margin-top:.5rem">
         Cached: <strong>{{ summary_count }}</strong> / <strong>{{ points_saved_count }}</strong> activities with GPS points
-        <span style="color:#636366;font-size:11px">({{ activity_count }} total activities, {{ activity_count - points_saved_count }} without GPS)</span>
+        <span style="color:var(--muted2);font-size:11px">({{ activity_count }} total activities, {{ activity_count - points_saved_count }} without GPS)</span>
       </p>
       {% if summary_backfill_started %}
       <p style="margin-top:.5rem;color:#30d158;font-size:12px">Backfill started — running in background. Refresh this page to check progress.</p>
@@ -234,7 +244,7 @@ td{padding:.5rem;border-bottom:1px solid #2a2a2c;vertical-align:middle;white-spa
       </div>
     </div>
 
-    <div style="margin-top:1.25rem;padding-top:1.25rem;border-top:1px solid #3a3a3c">
+    <div class="card-divider">
       <h2>Switch Database</h2>
       <p>Choose an existing Ascent database file to use.</p>
       <input type="file" id="switchDbFile" accept=".ascentdb,.db"

@@ -1272,6 +1272,7 @@ async def tour_share_page(token: str, request: Request):
         "token":        token,
         "tour_title":   title,
         "display_name": display_name,
+        "share_uid":    share_uid,
     })
 
 
@@ -1282,12 +1283,12 @@ async def tour_share_data(token: str):
     try:
         _ensure_tables(con)
         tour_row = con.execute(
-            "SELECT id, title, start_date, end_date, share_user_id FROM tours WHERE share_token=?",
+            "SELECT id, title, start_date, end_date, share_user_id, ai_summary FROM tours WHERE share_token=?",
             (token,),
         ).fetchone()
         if not tour_row:
             raise HTTPException(404, "Share link not found or revoked")
-        tour_id, title, start_date, end_date, share_uid = tour_row
+        tour_id, title, start_date, end_date, share_uid, ai_summary = tour_row
 
         stage_rows = con.execute(
             "SELECT id, stage_num, name, distance_mi, climb_ft, start_lat, start_lon "
@@ -1314,6 +1315,7 @@ async def tour_share_data(token: str):
             "title":      title,
             "start_date": start_date,
             "end_date":   end_date,
+            "ai_summary": ai_summary,
             "stages":     stages,
         })
     finally:
@@ -1543,27 +1545,53 @@ async def tour_share_activity(token: str, activity_id: int):
 
         act = build_activity(act_row)
         return JSONResponse({
-            "id":              act["id"],
-            "name":            act.get("name") or "",
-            "notes":           act.get("notes") or "",
-            "start_time":      act.get("start_time"),
-            "activity_type":   act.get("activity_type") or "",
-            "equipment":       act.get("equipment") or "",
-            "distance_mi":     act.get("distance_mi", 0),
-            "total_climb_ft":  act.get("total_climb_ft", 0),
-            "total_descent_ft":act.get("total_descent_ft", 0),
-            "duration":        act.get("duration", 0),
-            "active_time":     act.get("active_time", 0),
-            "avg_speed_mph":   act.get("avg_speed_mph", 0),
+            "id":                    act["id"],
+            "name":                  act.get("name") or "",
+            "notes":                 act.get("notes") or "",
+            "start_time":            act.get("start_time"),
+            "activity_type":         act.get("activity_type") or "",
+            "equipment":             act.get("equipment") or "",
+            "strava_activity_id":    act.get("strava_activity_id"),
+            "perceived_exertion":    act.get("perceived_exertion"),
+            "distance_mi":           act.get("distance_mi", 0),
+            "total_climb_ft":        act.get("total_climb_ft", 0),
+            "total_descent_ft":      act.get("total_descent_ft", 0),
+            "duration":              act.get("duration", 0),
+            "active_time":           act.get("active_time", 0),
+            "avg_speed_mph":         act.get("avg_speed_mph", 0),
             "avg_overall_speed_mph": act.get("avg_overall_speed_mph", 0),
-            "avg_heartrate":   act.get("avg_heartrate", 0),
-            "max_heartrate":   act.get("max_heartrate", 0),
-            "calories":        act.get("calories", 0),
-            "avg_cadence":     act.get("avg_cadence", 0),
-            "avg_power":       act.get("avg_power", 0),
-            "max_power":       act.get("max_power", 0),
-            "suffer_score":    act.get("suffer_score", 0),
+            "avg_heartrate":         act.get("avg_heartrate", 0),
+            "max_heartrate":         act.get("max_heartrate", 0),
+            "calories":              act.get("calories", 0),
+            "avg_cadence":           act.get("avg_cadence", 0),
+            "avg_power":             act.get("avg_power", 0),
+            "max_power":             act.get("max_power", 0),
+            "suffer_score":          act.get("suffer_score", 0),
         })
+    finally:
+        con.close()
+
+
+@router.get("/tours/share/{token}/stages/{stage_id}/ai-summary")
+async def tour_share_stage_ai_summary(token: str, stage_id: int):
+    """Public endpoint — cached AI stage summary (read-only, no generation)."""
+    con = sqlite3.connect(db_getter().path, timeout=10)
+    try:
+        _ensure_tables(con)
+        tour_row = con.execute("SELECT id FROM tours WHERE share_token=?", (token,)).fetchone()
+        if not tour_row:
+            raise HTTPException(404, "Share link not found or revoked")
+        stage_row = con.execute(
+            "SELECT id FROM tour_stages WHERE id=? AND tour_id=?", (stage_id, tour_row[0])
+        ).fetchone()
+        if not stage_row:
+            raise HTTPException(404, "Stage not found")
+        cache_row = con.execute(
+            "SELECT summary FROM tour_stage_ai_summary WHERE stage_id=?", (stage_id,)
+        ).fetchone()
+        if not cache_row:
+            raise HTTPException(404, "No cached summary")
+        return JSONResponse({"summary": cache_row[0]})
     finally:
         con.close()
 
@@ -1575,9 +1603,14 @@ async def tour_page(request: Request):
         return RedirectResponse("/login?next=/tour", status_code=303)
     user = db_getter().get_user(uid)
     is_admin = bool(user and user.get("is_admin"))
+    try:
+        ui_prefs = db_getter().get_ui_prefs(uid)
+    except Exception:
+        ui_prefs = {}
     return templates.TemplateResponse("tour.html", {
         "request": request,
         "current_user_id": uid,
         "is_admin": is_admin,
         "has_anthropic_key": bool((user or {}).get("anthropic_api_key") or os.environ.get("ANTHROPIC_API_KEY")),
+        "ui_prefs": ui_prefs,
     })

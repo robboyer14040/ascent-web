@@ -7,14 +7,19 @@
 <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
 <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script>(function(){var t={{ ui_prefs.get('theme','') | tojson }};if(t)document.documentElement.dataset.theme=t;})();</script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
   --bg:#1c1c1e;--surface:#2c2c2e;--surface2:#3a3a3c;
   --border:#3a3a3c;--border2:#48484a;
   --text:#f2f2f7;--muted:#8e8e93;--muted2:#636366;
-  --accent:#f97316;
+  --accent:#f97316;--nav-hover:rgba(255,255,255,.06);
+  --lb-bg:rgba(0,0,0,.92);--lb-btn:rgba(255,255,255,.15);
+  --lb-text:#fff;--lb-muted:#aaa;--lb-hint:#666;
 }
+[data-theme="light"]{--bg:#f2f2f7;--surface:#ffffff;--surface2:#e5e5ea;--border:#d1d1d6;--border2:#c7c7cc;--text:#1c1c1e;--muted:#6c6c70;--muted2:#8e8e93;--accent:#f97316;--nav-hover:rgba(0,0,0,.05);--lb-bg:rgba(215,215,225,.95);--lb-btn:rgba(0,0,0,.12);--lb-text:#1c1c1e;--lb-muted:#6c6c70;--lb-hint:#8e8e93}
+@media(prefers-color-scheme:light){:root:not([data-theme]){--bg:#f2f2f7;--surface:#ffffff;--surface2:#e5e5ea;--border:#d1d1d6;--border2:#c7c7cc;--text:#1c1c1e;--muted:#6c6c70;--muted2:#8e8e93;--accent:#f97316;--nav-hover:rgba(0,0,0,.05);--lb-bg:rgba(215,215,225,.95);--lb-btn:rgba(0,0,0,.12);--lb-text:#1c1c1e;--lb-muted:#6c6c70;--lb-hint:#8e8e93}}
 html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif;font-size:13px;background:var(--bg);color:var(--text)}
 button{cursor:pointer;border:none;background:none;color:inherit;font:inherit}
 input,select{font:inherit}
@@ -26,8 +31,8 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
 .nav-version{font-size:10px;color:var(--muted);margin-left:4px;letter-spacing:.02em}
 .nav-pages{display:flex;align-items:center;gap:2px;margin-left:14px}
 .nav-btn{padding:5px 10px;border-radius:6px;font-size:12px;font-weight:500;color:var(--muted);background:none;border:none;cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:4px;text-decoration:none;height:34px}
-.nav-btn:hover{color:var(--text);background:rgba(255,255,255,.06)}
-.nav-btn.nav-active{color:#fff;font-weight:700}
+.nav-btn:hover{color:var(--text);background:var(--nav-hover)}
+.nav-btn.nav-active{color:var(--text);font-weight:700}
 .spacer{flex:1}
 
 /* ── Page layout ── */
@@ -297,29 +302,41 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
   </div>
 </div>
 
+<!-- ── Delete tour confirmation modal ── -->
+<div id="tour-delete-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:600;align-items:center;justify-content:center">
+  <div style="background:var(--surface);border:1px solid var(--border2);border-radius:12px;padding:22px 24px;width:360px;max-width:96vw;box-shadow:0 8px 40px rgba(0,0,0,.5)">
+    <div style="font-size:15px;font-weight:600;margin-bottom:10px">Delete Tour</div>
+    <div id="tour-delete-msg" style="font-size:13px;color:var(--muted);margin-bottom:20px;line-height:1.5"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button onclick="closeTourDeleteModal()" style="font-size:13px;font-weight:500;padding:6px 16px;border-radius:7px;border:1px solid var(--border2);background:none;color:var(--text);cursor:pointer">Cancel</button>
+      <button id="tour-delete-confirm-btn" style="font-size:13px;font-weight:500;padding:6px 16px;border-radius:7px;border:none;background:#ef4444;color:#fff;cursor:pointer">Delete</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── Photo lightbox ── -->
-<div id="tour-lightbox" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:9999;align-items:center;justify-content:center;flex-direction:column" onclick="closeTourLightbox()">
+<div id="tour-lightbox" style="display:none;position:fixed;inset:0;background:var(--lb-bg);z-index:9999;align-items:center;justify-content:center;flex-direction:column" onclick="closeTourLightbox()">
   <img id="tlb-img" alt="" style="max-width:90vw;max-height:82vh;object-fit:contain;border-radius:6px">
   <video id="tlb-vid" controls playsinline style="display:none;max-width:90vw;max-height:82vh;border-radius:6px;background:#000" onclick="event.stopPropagation()"></video>
   <div style="display:flex;align-items:center;gap:1rem;margin-top:12px" onclick="event.stopPropagation()">
-    <button onclick="tourLbNav(-1)" style="background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:6px;padding:6px 18px;cursor:pointer;font-size:18px">‹</button>
-    <span id="tlb-count" style="color:#aaa;font-size:13px;min-width:50px;text-align:center"></span>
-    <button onclick="tourLbNav(1)"  style="background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:6px;padding:6px 18px;cursor:pointer;font-size:18px">›</button>
-    <a id="tlb-download" href="#" download style="font-size:12px;font-weight:600;color:#f97316;border:1px solid #f97316;border-radius:4px;padding:3px 10px;text-decoration:none">↓ Download</a>
+    <button onclick="tourLbNav(-1)" style="background:var(--lb-btn);border:none;color:var(--lb-text);border-radius:6px;padding:6px 18px;cursor:pointer;font-size:18px">‹</button>
+    <span id="tlb-count" style="color:var(--lb-muted);font-size:13px;min-width:50px;text-align:center"></span>
+    <button onclick="tourLbNav(1)"  style="background:var(--lb-btn);border:none;color:var(--lb-text);border-radius:6px;padding:6px 18px;cursor:pointer;font-size:18px">›</button>
+    <a id="tlb-download" href="#" download style="font-size:12px;font-weight:600;color:var(--accent);border:1px solid var(--accent);border-radius:4px;padding:3px 10px;text-decoration:none">↓ Download</a>
   </div>
-  <div style="color:#666;font-size:11px;margin-top:8px">Press Esc or click background to close · ← → to navigate</div>
+  <div style="color:var(--lb-hint);font-size:11px;margin-top:8px">Press Esc or click background to close · ← → to navigate</div>
 </div>
 
 <!-- ── Save as Route dialog (stage detail) ── -->
 <div id="sd-save-route-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:3000;align-items:center;justify-content:center" onclick="if(event.target===this)closeStageSaveRouteDialog()">
-  <div style="background:#2c2c2e;border:1px solid #3a3a3c;border-radius:12px;padding:1.25rem;width:380px;max-width:calc(100vw - 2rem);box-shadow:0 20px 60px rgba(0,0,0,.5)">
+  <div style="background:var(--surface);border:1px solid var(--border2);border-radius:12px;padding:1.25rem;width:380px;max-width:calc(100vw - 2rem);box-shadow:0 20px 60px rgba(0,0,0,.5)">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
       <div style="font-size:14px;font-weight:600">Save as Route</div>
       <button onclick="closeStageSaveRouteDialog()" style="background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;line-height:1;padding:0 2px">✕</button>
     </div>
     <div style="margin-bottom:12px">
       <div style="font-size:11px;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em">Route Name</div>
-      <input id="sd-save-route-name" type="text" style="width:100%;padding:6px 9px;font-size:13px;background:#1c1c1e;border:1px solid #3a3a3c;border-radius:6px;color:#f2f2f7;outline:none;box-sizing:border-box">
+      <input id="sd-save-route-name" type="text" style="width:100%;padding:6px 9px;font-size:13px;background:var(--bg);border:1px solid var(--border2);border-radius:6px;color:var(--text);outline:none;box-sizing:border-box">
     </div>
     <div style="margin-bottom:12px;display:flex;align-items:center;gap:8px">
       <input type="checkbox" id="sd-save-route-favorite" checked style="width:15px;height:15px;accent-color:#f97316;cursor:pointer;flex-shrink:0">
@@ -327,7 +344,7 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
     </div>
     <div id="sd-save-route-msg" style="font-size:11px;margin-bottom:10px;display:none"></div>
     <div style="display:flex;gap:8px;justify-content:flex-end">
-      <button onclick="closeStageSaveRouteDialog()" style="font-size:12px;font-weight:600;padding:5px 14px;border-radius:7px;border:1px solid #3a3a3c;background:#3a3a3c;color:#f2f2f7;cursor:pointer">Cancel</button>
+      <button onclick="closeStageSaveRouteDialog()" style="font-size:12px;font-weight:600;padding:5px 14px;border-radius:7px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);cursor:pointer">Cancel</button>
       <button id="sd-save-route-confirm" onclick="confirmStageSaveAsRoute()" style="font-size:12px;font-weight:600;padding:5px 14px;border-radius:7px;border:none;background:#f97316;color:#fff;cursor:pointer">Save</button>
     </div>
   </div>
@@ -590,22 +607,31 @@ async function onTourSelect(id) {
   renderDetail(null);
 }
 
-async function confirmDelete() {
+function confirmDelete() {
   if(!tourInfo?.is_mine) return;
-  if(!confirm(`Delete tour "${tourInfo.title}"? This cannot be undone.`)) return;
-  await fetch(`/tours/${tourInfo.id}`, { method:'DELETE' });
-  _saveLastTour(null);
-  tourInfo=null; tourStages=[]; selectedId=null;
-  routeGroup && routeGroup.clearLayers();
-  document.getElementById('tour-selector').value = '';
-  document.getElementById('stage-list').innerHTML = '';
-  document.getElementById('delete-btn').style.visibility   = 'hidden';
-  document.getElementById('edit-tour-btn').style.visibility = 'hidden';
-  document.getElementById('publish-btn').style.visibility  = 'hidden';
-  document.getElementById('view-all-btn').style.display  = 'none';
-  document.getElementById('main-empty').style.display    = 'flex';
-  document.getElementById('map-and-detail').style.display = 'none';
-  await loadTours();
+  document.getElementById('tour-delete-msg').textContent =
+    `Delete tour "${tourInfo.title}"? This cannot be undone.`;
+  const modal = document.getElementById('tour-delete-modal');
+  modal.style.display = 'flex';
+  document.getElementById('tour-delete-confirm-btn').onclick = async () => {
+    closeTourDeleteModal();
+    await fetch(`/tours/${tourInfo.id}`, { method:'DELETE' });
+    _saveLastTour(null);
+    tourInfo=null; tourStages=[]; selectedId=null;
+    routeGroup && routeGroup.clearLayers();
+    document.getElementById('tour-selector').value = '';
+    document.getElementById('stage-list').innerHTML = '';
+    document.getElementById('delete-btn').style.visibility   = 'hidden';
+    document.getElementById('edit-tour-btn').style.visibility = 'hidden';
+    document.getElementById('publish-btn').style.visibility  = 'hidden';
+    document.getElementById('view-all-btn').style.display  = 'none';
+    document.getElementById('main-empty').style.display    = 'flex';
+    document.getElementById('map-and-detail').style.display = 'none';
+    await loadTours();
+  };
+}
+function closeTourDeleteModal() {
+  document.getElementById('tour-delete-modal').style.display = 'none';
 }
 
 // ── Sidebar stage list (click only) ──────────────────────────────────────────

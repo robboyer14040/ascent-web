@@ -22,11 +22,16 @@ async def route_builder_page(request: Request):
                     "/{z}/{x}/{y}.png?api_key=" + stadia_key)
     else:
         tile_url = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+    try:
+        ui_prefs = db_getter().get_ui_prefs(uid)
+    except Exception:
+        ui_prefs = {}
     return templates.TemplateResponse("route_builder.html", {
         "request": request,
         "current_user": user,
         "has_stadia_key": bool(stadia_key),
         "tile_url": tile_url,
+        "ui_prefs": ui_prefs,
     })
 
 

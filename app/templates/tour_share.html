@@ -13,8 +13,12 @@
   --bg:#1c1c1e;--surface:#2c2c2e;--surface2:#3a3a3c;
   --border:#3a3a3c;--border2:#48484a;
   --text:#f2f2f7;--muted:#8e8e93;--muted2:#636366;
-  --accent:#f97316;
+  --accent:#f97316;--nav-hover:rgba(255,255,255,.06);
+  --lb-bg:rgba(0,0,0,.92);--lb-btn:rgba(255,255,255,.15);
+  --lb-text:#fff;--lb-muted:#aaa;--lb-hint:#666;
 }
+[data-theme="light"]{--bg:#f2f2f7;--surface:#ffffff;--surface2:#e5e5ea;--border:#d1d1d6;--border2:#c7c7cc;--text:#1c1c1e;--muted:#6c6c70;--muted2:#8e8e93;--accent:#f97316;--nav-hover:rgba(0,0,0,.05);--lb-bg:rgba(215,215,225,.95);--lb-btn:rgba(0,0,0,.12);--lb-text:#1c1c1e;--lb-muted:#6c6c70;--lb-hint:#8e8e93}
+@media(prefers-color-scheme:light){:root:not([data-theme]){--bg:#f2f2f7;--surface:#ffffff;--surface2:#e5e5ea;--border:#d1d1d6;--border2:#c7c7cc;--text:#1c1c1e;--muted:#6c6c70;--muted2:#8e8e93;--accent:#f97316;--nav-hover:rgba(0,0,0,.05);--lb-bg:rgba(215,215,225,.95);--lb-btn:rgba(0,0,0,.12);--lb-text:#1c1c1e;--lb-muted:#6c6c70;--lb-hint:#8e8e93}}
 html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif;font-size:13px;background:var(--bg);color:var(--text)}
 button{cursor:pointer;border:none;background:none;color:inherit;font:inherit}
 input,select{font:inherit}
@@ -44,20 +48,28 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
 .stage-status-none{font-size:14px;color:var(--muted2);line-height:1}
 #main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
 #map{width:100%;background:#1a2030;flex-shrink:0;position:relative}
-.map-style-btn{background:rgba(0,0,0,.6);color:#ccc;border:1px solid rgba(255,255,255,.15);border-radius:4px;padding:2px 7px;font-size:11px;cursor:pointer;backdrop-filter:blur(4px)}
+.map-style-btn{background:rgba(0,0,0,.6);color:#ccc;border:1px solid rgba(255,255,255,.15);border-radius:4px;padding:2px 7px;font-size:11px;cursor:pointer;backdrop-filter:blur(4px);transition:all .15s}
 .map-style-btn:hover{background:rgba(0,0,0,.8);color:#fff}
 .map-style-btn.active{background:#f97316;color:#fff;border-color:#f97316}
-#resize-handle{height:6px;background:var(--surface2);cursor:row-resize;flex-shrink:0;border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
-#resize-handle:hover{background:var(--accent);opacity:.5}
+#resize-handle{height:6px;background:var(--surface2);cursor:row-resize;flex-shrink:0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);transition:background .1s}
+#resize-handle:hover,#resize-handle.dragging{background:var(--accent);opacity:.5}
+#stage-elev-strip{height:100px;flex-shrink:0;background:var(--bg);border-bottom:1px solid var(--border);position:relative;display:none}
+#stage-elev-canvas{width:100%;height:100%;display:block}
+#stage-elev-xhair{display:none;position:absolute;top:4px;bottom:0;width:1px;background:rgba(255,255,255,.45);pointer-events:none}
+#stage-elev-hud{display:none;position:absolute;top:4px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.62);color:#e2e8f0;font-size:10px;font-family:monospace;padding:2px 8px;border-radius:4px;white-space:nowrap;pointer-events:none;z-index:10}
 #stage-detail{flex:1;overflow-y:auto;padding:16px 20px;min-height:0}
 .section-label{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:7px}
-.stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:6px;margin-bottom:8px}
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:6px;align-content:start;margin-bottom:8px;flex:1;min-width:0}
 .stat-chip{background:var(--surface2);border:1px solid var(--border2);border-radius:7px;padding:5px 4px;display:flex;flex-direction:column;align-items:center}
 .sc-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:1px}
 .sc-val{font-size:14px;font-weight:600;font-variant-numeric:tabular-nums}
 .sc-sub{font-size:10px;color:var(--muted);margin-top:2px;min-height:1.2em;font-variant-numeric:tabular-nums}
-#stage-elev-strip{width:100%;margin-top:12px;position:relative}
-#stage-elev-canvas{width:100%;height:100px;display:block}
+.act-notes{font-size:12px;color:var(--text);background:var(--surface2);border-radius:6px;padding:8px;margin-bottom:8px;line-height:1.5;white-space:pre-wrap}
+/* ── AI cards ── */
+.ai-card{background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:10px 12px;margin-top:14px}
+.ai-card-label{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--accent);margin-bottom:5px;font-weight:600}
+.ai-card-body{font-size:12px;color:var(--text);line-height:1.6}
+.ai-card-loading{font-size:11px;color:var(--muted);font-style:italic}
 </style>
 </head>
 <body>
@@ -75,7 +87,10 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
     <div id="tour-header">
       <div id="tour-header-title">{{ tour_title }}</div>
       <div id="tour-header-sub">Loading…</div>
-      <div style="margin-top:6px;font-size:12px;color:var(--muted)">Athlete: <strong style="color:var(--text);font-size:13px">{{ display_name }}</strong></div>
+      <div style="margin-top:6px;display:flex;align-items:center;gap:7px">
+        <img src="/api/avatar/{{ share_uid }}?thumb=1" style="width:26px;height:26px;border-radius:50%;object-fit:cover;flex-shrink:0" onerror="this.style.display='none'">
+        <strong style="color:var(--text);font-size:13px">{{ display_name }}</strong>
+      </div>
     </div>
     <div id="stage-list-wrap">
       <div id="stage-list"></div>
@@ -93,22 +108,28 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
       </div>
       <button onclick="resetZoom()" title="Reset zoom" style="position:absolute;bottom:24px;left:8px;z-index:500;background:rgba(0,0,0,.6);color:#ccc;border:1px solid rgba(255,255,255,.15);border-radius:4px;padding:3px 6px;font-size:13px;cursor:pointer;backdrop-filter:blur(4px)"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1 5V1h4M9 1h4v4M13 9v4H9M5 13H1V9"/></svg></button>
     </div>
-    <div id="resize-handle"></div>
+    <div id="resize-handle" title="Drag to resize map"></div>
+    <div id="stage-elev-strip">
+      <canvas id="stage-elev-canvas"></canvas>
+      <div id="stage-elev-xhair"></div>
+      <div id="stage-elev-hud"></div>
+    </div>
     <div id="stage-detail"><div style="color:var(--muted);font-size:12px">Loading tour…</div></div>
   </div>
 </div>
 
-<!-- Photo lightbox -->
-<div id="share-lightbox" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.92);align-items:center;justify-content:center;flex-direction:column" onclick="if(event.target===this)closeShareLightbox()">
-  <button onclick="closeShareLightbox()" style="position:absolute;top:14px;right:18px;font-size:22px;color:#fff;background:none;border:none;cursor:pointer;line-height:1">✕</button>
-  <button onclick="event.stopPropagation();shareNavLb(-1)" style="position:absolute;left:12px;font-size:28px;color:#fff;background:none;border:none;cursor:pointer;line-height:1;top:50%;transform:translateY(-50%)">‹</button>
-  <button onclick="event.stopPropagation();shareNavLb(1)"  style="position:absolute;right:12px;font-size:28px;color:#fff;background:none;border:none;cursor:pointer;line-height:1;top:50%;transform:translateY(-50%)">›</button>
+<!-- Photo/video lightbox -->
+<div id="share-lightbox" style="display:none;position:fixed;inset:0;z-index:9999;background:var(--lb-bg);align-items:center;justify-content:center;flex-direction:column" onclick="if(event.target===this)closeShareLightbox()">
+  <button onclick="closeShareLightbox()" style="position:absolute;top:14px;right:18px;font-size:22px;color:var(--lb-text);background:none;border:none;cursor:pointer;line-height:1">✕</button>
+  <button onclick="event.stopPropagation();shareNavLb(-1)" style="position:absolute;left:12px;font-size:28px;color:var(--lb-text);background:none;border:none;cursor:pointer;line-height:1;top:50%;transform:translateY(-50%)">‹</button>
+  <button onclick="event.stopPropagation();shareNavLb(1)"  style="position:absolute;right:12px;font-size:28px;color:var(--lb-text);background:none;border:none;cursor:pointer;line-height:1;top:50%;transform:translateY(-50%)">›</button>
   <img id="slb-img" src="" style="max-width:90vw;max-height:80vh;object-fit:contain;border-radius:6px">
   <video id="slb-vid" controls playsinline style="display:none;max-width:90vw;max-height:80vh;border-radius:6px;background:#000" onclick="event.stopPropagation()"></video>
   <div style="display:flex;align-items:center;gap:14px;margin-top:10px" onclick="event.stopPropagation()">
-    <span id="slb-count" style="color:#aaa;font-size:12px;min-width:50px;text-align:center"></span>
+    <span id="slb-count" style="color:var(--lb-muted);font-size:12px;min-width:50px;text-align:center"></span>
     <a id="slb-download" href="#" download style="font-size:12px;font-weight:600;color:#f97316;border:1px solid #f97316;border-radius:4px;padding:3px 10px;text-decoration:none">↓ Download</a>
   </div>
+  <div style="color:var(--lb-hint);font-size:11px;margin-top:6px">Press Esc or click background to close · ← → to navigate</div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -120,22 +141,23 @@ const TOKEN = {{ token | tojson }};
 // ── Units (default statute; toggled by URL ?metric=1) ────────────────────────
 const U = {
   metric: new URLSearchParams(location.search).get('metric') === '1',
-  dist:   mi  => U.metric ? +(mi*1.60934).toFixed(2) : +mi.toFixed(2),
   distS:  mi  => U.metric ? (mi*1.60934).toFixed(1)+' km' : mi.toFixed(1)+' mi',
-  climb:  ft  => U.metric ? Math.round(ft*0.3048) : Math.round(ft),
   climbS: ft  => U.metric ? Math.round(ft*0.3048)+' m' : Math.round(ft)+' ft',
   speedS: mph => U.metric ? (mph*1.60934).toFixed(1)+' km/h' : mph.toFixed(1)+' mph',
   tempS:  f   => U.metric ? +((f-32)*5/9).toFixed(1)+' °C' : Math.round(f)+' °F',
   windS:  kph => U.metric ? Math.round(kph)+' km/h' : Math.round(kph/1.60934)+' mph',
   precipS:mm  => U.metric ? mm+' mm' : (mm/25.4).toFixed(2)+'"',
-  altS:   ft  => U.metric ? Math.round(ft*0.3048)+' m' : Math.round(ft)+' ft',
 };
 
 function fmtHMS(s) {
   if(!s) return '—';
   s = Math.round(s);
-  const h = Math.floor(s/3600), m = Math.floor((s%3600)/60), sec = s%60;
-  return h ? `${h}h ${m}m` : `${m}m ${sec}s`;
+  const h=Math.floor(s/3600), m=Math.floor((s%3600)/60), sec=s%60;
+  return h ? `${h}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}` : `${m}:${String(sec).padStart(2,'0')}`;
+}
+function fmtDate(ts) {
+  if(!ts) return '';
+  try { return new Date(parseInt(ts)*1000).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}); } catch(e) { return ''; }
 }
 function esc(s) { const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
 function mkStatChip(l,v,sub) {
@@ -144,10 +166,9 @@ function mkStatChip(l,v,sub) {
 function chip4(l,v,altSub,bot) {
   return `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">${l}</div><div class="sc-val">${v}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${altSub}</div><div class="sc-sub">${bot}</div></div>`;
 }
-function stageColor(s) {
-  return s.completion ? '#ef4444' : '#1e40af';
-}
+function stageColor(s) { return s.completion ? '#ef4444' : '#1e40af'; }
 
+// ── Flag icons ────────────────────────────────────────────────────────────────
 const _startIcon = L.divIcon({
   html: `<svg width="17" height="22" viewBox="0 0 20 26" xmlns="http://www.w3.org/2000/svg" style="filter:drop-shadow(0 1px 3px rgba(0,0,0,.9))">
     <line x1="2" y1="0" x2="2" y2="26" stroke="white" stroke-width="2"/>
@@ -186,9 +207,7 @@ function initMap() {
   MapUtils.addScale(shareMap, U.metric);
 }
 function setMapStyle(key, init=false) {
-  document.querySelectorAll('.map-style-btn').forEach(b=>{
-    b.classList.toggle('active', b.dataset.style===key);
-  });
+  document.querySelectorAll('.map-style-btn').forEach(b => b.classList.toggle('active', b.dataset.style===key));
   const [url, attr] = TILE_LAYERS[key] || TILE_LAYERS['osm'];
   if(tileLayer) shareMap.removeLayer(tileLayer);
   tileLayer = L.tileLayer(url, {attribution:attr, maxZoom:19}).addTo(shareMap);
@@ -204,119 +223,157 @@ function resetZoom() {
   let dragging = false, startY = 0, startH = 0;
   handle.addEventListener('mousedown', e => {
     dragging = true; startY = e.clientY; startH = mapEl.offsetHeight;
-    document.body.style.userSelect = 'none';
-    handle.classList.add('dragging');
+    document.body.style.userSelect = 'none'; handle.classList.add('dragging');
   });
   document.addEventListener('mousemove', e => {
     if(!dragging) return;
     const h = Math.max(80, Math.min(startH + e.clientY - startY, window.innerHeight * 0.8));
-    mapEl.style.height = h + 'px';
-    shareMap && shareMap.invalidateSize();
+    mapEl.style.height = h + 'px'; shareMap && shareMap.invalidateSize();
   });
   document.addEventListener('mouseup', () => {
-    dragging = false;
-    document.body.style.userSelect = '';
-    handle.classList.remove('dragging');
+    dragging = false; document.body.style.userSelect = ''; handle.classList.remove('dragging');
   });
 })();
 
-// ── Elevation chart ───────────────────────────────────────────────────────────
-let _elevChart = null;
-function _haversineMi(lat1,lon1,lat2,lon2) {
+// ── Elevation strip ───────────────────────────────────────────────────────────
+let _elevChart = null, _elevRawPts = null, _elevHoverDot = null;
+
+function _haversineMi(lat1, lon1, lat2, lon2) {
   const R=3958.8, dLat=(lat2-lat1)*Math.PI/180, dLon=(lon2-lon1)*Math.PI/180;
   const a=Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
   return R*2*Math.asin(Math.sqrt(a));
 }
-function drawElevation(pts) {
-  const strip = document.getElementById('stage-elev-strip');
-  const canvas= document.getElementById('stage-elev-canvas');
+function _removeHoverDot() { if(_elevHoverDot){_elevHoverDot.remove();_elevHoverDot=null;} }
+function onElevLeave() {
+  const x=document.getElementById('stage-elev-xhair'), h=document.getElementById('stage-elev-hud');
+  if(x) x.style.display='none'; if(h) h.style.display='none'; _removeHoverDot();
+}
+function onElevHover(e) {
+  if(!_elevChart||!_elevRawPts) return;
+  const xAxis=_elevChart.scales.x, rect=_elevChart.canvas.getBoundingClientRect();
+  const mouseX=e.clientX-rect.left;
+  if(mouseX<xAxis.left||mouseX>xAxis.right){onElevLeave();return;}
+  const dataX=xAxis.getValueForPixel(mouseX), pts=_elevChart._chartPts;
+  let lo=0,hi=pts.length-1;
+  while(lo<hi){const mid=(lo+hi)>>1; if(pts[mid].x<dataX)lo=mid+1;else hi=mid;}
+  const idx=(lo>0&&Math.abs(pts[lo-1].x-dataX)<Math.abs(pts[lo].x-dataX))?lo-1:lo;
+  const pt=pts[idx], px=xAxis.getPixelForValue(pt.x);
+  const xhair=document.getElementById('stage-elev-xhair');
+  if(xhair){xhair.style.display='block';xhair.style.left=px+'px';}
+  const hud=document.getElementById('stage-elev-hud');
+  if(hud){
+    const win=Math.min(5,Math.floor(pts.length/20))||1;
+    const i0=Math.max(0,idx-win),i1=Math.min(pts.length-1,idx+win);
+    const grad=i1!==i0?(pts[i1].y-pts[i0].y)/((pts[i1].x-pts[i0].x)*(U.metric?1000:5280))*100:0;
+    const xu=U.metric?'km':'mi', yu=U.metric?'m':'ft';
+    hud.innerHTML=`DIST&nbsp;${pt.x.toFixed(2)}&nbsp;${xu}&nbsp;&nbsp;ALT&nbsp;${pt.y}&nbsp;${yu}&nbsp;&nbsp;GRAD&nbsp;${grad>=0?'+':''}${grad.toFixed(1)}%`;
+    hud.style.display='block';
+  }
+  if(_elevRawPts[idx]&&shareMap){
+    const [lat,lon]=_elevRawPts[idx];
+    const dotHtml=`<div style="width:10px;height:10px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#ffe066,#f59e0b 55%,#b45309);border:1.5px solid #fff;box-shadow:0 0 3px rgba(0,0,0,.5)"></div>`;
+    if(!_elevHoverDot){
+      _elevHoverDot=L.marker([lat,lon],{icon:L.divIcon({html:dotHtml,className:'',iconSize:[10,10],iconAnchor:[5,5]}),zIndexOffset:1000,interactive:false}).addTo(shareMap);
+    } else { _elevHoverDot.setLatLng([lat,lon]); }
+  }
+}
+function drawStageElevation(pts) {
+  const strip=document.getElementById('stage-elev-strip'), canvas=document.getElementById('stage-elev-canvas');
   if(!strip||!canvas) return;
-  if(_elevChart){_elevChart.destroy();_elevChart=null;}
+  if(_elevChart){_elevChart.destroy();_elevChart=null;} _elevRawPts=null; _removeHoverDot(); onElevLeave();
   if(!pts?.length||pts[0].length<3||!pts.some(p=>p[2]&&p[2]!==0)){strip.style.display='none';return;}
-  const step = Math.max(1,Math.floor(pts.length/600));
-  let cum=0; const chartPts=[];
+  const step=Math.max(1,Math.floor(pts.length/600));
+  const distConv=U.metric?mi=>+(mi*1.60934).toFixed(3):mi=>+mi.toFixed(3);
+  const altConv=U.metric?ft=>Math.round(ft*0.3048):ft=>Math.round(ft);
+  const xUnit=U.metric?'km':'mi', yUnit=U.metric?'m':'ft';
+  let cum=0; const chartPts=[], rawPts=[];
   for(let i=0;i<pts.length;i++){
     if(i>0) cum+=_haversineMi(pts[i-1][0],pts[i-1][1],pts[i][0],pts[i][1]);
-    if(i%step===0||i===pts.length-1)
-      chartPts.push({x:U.metric?+(cum*1.60934).toFixed(3):+cum.toFixed(3), y:U.metric?Math.round(pts[i][2]*0.3048):Math.round(pts[i][2])});
+    if(i%step===0||i===pts.length-1){chartPts.push({x:distConv(cum),y:altConv(pts[i][2]||0)});rawPts.push(pts[i]);}
   }
-  const xUnit=U.metric?'km':'mi', yUnit=U.metric?'m':'ft';
-  const minY=Math.min(...chartPts.map(p=>p.y));
-  const yFloor=Math.floor(minY/100)*100;
-  strip.style.display='';
+  if(!chartPts.length){strip.style.display='none';return;}
+  _elevRawPts=rawPts;
+  const totalX=chartPts[chartPts.length-1].x, minY=Math.min(...chartPts.map(p=>p.y)), yFloor=Math.floor(minY/100)*100;
+  strip.style.display='block';
   _elevChart=new Chart(canvas.getContext('2d'),{
     type:'line',
-    data:{datasets:[{data:chartPts,fill:true,borderColor:'#f97316',borderWidth:1.5,
-      backgroundColor:'rgba(249,115,22,.18)',pointRadius:0,tension:0}]},
+    data:{datasets:[{data:chartPts,fill:true,borderColor:'#3b82f6',backgroundColor:'rgba(30,80,180,.55)',borderWidth:1.5,pointRadius:0,tension:0.3}]},
     options:{responsive:true,maintainAspectRatio:false,animation:false,
+      layout:{padding:{top:4,right:10,bottom:0,left:0}},
       plugins:{legend:{display:false},tooltip:{enabled:false}},
       scales:{
-        x:{type:'linear',ticks:{color:'#64748b',font:{size:9},maxTicksLimit:8,callback:v=>`${v.toFixed(1)}${xUnit}`},
-           grid:{color:'rgba(255,255,255,.04)'}},
-        y:{min:yFloor,ticks:{color:'#64748b',font:{size:9},maxTicksLimit:4,callback:v=>`${v}${yUnit}`},
-           grid:{color:'rgba(255,255,255,.06)'}},
+        x:{type:'linear',min:0,max:totalX,ticks:{color:'#64748b',font:{size:9},maxTicksLimit:8,callback:v=>`${(+v).toFixed(1)} ${xUnit}`},grid:{color:'rgba(255,255,255,.04)'}},
+        y:{position:'left',min:yFloor,afterBuildTicks(axis){if(axis.ticks.length>1)axis.ticks.pop();},ticks:{color:'#64748b',font:{size:9},maxTicksLimit:4,callback:v=>`${v} ${yUnit}`},grid:{color:'rgba(255,255,255,.06)'}},
       }}
   });
+  _elevChart._chartPts=chartPts;
+  strip.removeEventListener('mousemove',onElevHover); strip.removeEventListener('mouseleave',onElevLeave);
+  strip.addEventListener('mousemove',onElevHover); strip.addEventListener('mouseleave',onElevLeave);
+}
+function hideStageElevation() {
+  const strip=document.getElementById('stage-elev-strip');
+  if(strip){strip.style.display='none';strip.removeEventListener('mousemove',onElevHover);strip.removeEventListener('mouseleave',onElevLeave);}
+  if(_elevChart){_elevChart.destroy();_elevChart=null;} _elevRawPts=null; _removeHoverDot(); onElevLeave();
 }
 
 // ── Biggest climb ─────────────────────────────────────────────────────────────
 function biggestClimbInfo(pts) {
   if(!pts?.length||pts[0].length<3) return {gainFt:0,startKm:0};
   const raw=pts.map(p=>p[2]||0), half=2;
-  const alts=raw.map((_,i)=>{
-    let s=0,c=0;
-    for(let j=Math.max(0,i-half);j<=Math.min(raw.length-1,i+half);j++){s+=raw[j];c++;}
-    return s/c;
-  });
+  const alts=raw.map((_,i)=>{let s=0,c=0;for(let j=Math.max(0,i-half);j<=Math.min(raw.length-1,i+half);j++){s+=raw[j];c++;}return s/c;});
   const cumKm=[0];
-  for(let i=1;i<pts.length;i++)
-    cumKm.push(cumKm[i-1]+_haversineMi(pts[i-1][0],pts[i-1][1],pts[i][0],pts[i][1])*1.60934);
-  const START_GRAD=3, END_FT=250;
+  for(let i=1;i<pts.length;i++) cumKm.push(cumKm[i-1]+_haversineMi(pts[i-1][0],pts[i-1][1],pts[i][0],pts[i][1])*1.60934);
   let best=0,bestKm=0,inClimb=false,startKm=0,startAlt=0,maxAlt=0,flatFt=0;
   for(let i=1;i<pts.length;i++){
-    const dAlt=alts[i]-alts[i-1], dFt=(cumKm[i]-cumKm[i-1])*3280.84;
-    const grad=dFt>0?(dAlt/dFt)*100:0;
-    if(!inClimb){
-      if(grad>START_GRAD){inClimb=true;startKm=cumKm[i-1];startAlt=alts[i-1];maxAlt=Math.max(alts[i-1],alts[i]);flatFt=0;}
-    } else {
-      if(grad>0){flatFt=0;maxAlt=Math.max(maxAlt,alts[i]);}
-      else{flatFt+=dFt;if(flatFt>END_FT){const g=maxAlt-startAlt;if(g>best){best=g;bestKm=startKm;}inClimb=false;flatFt=0;}}
-    }
+    const dAlt=alts[i]-alts[i-1], dFt=(cumKm[i]-cumKm[i-1])*3280.84, grad=dFt>0?(dAlt/dFt)*100:0;
+    if(!inClimb){if(grad>3){inClimb=true;startKm=cumKm[i-1];startAlt=alts[i-1];maxAlt=Math.max(alts[i-1],alts[i]);flatFt=0;}}
+    else{if(grad>0){flatFt=0;maxAlt=Math.max(maxAlt,alts[i]);}else{flatFt+=dFt;if(flatFt>250){const g=maxAlt-startAlt;if(g>best){best=g;bestKm=startKm;}inClimb=false;flatFt=0;}}}
   }
   if(inClimb){const g=maxAlt-startAlt;if(g>best){best=g;bestKm=startKm;}}
   return {gainFt:best,startKm:bestKm};
 }
 
+// ── Reverse geocode ───────────────────────────────────────────────────────────
+async function reverseGeocode(lat, lon) {
+  try {
+    const r=await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`);
+    const d=await r.json();
+    return [d.city||d.locality||d.principalSubdivision, d.countryName].filter(Boolean).slice(0,2).join(', ') || null;
+  } catch(e) { return null; }
+}
+
 // ── State ─────────────────────────────────────────────────────────────────────
 let tourInfo = null, pointsCache = {}, selectedId = null;
 let _shareLbMedia = [], _shareLbIdx = 0;
+
+// ── Lightbox ──────────────────────────────────────────────────────────────────
 function openShareLightbox(idx) {
   if(!_shareLbMedia.length) return;
   _shareLbIdx = idx;
-  const m   = _shareLbMedia[idx];
-  const img = document.getElementById('slb-img');
-  const vid = document.getElementById('slb-vid');
-  const cnt = document.getElementById('slb-count');
-  const dl  = document.getElementById('slb-download');
-  if(m.type==='video') {
-    img.style.display='none';
-    vid.style.display='';
-    vid.src = m.hls_url||m.url||'';
+  const m=_shareLbMedia[idx], img=document.getElementById('slb-img'), vid=document.getElementById('slb-vid');
+  const cnt=document.getElementById('slb-count'), dl=document.getElementById('slb-download');
+  if(m.type==='video'){
+    img.style.display='none'; vid.style.display=''; vid.src=m.hls_url||m.url||'';
   } else {
-    vid&&vid.pause(); if(vid) vid.style.display='none';
-    img.src = m.url||''; img.style.display='';
+    vid&&vid.pause(); if(vid)vid.style.display='none'; img.src=m.url||''; img.style.display='';
   }
   cnt.textContent = _shareLbMedia.length>1 ? `${idx+1} / ${_shareLbMedia.length}` : '';
-  if(dl) { dl.href = (m.url||'') + '/download'; dl.download = m.url.split('/').pop(); }
+  if(dl){dl.href=(m.url||'')+'/download'; dl.download=m.url.split('/').pop();}
   document.getElementById('share-lightbox').style.display='flex';
 }
 function shareNavLb(d){openShareLightbox((_shareLbIdx+d+_shareLbMedia.length)%_shareLbMedia.length);}
 function closeShareLightbox(){
-  const lb=document.getElementById('share-lightbox');
-  const vid=document.getElementById('slb-vid');
+  const lb=document.getElementById('share-lightbox'), vid=document.getElementById('slb-vid');
   if(vid){vid.pause();vid.src='';}
   lb.style.display='none';
 }
+document.addEventListener('keydown', e => {
+  if(document.getElementById('share-lightbox').style.display==='flex'){
+    if(e.key==='Escape')closeShareLightbox();
+    else if(e.key==='ArrowLeft')shareNavLb(-1);
+    else if(e.key==='ArrowRight')shareNavLb(1);
+  }
+});
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 (async function init() {
@@ -324,7 +381,6 @@ function closeShareLightbox(){
   shareMap.getContainer().style.height = '320px';
   document.getElementById('map').style.height = '320px';
 
-  // Load tour data
   try {
     tourInfo = await fetch(`/tours/share/${TOKEN}/data`).then(r=>r.json());
   } catch(e) {
@@ -332,342 +388,310 @@ function closeShareLightbox(){
     return;
   }
 
-  // Update sidebar header
-  const stages  = tourInfo.stages||[];
-  const done    = stages.filter(s=>s.completion).length;
+  const stages=tourInfo.stages||[], done=stages.filter(s=>s.completion).length;
   document.getElementById('tour-header-sub').textContent =
     `${tourInfo.start_date} – ${tourInfo.end_date}  ·  ${done}/${stages.length} stages complete`;
 
-  // Load points and draw routes
-  try {
-    pointsCache = await fetch(`/tours/share/${TOKEN}/points`).then(r=>r.json());
-  } catch(e) {}
+  try { pointsCache = await fetch(`/tours/share/${TOKEN}/points`).then(r=>r.json()); } catch(e) {}
   drawRoutes(null);
-
   renderStageList();
   renderDetail(null);
 
-  // Defer fitBounds until map has settled
-  setTimeout(() => {
-    shareMap.invalidateSize();
-    if(_lastBounds) shareMap.fitBounds(_lastBounds, {padding:[24,24]});
-  }, 150);
+  setTimeout(() => { shareMap.invalidateSize(); if(_lastBounds) shareMap.fitBounds(_lastBounds, {padding:[24,24]}); }, 150);
 })();
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 function drawRoutes(selId) {
   routeGroup.clearLayers();
-  const stages = tourInfo?.stages||[];
-  const allPts = [];
-  const hasSel = selId != null;
-
-  // Draw polylines
+  const stages=tourInfo?.stages||[], allPts=[], hasSel=selId!=null;
   stages.forEach(s => {
-    const pts = pointsCache[String(s.id)];
-    if(!pts?.length) return;
-    const color      = stageColor(s);
-    const lpts       = pts.map(p=>[p[0],p[1]]);
-    const isSelected = hasSel && String(s.id) === String(selId);
-    const opacity    = hasSel ? (isSelected ? 1 : 0.18) : 0.85;
-    const weight     = isSelected ? 5 : 3;
-    L.polyline(lpts,{color,weight,opacity}).addTo(routeGroup);
+    const pts=pointsCache[String(s.id)]; if(!pts?.length) return;
+    const lpts=pts.map(p=>[p[0],p[1]]), isSelected=hasSel&&String(s.id)===String(selId);
+    L.polyline(lpts,{color:stageColor(s),weight:isSelected?5:3,opacity:hasSel?(isSelected?1:0.18):0.85}).addTo(routeGroup);
     allPts.push(...lpts);
   });
-
   if(!hasSel) {
-    // Overall view: start flag, stage-number circles, finish flag
-    const first = stages[0];
-    if(first?.start_lat != null)
-      L.marker([first.start_lat, first.start_lon], {icon:_startIcon, zIndexOffset:50, interactive:false}).addTo(routeGroup);
-
+    const first=stages[0];
+    if(first?.start_lat!=null) L.marker([first.start_lat,first.start_lon],{icon:_startIcon,zIndexOffset:50,interactive:false}).addTo(routeGroup);
     stages.forEach(s => {
-      if(s.start_lat == null || s.start_lon == null) return;
-      const icon = L.divIcon({
-        className: '',
-        html: `<div style="width:16px;height:16px;border-radius:50%;background:#fff;border:1.5px solid #000;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:#000;font-family:-apple-system,sans-serif;line-height:1;box-sizing:border-box">${s.stage_num}</div>`,
-        iconSize: [16,16], iconAnchor: [8,8],
-      });
-      L.marker([s.start_lat, s.start_lon], {icon, zIndexOffset:150, interactive:false}).addTo(routeGroup);
+      if(s.start_lat==null||s.start_lon==null) return;
+      const icon=L.divIcon({className:'',html:`<div style="width:16px;height:16px;border-radius:50%;background:#fff;border:1.5px solid #000;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:#000;font-family:-apple-system,sans-serif;line-height:1;box-sizing:border-box">${s.stage_num}</div>`,iconSize:[16,16],iconAnchor:[8,8]});
+      L.marker([s.start_lat,s.start_lon],{icon,zIndexOffset:150,interactive:false}).addTo(routeGroup);
     });
-
-    const last = stages[stages.length-1];
-    const lastPts = last ? pointsCache[String(last.id)] : null;
-    if(lastPts?.length)
-      L.marker(lastPts[lastPts.length-1], {icon:_endIcon, zIndexOffset:200, interactive:false}).addTo(routeGroup);
-
-    if(allPts.length) _lastBounds = L.latLngBounds(allPts);
+    const last=stages[stages.length-1], lastPts=last?pointsCache[String(last.id)]:null;
+    if(lastPts?.length) L.marker(lastPts[lastPts.length-1],{icon:_endIcon,zIndexOffset:200,interactive:false}).addTo(routeGroup);
+    if(allPts.length) _lastBounds=L.latLngBounds(allPts);
   } else {
-    // Stage view: start + end flags for selected stage
-    const pts = pointsCache[String(selId)];
-    if(pts?.length) {
-      L.marker(pts[0],            {icon:_startIcon, zIndexOffset:200, interactive:false}).addTo(routeGroup);
-      L.marker(pts[pts.length-1], {icon:_endIcon,   zIndexOffset:200, interactive:false}).addTo(routeGroup);
-    }
+    const pts=pointsCache[String(selId)];
+    if(pts?.length){L.marker(pts[0],{icon:_startIcon,zIndexOffset:200,interactive:false}).addTo(routeGroup);L.marker(pts[pts.length-1],{icon:_endIcon,zIndexOffset:200,interactive:false}).addTo(routeGroup);}
   }
 }
 
 // ── Stage list ────────────────────────────────────────────────────────────────
 function renderStageList() {
-  const list   = document.getElementById('stage-list');
-  const stages = tourInfo?.stages||[];
+  const list=document.getElementById('stage-list'), stages=tourInfo?.stages||[];
   list.innerHTML = stages.map(s => {
-    const color    = stageColor(s);
     const statusHtml = s.completion
       ? `<div class="stage-status"><div class="stage-status-done">✓</div><div class="stage-status-date">${s.completion.date}</div></div>`
       : `<div class="stage-status"><div class="stage-status-none">—</div></div>`;
     return `<div class="stage-item${String(s.id)===String(selectedId)?' active':''}" onclick="selectStage('${s.id}')">
-      <span class="stage-dot" style="background:${color}"></span>
-      <div class="stage-item-body">
-        <div class="stage-item-name">${esc(s.name)}</div>
-        <div class="stage-item-sub">${U.distS(s.distance_mi)} · ${U.climbS(s.climb_ft)} climb</div>
-      </div>${statusHtml}</div>`;
+      <span class="stage-dot" style="background:${stageColor(s)}"></span>
+      <div class="stage-item-body"><div class="stage-item-name">${esc(s.name)}</div><div class="stage-item-sub">${U.distS(s.distance_mi)} · ${U.climbS(s.climb_ft)} climb</div></div>${statusHtml}</div>`;
   }).join('');
 }
 
 // ── Stage selection ───────────────────────────────────────────────────────────
 function selectStage(id) {
   selectedId = (String(id)===String(selectedId)) ? null : id;
-  renderStageList();
-  drawRoutes(selectedId);
-  renderDetail(selectedId);
+  renderStageList(); drawRoutes(selectedId); renderDetail(selectedId);
   if(selectedId) {
-    const pts = pointsCache[String(selectedId)];
-    if(pts?.length) {
-      const lpts = pts.map(p=>[p[0],p[1]]);
-      shareMap.fitBounds(L.latLngBounds(lpts),{padding:[24,24]});
-    }
-  } else {
-    resetZoom();
-  }
+    const pts=pointsCache[String(selectedId)];
+    if(pts?.length) shareMap.fitBounds(L.latLngBounds(pts.map(p=>[p[0],p[1]])),{padding:[24,24]});
+  } else { resetZoom(); }
 }
 
 // ── Detail pane ───────────────────────────────────────────────────────────────
 async function renderDetail(activeId) {
-  const el = document.getElementById('stage-detail');
-  const stages = tourInfo?.stages||[];
+  const el=document.getElementById('stage-detail'), stages=tourInfo?.stages||[];
 
   if(!activeId) {
-    // Overview
-    const done       = stages.filter(s=>s.completion);
-    const totalDist  = stages.reduce((a,x)=>a+(x.distance_mi||0),0);
-    const totalClimb = stages.reduce((a,x)=>a+(x.climb_ft||0),0);
-    const doneDist   = done.reduce((a,x)=>a+(x.distance_mi||0),0);
-    const doneClimb  = done.reduce((a,x)=>a+(x.climb_ft||0),0);
-    const pctD = totalDist >0?Math.round(doneDist /totalDist *100):0;
-    const pctC = totalClimb>0?Math.round(doneClimb/totalClimb*100):0;
-    const n    = stages.length||1;
-    const avgDist  = totalDist/n, avgClimb=totalClimb/n;
-    const maxDistIdx  = stages.reduce((mi,x,i)=>(x.distance_mi||0)>(stages[mi].distance_mi||0)?i:mi,0);
-    const maxClimbIdx = stages.reduce((mi,x,i)=>(x.climb_ft||0)>(stages[mi].climb_ft||0)?i:mi,0);
-    const maxDist  = stages[maxDistIdx]?.distance_mi||0;
-    const maxClimb = stages[maxClimbIdx]?.climb_ft||0;
-
-    const altDistStr  = U.metric?totalDist.toFixed(1)+' mi':(totalDist*1.60934).toFixed(1)+' km';
-    const altClimbStr = U.metric?Math.round(totalClimb)+' ft':Math.round(totalClimb*0.3048)+' m';
-    const altAvgDStr  = U.metric?avgDist.toFixed(1)+' mi':(avgDist*1.60934).toFixed(1)+' km';
-    const altAvgCStr  = U.metric?Math.round(avgClimb)+' ft':Math.round(avgClimb*0.3048)+' m';
-    const altMaxDStr  = U.metric?maxDist.toFixed(1)+' mi':(maxDist*1.60934).toFixed(1)+' km';
-    const altMaxCStr  = U.metric?Math.round(maxClimb)+' ft':Math.round(maxClimb*0.3048)+' m';
-
-    let html = `<div class="stats-grid" style="grid-template-columns:repeat(7,1fr);margin-bottom:14px">`;
-    html += `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Stages</div><div class="sc-val">${done.length} / ${stages.length}</div><div class="sc-sub">completed</div></div>`;
-    html += `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Total Dist</div><div class="sc-val">${U.distS(totalDist)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${altDistStr}</div><div class="sc-sub">${U.distS(doneDist)} done (${pctD}%)</div></div>`;
-    html += `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Total Climb</div><div class="sc-val">${U.climbS(totalClimb)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${altClimbStr}</div><div class="sc-sub">${U.climbS(doneClimb)} done (${pctC}%)</div></div>`;
-    html += `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Avg Dist</div><div class="sc-val">${U.distS(avgDist)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${altAvgDStr}</div><div class="sc-sub">per stage</div></div>`;
-    html += `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Avg Climb</div><div class="sc-val">${U.climbS(avgClimb)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${altAvgCStr}</div><div class="sc-sub">per stage</div></div>`;
-    html += `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Max Stage Dist</div><div class="sc-val">${U.distS(maxDist)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${altMaxDStr}</div><div class="sc-sub">Stage ${maxDistIdx+1}</div></div>`;
-    html += `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Max Ascent</div><div class="sc-val">${U.climbS(maxClimb)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${altMaxCStr}</div><div class="sc-sub">Stage ${maxClimbIdx+1}</div></div>`;
-    html += `</div>`;
-    html += `<div style="font-size:11px;color:var(--muted)">Click a stage in the sidebar to see details.</div>`;
-    el.innerHTML = html;
+    // ── Overview ──────────────────────────────────────────────────────────────
+    hideStageElevation();
+    const done=stages.filter(s=>s.completion);
+    const totalDist=stages.reduce((a,x)=>a+(x.distance_mi||0),0);
+    const totalClimb=stages.reduce((a,x)=>a+(x.climb_ft||0),0);
+    const doneDist=done.reduce((a,x)=>a+(x.distance_mi||0),0);
+    const doneClimb=done.reduce((a,x)=>a+(x.climb_ft||0),0);
+    const pctD=totalDist>0?Math.round(doneDist/totalDist*100):0;
+    const pctC=totalClimb>0?Math.round(doneClimb/totalClimb*100):0;
+    const n=stages.length||1, avgDist=totalDist/n, avgClimb=totalClimb/n;
+    const maxDistIdx=stages.reduce((mi,x,i)=>(x.distance_mi||0)>(stages[mi].distance_mi||0)?i:mi,0);
+    const maxClimbIdx=stages.reduce((mi,x,i)=>(x.climb_ft||0)>(stages[mi].climb_ft||0)?i:mi,0);
+    const maxDist=stages[maxDistIdx]?.distance_mi||0, maxClimb=stages[maxClimbIdx]?.climb_ft||0;
+    const ad=U.metric?totalDist.toFixed(1)+' mi':(totalDist*1.60934).toFixed(1)+' km';
+    const ac=U.metric?Math.round(totalClimb)+' ft':Math.round(totalClimb*0.3048)+' m';
+    const aad=U.metric?avgDist.toFixed(1)+' mi':(avgDist*1.60934).toFixed(1)+' km';
+    const aac=U.metric?Math.round(avgClimb)+' ft':Math.round(avgClimb*0.3048)+' m';
+    const amd=U.metric?maxDist.toFixed(1)+' mi':(maxDist*1.60934).toFixed(1)+' km';
+    const amc=U.metric?Math.round(maxClimb)+' ft':Math.round(maxClimb*0.3048)+' m';
+    let html=`<div class="stats-grid" style="grid-template-columns:repeat(7,1fr);margin-bottom:14px">`;
+    html+=`<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Stages</div><div class="sc-val">${done.length} / ${stages.length}</div><div class="sc-sub">completed</div></div>`;
+    html+=`<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Total Dist</div><div class="sc-val">${U.distS(totalDist)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${ad}</div><div class="sc-sub">${U.distS(doneDist)} done (${pctD}%)</div></div>`;
+    html+=`<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Total Climb</div><div class="sc-val">${U.climbS(totalClimb)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${ac}</div><div class="sc-sub">${U.climbS(doneClimb)} done (${pctC}%)</div></div>`;
+    html+=`<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Avg Dist</div><div class="sc-val">${U.distS(avgDist)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${aad}</div><div class="sc-sub">per stage</div></div>`;
+    html+=`<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Avg Climb</div><div class="sc-val">${U.climbS(avgClimb)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${aac}</div><div class="sc-sub">per stage</div></div>`;
+    html+=`<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Max Stage Dist</div><div class="sc-val">${U.distS(maxDist)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${amd}</div><div class="sc-sub">Stage ${maxDistIdx+1}</div></div>`;
+    html+=`<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Max Ascent</div><div class="sc-val">${U.climbS(maxClimb)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${amc}</div><div class="sc-sub">Stage ${maxClimbIdx+1}</div></div>`;
+    html+=`</div>`;
+    const first=stages[0], lastSt=stages[stages.length-1];
+    const lastPts=lastSt?(pointsCache[String(lastSt.id)]||[]):[], lastPt=lastPts.length?lastPts[lastPts.length-1]:null;
+    html+=`<div style="display:flex;flex-direction:column;gap:6px">`;
+    if(first?.start_lat!=null) html+=`<div style="font-size:12px"><span style="color:var(--muted);margin-right:6px">Start:</span><span id="ov-start-loc">Loading…</span></div>`;
+    if(lastPt) html+=`<div style="font-size:12px"><span style="color:var(--muted);margin-right:6px">End:</span><span id="ov-end-loc">Loading…</span></div>`;
+    html+=`</div>`;
+    el.innerHTML=html;
+    if(first?.start_lat!=null) reverseGeocode(first.start_lat,first.start_lon).then(loc=>{const e=document.getElementById('ov-start-loc');if(e)e.textContent=loc||'—';});
+    if(lastPt) reverseGeocode(lastPt[0],lastPt[1]).then(loc=>{const e=document.getElementById('ov-end-loc');if(e)e.textContent=loc||'—';});
+    if(tourInfo.ai_summary) {
+      el.insertAdjacentHTML('beforeend',`<div class="ai-card"><div class="ai-card-label">AI Tour Summary</div><div class="ai-card-body">${esc(tourInfo.ai_summary)}</div></div>`);
+    }
     return;
   }
 
-  const stage = stages.find(s=>String(s.id)===String(activeId));
-  if(!stage) { el.innerHTML=''; return; }
+  const stage=stages.find(s=>String(s.id)===String(activeId));
+  if(!stage){el.innerHTML='';return;}
 
-  const stageHead = `<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:10px">
+  const stageHead=`<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:10px">
     <div style="flex:1;min-width:0;font-size:15px;font-weight:600">Stage ${stage.stage_num}: ${esc(stage.name)}</div>
     <button onclick="selectStage('${stage.id}')" style="flex-shrink:0;font-size:11px;font-weight:600;color:var(--text);border:1px solid var(--border2);border-radius:4px;padding:3px 8px;background:none;cursor:pointer;white-space:nowrap;line-height:1.4">← Entire Tour</button>
   </div>`;
 
   if(!stage.completion) {
-    // Uncompleted stage
-    const pts = pointsCache[String(stage.id)];
-    const distP = U.metric?(+(stage.distance_mi*1.60934).toFixed(1))+' km':(+stage.distance_mi).toFixed(1)+' mi';
-    const distS = U.metric?(+stage.distance_mi.toFixed(1))+' mi':(+(stage.distance_mi*1.60934).toFixed(1))+' km';
-    const climP = U.metric?Math.round(stage.climb_ft*0.3048)+' m':Math.round(stage.climb_ft)+' ft';
-    const climS = U.metric?Math.round(stage.climb_ft)+' ft':Math.round(stage.climb_ft*0.3048)+' m';
-    const {gainFt:bigFt, startKm:bigKm} = biggestClimbInfo(pts);
-    const bigP  = U.metric?Math.round(bigFt*0.3048)+' m':Math.round(bigFt)+' ft';
-    const bigS  = U.metric?Math.round(bigFt)+' ft':Math.round(bigFt*0.3048)+' m';
-    const bigAt = `at ${bigKm.toFixed(1)} km`;
+    // ── Uncompleted stage ────────────────────────────────────────────────────
+    const pts=pointsCache[String(stage.id)];
+    drawStageElevation(pts);
 
-    let html = stageHead;
-    html += `<div class="section-label" style="margin-bottom:6px">Estimated Route</div>`;
-    html += `<div class="stats-grid" style="grid-template-columns:repeat(${bigFt>0?3:2},1fr);margin-bottom:10px">`;
-    html += chip4('Distance',     distP, distS,   '&nbsp;');
-    html += chip4('Total Climb',  climP, climS,   '&nbsp;');
-    if(bigFt>0) html += chip4('Biggest Climb', bigP, bigS, bigAt);
-    html += `</div>`;
-    html += `<div style="display:flex;align-items:baseline;gap:10px;min-height:1.4em">
-      <div style="flex:1;font-size:11px;color:var(--muted)"><span style="font-size:10px;text-transform:uppercase;letter-spacing:.06em">Start:</span> <span id="share-loc-text">—</span></div>
+    const distP=U.metric?(+(stage.distance_mi*1.60934).toFixed(1))+' km':(+stage.distance_mi).toFixed(1)+' mi';
+    const distS=U.metric?(+stage.distance_mi.toFixed(1))+' mi':(+(stage.distance_mi*1.60934).toFixed(1))+' km';
+    const climP=U.metric?Math.round(stage.climb_ft*0.3048)+' m':Math.round(stage.climb_ft)+' ft';
+    const climS=U.metric?Math.round(stage.climb_ft)+' ft':Math.round(stage.climb_ft*0.3048)+' m';
+    const {gainFt:bigFt,startKm:bigKm}=biggestClimbInfo(pts);
+    const bigP=U.metric?Math.round(bigFt*0.3048)+' m':Math.round(bigFt)+' ft';
+    const bigS=U.metric?Math.round(bigFt)+' ft':Math.round(bigFt*0.3048)+' m';
+    const bigAt=U.metric?`at ${bigKm.toFixed(1)} km`:`at ${(bigKm*0.621371).toFixed(1)} mi`;
+
+    let html=stageHead;
+    html+=`<div class="section-label" style="margin-bottom:6px">Estimated Route</div>`;
+    html+=`<div class="stats-grid" style="grid-template-columns:repeat(${bigFt>0?3:2},1fr);margin-bottom:10px">`;
+    html+=chip4('Distance',distP,distS,'&nbsp;');
+    html+=chip4('Total Climb',climP,climS,'&nbsp;');
+    if(bigFt>0) html+=chip4('Biggest Climb',bigP,bigS,bigAt);
+    html+=`</div>`;
+    html+=`<div style="display:flex;align-items:baseline;gap:10px;min-height:1.4em">
+      <div style="flex:1;font-size:11px;color:var(--muted)"><span style="font-size:10px;text-transform:uppercase;letter-spacing:.06em">Trajectory:</span> <span id="share-loc-text">Loading…</span></div>
       <a href="/tours/share/${TOKEN}/stages/${stage.id}/export/gpx" download style="flex-shrink:0;font-size:11px;font-weight:600;color:#f97316;border:1px solid #f97316;border-radius:4px;padding:2px 8px;text-decoration:none;line-height:1.6">↓ GPX</a>
     </div>`;
-    html += `<div style="margin-top:6px;font-size:11px;color:var(--muted)"><span style="font-size:10px;text-transform:uppercase;letter-spacing:.06em">Forecast:</span> <span id="share-forecast-text">Loading…</span></div>`;
-    html += `<div id="stage-elev-strip" style="display:none"><canvas id="stage-elev-canvas"></canvas></div>`;
-    el.innerHTML = html;
+    html+=`<div style="margin-top:6px;font-size:11px;color:var(--muted)"><span style="font-size:10px;text-transform:uppercase;letter-spacing:.06em">Forecast:</span> <span id="share-forecast-text">Loading…</span></div>`;
+    el.innerHTML=html;
 
-    drawElevation(pts);
+    // Trajectory geocode (3 sample points)
+    if(pts?.length) {
+      const p0=pts[0], pm=pts[Math.floor(pts.length/2)], pn=pts[pts.length-1];
+      Promise.all([reverseGeocode(p0[0],p0[1]), reverseGeocode(pm[0],pm[1]), reverseGeocode(pn[0],pn[1])]).then(locs=>{
+        const deduped=locs.filter(Boolean).filter((p,i,a)=>i===0||p!==a[i-1]);
+        const locEl=document.getElementById('share-loc-text'); if(locEl) locEl.textContent=deduped.join(' → ')||'';
+      });
+    } else { const e=document.getElementById('share-loc-text');if(e)e.textContent=''; }
 
     // Forecast
     fetch(`/tours/share/${TOKEN}/stages/${stage.id}/forecast`)
-      .then(r=>r.json())
-      .then(d => {
-        const txt = document.getElementById('share-forecast-text');
-        if(!txt) return;
+      .then(r=>r.json()).then(d=>{
+        const txt=document.getElementById('share-forecast-text'); if(!txt) return;
         if(d.out_of_range){txt.textContent='unavailable';return;}
-        const fc=d.forecast;
-        if(!fc){txt.textContent='';return;}
+        const fc=d.forecast; if(!fc){txt.textContent='';return;}
         const parts=[];
         if(fc.description) parts.push(fc.description);
         if(fc.temp_max_f!=null&&fc.temp_min_f!=null) parts.push(U.tempS(fc.temp_max_f)+' / '+U.tempS(fc.temp_min_f));
         if(fc.wind_kph!=null) parts.push('Wind '+U.windS(fc.wind_kph));
-        if(fc.precip_mm>0)   parts.push(U.precipS(fc.precip_mm));
-        txt.textContent = parts.join(' · ');
-      })
-      .catch(()=>{ const t=document.getElementById('share-forecast-text'); if(t) t.textContent=''; });
+        if(fc.precip_mm>0) parts.push(U.precipS(fc.precip_mm));
+        txt.textContent=parts.join(' · ');
+      }).catch(()=>{const t=document.getElementById('share-forecast-text');if(t)t.textContent='';});
+
+    // AI Stage Summary — cached only, no regeneration. AI Coach Advice NOT shown.
+    fetch(`/tours/share/${TOKEN}/stages/${stage.id}/ai-summary`)
+      .then(r=>r.ok?r.json():null).then(d=>{
+        if(!d?.summary) return;
+        el.insertAdjacentHTML('beforeend',`<div class="ai-card"><div class="ai-card-label">AI Stage Summary</div><div class="ai-card-body">${esc(d.summary)}</div></div>`);
+      }).catch(()=>{});
 
   } else {
-    // Completed stage — render skeleton then populate from full activity fetch
-    const c = stage.completion;
-    let html = stageHead;
-    html += `<div style="font-size:11px;color:#22c55e;margin-bottom:8px">✓ Completed ${c.date}</div>`;
-    html += `<div id="act-detail-body" style="color:var(--muted);font-size:11px">Loading…</div>`;
-    el.innerHTML = html;
+    // ── Completed stage ──────────────────────────────────────────────────────
+    hideStageElevation();
+    const c=stage.completion;
+    el.innerHTML=stageHead+
+      `<div style="font-size:11px;color:#22c55e;font-weight:500;margin-bottom:10px">✓ Completed ${c.date}</div>`+
+      `<div id="act-detail-body" style="color:var(--muted);font-size:11px">Loading…</div>`;
 
-    if(!c.activity_id) { _renderActFallback(c); return; }
+    if(!c.activity_id){_renderActFallback(c);return;}
 
     fetch(`/tours/share/${TOKEN}/activities/${c.activity_id}`)
-      .then(r => r.ok ? r.json() : Promise.reject())
-      .then(act => {
-        const body = document.getElementById('act-detail-body');
-        if(!body) return;
+      .then(r=>r.ok?r.json():Promise.reject())
+      .then(act=>{
+        const body=document.getElementById('act-detail-body'); if(!body) return;
 
-        function altPaceStr(mph, perMile) {
+        function altPaceStr(mph,perMile){
           if(!mph||mph<=0) return null;
-          const mins = perMile ? 60/mph : 60/(mph*1.60934);
-          const m=Math.floor(mins), s=Math.round((mins-m)*60);
+          const mins=perMile?60/mph:60/(mph*1.60934), m=Math.floor(mins), s=Math.round((mins-m)*60);
           return `${m}:${String(s).padStart(2,'0')}/${perMile?'mi':'km'}`;
         }
-        const chips = [
-          ['Distance',  act.distance_mi       ? U.distS(act.distance_mi)      : null, act.distance_mi?(U.metric?(+act.distance_mi.toFixed(2))+' mi':(+(act.distance_mi*1.60934).toFixed(2))+' km'):null],
-          ['Mov Time',  act.active_time        ? fmtHMS(act.active_time)       : null, null],
-          ['Duration',  act.duration           ? fmtHMS(act.duration)          : null, null],
-          ['Climb',     act.total_climb_ft     ? U.climbS(act.total_climb_ft)  : null, act.total_climb_ft?(U.metric?Math.round(act.total_climb_ft)+' ft':Math.round(act.total_climb_ft*0.3048)+' m'):null],
-          ['Descent',   act.total_descent_ft   ? U.climbS(act.total_descent_ft): null, act.total_descent_ft?(U.metric?Math.round(act.total_descent_ft)+' ft':Math.round(act.total_descent_ft*0.3048)+' m'):null],
-          ['Mov Spd',   act.avg_speed_mph      ? U.speedS(act.avg_speed_mph)   : null, act.avg_speed_mph?(U.metric?act.avg_speed_mph.toFixed(1)+' mph':(act.avg_speed_mph*1.60934).toFixed(1)+' km/h'):null],
-          ['Avg Spd',   (act.duration&&act.distance_mi)?U.speedS(+(act.distance_mi/(act.duration/3600)).toFixed(1)):null, (act.duration&&act.distance_mi)?(()=>{const mph=+(act.distance_mi/(act.duration/3600)).toFixed(1);return U.metric?mph+' mph':(+(mph*1.60934).toFixed(1))+' km/h';})():null],
-          ['Avg Pace',  act.avg_speed_mph      ? altPaceStr(act.avg_speed_mph,!U.metric) : null, act.avg_speed_mph?altPaceStr(act.avg_speed_mph,U.metric):null],
-          ['Avg HR',    act.avg_heartrate      ? Math.round(act.avg_heartrate)+' bpm' : null, null],
-          ['Max HR',    act.max_heartrate      ? Math.round(act.max_heartrate)+' bpm' : null, null],
-          ['Cadence',   act.avg_cadence        ? Math.round(act.avg_cadence)+' rpm'   : null, null],
-          ['Avg Pwr',   act.avg_power          ? Math.round(act.avg_power)+' W'       : null, act.max_power?'max '+Math.round(act.max_power)+' W':null],
-          ['Suffer',    act.suffer_score       ? Math.round(act.suffer_score)+''      : null, null],
-          ['Type',      act.activity_type      ? esc(act.activity_type)               : null, null],
-          ['Equipment', act.equipment          ? esc(act.equipment)                   : null, null],
+        const chips=[
+          ['Distance',  act.distance_mi?U.distS(act.distance_mi):null, act.distance_mi?(U.metric?(+act.distance_mi.toFixed(2))+' mi':(+(act.distance_mi*1.60934).toFixed(2))+' km'):null],
+          ['Mov Time',  act.active_time?fmtHMS(act.active_time):null, null],
+          ['Duration',  act.duration?fmtHMS(act.duration):null, null],
+          ['Climb',     act.total_climb_ft?U.climbS(act.total_climb_ft):null, act.total_climb_ft?(U.metric?Math.round(act.total_climb_ft)+' ft':Math.round(act.total_climb_ft*0.3048)+' m'):null],
+          ['Descent',   act.total_descent_ft?U.climbS(act.total_descent_ft):null, act.total_descent_ft?(U.metric?Math.round(act.total_descent_ft)+' ft':Math.round(act.total_descent_ft*0.3048)+' m'):null],
+          ['Mov Spd',   act.avg_speed_mph?U.speedS(act.avg_speed_mph):null, act.avg_speed_mph?(U.metric?act.avg_speed_mph.toFixed(1)+' mph':(act.avg_speed_mph*1.60934).toFixed(1)+' km/h'):null],
+          ['Avg Spd',   (act.duration&&act.distance_mi)?U.speedS(+(act.distance_mi/(act.duration/3600)).toFixed(1)):null,(act.duration&&act.distance_mi)?(()=>{const mph=+(act.distance_mi/(act.duration/3600)).toFixed(1);return U.metric?mph+' mph':(+(mph*1.60934).toFixed(1))+' km/h';})():null],
+          ['Avg Pace',  act.avg_speed_mph?altPaceStr(act.avg_speed_mph,!U.metric):null, act.avg_speed_mph?altPaceStr(act.avg_speed_mph,U.metric):null],
+          ['Avg HR',    act.avg_heartrate?Math.round(act.avg_heartrate)+' bpm':null, null],
+          ['Max HR',    act.max_heartrate?Math.round(act.max_heartrate)+' bpm':null, null],
+          ['Cadence',   act.avg_cadence?Math.round(act.avg_cadence)+' rpm':null, null],
+          ['Avg Pwr',   act.avg_power?Math.round(act.avg_power)+' W':null, act.max_power?'max '+Math.round(act.max_power)+' W':null],
+          ['Suffer',    act.suffer_score?Math.round(act.suffer_score)+'':null, null],
+          ['Type',      act.activity_type?esc(act.activity_type):null, null],
+          ['Equipment', act.equipment?esc(act.equipment):null, null],
         ].filter(([,v])=>v);
 
-        let ts = '';
-        if(act.start_time) {
-          const d = new Date(act.start_time*1000);
-          ts = d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+        const _rpeLabels=['','Easy','Easy+','Moderate','Moderate+','Medium','Hard','Hard+','Very Hard','Max-','Max'];
+        let rpeHtml='';
+        if(act.perceived_exertion!=null){
+          const v=act.perceived_exertion;
+          rpeHtml=`<div style="font-size:11px;color:var(--muted);margin-bottom:6px">Effort: <span style="color:var(--text);font-weight:500">${_rpeLabels[v]||v}</span> <span style="color:var(--muted2)">(${v}/10)</span></div>`;
         }
 
-        let aHtml = '';
-        if(act.name)  aHtml += `<div style="font-size:14px;font-weight:600;margin-bottom:5px">${esc(act.name)}</div>`;
-        // Date + location/weather row (populated async)
-        aHtml += `<div style="display:grid;grid-template-columns:auto 1fr;column-gap:20px;row-gap:3px;margin-bottom:7px;align-items:baseline">
-          <span style="font-size:11.5px;color:var(--muted)">${ts}</span>
-          <span id="share-loc"  style="font-size:11px;color:var(--muted)"></span>
-          <span></span>
-          <span id="share-wx"   style="font-size:11px;color:var(--muted)"></span>
+        const stravaLink=act.strava_activity_id
+          ?`<a href="https://www.strava.com/activities/${act.strava_activity_id}" target="_blank" style="font-size:11px;font-weight:600;color:#fc4c02;border:1px solid rgba(252,76,2,.4);border-radius:4px;padding:3px 8px;text-decoration:none;line-height:1.4;flex-shrink:0">View on Strava ↗</a>`
+          :'';
+
+        let aHtml='';
+        aHtml+=`<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:8px">
+          <div style="font-size:14px;font-weight:600;line-height:1.3">${esc(act.name||'(unnamed)')}</div>
+          ${stravaLink?`<div>${stravaLink}</div>`:''}
         </div>`;
-        if(act.notes) aHtml += `<div style="font-size:12px;color:var(--muted);margin-bottom:10px;white-space:pre-line">${esc(act.notes)}</div>`;
-        // Stats grid
-        aHtml += `<div class="stats-grid">`;
-        chips.forEach(([l,v,sub]) => {
-          const span = l==='Equipment' ? Math.min(6,Math.max(1,Math.ceil(v.length/14))) : 1;
-          const s = span>1 ? ` style="grid-column:span ${span}"` : '';
-          aHtml += `<div class="stat-chip"${s}><div class="sc-label">${l}</div><div class="sc-val">${v}</div><div class="sc-sub">${sub||''}</div></div>`;
+        const ts=act.start_time?fmtDate(act.start_time):'';
+        aHtml+=`<div style="display:grid;grid-template-columns:auto 1fr;column-gap:20px;row-gap:3px;margin-bottom:7px;align-items:baseline">
+          <span style="font-size:11.5px;color:var(--muted)">${ts}</span>
+          <span id="share-wx" style="font-size:11px;color:var(--muted)"></span>
+          <span></span>
+          <span id="share-loc" style="font-size:11px;color:var(--muted)"></span>
+        </div>`;
+        aHtml+=rpeHtml;
+        if(act.notes) aHtml+=`<div class="act-notes">${esc(act.notes)}</div>`;
+        aHtml+=`<div class="stats-grid">`;
+        chips.forEach(([l,v,sub])=>{
+          const span=l==='Equipment'?Math.min(6,Math.max(1,Math.ceil(v.length/14))):1;
+          const s=span>1?` style="grid-column:span ${span}"`:'';;
+          aHtml+=`<div class="stat-chip"${s}><div class="sc-label">${l}</div><div class="sc-val">${v}</div><div class="sc-sub">${sub||''}</div></div>`;
         });
-        aHtml += `</div>`;
-        aHtml += `<div id="share-photos"></div>`;
-        body.innerHTML = aHtml;
+        aHtml+=`</div>`;
+        aHtml+=`<div id="share-photos"></div>`;
+        body.innerHTML=aHtml;
 
-        // Async: weather+location
-        fetch(`/api/activities/${act.id}/weather-location`)
-          .then(r=>r.json())
-          .then(d=>{
-            const wx  = document.getElementById('share-wx');
-            const loc = document.getElementById('share-loc');
-            if(wx && d.weather?.description) {
-              const w=d.weather, parts=[w.description];
-              if(w.avg_temp_f !=null) parts.push(U.tempS(w.avg_temp_f));
-              if(w.avg_wind_kph!=null) parts.push('Wind '+U.windS(w.avg_wind_kph));
-              if(w.precip_mm  >0)     parts.push(U.precipS(w.precip_mm));
-              wx.textContent = parts.join(' · ');
-            }
-            if(loc && d.locations) loc.textContent = d.locations;
-          }).catch(()=>{});
+        // Async: weather + location
+        fetch(`/api/activities/${act.id}/weather-location`).then(r=>r.json()).then(d=>{
+          const wx=document.getElementById('share-wx'), loc=document.getElementById('share-loc');
+          if(wx&&d.weather?.description){const w=d.weather,parts=[w.description];if(w.avg_temp_f!=null)parts.push(U.tempS(w.avg_temp_f));if(w.avg_wind_kph!=null)parts.push('Wind '+U.windS(w.avg_wind_kph));if(w.precip_mm>0)parts.push(U.precipS(w.precip_mm));wx.textContent=parts.join(' · ');}
+          if(loc&&d.locations) loc.textContent=d.locations;
+        }).catch(()=>{});
 
-        // Async: photos
-        fetch(`/activities/${act.id}/photos`)
-          .then(r=>r.json())
-          .then(d=>{
-            const media = d.media||(d.photos?d.photos.map(f=>({url:d.base_url+f,type:'image'})):[]);
-            if(!media.length) return;
-            _shareLbMedia = media;
-            const el = document.getElementById('share-photos');
-            if(!el) return;
-            let ph = `<div class="section-label" style="margin-top:12px;margin-bottom:6px">Photos</div>`;
-            ph += `<div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:6px">`;
-            media.forEach((m,i)=>{
-              if(m.type==='image') {
-                ph += `<img src="${m.url}" loading="lazy" style="height:80px;width:80px;object-fit:cover;border-radius:5px;cursor:pointer;flex-shrink:0" onclick="openShareLightbox(${i})">`;
-              } else {
-                // Video: show first frame via <video> with play overlay
-                ph += `<div style="position:relative;height:80px;width:80px;border-radius:5px;overflow:hidden;flex-shrink:0;cursor:pointer;background:#000" onclick="openShareLightbox(${i})">
-                  <video src="${m.hls_url||m.url}" muted preload="metadata" playsinline
-                    style="width:100%;height:100%;object-fit:cover;pointer-events:none"
-                    onloadedmetadata="this.currentTime=0.1"></video>
-                  <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none">
-                    <div style="width:28px;height:28px;border-radius:50%;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center">
-                      <span style="font-size:13px;margin-left:2px">▶</span>
-                    </div>
-                  </div>
-                </div>`;
-              }
-            });
-            ph += `</div>`;
-            el.innerHTML = ph;
-          }).catch(()=>{});
-      })
-      .catch(() => _renderActFallback(c));
+        // Async: photos (flex-wrap, no autoplay)
+        loadSharePhotos(act.id);
+      }).catch(()=>_renderActFallback(c));
   }
 }
 
+// ── Photos / videos ───────────────────────────────────────────────────────────
+async function loadSharePhotos(actId) {
+  try {
+    const r=await fetch(`/activities/${actId}/photos`); if(!r.ok) return;
+    const d=await r.json();
+    const media=d.media||(d.photos?d.photos.map(f=>({url:d.base_url+f,type:'image'})):[]);
+    if(!media.length) return;
+    _shareLbMedia=media;
+    const el=document.getElementById('share-photos'); if(!el) return;
+    let ph=`<div class="section-label" style="margin-top:12px;margin-bottom:6px">Photos</div>`;
+    ph+=`<div style="display:flex;flex-wrap:wrap;gap:6px;padding-bottom:6px">`;
+    media.forEach((m,i)=>{
+      if(m.type==='image'){
+        ph+=`<img src="${m.url}" loading="lazy" style="height:80px;width:80px;object-fit:cover;border-radius:5px;cursor:pointer;flex-shrink:0" onclick="openShareLightbox(${i})">`;
+      } else {
+        ph+=`<div style="position:relative;height:80px;width:80px;border-radius:5px;overflow:hidden;flex-shrink:0;cursor:pointer;background:#000" onclick="openShareLightbox(${i})">
+          <video src="${m.hls_url||m.url}" muted preload="metadata" playsinline
+            style="width:100%;height:100%;object-fit:cover;pointer-events:none"
+            onloadedmetadata="this.currentTime=0.1"></video>
+          <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none">
+            <div style="width:28px;height:28px;border-radius:50%;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center">
+              <span style="font-size:13px;margin-left:2px">▶</span>
+            </div>
+          </div>
+        </div>`;
+      }
+    });
+    ph+=`</div>`;
+    el.innerHTML=ph;
+  } catch(e) {}
+}
+
 function _renderActFallback(c) {
-  const body = document.getElementById('act-detail-body');
-  if(!body) return;
-  let fb = `<div class="stats-grid">`;
-  if(c.distance_mi) fb += mkStatChip('Distance', U.distS(c.distance_mi), '');
-  if(c.climb_ft)    fb += mkStatChip('Climb',    U.climbS(c.climb_ft),   '');
-  if(c.moving_s)    fb += mkStatChip('Mov Time', fmtHMS(c.moving_s),     '');
-  if(c.duration_s)  fb += mkStatChip('Duration', fmtHMS(c.duration_s),   '');
-  if(c.avg_hr)      fb += mkStatChip('Avg HR',   Math.round(c.avg_hr)+' bpm', '');
-  fb += `</div>`;
-  body.innerHTML = fb;
+  const body=document.getElementById('act-detail-body'); if(!body) return;
+  let fb=`<div class="stats-grid">`;
+  if(c.distance_mi) fb+=mkStatChip('Distance',U.distS(c.distance_mi),'');
+  if(c.climb_ft)    fb+=mkStatChip('Climb',U.climbS(c.climb_ft),'');
+  if(c.moving_s)    fb+=mkStatChip('Mov Time',fmtHMS(c.moving_s),'');
+  if(c.duration_s)  fb+=mkStatChip('Duration',fmtHMS(c.duration_s),'');
+  if(c.avg_hr)      fb+=mkStatChip('Avg HR',Math.round(c.avg_hr)+' bpm','');
+  fb+=`</div>`;
+  body.innerHTML=fb;
 }
 </script>
 </body>

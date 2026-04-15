@@ -222,6 +222,10 @@ async def strava_sync_page(request: Request):
         last_sync_str = datetime.fromtimestamp(last_ts).strftime("%b %-d, %Y")
 
     user = db.get_user(uid)
+    try:
+        ui_prefs = db.get_ui_prefs(uid)
+    except Exception:
+        ui_prefs = {}
     return templates.TemplateResponse("strava_sync.html", {
         "request":       request,
         "authorized":    bool(tokens.get("refresh_token")),
@@ -230,6 +234,7 @@ async def strava_sync_page(request: Request):
         "last_sync_str": last_sync_str,
         "db_count":      db.count_activities(user_id=uid),
         "is_admin":      bool(user and user.get("is_admin")),
+        "ui_prefs":      ui_prefs,
     })
 
 # ── Gear map helper ───────────────────────────────────────────────────────────

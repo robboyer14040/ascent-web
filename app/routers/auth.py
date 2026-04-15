@@ -235,6 +235,10 @@ async def admin_invites(request: Request):
         points_saved_count  = 0
         summary_count       = 0
     summary_backfill_started = "summary_backfill" in str(request.url)
+    try:
+        ui_prefs = db.get_ui_prefs(uid)
+    except Exception:
+        ui_prefs = {}
     return templates.TemplateResponse("admin_invites.html", {
         "request":                  request,
         "invites":                  invites,
@@ -246,6 +250,7 @@ async def admin_invites(request: Request):
         "summary_count":            summary_count,
         "username":                 getpass.getuser(),
         "summary_backfill_started": summary_backfill_started,
+        "ui_prefs":                 ui_prefs,
     })
 
 @router.post("/admin/invites/create")
@@ -301,6 +306,10 @@ async def admin_create_invite(
         activity_count     = 0
         points_saved_count = 0
         summary_count      = 0
+    try:
+        ui_prefs = db.get_ui_prefs(uid)
+    except Exception:
+        ui_prefs = {}
     return templates.TemplateResponse("admin_invites.html", {
         "request":        request,
         "invites":        db.list_invites(),
@@ -314,6 +323,7 @@ async def admin_create_invite(
         "points_saved_count": points_saved_count,
         "summary_count":     summary_count,
         "username":          getpass.getuser(),
+        "ui_prefs":          ui_prefs,
     })
 
 @router.post("/admin/users/delete")

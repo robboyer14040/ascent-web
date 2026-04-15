@@ -4,6 +4,7 @@
 // opts = {
 //   currentUserId,      // for ownership checks
 //   editCallback,       // string fn name: 'startEditActivity' | 'openTourEdit'
+//   deleteCallback,     // string fn name: 'deleteSelected' (INFO pane only)
 //   resyncCallback,     // string fn name: 'resyncActivity' | 'resyncStageActivity'
 //   saveRouteCb,        // string fn name: 'openSaveRouteDialog' | 'openStageSaveRouteDialog'
 //   resyncBtnId,        // 'resync-btn' | 'sd-resync-btn'
@@ -46,6 +47,7 @@ function buildActivityDetailHTML(a, opts) {
   const {
     currentUserId,
     editCallback,
+    deleteCallback,
     resyncCallback,
     saveRouteCb,
     resyncBtnId      = 'resync-btn',
@@ -89,6 +91,9 @@ function buildActivityDetailHTML(a, opts) {
     : '';
   const editBtn = (isOwner && editCallback)
     ? `<button class="edit-btn" id="edit-act-btn" onclick="${editCallback}(${a.id})" title="Edit title, description, type &amp; equipment">Edit…</button>`
+    : '';
+  const deleteBtn = (isOwner && deleteCallback)
+    ? `<button class="edit-btn delete-act-btn" id="delete-act-btn" onclick="${deleteCallback}()" title="Delete this activity">Delete</button>`
     : '';
   const exportBtn = `<a href="/activities/${a.id}/export/gpx" class="edit-btn" style="text-decoration:none" title="Download as GPX file">↓ GPX</a>`;
   const saveRouteBtn = (saveRouteCb && (a.points_count > 0 || a.points_saved))
@@ -170,7 +175,9 @@ function buildActivityDetailHTML(a, opts) {
     : null;
   const avatarHtml = ownerAvatarUrl
     ? `<img src="${ownerAvatarUrl}" alt="" style="width:32px;height:32px;object-fit:cover;border-radius:4px;flex-shrink:0;margin-right:9px;margin-top:1px">`
-    : '';
+    : (a.user_id && userMap[a.user_id]
+        ? userInitialAvatar(a.user_id, userMap[a.user_id].username, 32, '4px', 'margin-right:9px;margin-top:1px;')
+        : '');
 
   // ── AI Summary chip ───────────────────────────────────────────────────────────
   const aiChipHtml = showAiSummary
@@ -181,7 +188,7 @@ function buildActivityDetailHTML(a, opts) {
   return `
     <div class="act-title-bar">
       <div style="display:flex;align-items:flex-start;min-width:0;flex:1">${avatarHtml}<div class="act-title">${esc(a.name||'(unnamed)')}${isDirty?'<span style="color:#f97316;font-size:10px;margin-left:5px;font-weight:400;vertical-align:middle">edited</span>':''}</div></div>
-      <div class="act-title-links">${editBtn}${resyncBtn}${exportBtn}${saveRouteBtn}${stravaLink}</div>
+      <div class="act-title-links">${editBtn}${deleteBtn}${resyncBtn}${exportBtn}${saveRouteBtn}${stravaLink}</div>
     </div>
     ${rpeKudosHtml}
     <div style="display:grid;grid-template-columns:auto 1fr;column-gap:20px;row-gap:4px;margin-bottom:6px;align-items:baseline">

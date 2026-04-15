@@ -42,7 +42,11 @@ function fmtElapsed(s) {
 function setElevSelection(startIdx, endIdx) {
   cmp.selStartIdx = startIdx;
   cmp.selEndIdx   = endIdx;
-  // Button always visible when activity loaded; selection state tracked separately
+  const hasRegion = startIdx !== null && endIdx !== null;
+  const compareBtn = document.getElementById('compare-btn');
+  const segDefineBtn = document.getElementById('seg-define-btn');
+  if (compareBtn)   compareBtn.disabled   = !hasRegion;
+  if (segDefineBtn) segDefineBtn.disabled = !hasRegion;
 }
 
 async function cmpOpenManualWithSegment() {
@@ -324,10 +328,10 @@ async function openCompare() {
   const friendsCb = document.getElementById('cmp-include-friends');
   if (friendsCb) friendsCb.checked = _uiPrefsGet('ascent-cmp-friends') === '1';
 
-  // If no segment selected, single activity: show error but load saved segments so
+  // If no segment selected, single activity: load saved segments so
   // the user can pick one from the dropdown to run compare immediately.
   if (cmp.selStartIdx === null || cmp.selEndIdx === null) {
-    titleEl.textContent = 'Select a region on the elevation chart, or choose a saved segment below';
+    titleEl.textContent = 'Segment Compare';
     loading.style.display = 'none';
     cmp.matches      = [];
     cmp.currentT     = 0;

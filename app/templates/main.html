@@ -8,6 +8,7 @@
 <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <link rel="stylesheet" href="/static/main.css?v={{ app_version }}">
+<script>(function(){var t={{ ui_prefs.get('theme','') | tojson }};if(t)document.documentElement.dataset.theme=t;})();</script>
 </head>
 <body>
 <div id="autosync-toast"></div>
@@ -31,12 +32,14 @@
 <script src="/static/main.js?v={{ app_version }}" defer></script>
 <script src="/static/compare.js?v={{ app_version }}" defer></script>
 <script src="/static/altitude_chart.js?v={{ app_version }}" defer></script>
+<script src="/static/segment.js?v={{ app_version }}" defer></script>
 <script src="/static/photos.js?v={{ app_version }}" defer></script>
 <script src="/static/coach.js?v={{ app_version }}" defer></script>
 <script src="/static/activity_edit.js?v={{ app_version }}" defer></script>
 <script src="/static/strava_sync_btn.js?v={{ app_version }}" defer></script>
 
 {% include '_html_overlays.html' %}
+{% include 'segment.html' %}
 <!-- ── ABOUT MODAL ──────────────────────────────────────────────────────── -->
 {% include '_about.html' %}
 

@@ -376,13 +376,24 @@ class StravaImporter:
         con.execute("PRAGMA foreign_keys=ON")
         return con
 
-    def get_existing_strava_ids(self) -> set:
+    def get_existing_strava_ids(self, user_id=None) -> set:
         con = self._connect()
         try:
             rows = con.execute(
                 "SELECT strava_activity_id FROM activities WHERE strava_activity_id IS NOT NULL"
             ).fetchall()
-            return {r[0] for r in rows}
+            result = {r[0] for r in rows}
+            # Also include IDs the user has explicitly deleted (blocklist)
+            if user_id is not None:
+                try:
+                    blocked = con.execute(
+                        "SELECT strava_activity_id FROM strava_deleted_activities WHERE user_id=?",
+                        (user_id,)
+                    ).fetchall()
+                    result.update(r[0] for r in blocked)
+                except Exception:
+                    pass  # table may not exist yet
+            return result
         finally:
             con.close()
 
@@ -544,7 +555,7 @@ class StravaImporter:
           before_ts — only fetch activities before this unix timestamp (inclusive)
           gear_map  — {gear_id: gear_name} dict for equipment labelling
         """
-        existing_ids = self.get_existing_strava_ids()
+        existing_ids = self.get_existing_strava_ids(user_id=user_id)
         headers      = {"Authorization": f"Bearer {access_token}"}
         page         = 1
         imported     = 0

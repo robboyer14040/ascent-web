@@ -6,78 +6,116 @@
 <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Settings — Ascent</title>
+<script>(function(){var t={{ ui_prefs.get('theme','') | tojson }};if(t)document.documentElement.dataset.theme=t;})();</script>
 <style>
+:root{
+  --bg:#1c1c1e;--surface:#2c2c2e;--surface2:#3a3a3c;
+  --border:#3a3a3c;--border2:#48484a;
+  --text:#f2f2f7;--muted:#8e8e93;--muted2:#636366;
+  --accent:#f97316;--accent-blue:#0a84ff;--accent-green:#30d158;
+  --nav-hover:rgba(255,255,255,.06);
+  --color-scheme:dark;
+}
+[data-theme="light"]{
+  --bg:#f2f2f7;--surface:#ffffff;--surface2:#e5e5ea;
+  --border:#d1d1d6;--border2:#c7c7cc;
+  --text:#1c1c1e;--muted:#6c6c70;--muted2:#8e8e93;
+  --accent:#f97316;--accent-blue:#007aff;--accent-green:#34c759;
+  --nav-hover:rgba(0,0,0,.05);
+  --color-scheme:light;
+}
+@media(prefers-color-scheme:light){
+  :root:not([data-theme]){
+    --bg:#f2f2f7;--surface:#ffffff;--surface2:#e5e5ea;
+    --border:#d1d1d6;--border2:#c7c7cc;
+    --text:#1c1c1e;--muted:#6c6c70;--muted2:#8e8e93;
+    --accent:#f97316;--accent-blue:#007aff;--accent-green:#34c759;
+    --nav-hover:rgba(0,0,0,.05);
+    --color-scheme:light;
+  }
+}
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif;font-size:14px;background:#1c1c1e;color:#f2f2f7;min-height:100vh}
-nav{display:flex;align-items:center;gap:0;padding:0 12px;height:44px;background:#2c2c2e;border-bottom:1px solid #3a3a3c;position:sticky;top:0;z-index:99}
-.nav-brand-name{font-size:14px;font-weight:700;color:#f97316}
-.nav-version{font-size:10px;font-weight:400;color:#8e8e93;margin-left:4px;letter-spacing:.02em}
+body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif;font-size:14px;background:var(--bg);color:var(--text);min-height:100vh}
+nav{display:flex;align-items:center;gap:0;padding:0 12px;height:44px;background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:99}
+.nav-brand-name{font-size:14px;font-weight:700;color:var(--accent)}
+.nav-version{font-size:10px;font-weight:400;color:var(--muted);margin-left:4px;letter-spacing:.02em}
 .nav-pages{display:flex;align-items:center;gap:2px;margin-left:14px}
-.nav-btn{padding:5px 10px;border-radius:6px;font-size:12px;font-weight:500;color:#8e8e93;background:none;border:none;cursor:pointer;white-space:nowrap;display:flex;align-items:center;text-decoration:none;height:34px}
-.nav-btn:hover{color:#f2f2f7;background:rgba(255,255,255,.06)}
-.nav-btn.nav-active{color:#fff;font-weight:700}
+.nav-btn{padding:5px 10px;border-radius:6px;font-size:12px;font-weight:500;color:var(--muted);background:none;border:none;cursor:pointer;white-space:nowrap;display:flex;align-items:center;text-decoration:none;height:34px}
+.nav-btn:hover{color:var(--text);background:var(--nav-hover)}
+.nav-btn.nav-active{color:var(--text);font-weight:700;}
 .spacer{flex:1}
 .container{max-width:640px;margin:2rem auto;padding:0 1.25rem 4rem}
-.card{background:#2c2c2e;border:1px solid #3a3a3c;border-radius:12px;padding:1.5rem;margin-bottom:1rem}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1.5rem;margin-bottom:1rem}
 .card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem}
 h1{font-size:1.15rem;font-weight:600}
 h2{font-size:.95rem;font-weight:600}
-p{color:#8e8e93;font-size:.875rem;line-height:1.6;margin-bottom:1rem}
+p{color:var(--muted);font-size:.875rem;line-height:1.6;margin-bottom:1rem}
 p:last-child{margin-bottom:0}
-label{display:block;font-size:.85rem;color:#8e8e93;margin-bottom:.35rem;margin-top:.75rem}
+label{display:block;font-size:.85rem;color:var(--muted);margin-bottom:.35rem;margin-top:.75rem}
 label:first-of-type{margin-top:0}
 input[type=text],input[type=password],input[type=date]{
-  width:100%;background:#1c1c1e;border:1px solid #3a3a3c;border-radius:8px;
-  padding:.55rem .8rem;color:#f2f2f7;font-size:.9rem;outline:none;
+  width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;
+  padding:.55rem .8rem;color:var(--text);font-size:.9rem;outline:none;
   font-family:inherit;
 }
-input[type=text]:focus,input[type=password]:focus,input[type=date]:focus{border-color:#f97316}
-input[type=date]{color-scheme:dark;-webkit-appearance:none;appearance:none;height:auto;line-height:normal}
-input[readonly]{color:#8e8e93;cursor:default}
+input[type=text]:focus,input[type=password]:focus,input[type=date]:focus{border-color:var(--accent)}
+input[type=date]{color-scheme:var(--color-scheme);-webkit-appearance:none;appearance:none;height:auto;line-height:normal}
+input[readonly]{color:var(--muted);cursor:default}
 
 /* ── Avatar crop ─────────────────────────────────────────────────────────── */
 #crop-wrap{
   position:relative;width:260px;height:260px;overflow:hidden;
-  border-radius:50%;border:3px solid #f97316;cursor:grab;background:#1c1c1e;flex-shrink:0;
+  border-radius:50%;border:3px solid var(--accent);cursor:grab;background:var(--bg);flex-shrink:0;
 }
 #crop-wrap:active{cursor:grabbing}
 #crop-canvas{display:block;width:260px;height:260px}
 .avatar-preview{
   width:64px;height:64px;border-radius:50%;object-fit:cover;
-  border:2px solid #3a3a3c;display:block;
+  border:2px solid var(--border);display:block;
 }
 .avatar-placeholder{
-  width:64px;height:64px;border-radius:50%;background:#3a3a3c;
+  width:64px;height:64px;border-radius:50%;background:var(--surface2);
   display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;
 }
 .btn{display:inline-flex;align-items:center;gap:.5rem;padding:.55rem 1.1rem;border-radius:8px;font-size:.875rem;font-weight:600;cursor:pointer;border:none;text-decoration:none;transition:background .15s;white-space:nowrap}
-.btn-primary{background:#f97316;color:#fff}.btn-primary:hover{background:#ea6c0a}
+.btn-primary{background:var(--accent);color:#fff}.btn-primary:hover{background:#ea6c0a}
 .btn-danger{background:#ef4444;color:#fff}.btn-danger:hover{background:#dc2626}
-.btn-ghost{background:#3a3a3c;color:#f2f2f7}.btn-ghost:hover{background:#48484a}
-.btn-blue{background:#0a84ff;color:#fff}.btn-blue:hover{background:#0070e0}
+.btn-ghost{background:var(--surface2);color:var(--text)}.btn-ghost:hover{background:var(--border2)}
+.btn-blue{background:var(--accent-blue);color:#fff}.btn-blue:hover{background:#0070e0}
 .btn-sm{padding:.35rem .75rem;font-size:.8rem}
 .btn:disabled{opacity:.45;cursor:default}
 .btn-row{display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;margin-top:1rem}
-.current-db{font-family:"SF Mono","Fira Code",monospace;font-size:.8rem;color:#f97316;background:#1c1c1e;border:1px solid #3a3a3c;border-radius:6px;padding:.4rem .7rem;word-break:break-all}
+.current-db{font-family:"SF Mono","Fira Code",monospace;font-size:.8rem;color:var(--accent);background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:.4rem .7rem;word-break:break-all}
 .result{margin-top:.75rem;padding:.65rem .9rem;border-radius:8px;font-size:.875rem;display:none}
 .result-ok{background:rgba(48,209,88,.12);border:1px solid rgba(48,209,88,.3);color:#30d158}
 .result-err{background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);color:#ef4444}
 .result-warn{background:rgba(255,159,10,.12);border:1px solid rgba(255,159,10,.3);color:#ff9f0a}
-.divider{border:none;border-top:1px solid #3a3a3c;margin:1.25rem 0}
+.divider{border:none;border-top:1px solid var(--border);margin:1.25rem 0}
 .status-badge{display:inline-flex;align-items:center;gap:.35rem;font-size:.78rem;font-weight:600;padding:.25rem .6rem;border-radius:999px}
 .badge-set{background:rgba(48,209,88,.15);color:#30d158;border:1px solid rgba(48,209,88,.3)}
-.badge-unset{background:rgba(142,142,147,.12);color:#8e8e93;border:1px solid #3a3a3c}
+.badge-unset{background:rgba(142,142,147,.12);color:var(--muted);border:1px solid var(--border)}
 .key-display{display:flex;align-items:center;gap:.5rem;margin-top:.5rem}
-.key-mono{font-family:"SF Mono","Fira Code",monospace;font-size:.82rem;color:#8e8e93;
-  background:#1c1c1e;border:1px solid #3a3a3c;border-radius:6px;padding:.35rem .65rem;flex:1}
-.help-btn{background:none;border:1px solid #3a3a3c;border-radius:6px;color:#8e8e93;
+.key-mono{font-family:"SF Mono","Fira Code",monospace;font-size:.82rem;color:var(--muted);
+  background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:.35rem .65rem;flex:1}
+.help-btn{background:none;border:1px solid var(--border);border-radius:6px;color:var(--muted);
   font-size:.78rem;padding:.25rem .6rem;cursor:pointer;font-family:inherit}
-.help-btn:hover{color:#f2f2f7;border-color:#8e8e93}
+.help-btn:hover{color:var(--text);border-color:var(--muted)}
 .restart-notice{background:rgba(255,159,10,.1);border:1px solid rgba(255,159,10,.25);
   border-radius:8px;padding:.65rem .9rem;font-size:.825rem;color:#ff9f0a;
   margin-top:.75rem;display:none}
 .restart-notice.visible{display:block}
-.section-intro{font-size:.8rem;color:#636366;margin-bottom:1.25rem;line-height:1.5}
+.section-intro{font-size:.8rem;color:var(--muted2);margin-bottom:1.25rem;line-height:1.5}
+
+/* ── Theme picker ────────────────────────────────────────────────────────── */
+.theme-picker{display:flex;gap:.5rem;margin-top:.5rem}
+.theme-btn{padding:.4rem .9rem;border-radius:7px;font-size:.82rem;font-weight:500;
+  border:1px solid var(--border);background:var(--surface2);color:var(--muted);cursor:pointer}
+.theme-btn:hover{color:var(--text);border-color:var(--muted)}
+.theme-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+/* ── Pref select ─────────────────────────────────────────────────────────── */
+.pref-select{background:var(--bg);border:1px solid var(--border);border-radius:8px;
+  color:var(--text);font-size:.875rem;padding:.4rem .7rem;cursor:pointer;outline:none;flex-shrink:0}
 
 /* ── Help modal ─────────────────────────────────────────────────────────── */
 .modal-overlay{
@@ -86,27 +124,27 @@ input[readonly]{color:#8e8e93;cursor:default}
 }
 .modal-overlay.open{display:flex}
 .modal{
-  background:#2c2c2e;border:1px solid #3a3a3c;border-radius:14px;
+  background:var(--surface);border:1px solid var(--border);border-radius:14px;
   width:min(560px,100%);max-height:85vh;overflow-y:auto;
-  box-shadow:0 24px 64px rgba(0,0,0,.7);
+  box-shadow:0 24px 64px rgba(0,0,0,.4);
 }
 .modal-header{
   display:flex;align-items:center;justify-content:space-between;
-  padding:1.1rem 1.25rem .9rem;border-bottom:1px solid #3a3a3c;
-  position:sticky;top:0;background:#2c2c2e;z-index:1;
+  padding:1.1rem 1.25rem .9rem;border-bottom:1px solid var(--border);
+  position:sticky;top:0;background:var(--surface);z-index:1;
 }
 .modal-header h2{font-size:1rem;font-weight:700}
-.modal-close{background:none;border:none;color:#8e8e93;font-size:20px;cursor:pointer;line-height:1;padding:0 2px}
-.modal-close:hover{color:#f2f2f7}
+.modal-close{background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;line-height:1;padding:0 2px}
+.modal-close:hover{color:var(--text)}
 .modal-body{padding:1.25rem}
-.modal-body h3{font-size:.9rem;font-weight:600;color:#f2f2f7;margin:1.1rem 0 .4rem}
+.modal-body h3{font-size:.9rem;font-weight:600;color:var(--text);margin:1.1rem 0 .4rem}
 .modal-body h3:first-child{margin-top:0}
-.modal-body p{color:#8e8e93;font-size:.85rem;line-height:1.65;margin-bottom:.6rem}
-.modal-body ol,.modal-body ul{padding-left:1.25rem;color:#8e8e93;font-size:.85rem;line-height:1.8}
-.modal-body a{color:#0a84ff}
+.modal-body p{color:var(--muted);font-size:.85rem;line-height:1.65;margin-bottom:.6rem}
+.modal-body ol,.modal-body ul{padding-left:1.25rem;color:var(--muted);font-size:.85rem;line-height:1.8}
+.modal-body a{color:var(--accent-blue)}
 .modal-body a:hover{text-decoration:underline}
 .modal-body code{font-family:"SF Mono","Fira Code",monospace;font-size:.8rem;
-  background:#1c1c1e;border:1px solid #3a3a3c;border-radius:4px;padding:.1rem .35rem;color:#f97316}
+  background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:.1rem .35rem;color:var(--accent)}
 .modal-tip{background:rgba(10,132,255,.1);border:1px solid rgba(10,132,255,.25);
   border-radius:8px;padding:.7rem .9rem;font-size:.825rem;color:#5ab4f5;margin:.75rem 0}
 .modal-warn{background:rgba(255,159,10,.1);border:1px solid rgba(255,159,10,.25);
@@ -169,7 +207,7 @@ input[readonly]{color:#8e8e93;cursor:default}
             <canvas id="crop-canvas" width="260" height="260"></canvas>
           </div>
         </div>
-        <div style="color:#8e8e93;font-size:.8rem;text-align:center;margin-bottom:1rem">Drag to position · Pinch or scroll to zoom</div>
+        <div style="color:var(--muted);font-size:.8rem;text-align:center;margin-bottom:1rem">Drag to position · Pinch or scroll to zoom</div>
         <div style="display:flex;gap:.75rem">
           <button class="btn btn-primary" style="flex:1" onclick="saveCroppedAvatar()">Save Photo</button>
           <button class="btn btn-ghost" onclick="closeCropModal()">Cancel</button>
@@ -250,24 +288,24 @@ input[readonly]{color:#8e8e93;cursor:default}
     <div style="margin-bottom:1rem">
       <label style="display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none">
         <input type="checkbox" id="tp-metric" style="width:16px;height:16px;accent-color:#f97316">
-        <span>Use metric units <span style="color:#636366;font-weight:400">(km, m, km/h, °C)</span></span>
+        <span>Use metric units <span style="color:var(--muted2);font-weight:400">(km, m, km/h, °C)</span></span>
       </label>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
       <div>
-        <label for="tp-max-hr">Max Heart Rate <span style="color:#636366;font-weight:400">(bpm)</span></label>
+        <label for="tp-max-hr">Max Heart Rate <span style="color:var(--muted2);font-weight:400">(bpm)</span></label>
         <input type="text" id="tp-max-hr" placeholder="e.g. 185">
       </div>
       <div>
-        <label for="tp-ftp">FTP <span style="color:#636366;font-weight:400">(watts)</span></label>
+        <label for="tp-ftp">FTP <span style="color:var(--muted2);font-weight:400">(watts)</span></label>
         <input type="text" id="tp-ftp" placeholder="e.g. 250">
       </div>
       <div>
-        <label for="tp-age">Age <span style="color:#636366;font-weight:400">(years — set birthday above)</span></label>
+        <label for="tp-age">Age <span style="color:var(--muted2);font-weight:400">(years — set birthday above)</span></label>
         <input type="text" id="tp-age" placeholder="—" readonly>
       </div>
       <div>
-        <label for="tp-weight">Weight <span style="color:#636366;font-weight:400">(lbs)</span></label>
+        <label for="tp-weight">Weight <span style="color:var(--muted2);font-weight:400">(lbs)</span></label>
         <input type="text" id="tp-weight" placeholder="e.g. 165">
       </div>
     </div>
@@ -282,7 +320,7 @@ input[readonly]{color:#8e8e93;cursor:default}
     <div class="card-header">
       <h1>Sharing</h1>
     </div>
-    <p style="color:#8e8e93;font-size:12px;margin-bottom:1rem">
+    <p style="color:var(--muted);font-size:12px;margin-bottom:1rem">
       Allow other Ascent users to see your activities and segments when they search.
       Only users on this server can see shared data.
     </p>
@@ -290,7 +328,7 @@ input[readonly]{color:#8e8e93;cursor:default}
       <label style="display:flex;align-items:center;justify-content:space-between;cursor:pointer">
         <div>
           <div style="font-weight:500">Share my activities</div>
-          <div style="color:#8e8e93;font-size:12px">Friends can find your rides in Compare searches</div>
+          <div style="color:var(--muted);font-size:12px">Friends can find your rides in Compare searches</div>
         </div>
         <input type="checkbox" id="share-activities" onchange="saveSharing()"
                style="width:18px;height:18px;accent-color:#f97316;cursor:pointer">
@@ -298,23 +336,33 @@ input[readonly]{color:#8e8e93;cursor:default}
       <label style="display:flex;align-items:center;justify-content:space-between;cursor:pointer">
         <div>
           <div style="font-weight:500">Share my segments</div>
-          <div style="color:#8e8e93;font-size:12px">Friends can see and use your saved segments</div>
+          <div style="color:var(--muted);font-size:12px">Friends can see and use your saved segments</div>
         </div>
         <input type="checkbox" id="share-segments" onchange="saveSharing()"
                style="width:18px;height:18px;accent-color:#f97316;cursor:pointer">
       </label>
     </div>
-    <div id="sharing-status" style="margin-top:.75rem;font-size:12px;color:#8e8e93"></div>
+    <div id="sharing-status" style="margin-top:.75rem;font-size:12px;color:var(--muted)"></div>
   </div>
 
   <!-- ── App Preferences ──────────────────────────────────────────────────── -->
   <div class="card">
     <div class="card-header"><h2>App Preferences</h2></div>
     <div style="display:flex;flex-direction:column;gap:.75rem;margin-top:.5rem">
+
+      <div>
+        <div style="font-weight:500;margin-bottom:.4rem">Theme</div>
+        <div class="theme-picker">
+          <button class="theme-btn" id="theme-dark"   onclick="applyTheme('dark')">Dark</button>
+          <button class="theme-btn" id="theme-light"  onclick="applyTheme('light')">Light</button>
+          <button class="theme-btn" id="theme-system" onclick="applyTheme('')">System</button>
+        </div>
+      </div>
+
       <label style="display:flex;align-items:center;justify-content:space-between;cursor:pointer">
         <div>
           <div style="font-weight:500">Autoplay videos</div>
-          <div style="color:#8e8e93;font-size:12px">Start playing videos automatically when shown in the activity panel</div>
+          <div style="color:var(--muted);font-size:12px">Start playing videos automatically when shown in the activity panel</div>
         </div>
         <input type="checkbox" id="pref-autoplay-videos" onchange="savePref('autoplay-videos', this.checked)"
                style="width:18px;height:18px;accent-color:#f97316;cursor:pointer">
@@ -322,15 +370,12 @@ input[readonly]{color:#8e8e93;cursor:default}
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:1rem">
         <div>
           <div style="font-weight:500">Compare Lookback Interval</div>
-          <div style="color:#8e8e93;font-size:12px;margin-top:.2rem;max-width:360px">
+          <div style="color:var(--muted);font-size:12px;margin-top:.2rem;max-width:360px">
             Determines how far back the Compare feature will look when searching for fastest activities.
             Setting a longer lookback interval can result in longer search times.
           </div>
         </div>
-        <select id="pref-compare-lookback" onchange="saveLookback(this.value)"
-                style="background:#1c1c1e;border:1px solid #3a3a3c;border-radius:8px;
-                       color:#f2f2f7;font-size:.875rem;padding:.4rem .7rem;
-                       cursor:pointer;outline:none;flex-shrink:0">
+        <select id="pref-compare-lookback" onchange="saveLookback(this.value)" class="pref-select">
           <option value="1">1 year</option>
           <option value="3">3 years</option>
           <option value="5">5 years</option>
@@ -343,7 +388,7 @@ input[readonly]{color:#8e8e93;cursor:default}
 
 </div><!-- /container -->
 
-<div style="text-align:center;padding:1.5rem 0 2rem;color:#636366;font-size:11px;letter-spacing:.04em">
+<div style="text-align:center;padding:1.5rem 0 2rem;color:var(--muted2);font-size:11px;letter-spacing:.04em">
   Ascent {{ app_version }}
 </div>
 
@@ -571,6 +616,32 @@ async function loadPrefs() {
 }
 document.addEventListener('DOMContentLoaded', loadPrefs);
 
+// ── Theme ─────────────────────────────────────────────────────────────────────
+function _syncThemeBtns(theme) {
+  ['dark','light','system'].forEach(t => {
+    document.getElementById('theme-' + t).classList.toggle('active', t === (theme || 'system'));
+  });
+}
+async function applyTheme(theme) {
+  if (theme) {
+    document.documentElement.dataset.theme = theme;
+  } else {
+    delete document.documentElement.dataset.theme;
+  }
+  _syncThemeBtns(theme);
+  try {
+    await fetch('/api/settings/ui-prefs', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({prefs: {theme: theme || null}}),
+    });
+  } catch(e) {}
+}
+document.addEventListener('DOMContentLoaded', () => {
+  const current = document.documentElement.dataset.theme || '';
+  _syncThemeBtns(current);
+});
+
 // ── User Info ─────────────────────────────────────────────────────────────────
 async function loadUserInfo() {
   try {
@@ -655,7 +726,7 @@ function onAvatarFileSelected(e) {
 function _drawCrop() {
   const canvas = document.getElementById('crop-canvas');
   const ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#1c1c1e';
+  ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim() || '#1c1c1e';
   ctx.fillRect(0, 0, CROP_SIZE, CROP_SIZE);
   if (_cropImg) {
     ctx.drawImage(_cropImg, _cropOffX, _cropOffY,

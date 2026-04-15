@@ -1522,6 +1522,60 @@ async def save_segment(req: SegmentSaveRequest):
             "end_lat": pts[ei]["lat"], "end_lon": pts[ei]["lon"]}
 
 
+@router.put("/segments/{segment_id}")
+async def update_segment_full(segment_id: int, req: SegmentSaveRequest):
+    import math, json as json_mod
+    db = db_getter()
+
+    existing = db.get_segment(segment_id)
+    if not existing:
+        raise HTTPException(404, "Segment not found")
+
+    chart = db.get_chart_data_for_points(req.activity_id)
+    if not chart or not chart.get("alt_ft"):
+        raise HTTPException(404, "No chart data for activity")
+
+    all_pts = db.get_track_points(req.activity_id)
+    pts = [p for p in all_pts if p["lat"] != 999.0 and p["lon"] != 999.0]
+    if not pts:
+        raise HTTPException(404, "No GPS points for activity")
+
+    n  = len(pts)
+    si = max(0, min(req.start_idx, n-1))
+    ei = max(si+1, min(req.end_idx, n-1))
+
+    def hav_km(lat1,lon1,lat2,lon2):
+        R=6371.0; dlat=math.radians(lat2-lat1); dlon=math.radians(lon2-lon1)
+        a=math.sin(dlat/2)**2+math.cos(math.radians(lat1))*math.cos(math.radians(lat2))*math.sin(dlon/2)**2
+        return R*2*math.asin(min(1,math.sqrt(a)))
+
+    length_km = sum(hav_km(pts[i]["lat"],pts[i]["lon"],pts[i+1]["lat"],pts[i+1]["lon"])
+                    for i in range(si, min(ei, n-2)))
+
+    seg_pts = pts[si:ei+1]
+    lats = [p["lat"] for p in seg_pts]
+    lons = [p["lon"] for p in seg_pts]
+
+    step = max(1, len(seg_pts)//200)
+    sampled = seg_pts[::step]
+    if seg_pts[-1] not in sampled:
+        sampled.append(seg_pts[-1])
+
+    points_json = json_mod.dumps([[p["lat"], p["lon"]] for p in sampled])
+
+    db.update_segment(
+        segment_id=segment_id,
+        name=req.name.strip() or existing["name"],
+        activity_id=req.activity_id,
+        start_idx=si, end_idx=ei,
+        length_km=round(length_km, 4),
+        min_lat=min(lats), max_lat=max(lats),
+        min_lon=min(lons), max_lon=max(lons),
+        points_json=points_json,
+    )
+    return {"ok": True, "id": segment_id}
+
+
 @router.patch("/segments/{segment_id}")
 async def rename_segment(segment_id: int, body: dict):
     db = db_getter()
@@ -1550,7 +1604,9 @@ async def segments_for_activity(activity_id: int):
                           "length_km": s["length_km"],
                           "start_idx": s["start_idx"],
                           "end_idx":   s["end_idx"],
-                          "activity_id": s["activity_id"]}
+                          "activity_id": s["activity_id"],
+                          "matched_start_idx": s.get("matched_start_idx"),
+                          "matched_end_idx":   s.get("matched_end_idx")}
                          for s in segs]}
 
 

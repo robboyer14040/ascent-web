@@ -174,6 +174,16 @@ const state = {
 // User lookup map: id → {username, avatar_url} (populated async during init)
 const userMap = {};
 
+// Deterministic per-user avatar colors — must match avatar_colors in admin_invites.html
+const USER_AVATAR_COLORS = ['#3b82f6','#ef4444','#22c55e','#a855f7','#ec4899','#14b8a6','#f59e0b','#8b5cf6'];
+
+function userInitialAvatar(userId, username, size, radius, extraStyle) {
+  const color = USER_AVATAR_COLORS[(userId || 0) % USER_AVATAR_COLORS.length];
+  const initial = (username || '?')[0].toUpperCase();
+  const fs = Math.round(size * 0.45);
+  return `<div style="width:${size}px;height:${size}px;border-radius:${radius};background:${color};color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:${fs}px;font-weight:600;flex-shrink:0;${extraStyle}">${initial}</div>`;
+}
+
 function renderUserCell(a) {
   const u = userMap[a.user_id];
   if (!u) return '';
@@ -181,7 +191,7 @@ function renderUserCell(a) {
   if (u.avatar_url) {
     return `<img src="${u.avatar_url}" alt="" style="width:22px;height:22px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:5px;flex-shrink:0">${name}`;
   }
-  return name;
+  return userInitialAvatar(a.user_id, u.username, 22, '50%', 'vertical-align:middle;margin-right:5px;') + name;
 }
 
 const ALL_COLS = [
@@ -605,6 +615,14 @@ function deleteSelected() {
 
   document.getElementById('dcb-delete-btn').onclick = async () => {
     document.getElementById('delete-confirm-overlay').classList.remove('open');
+    // Determine next activity to select (prefer next, fall back to previous)
+    const deletingCurrent = ids.includes(state.selectedId);
+    let nextId = null;
+    if (deletingCurrent && ids.length === 1) {
+      const idx = state.filtered.findIndex(a => a.id === state.selectedId);
+      if (idx < state.filtered.length - 1) nextId = state.filtered[idx + 1].id;
+      else if (idx > 0) nextId = state.filtered[idx - 1].id;
+    }
     const r = await fetch('/api/activities', {
       method: 'DELETE',
       headers: {'Content-Type': 'application/json'},
@@ -614,15 +632,15 @@ function deleteSelected() {
     // Remove from state
     state.all      = state.all.filter(a => !ids.includes(a.id));
     state.selectedIds.clear();
-    if (ids.includes(state.selectedId)) {
+    if (deletingCurrent) {
       state.selectedId = null;
       document.getElementById('act-detail').style.display = 'none';
       document.getElementById('no-selection').style.display = 'flex';
-
       const _ctb = document.getElementById('chart-toolbar'); if (_ctb) _ctb.classList.remove('visible');
       clearMap();
     }
     applyFilterAndSort();
+    if (nextId) { selectActivity(nextId); scrollToSelected(); }
   };
 }
 
@@ -669,6 +687,7 @@ async function selectActivity(id) {
   loadPhotos(id); // async
   loadWeatherLocation(id); // async
   loadAISummary(id); // async
+  loadSegmentSelector(id); // async — populate segment dropdown
   if (act.strava_activity_id) loadKudos(id); // async
   if (act.strava_activity_id) loadComments(id); // async
 
@@ -787,6 +806,7 @@ function buildDetailHTML(a) {
   return buildActivityDetailHTML(a, {
     currentUserId:    viewState.myId,
     editCallback:     'startEditActivity',
+    deleteCallback:   'deleteSelected',
     resyncCallback:   'resyncActivity',
     saveRouteCb:      'openSaveRouteDialog',
     resyncBtnId:      'resync-btn',

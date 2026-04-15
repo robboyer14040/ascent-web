@@ -140,7 +140,10 @@ async def delete_activity(activity_id: int, request: Request):
         raise HTTPException(404, "Activity not found")
     if act.get("user_id") not in (None, uid):
         raise HTTPException(403, "Not your activity")
+    strava_id = act.get("strava_activity_id")
     db.delete_activities([activity_id])
+    if strava_id and uid is not None:
+        db.block_strava_activities(uid, [strava_id])
     return {"deleted": activity_id}
 
 
@@ -161,6 +164,13 @@ async def delete_activities_bulk(request: Request):
     ).fetchall()]
     if not owned:
         return {"deleted": 0}
+    ph = ','.join('?' * len(owned))
+    strava_ids = [r[0] for r in db._con.execute(
+        f"SELECT strava_activity_id FROM activities WHERE id IN ({ph}) AND strava_activity_id IS NOT NULL",
+        owned
+    ).fetchall()]
     count = db.delete_activities(owned)
+    if strava_ids:
+        db.block_strava_activities(uid, strava_ids)
     return {"deleted": count}
 

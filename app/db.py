@@ -397,6 +397,28 @@ class AscentDB:
         finally:
             con.close()
 
+    def block_strava_activities(self, user_id: int, strava_ids: list) -> None:
+        """Record Strava activity IDs so they are never re-imported after deletion."""
+        if not strava_ids:
+            return
+        con = sqlite3.connect(self.path, timeout=30)
+        try:
+            con.execute("""
+                CREATE TABLE IF NOT EXISTS strava_deleted_activities (
+                    user_id            INTEGER NOT NULL,
+                    strava_activity_id INTEGER NOT NULL,
+                    deleted_at         INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+                    PRIMARY KEY (user_id, strava_activity_id)
+                )
+            """)
+            con.executemany(
+                "INSERT OR IGNORE INTO strava_deleted_activities (user_id, strava_activity_id) VALUES (?, ?)",
+                [(user_id, sid) for sid in strava_ids],
+            )
+            con.commit()
+        finally:
+            con.close()
+
     def count_activities(
         self, search: str = "", activity_type: str = "", year: Optional[int] = None,
         user_id: Optional[int] = None, include_shared: bool = False,
@@ -412,20 +434,21 @@ class AscentDB:
     def get_activity_types(self, user_id: Optional[int] = None,
                             include_shared: bool = False,
                             user_ids: Optional[list] = None) -> list[str]:
-        """Activity types stored in attributes_json as {"activity": "Ride"}."""
+        """Return sorted unique activity types across all matching activities."""
         try:
             where, params = self._build_where("", "", None,
                                                user_id=user_id, include_shared=include_shared,
                                                user_ids=user_ids)
             rows = self._con.execute(
-                f"""SELECT DISTINCT json_extract(attributes_json, '$.activity') AS t
-                   FROM activities
-                   {where}
-                   {"AND" if where else "WHERE"} t IS NOT NULL AND t != ''
-                   ORDER BY t""",
+                f"SELECT attributes_json, local_sport_type FROM activities {where}",
                 params
             ).fetchall()
-            return [r[0] for r in rows if r[0]]
+            types: set[str] = set()
+            for attrs_json, local_sport_type in rows:
+                t = local_sport_type or (parse_attrs(attrs_json).get("activity") if attrs_json else None)
+                if t:
+                    types.add(t)
+            return sorted(types)
         except Exception:
             return []
 
@@ -766,6 +789,7 @@ class AscentDB:
             "speed":   [p["speed_mph"] for p in pts],
             "power":   [p["power"] for p in pts],
             "cadence": [p["cad"] for p in pts],
+            "temp_f":  [p["temp_f"] for p in pts],
             "dist_m":  dist_m,  # in miles (orig_distance_m stores miles)
         }
 
@@ -1186,8 +1210,15 @@ class AscentDB:
             params += [f"%{search}%", f"%{search}%", f"%{search}%"]
 
         if activity_type:
-            where_parts.append("json_extract(attributes_json,'$.activity') = ?")
-            params.append(activity_type)
+            # attributes_json is a flat alternating array ["key", value, ...]; use json_each
+            # to locate the "activity" key then grab the next element. Also check local_sport_type.
+            where_parts.append(
+                "(local_sport_type = ? OR (local_sport_type IS NULL AND EXISTS ("
+                "SELECT 1 FROM json_each(attributes_json) je "
+                "WHERE je.key % 2 = 0 AND je.value = 'activity' "
+                "AND json_extract(attributes_json, '$[' || (je.key+1) || ']') = ?)))"
+            )
+            params.extend([activity_type, activity_type])
 
         if year:
             where_parts.append(
@@ -1485,6 +1516,19 @@ class AscentDB:
         self._con.execute("UPDATE segments SET name=? WHERE id=?", (name, segment_id))
         self._con.commit()
 
+    def update_segment(self, segment_id: int, name: str, activity_id: int,
+                       start_idx: int, end_idx: int, length_km: float,
+                       min_lat: float, max_lat: float, min_lon: float, max_lon: float,
+                       points_json: str):
+        self._ensure_segments_table()
+        self._con.execute("""
+            UPDATE segments SET name=?, activity_id=?, start_idx=?, end_idx=?, length_km=?,
+                   min_lat=?, max_lat=?, min_lon=?, max_lon=?, points_json=?
+            WHERE id=?
+        """, (name, activity_id, start_idx, end_idx, length_km,
+              min_lat, max_lat, min_lon, max_lon, points_json, segment_id))
+        self._con.commit()
+
     def get_segments_for_activity(self, activity_id: int) -> list:
         """Return segments that the activity actually traverses.
         Checks that the activity has GPS points within 200m of the segment's
@@ -1511,12 +1555,12 @@ class AscentDB:
 
         # Load activity points once for proximity check
         act_pts = self._con.execute(
-            "SELECT latitude_e7, longitude_e7 FROM points WHERE track_id=? AND latitude_e7 != 999.0 ORDER BY wall_clock_delta_s",
+            "SELECT latitude_e7, longitude_e7 FROM points WHERE track_id=? AND latitude_e7 != 999.0 AND longitude_e7 != 999.0 ORDER BY wall_clock_delta_s",
             (activity_id,)
         ).fetchall()
 
         if not act_pts:
-            return [dict(r) for r in rows]
+            return [{**dict(r), 'matched_start_idx': None, 'matched_end_idx': None} for r in rows]
 
         def closest_idx(lat, lon, pts):
             """Return (index, distance_m) of the closest point in pts to (lat, lon)."""
@@ -1546,7 +1590,10 @@ class AscentDB:
 
             # All three anchors must be within tolerance AND appear in forward order
             if sd <= tol_m and md <= tol_m and ed <= tol_m and si < mi < ei:
-                result.append(dict(row))
+                r = dict(row)
+                r['matched_start_idx'] = si
+                r['matched_end_idx'] = ei
+                result.append(r)
 
         return result
 

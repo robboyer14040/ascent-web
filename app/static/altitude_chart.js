@@ -38,23 +38,24 @@ async function drawElevationFromSummary(act, version) {
         const px = xSc.getPixelForValue(pk.x);
         const py = ySc.getPixelForValue(pk.y);
         const label = U.alt(pk.y) + ' ' + U.altUnit();
+        const _lm = _chartIsLight();
         // Stem line
         cx.beginPath();
         cx.moveTo(px, py);
         cx.lineTo(px, py - 20);
-        cx.strokeStyle = 'rgba(255,255,255,.5)';
+        cx.strokeStyle = _lm ? 'rgba(0,0,0,.35)' : 'rgba(255,255,255,.5)';
         cx.lineWidth = 1;
         cx.stroke();
         // Dot at peak
         cx.beginPath();
         cx.arc(px, py, 3, 0, Math.PI*2);
-        cx.fillStyle = '#fff';
+        cx.fillStyle = _lm ? '#555' : '#fff';
         cx.fill();
         // Label bubble
         cx.font = 'bold 9px -apple-system,sans-serif';
         const tw = cx.measureText(label).width;
         const bx = px - tw/2 - 5, by = py - 38, bw = tw + 10, bh = 16;
-        cx.fillStyle = 'rgba(0,0,0,.7)';
+        cx.fillStyle = 'rgba(0,0,0,.75)';
         cx.beginPath();
         cx.roundRect(bx, by, bw, bh, 4);
         cx.fill();
@@ -67,6 +68,7 @@ async function drawElevationFromSummary(act, version) {
     }
   };
 
+  const light = _chartIsLight();
   if (elevChart){elevChart.destroy();elevChart=null;}
   elevChart = new Chart(ctx, {
     type:'line',
@@ -81,9 +83,9 @@ async function drawElevationFromSummary(act, version) {
         x:{
           type:'linear', display:true,
           ticks:{color:'#64748b',font:{size:9},maxTicksLimit:8,callback:v=>`${v.toFixed(1)}${U.distUnit()}`},
-          grid:{color:'rgba(255,255,255,.04)'},
+          grid:{color:light?'rgba(0,0,0,.08)':'rgba(255,255,255,.04)'},
         },
-        y:{ticks:{color:'#64748b',font:{size:10},maxTicksLimit:4,callback:v=>`${U.alt(v)}${U.altUnit()}`},grid:{color:'rgba(255,255,255,.06)'}},
+        y:{ticks:{color:'#64748b',font:{size:10},maxTicksLimit:4,callback:v=>`${U.alt(v)}${U.altUnit()}`},grid:{color:light?'rgba(0,0,0,.10)':'rgba(255,255,255,.06)'}},
       }
     }
   });
@@ -227,9 +229,11 @@ if (typeof window !== 'undefined' && window.Chart && window.ChartAnnotation) {
   Chart.register(window.ChartAnnotation);
 }
 
-function _heatColor(frac) {
-  // Blue→green→yellow→red gradient
-  const stops = [[0,59,130,246],[0.33,34,197,94],[0.67,234,179,8],[1,239,68,68]];
+function _heatColor(frac, light=false) {
+  // Blue→green→yellow→red gradient; darker stops for light theme
+  const stops = light
+    ? [[0,30,58,138],[0.33,20,83,45],[0.67,120,53,15],[1,127,29,29]]   // -900 shades
+    : [[0,59,130,246],[0.33,34,197,94],[0.67,234,179,8],[1,239,68,68]]; // -500 shades
   for (let i = 0; i < stops.length - 1; i++) {
     const [t0,r0,g0,b0] = stops[i], [t1,r1,g1,b1] = stops[i+1];
     if (frac <= t1) {
@@ -237,7 +241,7 @@ function _heatColor(frac) {
       return `rgb(${Math.round(r0+(r1-r0)*t)},${Math.round(g0+(g1-g0)*t)},${Math.round(b0+(b1-b0)*t)})`;
     }
   }
-  return 'rgb(239,68,68)';
+  return light ? 'rgb(127,29,29)' : 'rgb(239,68,68)';
 }
 
 function _fmtSplitVal(value, metric) {
@@ -247,6 +251,7 @@ function _fmtSplitVal(value, metric) {
     const secs = value * 60;
     return `${Math.floor(secs / 60)}:${String(Math.round(secs % 60)).padStart(2, '0')}`;
   }
+  if (metric === 'temp') return Math.round(U.metric ? (value - 32) * 5 / 9 : value);
   return Math.round(value);
 }
 
@@ -258,6 +263,13 @@ function fmtChartTime(sec) {
   return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(r).padStart(2,'0')}`;
 }
 
+function _chartIsLight() {
+  const t = document.documentElement.dataset.theme;
+  if (t === 'light') return true;
+  if (t === 'dark')  return false;
+  return window.matchMedia('(prefers-color-scheme: light)').matches;
+}
+
 async function drawElevation(data, version) {
   const label = document.querySelector('.chart-label');
   if (label) label.textContent = 'Elevation';
@@ -265,8 +277,9 @@ async function drawElevation(data, version) {
   if (version !== undefined && version !== elevRenderVersion) return; // stale
 
   elevChartData = data;
-  const { dist_m, alt_ft, hr, speed, power, cadence, time: timeArr } = data;
+  const { dist_m, alt_ft, hr, speed, power, cadence, temp_f, time: timeArr } = data;
   if (!alt_ft || alt_ft.every(v => v === 0)) return;
+  const light = _chartIsLight();
 
   const xConv = U.metric ? (m => m/1000)        : (m => m/1609.344);
   const yConv = U.metric ? (ft => Math.round(ft*0.3048)) : (ft => Math.round(ft));
@@ -305,15 +318,19 @@ async function drawElevation(data, version) {
   const splitAgg     = document.getElementById('split-agg-sel')?.value || 'avg';
   const splitZones  = document.getElementById('split-zones')?.checked ?? false;
 
-  // Single (non-zone) colors for each metric
-  const METRIC_COLORS = {
+  // Single (non-zone) colors for each metric — darker shades in light theme for visibility
+  const METRIC_COLORS = light ? {
+    hr: '#7f1d1d', power: '#14532d', speed: '#7c2d12',
+    cadence: '#4c1d95', climb: '#451a03', pace: '#164e63', temp: '#0c4a6e',
+  } : {
     hr: '#ef4444', power: '#22c55e', speed: '#f97316',
-    cadence: '#a855f7', climb: '#f59e0b', pace: '#06b6d4',
+    cadence: '#a855f7', climb: '#f59e0b', pace: '#06b6d4', temp: '#38bdf8',
   };
 
-  const overlayArrs   = { hr, speed, power, cadence };
-  const overlayUnits  = { hr: 'bpm', speed: U.speedUnit(), power: 'W', cadence: 'rpm' };
-  const overlayLabels = { hr: 'Heart Rate', speed: 'Speed', power: 'Power', cadence: 'Cadence' };
+  const temp_disp = temp_f ? temp_f.map(v => v ? +(U.metric ? ((v - 32) * 5 / 9).toFixed(1) : v) : 0) : null;
+  const overlayArrs   = { hr, speed, power, cadence, temp: temp_disp };
+  const overlayUnits  = { hr: 'bpm', speed: U.speedUnit(), power: 'W', cadence: 'rpm', temp: U.tempUnit() };
+  const overlayLabels = { hr: 'Heart Rate', speed: 'Speed', power: 'Power', cadence: 'Cadence', temp: 'Temperature' };
 
   function makeOverlayPoints(key) {
     const arr = overlayArrs[key];
@@ -329,6 +346,17 @@ async function drawElevation(data, version) {
   function makeSegmentColor(key, pts) {
     // Returns a segment.borderColor function for Chart.js that colors by zone
     if (!o1Zones) return null;
+    if (key === 'temp') {
+      const vals = pts.map(p => p.y).filter(v => v !== 0);
+      if (!vals.length) return null;
+      const minV = Math.min(...vals), maxV = Math.max(...vals);
+      return (ctx) => {
+        const pt = pts[ctx.p0DataIndex];
+        if (!pt) return METRIC_COLORS.temp;
+        const frac = maxV > minV ? (pt.y - minV) / (maxV - minV) : 0.5;
+        return _heatColor(frac, light);
+      };
+    }
     if (key !== 'hr' && key !== 'power') return null;
     const _p = cachedProfile || {};
     const bounds = key === 'hr' ? hrBoundsFor(_p, currentAct) : pwrBoundsFor(_p, currentAct);
@@ -379,13 +407,13 @@ async function drawElevation(data, version) {
         color: '#64748b', font: { size: 9 }, maxTicksLimit: 10,
         callback: xAxisTime ? (v => fmtChartTime(v)) : (v => `${v.toFixed(1)}${xUnit}`),
       },
-      grid: { color: 'rgba(255,255,255,.04)' },
+      grid: { color: light ? 'rgba(0,0,0,.08)' : 'rgba(255,255,255,.04)' },
     },
     yElev: {
       position: 'left',
       ...clampAxis(elevMax),
       ticks: { color: '#64748b', font: { size: 9 }, maxTicksLimit: 5, callback: v => `${U.alt(v)}${U.altUnit()}` },
-      grid: { color: 'rgba(255,255,255,.06)' },
+      grid: { color: light ? 'rgba(0,0,0,.10)' : 'rgba(255,255,255,.06)' },
     },
   };
 
@@ -429,6 +457,7 @@ async function drawElevation(data, version) {
         if (_sharedAxis) return v;
         if (splitMetric === 'speed' && U.metric) return v * 1.60934;
         if (splitMetric === 'climb' && U.metric) return v * 0.3048;
+        if (splitMetric === 'temp' && U.metric) return (v - 32) * 5 / 9;
         return v;
       }
       const _vals = _splits.map(s => _toDisplayVal(s.value)).filter(v => v > 0);
@@ -438,7 +467,8 @@ async function drawElevation(data, version) {
                     : splitZones && splitMetric === 'power' ? pwrBoundsFor(_p, currentAct) : null;
       const _splitAxisColor = METRIC_COLORS[splitMetric] || '#94a3b8';
       const _splitUnit = { speed: U.speedUnit(), power: 'W', hr: 'bpm', cadence: 'rpm',
-                           climb: U.climbUnit(), pace: U.metric ? 'min/km' : 'min/mi' }[splitMetric] || '';
+                           climb: U.climbUnit(), pace: U.metric ? 'min/km' : 'min/mi',
+                           temp: U.tempUnit() }[splitMetric] || '';
       if (!_sharedAxis) {
         scales.yRight = {
           position: 'right',
@@ -478,18 +508,18 @@ async function drawElevation(data, version) {
               color = zoneColorFor(sp.value, _bounds) || METRIC_COLORS[splitMetric];
             } else if (splitZones) {
               const frac = _maxV > _minV ? (dv - _minV) / (_maxV - _minV) : 0.5;
-              color = _heatColor(frac);
+              color = _heatColor(frac, light);
             } else {
               color = METRIC_COLORS[splitMetric] || '#3b82f6';
             }
             const barTop = Math.min(ySc.getPixelForValue(dv), bottom - 1);
             const barH = bottom - barTop;
-            cx.globalAlpha = 0.32;
+            cx.globalAlpha = light ? 0.82 : 0.32;
             cx.fillStyle = color;
             cx.fillRect(x0, barTop, w, barH);
             if (w > 32) {
               cx.globalAlpha = 0.9;
-              cx.fillStyle = 'rgba(255,255,255,0.9)';
+              cx.fillStyle = light ? 'rgba(0,0,0,0.7)' : 'rgba(255,255,255,0.9)';
               cx.font = 'bold 9px -apple-system,sans-serif';
               cx.textAlign = 'center';
               cx.textBaseline = 'bottom';
@@ -520,23 +550,24 @@ async function drawElevation(data, version) {
         const px = xSc.getPixelForValue(xAxisTime ? ptX(pk.idx) : pk.x);
         const py = ySc.getPixelForValue(pk.y);
         const label = U.alt(pk.y) + ' ' + U.altUnit();
+        const _lm = _chartIsLight();
         // Stem line
         cx.beginPath();
         cx.moveTo(px, py);
         cx.lineTo(px, py - 20);
-        cx.strokeStyle = 'rgba(255,255,255,.5)';
+        cx.strokeStyle = _lm ? 'rgba(0,0,0,.35)' : 'rgba(255,255,255,.5)';
         cx.lineWidth = 1;
         cx.stroke();
         // Dot at peak
         cx.beginPath();
         cx.arc(px, py, 3, 0, Math.PI*2);
-        cx.fillStyle = '#fff';
+        cx.fillStyle = _lm ? '#555' : '#fff';
         cx.fill();
         // Label bubble
         cx.font = 'bold 9px -apple-system,sans-serif';
         const tw = cx.measureText(label).width;
         const bx = px - tw/2 - 5, by = py - 38, bw = tw + 10, bh = 16;
-        cx.fillStyle = 'rgba(0,0,0,.7)';
+        cx.fillStyle = 'rgba(0,0,0,.75)';
         cx.beginPath();
         cx.roundRect(bx, by, bw, bh, 4);
         cx.fill();
@@ -823,6 +854,13 @@ async function drawElevation(data, version) {
       leafMap.removeLayer(splitsState._elevSelMapLayer);
       splitsState._elevSelMapLayer = null;
     }
+    const sel = document.getElementById('seg-selector');
+    if (sel) sel.value = '';
+    const lbl = document.getElementById('seg-selector-label');
+    if (lbl) lbl.textContent = 'Entire activity';
+    window._selectedSegmentId = null;
+    const defineBtn = document.getElementById('seg-define-btn');
+    if (defineBtn) defineBtn.textContent = 'Define Segment…';
   }
 
   function setup() {
@@ -847,6 +885,16 @@ async function drawElevation(data, version) {
       rect.style.display = 'block';
       rect.style.left  = px + 'px';
       rect.style.width = '0px';
+      // Reset segment selector when user draws a new region
+      const segSel = document.getElementById('seg-selector');
+      if (segSel && segSel.value) {
+        segSel.value = '';
+        window._selectedSegmentId = null;
+        const defineBtn = document.getElementById('seg-define-btn');
+        if (defineBtn) defineBtn.textContent = 'Define Segment…';
+        const segLbl = document.getElementById('seg-selector-label');
+        if (segLbl) segLbl.textContent = 'Entire activity';
+      }
       return true;
     }
 
@@ -902,9 +950,103 @@ async function drawElevation(data, version) {
   document.addEventListener('DOMContentLoaded', setup);
   setTimeout(setup, 800);
 
-  // Expose for compare legend navigation
+  // Expose for compare legend navigation and segment selector
   window._applyElevSelection = applyElevSelection;
+  window._clearElevSelection = clearElevSelection;
 })();
+
+// ── SEGMENT SELECTOR ──────────────────────────────────────────────────────────
+async function loadSegmentSelector(actId) {
+  const sel  = document.getElementById('seg-selector');
+  const wrap = document.getElementById('seg-selector-wrap');
+  const lbl  = document.getElementById('seg-selector-label');
+  const list = document.getElementById('seg-selector-list');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">Entire activity</option>';
+  sel.value = '';
+  if (wrap) wrap.style.display = 'none';
+  if (lbl)  lbl.textContent = 'Entire activity';
+  if (list) list.innerHTML = '';
+  // Reset edit state
+  window._selectedSegmentId = null;
+  const defineBtn = document.getElementById('seg-define-btn');
+  if (defineBtn) defineBtn.textContent = 'Define Segment…';
+  if (!actId) return;
+  try {
+    const r = await fetch(`/api/segments/for-activity/${actId}`);
+    if (!r.ok) return;
+    const d = await r.json();
+    const segs = (d.segments || []).sort((a, b) => a.name.localeCompare(b.name));
+    for (const s of segs) {
+      const opt = document.createElement('option');
+      opt.value = s.id;
+      opt.textContent = s.name;
+      const si = s.matched_start_idx ?? s.start_idx;
+      const ei = s.matched_end_idx   ?? s.end_idx;
+      if (si != null) opt.dataset.startIdx = si;
+      if (ei != null) opt.dataset.endIdx   = ei;
+      sel.appendChild(opt);
+      if (list) {
+        const item = document.createElement('div');
+        item.textContent = s.name;
+        item.dataset.value = s.id;
+        item.style.cssText = 'padding:4px 10px;cursor:pointer;font-size:11px;white-space:nowrap;color:var(--text)';
+        item.addEventListener('mouseenter', () => item.style.background = 'var(--surface2)');
+        item.addEventListener('mouseleave', () => item.style.background = '');
+        item.addEventListener('mousedown', e => {
+          e.preventDefault();
+          sel.value = s.id;
+          list.style.display = 'none';
+          onSegSelectorChange(s.id);
+        });
+        list.appendChild(item);
+      }
+    }
+    if (segs.length > 0 && wrap) {
+      wrap.style.display = '';
+    }
+  } catch(e) {}
+}
+
+function toggleSegDropdown(e) {
+  e.stopPropagation();
+  const list = document.getElementById('seg-selector-list');
+  if (!list) return;
+  if (list.style.display === 'none') {
+    list.style.display = '';
+    setTimeout(() => document.addEventListener('click', function closeDD(ev) {
+      const wrap = document.getElementById('seg-selector-wrap');
+      if (!wrap || !wrap.contains(ev.target)) {
+        list.style.display = 'none';
+        document.removeEventListener('click', closeDD);
+      }
+    }), 0);
+  } else {
+    list.style.display = 'none';
+  }
+}
+
+function onSegSelectorChange(val) {
+  const sel = document.getElementById('seg-selector');
+  const lbl = document.getElementById('seg-selector-label');
+  const defineBtn = document.getElementById('seg-define-btn');
+  if (!val) {
+    if (window._clearElevSelection) window._clearElevSelection();
+    window._selectedSegmentId = null;
+    if (defineBtn) defineBtn.textContent = 'Define Segment…';
+    if (lbl) lbl.textContent = 'Entire activity';
+    return;
+  }
+  window._selectedSegmentId = parseInt(val, 10);
+  if (defineBtn) defineBtn.textContent = 'Edit Segment…';
+  const opt = sel.options[sel.selectedIndex];
+  if (lbl && opt) lbl.textContent = opt.textContent;
+  const s0 = parseInt(opt.dataset.startIdx, 10);
+  const s1 = parseInt(opt.dataset.endIdx,   10);
+  if (!isNaN(s0) && !isNaN(s1) && window._applyElevSelection) {
+    window._applyElevSelection(s0, s1);
+  }
+}
 
 // ── ANIMATION ENGINE ─────────────────────────────────────────────────────────
 const anim = {
@@ -1158,7 +1300,7 @@ function computeSplits(pts, lenMi, metric, agg) {
   let si = 0, startDist = pts.dist_m[0];
 
   const getArr = m => ({ speed: pts.speed, power: pts.power, hr: pts.hr,
-    cadence: pts.cadence, climb: pts.alt_ft, pace: pts.speed })[m] || pts.speed;
+    cadence: pts.cadence, climb: pts.alt_ft, pace: pts.speed, temp: pts.temp_f })[m] || pts.speed;
   const arr = getArr(metric);
 
   for (let i = 1; i < n; i++) {
@@ -1196,7 +1338,7 @@ function computeSplitsByTime(pts, durSec, metric, agg) {
   let si = 0;
 
   const getArr = m => ({ speed: pts.speed, power: pts.power, hr: pts.hr,
-    cadence: pts.cadence, climb: pts.alt_ft, pace: pts.speed })[m] || pts.speed;
+    cadence: pts.cadence, climb: pts.alt_ft, pace: pts.speed, temp: pts.temp_f })[m] || pts.speed;
   const arr = getArr(metric);
 
   for (let i = 1; i < n; i++) {

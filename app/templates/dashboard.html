@@ -4,9 +4,12 @@
 <meta charset="UTF-8">
 <link rel="icon" type="image/svg+xml" href="/static/favicon.svg"><link rel="apple-touch-icon" href="/static/apple-touch-icon.png"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Dashboard — Ascent</title>
+<script>(function(){var t={{ ui_prefs.get('theme','') | tojson }};if(t)document.documentElement.dataset.theme=t;})();</script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-:root{--bg:#1c1c1e;--surface:#2c2c2e;--surface2:#3a3a3c;--border:#3a3a3c;--border2:#48484a;--text:#f2f2f7;--muted:#8e8e93;--accent:#f97316;--accent-blue:#3b82f6;--green:#30d158}
+:root{--bg:#1c1c1e;--surface:#2c2c2e;--surface2:#3a3a3c;--border:#3a3a3c;--border2:#48484a;--text:#f2f2f7;--muted:#8e8e93;--accent:#f97316;--accent-blue:#3b82f6;--green:#30d158;--nav-hover:rgba(255,255,255,.06)}
+[data-theme="light"]{--bg:#f2f2f7;--surface:#ffffff;--surface2:#e5e5ea;--border:#d1d1d6;--border2:#c7c7cc;--text:#1c1c1e;--muted:#6c6c70;--accent:#f97316;--accent-blue:#007aff;--green:#34c759;--nav-hover:rgba(0,0,0,.05)}
+@media(prefers-color-scheme:light){:root:not([data-theme]){--bg:#f2f2f7;--surface:#ffffff;--surface2:#e5e5ea;--border:#d1d1d6;--border2:#c7c7cc;--text:#1c1c1e;--muted:#6c6c70;--accent:#f97316;--accent-blue:#007aff;--green:#34c759;--nav-hover:rgba(0,0,0,.05)}}
 html,body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif;font-size:14px}
 a{color:var(--accent);text-decoration:none}
 nav{display:flex;align-items:center;gap:0;padding:0 12px;height:44px;background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:99}
@@ -14,8 +17,8 @@ nav{display:flex;align-items:center;gap:0;padding:0 12px;height:44px;background:
 .nav-version{font-size:10px;font-weight:400;color:var(--muted);margin-left:4px;letter-spacing:.02em}
 .nav-pages{display:flex;align-items:center;gap:2px;margin-left:14px}
 .nav-btn{padding:5px 10px;border-radius:6px;font-size:12px;font-weight:500;color:var(--muted);background:none;border:none;cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:4px;text-decoration:none;height:34px}
-.nav-btn:hover{color:var(--text);background:rgba(255,255,255,.06)}
-.nav-btn.nav-active{color:#fff;font-weight:700}
+.nav-btn:hover{color:var(--text);background:var(--nav-hover)}
+.nav-btn.nav-active{color:var(--text);font-weight:700}
 .spacer{flex:1}
 .container{max-width:1200px;margin:0 auto;padding:1.5rem}
 .stat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:.75rem;margin-bottom:1.5rem}
@@ -34,7 +37,7 @@ table{width:100%;border-collapse:collapse}
 th{text-align:left;font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);padding:.55rem .75rem;border-bottom:1px solid var(--border)}
 td{padding:.55rem .75rem;border-bottom:1px solid var(--border);font-size:.85rem}
 tr:last-child td{border-bottom:none}
-tr:hover td{background:rgba(255,255,255,.03)}
+tr:hover td{background:var(--nav-hover)}
 .type-badge{display:inline-block;padding:.15rem .55rem;border-radius:999px;font-size:.68rem;font-weight:600;text-transform:uppercase}
 .t-run{background:rgba(48,209,88,.15);color:var(--green)}
 .t-ride{background:rgba(249,115,22,.15);color:var(--accent)}
@@ -521,8 +524,10 @@ function buildChart(labels, data) {
   const ctx = document.getElementById('mainChart').getContext('2d');
   if (chart) chart.destroy();
   const useMetric = _uiPrefs?.use_metric;
-  const PC = '#f2f2f7', PF = { size: 12, weight: 'bold' }; // primary
-  const SC = '#64748b', SF = { size: 10 };                  // secondary
+  const cs = getComputedStyle(document.documentElement);
+  const PC = cs.getPropertyValue('--text').trim(), PF = { size: 12, weight: 'bold' }; // primary
+  const SC = cs.getPropertyValue('--muted').trim(), SF = { size: 10 };                // secondary
+  const gridColor = cs.getPropertyValue('--border').trim();
   const maxMi  = Math.max(1, ...data.map(d => d.dist_mi || 0));
   const maxKft = Math.max(0.1, ...data.map(d => (d.climb_ft || 0) / 1000));
   chart = new Chart(ctx, {
@@ -555,9 +560,9 @@ function buildChart(labels, data) {
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
-        legend: { labels: { color: '#f2f2f7', font: { size: 13, weight: 'bold' }, usePointStyle: true, generateLabels: chart => chart.data.datasets.map((ds, i) => ds.label === 'Climb'
-            ? { text: ds.label, fillStyle: 'transparent', strokeStyle: ds.borderColor, lineWidth: 3, pointStyle: 'line', hidden: false, datasetIndex: i, fontColor: '#f2f2f7' }
-            : { text: ds.label, fillStyle: ds.backgroundColor, strokeStyle: ds.backgroundColor, lineWidth: 0, pointStyle: 'rect', hidden: false, datasetIndex: i, fontColor: '#f2f2f7' }
+        legend: { labels: { color: PC, font: { size: 13, weight: 'bold' }, usePointStyle: true, generateLabels: chart => chart.data.datasets.map((ds, i) => ds.label === 'Climb'
+            ? { text: ds.label, fillStyle: 'transparent', strokeStyle: ds.borderColor, lineWidth: 3, pointStyle: 'line', hidden: false, datasetIndex: i, fontColor: PC }
+            : { text: ds.label, fillStyle: ds.backgroundColor, strokeStyle: ds.backgroundColor, lineWidth: 0, pointStyle: 'rect', hidden: false, datasetIndex: i, fontColor: PC }
           ) } },
         tooltip: {
           callbacks: {
@@ -581,10 +586,10 @@ function buildChart(labels, data) {
         }
       },
       scales: {
-        x: { ticks: { color: '#64748b', maxRotation: 45, maxTicksLimit: 24 }, grid: { color: '#2a2d3a' } },
+        x: { ticks: { color: SC, maxRotation: 45, maxTicksLimit: 24 }, grid: { color: gridColor } },
         y: {
           position: 'left', weight: useMetric ? 2 : 1,
-          grid: { color: '#2a2d3a' },
+          grid: { color: gridColor },
           ticks: { color: useMetric ? SC : PC, font: useMetric ? SF : PF },
           title: { display: true, text: 'mi', color: useMetric ? SC : PC, font: useMetric ? SF : PF },
         },

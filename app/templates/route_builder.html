@@ -7,14 +7,17 @@
 <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
 <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script>(function(){var t={{ ui_prefs.get('theme','') | tojson }};if(t)document.documentElement.dataset.theme=t;})();</script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
   --bg:#1c1c1e;--surface:#2c2c2e;--surface2:#3a3a3c;
   --border:#3a3a3c;--border2:#48484a;
   --text:#f2f2f7;--muted:#8e8e93;--muted2:#636366;
-  --accent:#f97316;
+  --accent:#f97316;--nav-hover:rgba(255,255,255,.06);
 }
+[data-theme="light"]{--bg:#f2f2f7;--surface:#ffffff;--surface2:#e5e5ea;--border:#d1d1d6;--border2:#c7c7cc;--text:#1c1c1e;--muted:#6c6c70;--muted2:#8e8e93;--accent:#f97316;--nav-hover:rgba(0,0,0,.05)}
+@media(prefers-color-scheme:light){:root:not([data-theme]){--bg:#f2f2f7;--surface:#ffffff;--surface2:#e5e5ea;--border:#d1d1d6;--border2:#c7c7cc;--text:#1c1c1e;--muted:#6c6c70;--muted2:#8e8e93;--accent:#f97316;--nav-hover:rgba(0,0,0,.05)}}
 html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif;font-size:13px;background:var(--bg);color:var(--text)}
 button{cursor:pointer;border:none;background:none;color:inherit;font:inherit}
 a{color:var(--accent);text-decoration:none}
@@ -26,8 +29,8 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
 .nav-version{font-size:10px;color:var(--muted);margin-left:4px;letter-spacing:.02em}
 .nav-pages{display:flex;align-items:center;gap:2px;margin-left:14px}
 .nav-btn{padding:5px 10px;border-radius:6px;font-size:12px;font-weight:500;color:var(--muted);background:none;border:none;cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:4px;text-decoration:none;height:34px}
-.nav-btn:hover{color:var(--text);background:rgba(255,255,255,.06)}
-.nav-btn.nav-active{color:#fff;font-weight:700}
+.nav-btn:hover{color:var(--text);background:var(--nav-hover)}
+.nav-btn.nav-active{color:var(--text);font-weight:700}
 .spacer{flex:1}
 
 /* ── Routes list page ── */
@@ -708,8 +711,8 @@ function renderRoutes() {
     grid.style.display = 'none';
     empty.style.display = 'flex';
     empty.innerHTML = savedRoutes.length
-      ? `No routes match "<strong>${escHtml(query)}</strong>".`
-      : 'No routes yet.<br>Click <strong>+ Create Route…</strong> to draw your first route.';
+      ? `<p>No routes match "<strong>${escHtml(query)}</strong>".</p>`
+      : '<p>No routes yet.<br>Click <strong>+ Create Route…</strong> to draw your first route.</p>';
     return;
   }
   grid.style.display = 'grid';
