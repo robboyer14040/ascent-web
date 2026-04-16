@@ -860,7 +860,9 @@ async function drawElevation(data, version) {
     if (lbl) lbl.textContent = 'Entire activity';
     window._selectedSegmentId = null;
     const defineBtn = document.getElementById('seg-define-btn');
-    if (defineBtn) defineBtn.textContent = 'Define Segment…';
+    if (defineBtn) defineBtn.textContent = 'Define…';
+    const beBtn2 = document.getElementById('seg-best-efforts-btn');
+    if (beBtn2) beBtn2.disabled = true;
   }
 
   function setup() {
@@ -891,9 +893,11 @@ async function drawElevation(data, version) {
         segSel.value = '';
         window._selectedSegmentId = null;
         const defineBtn = document.getElementById('seg-define-btn');
-        if (defineBtn) defineBtn.textContent = 'Define Segment…';
+        if (defineBtn) defineBtn.textContent = 'Define…';
         const segLbl = document.getElementById('seg-selector-label');
         if (segLbl) segLbl.textContent = 'Entire activity';
+        const beBtn2 = document.getElementById('seg-best-efforts-btn');
+        if (beBtn2) beBtn2.disabled = true;
       }
       return true;
     }
@@ -965,12 +969,16 @@ async function loadSegmentSelector(actId) {
   sel.innerHTML = '<option value="">Entire activity</option>';
   sel.value = '';
   if (wrap) wrap.style.display = 'none';
+  const prefix = document.getElementById('seg-selector-prefix');
+  if (prefix) prefix.style.display = 'none';
   if (lbl)  lbl.textContent = 'Entire activity';
   if (list) list.innerHTML = '';
   // Reset edit state
   window._selectedSegmentId = null;
   const defineBtn = document.getElementById('seg-define-btn');
-  if (defineBtn) defineBtn.textContent = 'Define Segment…';
+  if (defineBtn) defineBtn.textContent = 'Define…';
+  const beBtn = document.getElementById('seg-best-efforts-btn');
+  if (beBtn) { beBtn.disabled = true; }
   if (!actId) return;
   try {
     const r = await fetch(`/api/segments/for-activity/${actId}`);
@@ -1004,6 +1012,17 @@ async function loadSegmentSelector(actId) {
     }
     if (segs.length > 0 && wrap) {
       wrap.style.display = '';
+      const prefix = document.getElementById('seg-selector-prefix');
+      if (prefix) prefix.style.display = '';
+      const pendingId = window._pendingSegmentId;
+      if (pendingId) {
+        window._pendingSegmentId = null;
+        const found = segs.find(s => s.id === pendingId);
+        if (found) {
+          sel.value = String(pendingId);
+          onSegSelectorChange(String(pendingId));
+        }
+      }
     }
   } catch(e) {}
 }
@@ -1030,15 +1049,18 @@ function onSegSelectorChange(val) {
   const sel = document.getElementById('seg-selector');
   const lbl = document.getElementById('seg-selector-label');
   const defineBtn = document.getElementById('seg-define-btn');
+  const beBtn = document.getElementById('seg-best-efforts-btn');
   if (!val) {
     if (window._clearElevSelection) window._clearElevSelection();
     window._selectedSegmentId = null;
-    if (defineBtn) defineBtn.textContent = 'Define Segment…';
+    if (defineBtn) defineBtn.textContent = 'Define…';
     if (lbl) lbl.textContent = 'Entire activity';
+    if (beBtn) { beBtn.disabled = true; }
     return;
   }
   window._selectedSegmentId = parseInt(val, 10);
-  if (defineBtn) defineBtn.textContent = 'Edit Segment…';
+  if (defineBtn) defineBtn.textContent = 'Edit…';
+  if (beBtn) { beBtn.disabled = false; }
   const opt = sel.options[sel.selectedIndex];
   if (lbl && opt) lbl.textContent = opt.textContent;
   const s0 = parseInt(opt.dataset.startIdx, 10);

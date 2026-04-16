@@ -1529,26 +1529,34 @@ class AscentDB:
               min_lat, max_lat, min_lon, max_lon, points_json, segment_id))
         self._con.commit()
 
-    def get_segments_for_activity(self, activity_id: int) -> list:
+    def get_segments_for_activity(self, activity_id: int, current_user_id=None) -> list:
         """Return segments that the activity actually traverses.
         Checks that the activity has GPS points within 200m of the segment's
-        start, midpoint, and end — much more accurate than bbox overlap."""
+        start, midpoint, and end — much more accurate than bbox overlap.
+        Only includes segments from the current user or users with share_segments=1."""
         import json, math
         self._ensure_segments_table()
 
         # Quick bbox pre-filter first (cheap)
+        # Include segment if: it belongs to current user, or its owner has share_segments=1
         rows = self._con.execute("""
             SELECT s.id, s.name, s.activity_id, s.start_idx, s.end_idx,
                    s.length_km, s.min_lat, s.max_lat, s.min_lon, s.max_lon,
                    s.points_json, s.created_at
             FROM segments s
+            JOIN activities a ON a.id = s.activity_id
             WHERE EXISTS (
                 SELECT 1 FROM points p WHERE p.track_id = ?
                 AND p.latitude_e7  BETWEEN s.min_lat AND s.max_lat
                 AND p.longitude_e7 BETWEEN s.min_lon AND s.max_lon
             )
+            AND (
+                a.user_id = ?
+                OR a.user_id IS NULL
+                OR EXISTS (SELECT 1 FROM users u WHERE u.id = a.user_id AND u.share_segments = 1)
+            )
             ORDER BY s.name
-        """, (activity_id,)).fetchall()
+        """, (activity_id, current_user_id)).fetchall()
 
         if not rows:
             return []

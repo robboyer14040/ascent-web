@@ -79,7 +79,6 @@
   position: absolute;
   width: 12px;
   height: 24px;
-  background: #ef4444;
   border: 2px solid #fff;
   border-radius: 3px;
   cursor: ew-resize;
@@ -88,7 +87,10 @@
   box-shadow: 0 1px 6px rgba(0,0,0,.6);
   touch-action: none;
 }
-.seg-handle:hover { background: #dc2626; }
+#seg-handle-start               { background: #22c55e; }
+#seg-handle-start:hover         { background: #16a34a; }
+#seg-handle-end                 { background: #f97316; }
+#seg-handle-end:hover           { background: #ea580c; }
 .seg-handle-label {
   position: absolute;
   top: 28px;
@@ -96,12 +98,13 @@
   transform: translateX(-50%);
   font-size: 9px;
   font-weight: 600;
-  color: #ef4444;
   white-space: nowrap;
   pointer-events: none;
   text-shadow: 0 1px 2px rgba(0,0,0,.8);
   letter-spacing: .03em;
 }
+#seg-handle-start .seg-handle-label { color: #22c55e; }
+#seg-handle-end   .seg-handle-label { color: #f97316; }
 #seg-zoom-row {
   display: flex;
   align-items: center;
@@ -163,17 +166,19 @@
   font-weight: 500;
 }
 #seg-save-btn {
-  background: #ef4444;
-  color: #fff;
+  background: transparent;
+  color: #ef4444;
+  border: 1px solid #ef4444;
 }
-#seg-save-btn:hover { background: #dc2626; }
-#seg-save-btn:disabled { background: var(--surface2); color: var(--muted); cursor: not-allowed; }
+#seg-save-btn:hover { background: #ef444422; }
+#seg-save-btn:disabled { background: var(--surface2); color: var(--muted); cursor: not-allowed; border-color: var(--border2); }
 #seg-update-btn {
-  background: #3b82f6;
-  color: #fff;
+  background: transparent;
+  color: #ef4444;
+  border: 1px solid #ef4444;
 }
-#seg-update-btn:hover { background: #2563eb; }
-#seg-update-btn:disabled { background: var(--surface2); color: var(--muted); cursor: not-allowed; }
+#seg-update-btn:hover { background: #ef444422; }
+#seg-update-btn:disabled { background: var(--surface2); color: var(--muted); cursor: not-allowed; border-color: var(--border2); }
 #seg-cancel-btn {
   background: var(--surface2);
   color: var(--text);
@@ -245,6 +250,7 @@
       <span>Define Segment</span>
       <button id="seg-close-btn" onclick="closeDefineSegment()">✕</button>
     </div>
+    <div style="text-align:center;font-size:13px;font-weight:700;color:#fff;padding:6px 0 2px;flex-shrink:0">Adjust segment start and end points</div>
     <div id="seg-map">
       <div id="seg-map-style-bar" style="position:absolute;top:8px;right:8px;z-index:500;display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end">
         <button class="map-style-btn" data-style="osm"          onclick="setSegMapStyle('osm')">Street</button>
@@ -270,11 +276,11 @@
         <span>Climb: <b id="seg-stat-climb">—</b></span>
       </div>
       <div id="seg-name-row">
-        <input id="seg-name-input" type="text" placeholder="Name this segment…" maxlength="80">
+        <input id="seg-name-input" type="text" placeholder="Name this segment…" maxlength="80" oninput="segOnNameInput()">
       </div>
       <div id="seg-btn-row">
-        <button class="seg-action-btn" id="seg-cancel-btn" onclick="closeDefineSegment()">Cancel</button>
         <button class="seg-action-btn" id="seg-delete-btn" onclick="segDelete()" style="display:none;margin-right:auto">Delete…</button>
+        <button class="seg-action-btn" id="seg-cancel-btn" onclick="closeDefineSegment()">Cancel</button>
         <button class="seg-action-btn" id="seg-update-btn" onclick="segUpdate()" style="display:none">Update</button>
         <button class="seg-action-btn" id="seg-save-btn" onclick="segSave()">Save</button>
       </div>

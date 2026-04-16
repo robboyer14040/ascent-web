@@ -1854,13 +1854,17 @@ async function applyUserSelection() {
     showToast('<div class="dot-spin"></div> Checking for new Strava activities…', 0);
 
     let imported = 0;
+    const newActivityIds = [];
     try {
       const es = new EventSource('/strava/run-sync?mode=recent');
       await new Promise(resolve => {
         const guard = setTimeout(() => { es.close(); resolve(); }, 90000);
         es.onmessage = e => {
           const ev = JSON.parse(e.data);
-          if (ev.type === 'imported') imported = ev.imported || imported;
+          if (ev.type === 'imported') {
+            imported = ev.imported || imported;
+            if (ev.db_id) newActivityIds.push(ev.db_id);
+          }
           if (ev.type === 'done')     { imported = ev.imported || imported; clearTimeout(guard); es.close(); resolve(); }
           if (ev.type === 'error')    { clearTimeout(guard); es.close(); resolve(); }
         };
@@ -1878,6 +1882,21 @@ async function applyUserSelection() {
         5000
       );
       await loadAll();
+
+      // Check for new PRs on saved segments
+      if (newActivityIds.length > 0) {
+        try {
+          const prResp = await fetch('/api/activities/check-prs', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({activity_ids: newActivityIds}),
+          });
+          if (prResp.ok) {
+            const prData = await prResp.json();
+            if (prData.prs?.length > 0) showPrModal(prData.prs);
+          }
+        } catch(e) {}
+      }
     } else {
       document.getElementById('autosync-toast')?.classList.remove('visible');
     }
@@ -1908,6 +1927,120 @@ async function applyUserSelection() {
   const _navType = performance.getEntriesByType('navigation')[0]?.type;
   checkAndSync(_navType === 'reload');
 })();
+
+// ── PR Modal ──────────────────────────────────────────────────────────────────
+function _fmtElapsed(s) {
+  const m = Math.floor(s / 60), sec = Math.round(s % 60);
+  return `${m}:${String(sec).padStart(2, '0')}`;
+}
+
+function showPrModal(prs) {
+  const ov = document.getElementById('pr-overlay');
+  const tbody = document.getElementById('pr-tbody');
+  if (!ov || !tbody) return;
+  tbody.innerHTML = '';
+  for (const pr of prs) {
+    for (const cat of pr.categories) {
+      const tr = document.createElement('tr');
+      tr.style.borderTop = '1px solid var(--border)';
+      tr.innerHTML = `
+        <td style="padding:6px 6px 6px 0">
+          <a href="#" style="color:var(--accent);text-decoration:none" onclick="closePrModal();selectActivity(${pr.activity_id});return false">${pr.segment_name}</a>
+        </td>
+        <td style="padding:6px">${cat}</td>
+        <td style="padding:6px 0;text-align:right;font-variant-numeric:tabular-nums">${_fmtElapsed(pr.elapsed_s ?? 0)}</td>`;
+      tbody.appendChild(tr);
+    }
+  }
+  ov.style.display = 'flex';
+}
+
+function closePrModal() {
+  const ov = document.getElementById('pr-overlay');
+  if (ov) ov.style.display = 'none';
+}
+
+// ── Best Efforts Modal ────────────────────────────────────────────────────────
+async function openBestEfforts() {
+  const segId = window._selectedSegmentId;
+  if (!segId) return;
+  const actId = state.selectedId;
+
+  const ov          = document.getElementById('best-efforts-overlay');
+  const loading     = document.getElementById('best-efforts-loading');
+  const table       = document.getElementById('best-efforts-table');
+  const empty       = document.getElementById('best-efforts-empty');
+  const title       = document.getElementById('best-efforts-title');
+  const tbody       = document.getElementById('best-efforts-tbody');
+  const allSection  = document.getElementById('all-efforts-section');
+  const allTbody    = document.getElementById('all-efforts-tbody');
+  if (!ov) return;
+
+  // Reset state
+  if (loading) loading.style.display = '';
+  if (table)   table.style.display = 'none';
+  if (empty)   empty.style.display = 'none';
+  if (allSection) allSection.style.display = 'none';
+  if (title)   title.textContent = 'Best Efforts';
+  ov.style.display = 'flex';
+
+  try {
+    const url = `/api/segments/${segId}/best-efforts?activity_id=${actId || 0}`;
+    const r = await fetch(url);
+    if (!r.ok) throw new Error('fetch failed');
+    const d = await r.json();
+
+    if (title) title.textContent = `Best Efforts — ${d.segment_name || ''}`;
+    if (loading) loading.style.display = 'none';
+
+    const efforts = d.efforts || [];
+    if (efforts.length === 0) {
+      if (empty) empty.style.display = '';
+    } else {
+      tbody.innerHTML = '';
+      for (const e of efforts) {
+        const tr = document.createElement('tr');
+        tr.style.borderTop = '1px solid var(--border)';
+        tr.innerHTML = `
+          <td style="padding:6px 8px 6px 0;font-weight:600;color:var(--text)">${e.category}</td>
+          <td style="padding:6px 8px">
+            <a href="#" style="color:var(--accent);text-decoration:none" onclick="closeBestEfforts();window._pendingSegmentId=window._selectedSegmentId;selectActivity(${e.activity_id});scrollToSelected();return false">${e.activity_name}</a>
+          </td>
+          <td style="padding:6px 8px;color:var(--muted)">${e.date}</td>
+          <td style="padding:6px 8px;color:var(--muted)">${e.equipment || '—'}</td>
+          <td style="padding:6px 0;text-align:right;font-variant-numeric:tabular-nums">${_fmtElapsed(e.elapsed_s)}</td>`;
+        tbody.appendChild(tr);
+      }
+      if (table) table.style.display = '';
+    }
+
+    const allEfforts = d.all_efforts || [];
+    if (allEfforts.length > 0 && allSection && allTbody) {
+      allTbody.innerHTML = '';
+      for (const e of allEfforts) {
+        const tr = document.createElement('tr');
+        tr.style.borderTop = '1px solid var(--border)';
+        tr.innerHTML = `
+          <td style="padding:6px 8px 6px 10px;color:var(--muted);white-space:nowrap">${e.date}</td>
+          <td style="padding:6px 8px">
+            <a href="#" style="color:var(--accent);text-decoration:none" onclick="closeBestEfforts();window._pendingSegmentId=window._selectedSegmentId;selectActivity(${e.activity_id});scrollToSelected();return false">${e.activity_name}</a>
+          </td>
+          <td style="padding:6px 8px;color:var(--muted)">${e.equipment || '—'}</td>
+          <td style="padding:6px 10px 6px 8px;text-align:right;font-variant-numeric:tabular-nums">${_fmtElapsed(e.elapsed_s)}</td>`;
+        allTbody.appendChild(tr);
+      }
+      allSection.style.display = 'flex';
+    }
+  } catch(err) {
+    if (loading) loading.style.display = 'none';
+    if (empty)   { empty.textContent = 'Failed to load best efforts.'; empty.style.display = ''; }
+  }
+}
+
+function closeBestEfforts() {
+  const ov = document.getElementById('best-efforts-overlay');
+  if (ov) ov.style.display = 'none';
+}
 
 function openImportModal() {
   const ov = document.getElementById('import-overlay');

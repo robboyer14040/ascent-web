@@ -1409,17 +1409,10 @@ async def segment_compare(req: SegmentRequest, request: Request):
                     if d2 < best_dsq:
                         best_dsq, ei2_full = d2, _k
             else:
-                tol_deg_sq_full = (start_tol_km / 111.0) ** 2
-                si2_full, best_dsq = -1, float("inf")
-                for _k, p in enumerate(full_pts):
-                    d2 = (p["lat"]-start_lat)**2 + ((p["lon"]-start_lon)*cos_lat)**2
-                    if d2 < best_dsq:
-                        best_dsq, si2_full = d2, _k
-                if si2_full < 0 or best_dsq > tol_deg_sq_full:
+                _idx = _find_segment_indices(full_pts, start_lat, start_lon, end_lat, end_lon, ref_length_km, tol_km)
+                if not _idx:
                     continue
-                ei2_full = find_segment_end(full_pts, si2_full, ref_length_km, tol_km, end_lat, end_lon)
-                if ei2_full < 0 or ei2_full <= si2_full:
-                    continue
+                si2_full, ei2_full = _idx
 
             m = build_match(act_id, act_name, act_ts, full_pts, si2_full, ei2_full, user_id=act_user_id)
         else:
@@ -1597,9 +1590,10 @@ async def delete_segment(segment_id: int):
 
 
 @router.get("/segments/for-activity/{activity_id}")
-async def segments_for_activity(activity_id: int):
+async def segments_for_activity(request: Request, activity_id: int):
     db = db_getter()
-    segs = db.get_segments_for_activity(activity_id)
+    uid = get_session_user_id(request)
+    segs = db.get_segments_for_activity(activity_id, current_user_id=uid)
     return {"segments": [{"id": s["id"], "name": s["name"],
                           "length_km": s["length_km"],
                           "start_idx": s["start_idx"],
@@ -1973,5 +1967,342 @@ async def get_strava_comments_list(activity_id: int, request: Request):
         comments.append({"athlete_name": name, "text": c.get("text", "")})
 
     return {"comments": comments}
+
+
+# ── PERSONAL RECORDS ─────────────────────────────────────────────────────────
+
+def _find_segment_indices(pts, start_lat, start_lon, end_lat, end_lon, ref_length_km, tol_km):
+    """
+    Find (start_index, end_index) of a segment pass in pts, or None if not found.
+    Single canonical algorithm used by both segment compare and PR features.
+    Uses degree-squared proximity for start, haversine accumulation for end.
+    pts must be full track points (not summary) for accurate timing.
+    """
+    import math
+    if len(pts) < 2:
+        return None
+    tol_km = max(tol_km, 0.05)
+    cos_l = math.cos(math.radians(start_lat))
+    tol_deg_sq = (tol_km / 111.0) ** 2
+
+    # Find start: closest point within tolerance
+    best_i, best_dsq = -1, float("inf")
+    for i, p in enumerate(pts):
+        d2 = (p["lat"] - start_lat) ** 2 + ((p["lon"] - start_lon) * cos_l) ** 2
+        if d2 < best_dsq:
+            best_dsq, best_i = d2, i
+    if best_i < 0 or best_dsq > tol_deg_sq:
+        return None
+    si = best_i
+
+    # Find end: use cum_dist_m if available (summary points), else haversine accumulation (full pts)
+    R = 6371.0
+    def _hav(lat1, lon1, lat2, lon2):
+        dlat = math.radians(lat2 - lat1); dlon = math.radians(lon2 - lon1)
+        a = math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) ** 2
+        return R * 2 * math.asin(min(1.0, math.sqrt(a)))
+
+    window_pts = []
+    if "cum_dist_m" in pts[si]:
+        si_cum = pts[si]["cum_dist_m"]
+        target_min_m = si_cum + (ref_length_km - tol_km) * 1000.0
+        target_max_m = si_cum + (ref_length_km + tol_km) * 1000.0
+        for i in range(si + 1, len(pts)):
+            c = pts[i]["cum_dist_m"]
+            if c < target_min_m:
+                continue
+            if c > target_max_m:
+                break
+            d_end = _hav(pts[i]["lat"], pts[i]["lon"], end_lat, end_lon)
+            window_pts.append((i, d_end))
+    else:
+        accum = 0.0
+        for i in range(si, len(pts) - 1):
+            accum += _hav(pts[i]["lat"], pts[i]["lon"], pts[i + 1]["lat"], pts[i + 1]["lon"])
+            if accum >= ref_length_km - tol_km:
+                d_end = _hav(pts[i + 1]["lat"], pts[i + 1]["lon"], end_lat, end_lon)
+                window_pts.append((i + 1, d_end))
+            if accum > ref_length_km + tol_km:
+                break
+
+    if not window_pts:
+        return None
+    window_pts.sort(key=lambda x: x[1])
+    ei, best_d = window_pts[0]
+    if best_d > tol_km or ei <= si:
+        return None
+    return (si, ei)
+
+
+def _activity_type_group(act_type: str):
+    """Map Strava activity type to a PR comparison group. Returns None for excluded types."""
+    if not act_type:
+        return None
+    if act_type in ("EBikeRide", "VirtualRide"):
+        return None
+    if act_type in ("Ride", "GravelRide"):
+        return "Ride"
+    return act_type
+
+
+def _get_pr_windows():
+    """PR time windows: (label, years_back). years_back=None means all-time."""
+    return [("All-Time", None), ("5-Year", 5), ("3-Year", 3), ("1-Year", 1)]
+
+
+
+def _valid_gps(p):
+    lat, lon = p.get("lat"), p.get("lon")
+    return (lat is not None and lon is not None
+            and lat != 999.0 and lon != 999.0
+            and -90 <= lat <= 90 and -180 <= lon <= 180
+            and not (lat == 0.0 and lon == 0.0))
+
+
+def _match_segment_elapsed(db, act_id, start_lat, start_lon, end_lat, end_lon, ref_length_km, tol_km):
+    """
+    Screen with summary points (fast O(300)), refine on full track points (accurate timing).
+    Returns elapsed_s or None. Same two-phase approach as segment_compare.
+    """
+    # Phase 1: fast screening with summary (avoid loading full pts for non-matches)
+    sum_pts = db.get_points_summary(act_id)
+    if sum_pts:
+        if not _find_segment_indices(sum_pts, start_lat, start_lon, end_lat, end_lon, ref_length_km, tol_km):
+            return None
+
+    # Phase 2: accurate timing with full track points
+    full_pts = [p for p in db.get_track_points(act_id) if _valid_gps(p)]
+    if len(full_pts) < 2:
+        return None
+    idx = _find_segment_indices(full_pts, start_lat, start_lon, end_lat, end_lon, ref_length_km, tol_km)
+    if idx is None:
+        return None
+    elapsed = full_pts[idx[1]]["t"] - full_pts[idx[0]]["t"]
+    return elapsed if elapsed > 0 else None
+
+
+@router.post("/activities/check-prs")
+async def check_prs(body: dict, request: Request):
+    """Check if newly synced activities set PRs on saved segments."""
+    import json as json_mod, time as _time
+    uid = get_session_user_id(request)
+    if uid is None:
+        raise HTTPException(401, "Not authenticated")
+
+    db = db_getter()
+    activity_ids = body.get("activity_ids", [])
+    if not activity_ids:
+        return {"prs": []}
+
+    results = []
+    now = _time.time()
+
+    for target_id in activity_ids:
+        act = db.get_activity(target_id)
+        if not act:
+            continue
+
+        # Ensure GPS points exist — fetch from Strava if needed
+        if not (act.get("points_saved") and act.get("points_count", 0) > 0):
+            strava_id = act.get("strava_activity_id")
+            if strava_id:
+                try:
+                    import httpx
+                    from app.strava_importer import build_points_rows
+                    from app.routers.strava import load_tokens, tokens_are_fresh, refresh_tokens
+                    tokens = load_tokens(user_id=uid)
+                    if tokens.get("refresh_token"):
+                        if not tokens_are_fresh(tokens):
+                            tokens = await refresh_tokens(tokens, user_id=uid)
+                        token = tokens["access_token"]
+                        stream_types = "latlng,time,altitude,heartrate,velocity_smooth,distance"
+                        async with httpx.AsyncClient(timeout=30) as client:
+                            resp = await client.get(
+                                f"https://www.strava.com/api/v3/activities/{strava_id}/streams",
+                                headers={"Authorization": f"Bearer {token}"},
+                                params={"keys": stream_types, "key_by_type": "true"},
+                            )
+                        if resp.status_code == 200:
+                            rows = build_points_rows(resp.json(), target_id)
+                            if rows:
+                                db.store_points(target_id, rows)
+                                act = db.get_activity(target_id)  # refresh
+                except Exception:
+                    pass
+
+        target_type = act.get("activity_type", "")
+        target_group = _activity_type_group(target_type)
+        if target_group is None:
+            continue
+
+        # Get target's full points (newly synced — may not have summary yet)
+        target_pts = [p for p in db.get_track_points(target_id) if _valid_gps(p)]
+        if len(target_pts) < 2:
+            continue
+
+        segs = db.get_segments_for_activity(target_id)
+        if not segs:
+            continue
+
+        for seg in segs:
+            seg_pts_json = json_mod.loads(seg["points_json"]) if seg.get("points_json") else []
+            if len(seg_pts_json) < 2:
+                continue
+            length_km = seg.get("length_km", 0)
+            if length_km <= 0:
+                continue
+            tol_km = length_km * 0.10
+
+            start_lat, start_lon = seg_pts_json[0][0], seg_pts_json[0][1]
+            end_lat, end_lon = seg_pts_json[-1][0], seg_pts_json[-1][1]
+
+            _idx = _find_segment_indices(target_pts, start_lat, start_lon, end_lat, end_lon, length_km, tol_km)
+            if not _idx:
+                continue
+            target_elapsed = target_pts[_idx[1]]["t"] - target_pts[_idx[0]]["t"]
+            if target_elapsed <= 0:
+                continue
+
+            # Collect elapsed times from all compatible user activities
+            all_times = [(target_elapsed, act.get("start_time") or now, target_id)]
+
+            candidates = db._con.execute("""
+                SELECT id, COALESCE(creation_time_override_s, creation_time_s) AS ts,
+                       local_sport_type, attributes_json
+                FROM activities
+                WHERE user_id = ? AND id != ?
+                  AND points_saved = 1 AND points_count > 0
+                ORDER BY ts DESC
+            """, (uid, target_id)).fetchall()
+
+            for row in candidates:
+                cand_id  = row[0]
+                cand_ts  = row[1]
+                cand_type = row[2]
+                if not cand_type:
+                    try:
+                        attrs_raw = json_mod.loads(row[3]) if row[3] else []
+                        attrs_d   = dict(zip(attrs_raw[::2], attrs_raw[1::2]))
+                        cand_type = attrs_d.get("activity", "")
+                    except Exception:
+                        cand_type = ""
+                if _activity_type_group(cand_type) != target_group:
+                    continue
+
+                elapsed = _match_segment_elapsed(db, cand_id, start_lat, start_lon, end_lat, end_lon, length_km, tol_km)
+                if elapsed is not None:
+                    all_times.append((elapsed, cand_ts, cand_id))
+
+            # Check each PR window
+            pr_cats = []
+            for label, years_back in _get_pr_windows():
+                cutoff = now - years_back * 365.25 * 86400 if years_back else None
+                window = [(e, ts, aid) for e, ts, aid in all_times if cutoff is None or ts >= cutoff]
+                if len(window) < 1:
+                    continue
+                fastest = min(window, key=lambda x: x[0])
+                if fastest[2] == target_id:
+                    pr_cats.append(label)
+
+            if pr_cats:
+                results.append({
+                    "segment_name": seg["name"],
+                    "segment_id":   seg["id"],
+                    "activity_id":  target_id,
+                    "elapsed_s":    target_elapsed,
+                    "categories":   pr_cats,
+                })
+
+    return {"prs": results}
+
+
+@router.get("/segments/{segment_id}/best-efforts")
+async def segment_best_efforts(segment_id: int, request: Request,
+                               activity_id: int = Query(...)):
+    """Return PR holders per time window for a saved segment."""
+    import json as json_mod, time as _time, datetime
+    uid = get_session_user_id(request)
+    if uid is None:
+        raise HTTPException(401, "Not authenticated")
+
+    db = db_getter()
+    seg = db.get_segment(segment_id)
+    if not seg:
+        raise HTTPException(404, "Segment not found")
+
+    ref_act = db.get_activity(activity_id)
+    if not ref_act:
+        raise HTTPException(404, "Reference activity not found")
+    ref_group = _activity_type_group(ref_act.get("activity_type", ""))
+    if ref_group is None:
+        return {"efforts": [], "segment_name": seg["name"]}
+
+    seg_pts_json = json_mod.loads(seg["points_json"]) if seg.get("points_json") else []
+    if len(seg_pts_json) < 2:
+        raise HTTPException(400, "Segment has no GPS points")
+
+    length_km = seg.get("length_km", 0)
+    if length_km <= 0:
+        raise HTTPException(400, "Invalid segment length")
+    tol_km = length_km * 0.10
+    start_lat, start_lon = seg_pts_json[0][0], seg_pts_json[0][1]
+    end_lat, end_lon     = seg_pts_json[-1][0], seg_pts_json[-1][1]
+
+    candidates = db._con.execute("""
+        SELECT id, name, COALESCE(creation_time_override_s, creation_time_s) AS ts,
+               local_sport_type, attributes_json, local_gear_name
+        FROM activities
+        WHERE user_id = ?
+          AND points_saved = 1 AND points_count > 0
+        ORDER BY ts DESC
+    """, (uid,)).fetchall()
+
+    all_times = []  # (elapsed_s, ts, act_id, act_name, date_str, equipment)
+    for row in candidates:
+        cand_id   = row[0]
+        cand_name = row[1] or "(unnamed)"
+        cand_ts   = row[2]
+        cand_type = row[3]
+        attrs_d   = {}
+        try:
+            attrs_raw = json_mod.loads(row[4]) if row[4] else []
+            attrs_d   = dict(zip(attrs_raw[::2], attrs_raw[1::2]))
+        except Exception:
+            pass
+        if not cand_type:
+            cand_type = attrs_d.get("activity", "")
+        if _activity_type_group(cand_type) != ref_group:
+            continue
+        # local_gear_name overrides attributes_json equipment (mirrors build_activity logic)
+        equipment = row[5] if row[5] is not None else attrs_d.get("equipment", "")
+
+        elapsed = _match_segment_elapsed(db, cand_id, start_lat, start_lon, end_lat, end_lon, length_km, tol_km)
+        if elapsed is not None:
+            date_str = datetime.datetime.utcfromtimestamp(cand_ts).strftime("%Y-%m-%d") if cand_ts else ""
+            all_times.append((elapsed, cand_ts, cand_id, cand_name, date_str, equipment))
+
+    now    = _time.time()
+    efforts = []
+    for label, years_back in _get_pr_windows():
+        cutoff  = now - years_back * 365.25 * 86400 if years_back else None
+        window  = [(e, ts, aid, nm, dt, eq) for e, ts, aid, nm, dt, eq in all_times if cutoff is None or ts >= cutoff]
+        if len(window) < 1:
+            continue
+        fastest = min(window, key=lambda x: x[0])
+        efforts.append({
+            "category":      label,
+            "activity_id":   fastest[2],
+            "activity_name": fastest[3],
+            "date":          fastest[4],
+            "equipment":     fastest[5],
+            "elapsed_s":     fastest[0],
+        })
+
+    all_efforts_sorted = sorted(all_times, key=lambda x: x[0])
+    all_efforts = [
+        {"activity_id": e[2], "activity_name": e[3], "date": e[4], "equipment": e[5], "elapsed_s": e[0]}
+        for e in all_efforts_sorted
+    ]
+    return {"efforts": efforts, "all_efforts": all_efforts, "segment_name": seg["name"]}
 
 

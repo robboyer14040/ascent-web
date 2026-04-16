@@ -25,6 +25,13 @@ const seg = {
 
 // ── Public entry point ─────────────────────────────────────────────────────────
 
+function segOnNameInput() {
+  if (seg.editingId) return; // edit mode: Save opens sub-dialog, always enabled
+  const saveBtn  = document.getElementById('seg-save-btn');
+  const nameInput = document.getElementById('seg-name-input');
+  if (saveBtn && nameInput) saveBtn.disabled = nameInput.value.trim().length === 0;
+}
+
 function openDefineSegment() {
   if (!elevChartData || !elevChartData.dist_m || !elevChartData.dist_m.length) {
     alert('No GPS elevation data for this activity.');
@@ -87,8 +94,8 @@ function openDefineSegment() {
   const saveBtn   = document.getElementById('seg-save-btn');
   const updateBtn = document.getElementById('seg-update-btn');
   const deleteBtn = document.getElementById('seg-delete-btn');
-  if (saveBtn)   saveBtn.textContent = editId ? 'Save as new…' : 'Save';
-  if (updateBtn) updateBtn.style.display = editId ? '' : 'none';
+  if (saveBtn)   { saveBtn.textContent = editId ? 'Save as New…' : 'Save'; saveBtn.disabled = editId ? false : true; }
+  if (updateBtn) { updateBtn.style.display = editId ? '' : 'none'; updateBtn.disabled = false; }
   if (deleteBtn) deleteBtn.style.display = editId ? '' : 'none';
 
   // Init Leaflet map
@@ -116,6 +123,10 @@ function closeDefineSegment() {
 
   const overlay = document.getElementById('seg-overlay');
   if (overlay) overlay.classList.remove('open');
+
+  // Also close Compare if it was open behind this modal
+  const cmpOverlay = document.getElementById('compare-overlay');
+  if (cmpOverlay && cmpOverlay.classList.contains('open')) closeCompare();
 }
 
 // ── Smart defaults ─────────────────────────────────────────────────────────────
@@ -244,12 +255,11 @@ function segUpdateMap() {
   if (preCoords.length  > 1) seg.prePoly  = L.polyline(preCoords,  { color: '#64748b', weight: 3, opacity: 0.6 }).addTo(seg.map);
   if (postCoords.length > 1) seg.postPoly = L.polyline(postCoords, { color: '#64748b', weight: 3, opacity: 0.6 }).addTo(seg.map);
   if (segCoords.length  > 1) {
-    seg.segPoly = L.polyline(segCoords, { color: '#ef4444', weight: 5, opacity: 0.9 }).addTo(seg.map);
+    seg.segPoly = L.polyline(segCoords, { color: '#ef4444', weight: 5, opacity: 0.9, smoothFactor: 1.5 }).addTo(seg.map);
 
-    // Red dot markers
-    const dotIcon = L.divIcon({ className: '', html: '<div style="width:10px;height:10px;background:#ef4444;border:2px solid #fff;border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,.5)"></div>', iconSize: [10, 10], iconAnchor: [5, 5] });
-    seg.startDot = L.marker(segCoords[0], { icon: dotIcon }).addTo(seg.map);
-    seg.endDot   = L.marker(segCoords[segCoords.length - 1], { icon: dotIcon }).addTo(seg.map);
+    const mkDot = c => L.divIcon({ className: '', html: `<div style="width:10px;height:10px;background:${c};border:2px solid #fff;border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,.5)"></div>`, iconSize: [10, 10], iconAnchor: [5, 5] });
+    seg.startDot = L.marker(segCoords[0],                      { icon: mkDot('#22c55e') }).addTo(seg.map);
+    seg.endDot   = L.marker(segCoords[segCoords.length - 1],   { icon: mkDot('#f97316') }).addTo(seg.map);
   }
 }
 
@@ -297,9 +307,9 @@ function segBuildChart() {
         },
         {
           data: segPts,
-          borderColor: '#ef4444',
-          backgroundColor: 'rgba(239,68,68,.15)',
-          borderWidth: 3,
+          borderColor: 'rgba(239,68,68,0.9)',
+          backgroundColor: 'rgba(239,68,68,0)',
+          borderWidth: 5,
           fill: false,
           pointRadius: 0,
           tension: 0.3,
@@ -639,6 +649,8 @@ async function segSave() {
   if (!seg.actId) return;
 
   let name;
+  let overwriteId = null;
+
   if (seg.editingId) {
     // "Save as new" — ask via custom dialog
     const currentName = (document.getElementById('seg-name-input') || {}).value || '';
@@ -648,6 +660,20 @@ async function segSave() {
     const nameInput = document.getElementById('seg-name-input');
     name = nameInput ? nameInput.value.trim() : '';
     if (!name) { nameInput && nameInput.focus(); return; }
+
+    // Uniqueness check
+    try {
+      const checkR = await fetch(`/api/segments/for-activity/${seg.actId}`);
+      if (checkR.ok) {
+        const data = await checkR.json();
+        const allSegs = Array.isArray(data) ? data : (data.segments || []);
+        const existing = allSegs.find(s => s.name.toLowerCase() === name.toLowerCase());
+        if (existing) {
+          if (!confirm(`A segment named "${existing.name}" already exists. Overwrite it?`)) return;
+          overwriteId = existing.id;
+        }
+      }
+    } catch(e) { /* proceed with save */ }
   }
 
   const saveBtn = document.getElementById('seg-save-btn');
@@ -655,8 +681,10 @@ async function segSave() {
 
   const actId = seg.actId;
   try {
-    const resp = await fetch('/api/segments', {
-      method: 'POST',
+    const url    = overwriteId ? `/api/segments/${overwriteId}` : '/api/segments';
+    const method = overwriteId ? 'PUT' : 'POST';
+    const resp = await fetch(url, {
+      method,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         name,
@@ -672,7 +700,7 @@ async function segSave() {
     }
 
     const saved = await resp.json();
-    const newId = saved.id;
+    const newId = overwriteId || saved.id;
     if (saveBtn) { saveBtn.textContent = 'Saved!'; }
     setTimeout(async () => {
       closeDefineSegment();
@@ -684,11 +712,14 @@ async function segSave() {
           onSegSelectorChange(String(newId));
         }
       }
+      // Hide "Make Segment…" button in Compare if still open
+      const _mBtn = document.getElementById('cmp-make-seg-btn');
+      if (_mBtn) _mBtn.style.display = 'none';
     }, 900);
   } catch (err) {
     if (saveBtn) {
       saveBtn.disabled = false;
-      saveBtn.textContent = seg.editingId ? 'Save as new…' : 'Save';
+      saveBtn.textContent = seg.editingId ? 'Save as New…' : 'Save';
     }
     alert('Error saving segment: ' + err.message);
   }

@@ -60,6 +60,8 @@ async function cmpOpenManualWithSegment() {
   const titleEl = document.getElementById('compare-title');
   const panel   = document.getElementById('compare-panel');
   overlay.classList.add('open');
+  const _mBtnMs = document.getElementById('cmp-make-seg-btn');
+  if (_mBtnMs) _mBtnMs.style.display = 'none';
 
   const savedW = _uiPrefsGet('ascent-cmp-w');
   const savedH = _uiPrefsGet('ascent-cmp-h');
@@ -171,6 +173,8 @@ async function cmpOpenManual() {
 
   const overlay = document.getElementById('compare-overlay');
   const loading = document.getElementById('cmp-loading');
+  const _mBtnM = document.getElementById('cmp-make-seg-btn');
+  if (_mBtnM) _mBtnM.style.display = 'none';
   const titleEl = document.getElementById('compare-title');
   const panel   = document.getElementById('compare-panel');
   overlay.classList.add('open');
@@ -411,6 +415,10 @@ async function openCompare() {
 
     // Populate saved segments for this activity
     await cmpLoadSavedSegments();
+
+    // Show "Make Segment…" when the compare was from a drawn region (no named segment selected)
+    const _mBtn = document.getElementById('cmp-make-seg-btn');
+    if (_mBtn) _mBtn.style.display = (window._selectedSegmentId == null) ? '' : 'none';
 
   } catch(e) {
     clearInterval(_prog);
@@ -1416,4 +1424,10 @@ async function cmpDeleteSegment() {
     cmpUpdateSaveBtn();
   }
   await cmpLoadSavedSegments();
+}
+
+// ── MAKE SEGMENT (from Compare) ───────────────────────────────────────────────
+
+function cmpOpenMakeSegment() {
+  openDefineSegment();
 }

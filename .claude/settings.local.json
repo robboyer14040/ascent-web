@@ -29,7 +29,9 @@
       "Bash(grep:*)",
       "Bash(sqlite3:*)",
       "WebFetch(domain:www.graphhopper.com)",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "Bash(ls:*)",
+      "Bash(node:*)"
     ]
   }
 }
