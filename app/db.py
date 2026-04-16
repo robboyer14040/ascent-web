@@ -1138,7 +1138,8 @@ class AscentDB:
 
     def get_fingerprint_data(self, user_id: int, year: Optional[int] = None,
                               month: Optional[int] = None,
-                              week_start: Optional[str] = None) -> dict:
+                              week_start: Optional[str] = None,
+                              skip_zones: bool = False) -> dict:
         """Compute Training Fingerprint scores (0–100) for the given period.
 
         Dimensions:
@@ -1268,19 +1269,21 @@ class AscentDB:
         intensity_score = 0
         has_hr = False
 
-        profile = self.get_user_profile(user_id)
-        if profile.get("max_hr"):
-            zone_data = self.get_zone_time(user_id, year=year, month=month, week_start=week_start)
-            hr_zones  = zone_data.get("hr_zones_min", [0] * 5)
-            total     = sum(hr_zones)
-            if total > 0:
-                has_hr          = True
-                endurance_score = round((hr_zones[0] + hr_zones[1]) / total * 100)
-                intensity_score = round((hr_zones[3] + hr_zones[4]) / total * 100)
+        if not skip_zones:
+            profile = self.get_user_profile(user_id)
+            if profile.get("max_hr"):
+                zone_data = self.get_zone_time(user_id, year=year, month=month, week_start=week_start)
+                hr_zones  = zone_data.get("hr_zones_min", [0] * 5)
+                total     = sum(hr_zones)
+                if total > 0:
+                    has_hr          = True
+                    endurance_score = round((hr_zones[0] + hr_zones[1]) / total * 100)
+                    intensity_score = round((hr_zones[3] + hr_zones[4]) / total * 100)
 
         return {
             "has_data":    True,
             "has_hr":      has_hr,
+            "zones_ready": not skip_zones,
             "volume":      score(cur_dist, best_dist),
             "climbing":    score(climb_dens, best_dens),
             "speed":       score(avg_speed, best_speed),

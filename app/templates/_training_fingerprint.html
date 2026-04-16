@@ -3,19 +3,21 @@
   <div class="section-head">
     <h2 id="fingerprintTitle">Training Fingerprint</h2>
   </div>
-  <div class="chart-card">
+  <div class="chart-card" style="padding-top:0;padding-bottom:0">
     <div id="fingerprintNoData" style="display:none;color:var(--muted);font-size:.8rem;padding:.5rem 0"></div>
     <div style="display:flex;align-items:center;gap:2rem;flex-wrap:wrap">
-      <div style="position:relative;height:260px;flex:0 0 260px;min-width:220px">
-        <canvas id="fingerprintChart"></canvas>
-        <div id="fingerprintLoading" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:var(--surface);font-size:.9rem;font-weight:700;color:var(--muted);pointer-events:none">Building chart…</div>
+      <div style="display:flex;flex-direction:column;flex:0 0 440px;min-width:300px">
+        <div style="position:relative;height:440px">
+          <canvas id="fingerprintChart"></canvas>
+        </div>
+        <div id="fingerprintLoading" style="display:none;text-align:center;font-size:.78rem;font-weight:600;color:var(--muted);margin-top:.5rem"></div>
       </div>
       <div id="fingerprintLegend" style="flex:1;min-width:160px;font-size:.82rem;line-height:2.1"></div>
     </div>
-    <div id="fingerprintNoHR" style="display:none;font-size:.72rem;color:var(--muted);margin-top:.5rem">
+    <div id="fingerprintNoHR" style="display:none;font-size:.72rem;color:var(--muted);margin-top:.5rem;padding-bottom:.5rem">
       Endurance &amp; Intensity require Max HR — set it in <a href="/settings">Settings</a>.
     </div>
-    <div style="font-size:.72rem;color:var(--muted);margin-top:.3rem;line-height:1.5">
+    <div style="font-size:.72rem;color:var(--muted);margin-top:10px;padding-bottom:1.1rem;line-height:1.5">
       Scores compare this period to your personal best. Watch your identity shift as your training evolves.
     </div>
   </div>

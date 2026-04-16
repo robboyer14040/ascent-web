@@ -59,11 +59,12 @@ async def zone_stats(request: Request, year: Optional[int] = Query(None),
 @router.get("/stats/fingerprint")
 async def fingerprint_stats(request: Request, year: Optional[int] = Query(None),
                              month: Optional[int] = Query(None),
-                             week_start: Optional[str] = Query(None)):
+                             week_start: Optional[str] = Query(None),
+                             skip_zones: bool = Query(False)):
     uid = get_session_user_id(request)
     if uid is None:
         raise HTTPException(401, "Not authenticated")
-    return db_getter().get_fingerprint_data(user_id=uid, year=year, month=month, week_start=week_start)
+    return db_getter().get_fingerprint_data(user_id=uid, year=year, month=month, week_start=week_start, skip_zones=skip_zones)
 
 @router.get("/stats/hre")
 async def hre_stats(request: Request, year: Optional[int] = Query(None),
