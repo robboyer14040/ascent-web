@@ -1136,6 +1136,159 @@ class AscentDB:
             "ftp":    ftp,
         }
 
+    def get_fingerprint_data(self, user_id: int, year: Optional[int] = None,
+                              month: Optional[int] = None,
+                              week_start: Optional[str] = None) -> dict:
+        """Compute Training Fingerprint scores (0–100) for the given period.
+
+        Dimensions:
+          volume      – total distance vs personal best (same period granularity)
+          climbing    – climb density (ft/mi) vs personal best
+          speed       – avg speed (mi/h) vs personal best
+          consistency – active days / days in period  (%)
+          endurance   – (Z1+Z2) / total HR-zone time  (%) — 0 if no max_hr
+          intensity   – (Z4+Z5) / total HR-zone time  (%) — 0 if no max_hr
+        """
+        import calendar as _cal
+
+        # ── build WHERE for current period ──────────────────────────────────
+        where_parts: list = ["user_id = ?"]
+        params: list = [user_id]
+
+        if week_start:
+            from datetime import date, timedelta
+            week_end = (date.fromisoformat(week_start) + timedelta(days=6)).isoformat()
+            where_parts.append(
+                "date(datetime(creation_time_s,'unixepoch')) BETWEEN ? AND ?"
+            )
+            params.extend([week_start, week_end])
+        elif month and year:
+            where_parts.append(
+                "strftime('%Y', datetime(creation_time_s,'unixepoch')) = ?"
+            )
+            where_parts.append(
+                f"strftime('%m', datetime(creation_time_s,'unixepoch')) = '{month:02d}'"
+            )
+            params.append(str(year))
+        elif year:
+            where_parts.append(
+                "strftime('%Y', datetime(creation_time_s,'unixepoch')) = ?"
+            )
+            params.append(str(year))
+
+        where = "WHERE " + " AND ".join(where_parts)
+
+        # ── current period totals ────────────────────────────────────────────
+        row = self._con.execute(f"""
+            SELECT
+                SUM(distance_mi)       AS dist_mi,
+                SUM(src_total_climb)   AS climb_ft,
+                SUM(src_moving_time_s) AS moving_s,
+                COUNT(DISTINCT date(datetime(creation_time_s,'unixepoch'))) AS active_days
+            FROM activities {where}
+        """, params).fetchone()
+
+        if not row or not (row["dist_mi"] or row["active_days"]):
+            return {"has_data": False, "has_hr": False}
+
+        cur_dist   = float(row["dist_mi"]   or 0)
+        cur_climb  = float(row["climb_ft"]  or 0)
+        cur_h      = float(row["moving_s"]  or 0) / 3600.0
+        cur_active = int(row["active_days"] or 0)
+
+        # ── days in period (for consistency) ────────────────────────────────
+        if week_start:
+            period_days = 7
+        elif month and year:
+            period_days = _cal.monthrange(year, month)[1]
+        elif year:
+            period_days = 366 if _cal.isleap(year) else 365
+        else:
+            bounds = self._con.execute(
+                "SELECT MIN(creation_time_s), MAX(creation_time_s) "
+                "FROM activities WHERE user_id = ?", [user_id]
+            ).fetchone()
+            period_days = max(1, ((bounds[1] or 0) - (bounds[0] or 0)) // 86400) if bounds[0] else 365
+
+        # ── raw dimension values ─────────────────────────────────────────────
+        climb_dens  = cur_climb / cur_dist if cur_dist > 0 else 0   # ft / mi
+        avg_speed   = cur_dist / cur_h     if cur_h    > 0 else 0   # mph
+        consistency = min(100.0, cur_active / period_days * 100)
+
+        # ── all-time normalization: same granularity ─────────────────────────
+        if week_start:
+            norm_group = "strftime('%Y-%W', datetime(creation_time_s,'unixepoch'))"
+        elif month and year:
+            norm_group = "strftime('%Y-%m', datetime(creation_time_s,'unixepoch'))"
+        else:
+            norm_group = "strftime('%Y', datetime(creation_time_s,'unixepoch'))"
+
+        norm_rows = self._con.execute(f"""
+            SELECT
+                SUM(distance_mi)       AS dist_mi,
+                SUM(src_total_climb)   AS climb_ft,
+                SUM(src_moving_time_s) AS moving_s
+            FROM activities
+            WHERE user_id = ?
+            GROUP BY {norm_group}
+            HAVING SUM(distance_mi) > 0
+        """, [user_id]).fetchall()
+
+        def pct90(vals: list) -> float:
+            sv = sorted(v for v in vals if v > 0)
+            if not sv:
+                return 1.0
+            return sv[min(len(sv) - 1, int(len(sv) * 0.90))] or 1.0
+
+        if norm_rows:
+            best_dist  = pct90([float(r["dist_mi"] or 0) for r in norm_rows])
+            denss, speeds = [], []
+            for r in norm_rows:
+                d = float(r["dist_mi"] or 0)
+                c = float(r["climb_ft"] or 0)
+                h = float(r["moving_s"] or 0) / 3600.0
+                if d > 0:
+                    denss.append(c / d)
+                if h > 0 and d > 0:
+                    speeds.append(d / h)
+            best_dens  = pct90(denss)  if denss  else max(climb_dens, 1.0)
+            best_speed = pct90(speeds) if speeds  else max(avg_speed,  1.0)
+        else:
+            best_dist  = max(cur_dist, 1.0)
+            best_dens  = max(climb_dens, 1.0)
+            best_speed = max(avg_speed,  1.0)
+
+        def score(val: float, best: float) -> int:
+            if best <= 0:
+                return 0
+            return min(100, round(val / best * 100))
+
+        # ── HR zone scores ───────────────────────────────────────────────────
+        endurance_score = 0
+        intensity_score = 0
+        has_hr = False
+
+        profile = self.get_user_profile(user_id)
+        if profile.get("max_hr"):
+            zone_data = self.get_zone_time(user_id, year=year, month=month, week_start=week_start)
+            hr_zones  = zone_data.get("hr_zones_min", [0] * 5)
+            total     = sum(hr_zones)
+            if total > 0:
+                has_hr          = True
+                endurance_score = round((hr_zones[0] + hr_zones[1]) / total * 100)
+                intensity_score = round((hr_zones[3] + hr_zones[4]) / total * 100)
+
+        return {
+            "has_data":    True,
+            "has_hr":      has_hr,
+            "volume":      score(cur_dist, best_dist),
+            "climbing":    score(climb_dens, best_dens),
+            "speed":       score(avg_speed, best_speed),
+            "consistency": round(consistency),
+            "endurance":   endurance_score,
+            "intensity":   intensity_score,
+        }
+
     def get_yearly_totals(self, year: Optional[int] = None,
                           user_id: Optional[int] = None,
                           include_shared: bool = False) -> list[dict]:

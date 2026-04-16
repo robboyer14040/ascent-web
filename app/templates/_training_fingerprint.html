@@ -1,0 +1,22 @@
+<!-- Training Fingerprint — radar chart showing training identity -->
+<div class="section" id="fingerprint-section">
+  <div class="section-head">
+    <h2 id="fingerprintTitle">Training Fingerprint</h2>
+  </div>
+  <div class="chart-card">
+    <div id="fingerprintNoData" style="display:none;color:var(--muted);font-size:.8rem;padding:.5rem 0"></div>
+    <div style="display:flex;align-items:center;gap:2rem;flex-wrap:wrap">
+      <div style="position:relative;height:260px;flex:0 0 260px;min-width:220px">
+        <canvas id="fingerprintChart"></canvas>
+        <div id="fingerprintLoading" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:var(--surface);font-size:.9rem;font-weight:700;color:var(--muted);pointer-events:none">Building chart…</div>
+      </div>
+      <div id="fingerprintLegend" style="flex:1;min-width:160px;font-size:.82rem;line-height:2.1"></div>
+    </div>
+    <div id="fingerprintNoHR" style="display:none;font-size:.72rem;color:var(--muted);margin-top:.5rem">
+      Endurance &amp; Intensity require Max HR — set it in <a href="/settings">Settings</a>.
+    </div>
+    <div style="font-size:.72rem;color:var(--muted);margin-top:.3rem;line-height:1.5">
+      Scores compare this period to your personal best. Watch your identity shift as your training evolves.
+    </div>
+  </div>
+</div>

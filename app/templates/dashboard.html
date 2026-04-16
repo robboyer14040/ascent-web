@@ -166,6 +166,8 @@ select.filter-sel{background:var(--surface2);border:1px solid var(--border2);col
     </div>
   </div>
 
+  {% include '_training_fingerprint.html' %}
+
   <!-- Recent activities -->
   <div class="section">
     <div class="section-head">
@@ -186,6 +188,7 @@ select.filter-sel{background:var(--surface2);border:1px solid var(--border2);col
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="/static/strava_sync_btn.js?v={{ app_version }}" defer></script>
 <script src="/static/hre_chart.js?v={{ app_version }}" defer></script>
+<script src="/static/training_fingerprint.js?v={{ app_version }}" defer></script>
 <script>
 const monthlyRaw = {{ monthly | tojson }};
 let chart = null;
@@ -415,7 +418,8 @@ async function loadChart(save = true) {
   currentData = data;
   updatePeriodStats(data);
   loadZoneCharts();
-  if (typeof loadHreChart === 'function') loadHreChart();
+  if (typeof loadHreChart         === 'function') loadHreChart();
+  if (typeof loadFingerprintChart === 'function') loadFingerprintChart();
 }
 
 // ── Period summary stats ──────────────────────────────────────────────────────
