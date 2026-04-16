@@ -932,3 +932,150 @@ async def _call_claude(
     return reply
 
 
+# ── Compare Analysis ──────────────────────────────────────────────────────────
+
+class CompareAnalysisRequest(BaseModel):
+    activity_ids: list
+    elapsed_times: dict          # {str(activity_id): elapsed_s int or null}
+    segment_name: str = "Segment"
+    model: str = DEFAULT_MODEL
+
+
+@router.post("/coach/compare-analysis")
+async def compare_analysis(req: CompareAnalysisRequest, request: Request):
+    """
+    Generate a one-shot AI analysis of a segment comparison.
+    Does not persist to the coaching conversation.
+    """
+    from app.auth import get_session_user_id
+    uid = get_session_user_id(request)
+
+    db = db_getter()
+
+    # Get API key (user key > env key)
+    api_key = ""
+    if uid:
+        user = db.get_user(uid)
+        api_key = (user or {}).get("anthropic_api_key") or ""
+    if not api_key:
+        api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        raise HTTPException(500, "No Anthropic API key set. Add your key in Settings.")
+
+    model = req.model if req.model in MODELS else DEFAULT_MODEL
+
+    # Fetch activity details for each id
+    activities = []
+    for aid in req.activity_ids:
+        act = db.get_activity(int(aid))
+        if act:
+            elapsed = req.elapsed_times.get(str(aid))
+            activities.append({
+                "id":          aid,
+                "name":        act.get("name", f"Activity {aid}"),
+                "date":        datetime.fromtimestamp(act["start_time"], tz=timezone.utc).strftime("%b %d, %Y") if act.get("start_time") else "unknown",
+                "elapsed_s":   elapsed,
+                "avg_hr":      act.get("avg_heartrate") or 0,
+                "max_hr":      act.get("max_heartrate") or 0,
+                "avg_power":   act.get("avg_power") or 0,
+                "avg_speed":   act.get("avg_speed_mph") or 0,
+                "equipment":   act.get("equipment") or "",
+                "weather":     act.get("weather") or "",
+                "notes":       act.get("notes") or "",
+                "activity_type": act.get("activity_type") or "",
+            })
+
+    if len(activities) < 2:
+        raise HTTPException(400, "Need at least 2 activities to analyze")
+
+    # Find fastest
+    timed = [a for a in activities if a["elapsed_s"] is not None]
+    if not timed:
+        raise HTTPException(400, "No timed efforts to analyze")
+    fastest = min(timed, key=lambda a: a["elapsed_s"])
+
+    def fmt_elapsed(s):
+        if s is None:
+            return "N/A"
+        m, sec = divmod(int(s), 60)
+        return f"{m}:{sec:02d}"
+
+    # Build effort summaries
+    lines = []
+    for a in activities:
+        parts = [f'**{a["name"]}** ({a["date"]})']
+        parts.append(f'Segment time: {fmt_elapsed(a["elapsed_s"])}')
+        if a["avg_hr"]:
+            parts.append(f'Avg HR: {a["avg_hr"]} bpm')
+        if a["max_hr"]:
+            parts.append(f'Max HR: {a["max_hr"]} bpm')
+        if a["avg_power"]:
+            parts.append(f'Avg power: {a["avg_power"]}W')
+        if a["avg_speed"]:
+            parts.append(f'Avg speed: {a["avg_speed"]} mph')
+        if a["equipment"]:
+            parts.append(f'Equipment: {a["equipment"]}')
+        if a["weather"]:
+            parts.append(f'Weather: {a["weather"]}')
+        lines.append(" | ".join(parts))
+
+    efforts_text = "\n".join(f"- {l}" for l in lines)
+
+    prompt = f"""You are an expert endurance sports analyst. Analyze the following segment efforts and explain what drove the differences in performance. The segment is called "{req.segment_name}".
+
+Efforts (sorted by activity):
+{efforts_text}
+
+Fastest effort: {fastest["name"]} ({fmt_elapsed(fastest["elapsed_s"])})
+
+In 3–5 short paragraphs:
+1. Identify the fastest effort and by how much it beat the others
+2. Discuss what physical factors (heart rate, power, etc.) explain the difference
+3. Note any equipment, weather, or external factors that may have contributed
+4. Give one specific, actionable tip for improving future efforts on this segment
+
+Be concise, specific, and reference actual numbers from the data. Do not use markdown headers."""
+
+    # Call Anthropic API directly (no DB persistence)
+    max_retries = 3
+    base_delay  = 2.0
+    resp = None
+
+    for attempt in range(max_retries):
+        try:
+            async with httpx.AsyncClient(timeout=60) as client:
+                resp = await client.post(
+                    "https://api.anthropic.com/v1/messages",
+                    headers={
+                        "x-api-key":         api_key,
+                        "anthropic-version": "2023-06-01",
+                        "content-type":      "application/json",
+                    },
+                    json={
+                        "model":      model,
+                        "max_tokens": 1024,
+                        "messages":   [{"role": "user", "content": prompt}],
+                    },
+                )
+        except httpx.TimeoutException:
+            raise HTTPException(504, "Claude API timed out")
+
+        if resp.status_code == 200:
+            break
+        if resp.status_code in (529, 500, 502, 503) and attempt < max_retries - 1:
+            await __import__("asyncio").sleep(base_delay * (2 ** attempt))
+            continue
+        break
+
+    if resp is None or resp.status_code != 200:
+        status = resp.status_code if resp else 0
+        body   = resp.text[:300] if resp else "no response"
+        raise HTTPException(502, f"Claude API error {status}: {body}")
+
+    data  = resp.json()
+    reply = " ".join(b["text"] for b in data.get("content", []) if b.get("type") == "text").strip()
+    if not reply:
+        raise HTTPException(502, "Claude returned an empty response")
+
+    return {"analysis": reply}
+

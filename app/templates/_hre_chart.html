@@ -1,0 +1,22 @@
+<!-- HR Efficiency Trend Chart — included in dashboard.html above the Zone section -->
+<div class="section" id="hre-section">
+  <div class="section-head">
+    <h2 id="hreSectionTitle">HR Efficiency</h2>
+    <div class="section-controls">
+      <select id="hreMetricSel" class="filter-sel" onchange="loadHreChart()">
+        <option value="power">Power ÷ HR</option>
+        <option value="speed">Speed ÷ HR</option>
+      </select>
+      <select id="hreTypeSel" class="filter-sel" onchange="loadHreChart()">
+        <option value="">All types</option>
+      </select>
+    </div>
+  </div>
+  <div class="chart-card">
+    <div id="hreNoData" style="display:none;color:var(--muted);font-size:.8rem;padding:.5rem 0"></div>
+    <div style="position:relative;height:200px"><canvas id="hreChart"></canvas></div>
+    <div id="hreDesc" style="font-size:.72rem;color:var(--muted);margin-top:.5rem;line-height:1.5">
+      Watts ÷ HR — a rising trend means more power output per heartbeat (fitness improving). Dots are clickable.
+    </div>
+  </div>
+</div>

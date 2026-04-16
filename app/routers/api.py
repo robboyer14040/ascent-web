@@ -56,6 +56,15 @@ async def zone_stats(request: Request, year: Optional[int] = Query(None),
         raise HTTPException(401, "Not authenticated")
     return db_getter().get_zone_time(user_id=uid, year=year, month=month, week_start=week_start)
 
+@router.get("/stats/hre")
+async def hre_stats(request: Request, year: Optional[int] = Query(None),
+                    month: Optional[int] = Query(None),
+                    week_start: Optional[str] = Query(None)):
+    uid = get_session_user_id(request)
+    if uid is None:
+        raise HTTPException(401, "Not authenticated")
+    return db_getter().get_hre_data(user_id=uid, year=year, month=month, week_start=week_start)
+
 @router.get("/stats/missing-points")
 async def missing_points(request: Request, year: Optional[int] = Query(None),
                          month: Optional[int] = Query(None), week_start: Optional[str] = Query(None)):

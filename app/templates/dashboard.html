@@ -135,6 +135,8 @@ select.filter-sel{background:var(--surface2);border:1px solid var(--border2);col
     </div>
   </div>
 
+  {% include '_hre_chart.html' %}
+
   <!-- Zone time charts -->
   <div class="section" id="zone-section">
     <div class="section-head">
@@ -183,6 +185,7 @@ select.filter-sel{background:var(--surface2);border:1px solid var(--border2);col
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="/static/strava_sync_btn.js?v={{ app_version }}" defer></script>
+<script src="/static/hre_chart.js?v={{ app_version }}" defer></script>
 <script>
 const monthlyRaw = {{ monthly | tojson }};
 let chart = null;
@@ -412,6 +415,7 @@ async function loadChart(save = true) {
   currentData = data;
   updatePeriodStats(data);
   loadZoneCharts();
+  if (typeof loadHreChart === 'function') loadHreChart();
 }
 
 // ── Period summary stats ──────────────────────────────────────────────────────

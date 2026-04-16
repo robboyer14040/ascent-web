@@ -1178,6 +1178,105 @@ class AscentDB:
             for r in rows
         ]
 
+    def get_hre_data(self, user_id: Optional[int] = None,
+                     year: Optional[int] = None,
+                     month: Optional[int] = None,
+                     week_start: Optional[str] = None) -> list[dict]:
+        """Return per-activity Heart Rate Efficiency data for the trend chart.
+
+        Returns both speed-based (hre_speed = speed_mph / hr) and power-based
+        (hre_power = watts / hr) efficiency values when the data is available.
+        Requires at least HR + (speed or power) data per activity.
+        """
+        where_parts: list = []
+        params: list = []
+
+        if user_id is not None:
+            where_parts.append("user_id = ?")
+            params.append(user_id)
+
+        where_parts.append("src_avg_heartrate > 50")
+        where_parts.append(
+            "((distance_mi > 0.1 AND src_moving_time_s > 60) OR src_avg_power > 0)"
+        )
+
+        if year:
+            where_parts.append(
+                "strftime('%Y', datetime(COALESCE(creation_time_override_s, creation_time_s),'unixepoch')) = ?"
+            )
+            params.append(str(year))
+
+        if month:
+            where_parts.append(
+                f"strftime('%m', datetime(COALESCE(creation_time_override_s, creation_time_s),'unixepoch')) = '{month:02d}'"
+            )
+
+        if week_start:
+            from datetime import date, timedelta
+            week_end = (date.fromisoformat(week_start) + timedelta(days=6)).isoformat()
+            where_parts.append(
+                "date(datetime(COALESCE(creation_time_override_s, creation_time_s),'unixepoch')) BETWEEN ? AND ?"
+            )
+            params.extend([week_start, week_end])
+
+        where = ("WHERE " + " AND ".join(where_parts)) if where_parts else ""
+
+        rows = self._con.execute(
+            f"""SELECT
+                    id,
+                    COALESCE(creation_time_override_s, creation_time_s) AS ts,
+                    COALESCE(local_name, name, '(unnamed)') AS name,
+                    local_sport_type,
+                    attributes_json,
+                    src_avg_heartrate AS hr,
+                    distance_mi,
+                    src_moving_time_s AS moving_s,
+                    src_avg_power AS power_w
+                FROM activities
+                {where}
+                ORDER BY ts ASC""",
+            params,
+        ).fetchall()
+
+        result = []
+        for r in rows:
+            act_type = r["local_sport_type"] or ""
+            if not act_type:
+                try:
+                    act_type = parse_attrs(r["attributes_json"]).get("activity", "")
+                except Exception:
+                    act_type = ""
+
+            hr      = safe_float(r["hr"])
+            power_w = safe_float(r["power_w"])
+            if hr <= 0:
+                continue
+
+            item: dict = {
+                "id":            r["id"],
+                "ts":            r["ts"],
+                "name":          r["name"],
+                "activity_type": act_type,
+                "hr":            round(hr, 1),
+            }
+
+            dist_mi  = safe_float(r["distance_mi"])
+            moving_s = safe_float(r["moving_s"])
+            if dist_mi > 0.1 and moving_s > 60:
+                speed_mph = dist_mi / (moving_s / 3600.0)
+                if 0.5 <= speed_mph <= 80:
+                    item["speed_mph"]  = round(speed_mph, 2)
+                    item["hre_speed"]  = round(speed_mph / hr, 4)
+
+            if power_w > 0:
+                item["power_w"]   = round(power_w, 1)
+                item["hre_power"] = round(power_w / hr, 4)
+
+            if "hre_speed" in item or "hre_power" in item:
+                result.append(item)
+
+        return result
+
     # ── internal helpers ──────────────────────────────────────────────────
 
     def _build_where(self, search: str, activity_type: str, year: Optional[int],

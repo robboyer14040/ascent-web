@@ -154,6 +154,7 @@ async function cmpOpenManualWithSegment() {
     initCompareMap();
     initCompareProfile();
     cmpUpdateUI(0);
+    cmpRequestAiAnalysis();
     await cmpLoadSavedSegments();
   } catch(e) {
     clearInterval(_prog);
@@ -412,6 +413,7 @@ async function openCompare() {
     initCompareMap();
     initCompareProfile();
     cmpUpdateUI(0);
+    cmpRequestAiAnalysis();
 
     // Populate saved segments for this activity
     await cmpLoadSavedSegments();
@@ -458,6 +460,7 @@ function closeCompare() {
     _uiPrefsSet('ascent-cmp-w', _panel.style.width  || _panel.offsetWidth  + 'px');
     _uiPrefsSet('ascent-cmp-h', _panel.style.height || _panel.offsetHeight + 'px');
   }
+  cmpClearAiAnalysis();
   cmp._manualIds = null;
   cmpStop();
   if (cmp.map)          { cmp.map.remove();          cmp.map = null; }
@@ -1318,6 +1321,7 @@ async function cmpRunManualCompare(seg) {
     initCompareMap();
     initCompareProfile();
     cmpUpdateUI(0);
+    cmpRequestAiAnalysis();
     await cmpLoadSavedSegments();
   } catch(e) {
     clearInterval(_prog);
@@ -1400,6 +1404,7 @@ async function cmpLoadSavedSegment(segId) {
     initCompareMap();
     initCompareProfile();
     cmpUpdateUI(0);
+    cmpRequestAiAnalysis();
   } catch(e) {
     clearInterval(_prog);
     if (_bar) _bar.style.width = '0%';
@@ -1424,6 +1429,70 @@ async function cmpDeleteSegment() {
     cmpUpdateSaveBtn();
   }
   await cmpLoadSavedSegments();
+}
+
+// ── AI ANALYSIS ───────────────────────────────────────────────────────────────
+
+function cmpClearAiAnalysis() {
+  const el = document.getElementById('cmp-ai-analysis');
+  const textEl = document.getElementById('cmp-ai-analysis-text');
+  const spinner = document.getElementById('cmp-ai-spinner');
+  if (el) el.style.display = 'none';
+  if (textEl) textEl.textContent = '';
+  if (spinner) spinner.style.display = 'none';
+}
+
+async function cmpRequestAiAnalysis() {
+  const matches = cmp.matches.filter(m => !m.missing && m.elapsed_s != null);
+  if (matches.length < 2) return;
+
+  const el = document.getElementById('cmp-ai-analysis');
+  const textEl = document.getElementById('cmp-ai-analysis-text');
+  const spinner = document.getElementById('cmp-ai-spinner');
+  if (!el || !textEl) return;
+
+  // Show loading state
+  el.style.display = '';
+  textEl.textContent = '';
+  if (spinner) spinner.style.display = 'flex';
+
+  // Get model from coach model selector (user's preference) or fall back to default
+  const modelSel = document.getElementById('coach-model-select') || document.getElementById('coach-setup-model');
+  const model = modelSel?.value || 'claude-haiku-4-5-20251001';
+
+  // Build elapsed_times map
+  const elapsedTimes = {};
+  matches.forEach(m => { elapsedTimes[String(m.activity_id)] = m.elapsed_s; });
+
+  // Segment name from title
+  const titleEl = document.getElementById('compare-title');
+  const segName = titleEl?.textContent || 'Segment';
+
+  try {
+    const r = await fetch('/api/coach/compare-analysis', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        activity_ids: matches.map(m => m.activity_id),
+        elapsed_times: elapsedTimes,
+        segment_name: segName,
+        model,
+      }),
+    });
+    const d = await r.json();
+    if (spinner) spinner.style.display = 'none';
+    if (!r.ok) {
+      textEl.textContent = d.detail || 'Analysis unavailable.';
+      textEl.style.color = 'var(--muted)';
+      return;
+    }
+    textEl.style.color = '';
+    textEl.textContent = d.analysis || 'No analysis returned.';
+  } catch(e) {
+    if (spinner) spinner.style.display = 'none';
+    textEl.textContent = 'Analysis unavailable.';
+    textEl.style.color = 'var(--muted)';
+  }
 }
 
 // ── MAKE SEGMENT (from Compare) ───────────────────────────────────────────────
