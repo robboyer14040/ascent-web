@@ -145,6 +145,10 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
 .ai-card-loading{font-size:11px;color:var(--muted);font-style:italic}
 /* ── Activity title bar (INFO-pane style) ── */
 .act-title-bar{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px}
+/* In tour stage detail, stack AI chip above stats-grid so chips get full width */
+#stage-detail .act-stats-row{flex-direction:column!important;overflow:visible!important;max-width:none!important;gap:8px!important}
+#stage-detail .act-stats-row #ai-summary-chip{width:100%!important;max-height:none!important;order:-1}
+#stage-detail .act-stats-row .stats-grid{width:100%;flex:none}
 .act-title{font-size:15px;font-weight:600;line-height:1.3}
 .act-title-links{display:flex;gap:6px;flex-shrink:0;margin-left:8px;margin-top:2px}
 .act-title-links a{font-size:11px;font-weight:600;color:var(--text);border:1px solid var(--border2);border-radius:4px;padding:3.5px 8px;text-decoration:none;line-height:1.4}
@@ -162,6 +166,112 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
 .meta-field{display:flex;flex-direction:column}
 .mf-label{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
 .mf-val{font-size:12px;color:var(--text);margin-top:1px}
+
+/* ── Mobile layout ─────────────────────────────────────────────────── */
+#mob-tour-header,#mob-tour-nav{display:none}
+@media(max-width:767px){
+  nav{display:none}
+  #mob-tour-header{
+    display:flex;align-items:center;gap:8px;
+    position:fixed;top:0;left:0;right:0;height:52px;
+    background:var(--surface);border-bottom:1px solid var(--border);
+    z-index:600;padding:0 14px;font-size:14px;font-weight:600;flex-shrink:0
+  }
+  #mob-tour-back{
+    font-size:16px;font-weight:500;color:var(--accent);
+    background:none;border:none;cursor:pointer;
+    padding:8px 4px;margin-right:2px;line-height:1
+  }
+  #view-all-btn{display:none!important}
+  #resize-handle{
+    height:28px;display:flex;align-items:center;justify-content:center;cursor:row-resize
+  }
+  #resize-handle::after{
+    content:'';display:block;width:40px;height:4px;
+    background:var(--border2);border-radius:2px
+  }
+  #tour-controls{padding:8px}
+  #tour-btn-row{grid-template-columns:repeat(4,1fr);gap:4px}
+  .sb-btn{padding:6px 4px;font-size:11px;min-height:36px}
+  #stage-list-wrap{-webkit-overflow-scrolling:touch}
+  .stage-item{padding:10px}
+  #stage-detail{-webkit-overflow-scrolling:touch;padding:12px}
+}
+/* ── Portrait: stacked column overview ── */
+@media(max-width:767px) and (orientation:portrait){
+  #page{
+    display:flex;flex-direction:column;
+    height:calc(100vh - 52px - env(safe-area-inset-bottom, 0px));margin-top:52px;
+    overflow:hidden;position:static
+  }
+  /* Flatten sidebar so #tour-controls and #stage-list-wrap become
+     direct flex children of #page, enabling the right vertical order */
+  #sidebar{display:contents}
+  #tour-controls{order:1;flex-shrink:0;border-bottom:1px solid var(--border)}
+  #main{
+    order:2;flex:0 0 auto;
+    position:static;width:100%;
+    display:flex;flex-direction:column
+  }
+  /* Stage list: position:fixed (like stage-detail in stage-view) so iOS scroll works.
+     top/bottom set by JS via _syncStageListHeight(). */
+  #stage-list-wrap{position:fixed;left:0;right:0;bottom:0;overflow-y:scroll;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;background:var(--bg);z-index:5}
+  /* Stage detail is hidden in overview mode; shown in stage-view state */
+  #stage-detail{display:none;padding:12px}
+  /* Stage view: body gets .mob-stage-view when a stage is selected */
+  body.mob-stage-view #tour-controls{display:none}
+  body.mob-stage-view #stage-list-wrap{display:none}
+  /* Stage detail uses position:fixed so iOS gives it an explicit pixel height to scroll */
+  body.mob-stage-view #main{flex:1}
+  body.mob-stage-view #stage-detail{display:block;position:fixed;left:0;right:0;bottom:0;overflow-y:scroll;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;background:var(--bg);z-index:20;padding:12px 12px 60px}
+  /* top is set dynamically in JS (52 + mapH + 6) */
+  /* "View Entire Tour" button — portrait stage view only */
+  .mob-view-tour-wrap{display:none}
+  body.mob-stage-view .mob-view-tour-wrap{display:block;padding:16px 0 8px}
+  .mob-view-tour-btn{width:100%;padding:11px;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;font-size:13px;font-weight:500;color:var(--text);cursor:pointer;text-align:center}
+  .mob-view-tour-btn:active{background:var(--border2)}
+  /* Portrait stat chips: AI summary full-width on top, chips horizontal below */
+  body.mob-stage-view .act-stats-row{flex-direction:column!important;overflow:visible!important;max-width:none!important;gap:8px!important}
+  body.mob-stage-view .act-stats-row #ai-summary-chip{width:100%!important;max-height:none!important;order:-1}
+  body.mob-stage-view .act-stats-row .stats-grid{width:100%;flex:none}
+}
+/* ── Landscape: preserve existing tab-based layout ── */
+@media(max-width:767px) and (orientation:landscape){
+  #mob-tour-nav{
+    display:flex;position:fixed;bottom:0;left:0;right:0;
+    height:58px;padding-bottom:env(safe-area-inset-bottom,0px);
+    background:var(--surface);border-top:1px solid var(--border);z-index:600
+  }
+  .mob-tour-tab{
+    flex:1;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;gap:2px;font-size:10px;font-weight:500;
+    letter-spacing:.02em;text-transform:uppercase;
+    color:var(--muted);background:none;border:none;cursor:pointer;
+    text-decoration:none;padding:4px;-webkit-tap-highlight-color:transparent
+  }
+  .mob-tour-tab>span:first-child{font-size:22px;line-height:1.2}
+  .mob-tour-tab.active{color:var(--accent)}
+  #page{
+    flex-direction:row;height:calc(100vh - 52px - 58px - env(safe-area-inset-bottom,0px));
+    margin-top:52px;position:relative
+  }
+  body.mob-landscape-stage #stage-detail{padding-bottom:calc(12px + env(safe-area-inset-bottom,0px))}
+  #sidebar{
+    position:absolute;inset:0;width:100%;
+    display:none;z-index:2;flex-direction:column
+  }
+  #sidebar.mob-visible{display:flex}
+  #main{
+    position:absolute;inset:0;
+    display:flex;flex-direction:column
+  }
+  #main.mob-hidden{display:none}
+  /* Landscape stage selected: horizontal split — map left, detail right */
+  body.mob-landscape-stage #map-and-detail{flex-direction:row!important}
+  body.mob-landscape-stage #map{width:55%;height:100%!important;flex-shrink:0}
+  body.mob-landscape-stage #resize-handle{display:none}
+  body.mob-landscape-stage #stage-right-panel{width:45%;border-left:1px solid var(--border)}
+}
 </style>
 </head>
 <body>
@@ -226,12 +336,14 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
         <button onclick="resetMapZoom()" title="Reset zoom to fit route" style="position:absolute;bottom:24px;left:8px;z-index:500;background:rgba(0,0,0,.6);color:#ccc;border:1px solid rgba(255,255,255,.15);border-radius:4px;padding:3px 6px;font-size:13px;line-height:1;cursor:pointer;backdrop-filter:blur(4px)"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1 5V1h4M9 1h4v4M13 9v4H9M5 13H1V9"/></svg></button>
       </div>
       <div id="resize-handle" title="Drag to resize map"></div>
-      <div id="stage-elev-strip" style="display:none;height:100px;flex-shrink:0;background:var(--bg);border-bottom:1px solid var(--border);position:relative">
-        <canvas id="stage-elev-canvas"></canvas>
-        <div id="stage-elev-xhair" style="display:none;position:absolute;top:4px;bottom:0;width:1px;background:rgba(255,255,255,.45);pointer-events:none"></div>
-        <div id="stage-elev-hud" style="display:none;position:absolute;top:4px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.62);color:#e2e8f0;font-size:10px;font-family:monospace;padding:2px 8px;border-radius:4px;white-space:nowrap;pointer-events:none;z-index:10"></div>
+      <div id="stage-right-panel" style="flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden">
+        <div id="stage-elev-strip" style="display:none;height:100px;flex-shrink:0;background:var(--bg);border-bottom:1px solid var(--border);position:relative">
+          <canvas id="stage-elev-canvas"></canvas>
+          <div id="stage-elev-xhair" style="display:none;position:absolute;top:4px;bottom:0;width:1px;background:rgba(255,255,255,.45);pointer-events:none"></div>
+          <div id="stage-elev-hud" style="display:none;position:absolute;top:4px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.62);color:#e2e8f0;font-size:10px;font-family:monospace;padding:2px 8px;border-radius:4px;white-space:nowrap;pointer-events:none;z-index:10"></div>
+        </div>
+        <div id="stage-detail"></div>
       </div>
-      <div id="stage-detail"></div>
     </div>
   </div>
 
@@ -417,6 +529,15 @@ function fmtDur(s) {
 }
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
+// ── User avatar helper (used by activity_detail.js) ───────────────────────────
+const USER_AVATAR_COLORS = ['#3b82f6','#ef4444','#22c55e','#a855f7','#ec4899','#14b8a6','#f59e0b','#8b5cf6'];
+function userInitialAvatar(userId, username, size, radius, extraStyle) {
+  const color = USER_AVATAR_COLORS[(userId || 0) % USER_AVATAR_COLORS.length];
+  const initial = (username || '?')[0].toUpperCase();
+  const fs = Math.round(size * 0.45);
+  return `<div style="width:${size}px;height:${size}px;border-radius:${radius};background:${color};color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:${fs}px;font-weight:600;flex-shrink:0;${extraStyle}">${initial}</div>`;
+}
+
 // ── Color scheme ──────────────────────────────────────────────────────────────
 const C = {
   done: '#ef4444',   // red
@@ -487,22 +608,75 @@ function setTourMapStyle(styleKey) {
     b.classList.toggle('active', b.dataset.style === styleKey));
 }
 
+// ── Mobile tab switching (landscape only) ─────────────────────────────────────
+function mobTourTab(tab) {
+  if (!isMobTour() || isPortrait()) return;
+  const sidebar = document.getElementById('sidebar');
+  const main    = document.getElementById('main');
+  const btnStages = document.getElementById('mob-btn-stages');
+  const btnMap    = document.getElementById('mob-btn-map');
+  if (btnStages) btnStages.classList.toggle('active', tab==='stages');
+  if (btnMap)    btnMap.classList.toggle('active',    tab==='map');
+  if (tab === 'stages') {
+    sidebar.classList.add('mob-visible');
+    main.classList.add('mob-hidden');
+  } else {
+    sidebar.classList.remove('mob-visible');
+    main.classList.remove('mob-hidden');
+    if (tourMap) setTimeout(() => tourMap.invalidateSize(), 50);
+  }
+}
+
 // ── Map init + resize ─────────────────────────────────────────────────────────
+const isMobTour  = () => window.innerWidth <= 767;
+const isPortrait = () => window.innerWidth < window.innerHeight;
+// Portrait has no bottom nav (52px header only); landscape keeps the 58px tab bar
+const tourChromeH = () => isMobTour() ? (isPortrait() ? 52 : 110) : 44;
+// Returns the correct `top` for the portrait fixed stage-detail panel,
+// accounting for map + resize handle + elevation strip (if visible).
+function _stageDetailTop() {
+  const strip = document.getElementById('stage-elev-strip');
+  const elevH = (strip && strip.style.display !== 'none') ? strip.offsetHeight : 0;
+  return (tourChromeH() + mapH + 6 + elevH) + 'px';
+}
+
+// iOS rubber-band fix: #stage-list-wrap is position:fixed in portrait; set its
+// top by summing the heights of the elements above it (header + tour-controls + main).
+// Must NOT use getBoundingClientRect on the wrap itself — once fixed, that returns
+// the current fixed position, not the correct target position.
+function _syncStageListHeight() {
+  if (!isMobTour() || !isPortrait()) return;
+  const wrap     = document.getElementById('stage-list-wrap');
+  const controls = document.getElementById('tour-controls');
+  const main     = document.getElementById('main');
+  if (!wrap) return;
+  const top = 52
+    + (controls ? controls.offsetHeight : 0)
+    + (main     ? main.offsetHeight     : 0);
+  wrap.style.top = top + 'px';
+}
+
 function initMap() {
-  mapH = Math.round((window.innerHeight - 44) * 0.55);
+  // Portrait mobile: use a smaller map fraction so the stage list has room
+  const mapFrac = (isMobTour() && isPortrait()) ? 0.38 : 0.55;
+  mapH = Math.round((window.innerHeight - tourChromeH()) * mapFrac);
   document.getElementById('map').style.height = mapH + 'px';
   tourMap = L.map('map', { zoomControl:true, attributionControl:false });
   routeGroup = L.layerGroup().addTo(tourMap);
   const savedStyle = (() => { try { return localStorage.getItem('ascent-map-style') || 'osm'; } catch(e) { return 'osm'; } })();
   setTourMapStyle(savedStyle);
   MapUtils.addScale(tourMap, U.metric);
+  // Landscape only: start with map visible (sidebar hidden until Stages tab)
+  if (isMobTour() && !isPortrait()) {
+    document.getElementById('main').classList.remove('mob-hidden');
+  }
 }
 
 (function() {
   const handle = document.getElementById('resize-handle');
   let drag=false, startY=0, startH=0;
   function startDrag(y) { drag=true; startY=y; startH=mapH; handle.classList.add('dragging'); document.body.style.cursor='row-resize'; }
-  function moveDrag(y)  { if(!drag) return; mapH=Math.max(120,Math.min(window.innerHeight-44-80,startH+(y-startY))); document.getElementById('map').style.height=mapH+'px'; tourMap&&tourMap.invalidateSize(); }
+  function moveDrag(y)  { if(!drag) return; mapH=Math.max(80,Math.min(window.innerHeight-tourChromeH()-80,startH+(y-startY))); document.getElementById('map').style.height=mapH+'px'; tourMap&&tourMap.invalidateSize(); if(document.body.classList.contains('mob-stage-view')&&isPortrait()){document.getElementById('stage-detail').style.top=_stageDetailTop();}else{_syncStageListHeight();} }
   function endDrag()    { if(!drag) return; drag=false; handle.classList.remove('dragging'); document.body.style.cursor=''; tourMap&&tourMap.invalidateSize(); }
   handle.addEventListener('mousedown', e => { startDrag(e.clientY); e.preventDefault(); });
   document.addEventListener('mousemove', e => moveDrag(e.clientY));
@@ -582,6 +756,7 @@ async function onTourSelect(id) {
   if(!id) {
     document.getElementById('main-empty').style.display     = 'flex';
     document.getElementById('map-and-detail').style.display = 'none';
+    _syncStageListHeight();
     return;
   }
 
@@ -593,14 +768,14 @@ async function onTourSelect(id) {
 
   document.getElementById('delete-btn').style.visibility   = tourInfo.is_mine ? 'visible' : 'hidden';
   document.getElementById('edit-tour-btn').style.visibility = tourInfo.is_mine ? 'visible' : 'hidden';
-  document.getElementById('publish-btn').style.visibility  = tourInfo.is_mine ? 'visible' : 'hidden';
+  document.getElementById('publish-btn').style.visibility  = 'visible';
   const vab = document.getElementById('view-all-btn');
   vab.style.display  = '';
   vab.disabled = true;
 
   document.getElementById('main-empty').style.display     = 'none';
   document.getElementById('map-and-detail').style.display = 'flex';
-  setTimeout(() => tourMap && tourMap.invalidateSize(), 80);
+  setTimeout(() => { tourMap && tourMap.invalidateSize(); _syncStageListHeight(); }, 80);
 
   renderStageList();
   await drawRoutes(null);
@@ -670,15 +845,91 @@ async function selectStage(id) {
   renderStageList();
   await drawRoutes(selectedId);
   renderDetail(selectedId);
+  if (isMobTour()) {
+    if (isPortrait()) {
+      // Portrait: toggle stage-view mode on body
+      if (selectedId) {
+        document.body.classList.add('mob-stage-view');
+        document.getElementById('stage-detail').style.top = _stageDetailTop();
+        const s = tourStages.find(s => String(s.id) === String(selectedId));
+        document.getElementById('mob-tour-title').textContent =
+          s ? `Stage ${s.stage_num}: ${s.name}` : 'Stage';
+      } else {
+        document.body.classList.remove('mob-stage-view');
+        document.getElementById('stage-detail').style.top = '';
+        document.getElementById('mob-tour-title').textContent = 'Tours';
+      }
+      setTimeout(() => tourMap && tourMap.invalidateSize(), 50);
+    } else {
+      // Landscape: horizontal split when stage selected, normal column when deselected
+      if (selectedId) {
+        document.body.classList.add('mob-landscape-stage');
+        mobTourTab('map');
+      } else {
+        document.body.classList.remove('mob-landscape-stage');
+      }
+      setTimeout(() => tourMap && tourMap.invalidateSize(), 60);
+    }
+  }
+}
+
+// ── Portrait: back from stage view → overview ─────────────────────────────────
+function mobPortraitBack() {
+  if (document.body.classList.contains('mob-stage-view')) {
+    document.body.classList.remove('mob-stage-view');
+    document.getElementById('stage-detail').style.top = '';
+    selectedId = null;
+    document.getElementById('mob-tour-title').textContent = 'Tours';
+    renderStageList();
+    drawRoutes(null);
+    renderDetail(null);
+    setTimeout(() => { tourMap && tourMap.invalidateSize(); _syncStageListHeight(); }, 50);
+  } else {
+    window.location.href = '/activities';
+  }
 }
 
 async function viewEntireTour() {
   selectedId = null;
   document.getElementById('view-all-btn').disabled = true;
+  document.body.classList.remove('mob-landscape-stage');
   renderStageList();
   await drawRoutes(null);
   renderDetail(null);
+  setTimeout(() => tourMap && tourMap.invalidateSize(), 60);
 }
+
+// ── Orientation change: re-apply correct mobile layout ────────────────────────
+(function() {
+  let _orientTimer = null;
+  window.addEventListener('resize', () => {
+    if (!isMobTour()) return;
+    clearTimeout(_orientTimer);
+    _orientTimer = setTimeout(() => {
+      if (!selectedId) {
+        // No stage: clean up any stale classes
+        document.body.classList.remove('mob-stage-view', 'mob-landscape-stage');
+        document.getElementById('stage-detail').style.top = '';
+        _syncStageListHeight();
+        tourMap && tourMap.invalidateSize();
+        return;
+      }
+      if (isPortrait()) {
+        // Switched to portrait with stage selected
+        document.body.classList.remove('mob-landscape-stage');
+        document.body.classList.add('mob-stage-view');
+        document.getElementById('stage-detail').style.top = _stageDetailTop();
+      } else {
+        // Switched to landscape with stage selected
+        document.body.classList.remove('mob-stage-view');
+        document.getElementById('stage-detail').style.top = '';
+        document.body.classList.add('mob-landscape-stage');
+        mobTourTab('map');
+      }
+      tourMap && tourMap.invalidateSize();
+    }, 100);
+  });
+})();
 
 // ── Map drawing ───────────────────────────────────────────────────────────────
 async function drawRoutes(activeId) {
@@ -838,6 +1089,7 @@ function biggestClimbInfo(pts) {
 function buildStageActivityDetail(a) {
   return buildActivityDetailHTML(a, {
     currentUserId:    _currentUserId,
+    suppressTitle:    true,
     editCallback:     'openTourEdit',
     resyncCallback:   'resyncStageActivity',
     saveRouteCb:      'openStageSaveRouteDialog',
@@ -855,7 +1107,7 @@ function buildStageActivityDetail(a) {
     fmtDateFn:        fmtDate,
     fmtHMSFn:         fmtHMS,
     U,
-  }) + `<div id="sd-photos"></div>`;
+  }) + `<div id="sd-photos"></div><div class="mob-view-tour-wrap"><button class="mob-view-tour-btn" onclick="mobPortraitBack()">View Entire Tour</button></div>`;
 }
 
 // ── Resync stage activity from Strava ─────────────────────────────────────────
@@ -1333,6 +1585,7 @@ async function renderDetail(activeId) {
       <a href="/tours/stages/${stage.id}/export/gpx" download style="flex-shrink:0;font-size:11px;font-weight:600;color:#f97316;border:1px solid #f97316;border-radius:4px;padding:2px 8px;text-decoration:none;line-height:1.6">↓ GPX</a>
     </div>`;
     html += `<div style="margin-top:6px;font-size:11px;color:var(--muted)"><span style="font-size:10px;text-transform:uppercase;letter-spacing:.06em">Forecast:</span> <span id="stage-forecast-text">Loading…</span></div>`;
+    html += `<div class="mob-view-tour-wrap"><button class="mob-view-tour-btn" onclick="mobPortraitBack()">View Entire Tour</button></div>`;
     el.innerHTML = html;
 
     // Trajectory — check localStorage cache first, else geocode client-side
@@ -1470,12 +1723,22 @@ async function renderDetail(activeId) {
     return;
   }
 
-  // Completed: hide elevation strip and render INFO-pane style
-  hideStageElevation();
-  el.innerHTML = stageHead + `<div style="color:var(--muted);font-size:12px">Loading…</div>`;
+  // Completed: show elevation strip (same as uncompleted) and render INFO-pane style
+  drawStageElevation(_tourPointsCache[String(stage.id)]);
+  el.innerHTML = `<div style="color:var(--muted);font-size:12px">Loading…</div>`;
   try {
     const act = await fetch(`/activities/${stage.completion.activity_id}/json`).then(r=>r.json());
-    el.innerHTML = stageHead +
+    // Build avatar for stage header
+    const _u = _tourUserMap[act.user_id];
+    const _avUrl = _u?.avatar_url ? _u.avatar_url.replace('?thumb=1','')+'?thumb=1' : null;
+    const _avHtml = _avUrl
+      ? `<img src="${_avUrl}" alt="" style="width:32px;height:32px;object-fit:cover;border-radius:4px;flex-shrink:0">`
+      : (_u ? userInitialAvatar(act.user_id, _u.username, 32, '4px', '') : '');
+    el.innerHTML =
+      `<div style="display:flex;align-items:center;gap:9px;margin-bottom:8px">
+        ${_avHtml}
+        <div style="flex:1;font-size:15px;font-weight:600;line-height:1.3;min-width:0">Stage ${stage.stage_num}: ${esc(stage.name)}</div>
+      </div>` +
       `<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
         <div style="font-size:11px;color:#22c55e;font-weight:500">✓ Completed ${stage.completion.date}</div>
         <button onclick="sessionStorage.setItem('selectActivityId','${act.id}');window.location='/activities'" style="font-size:10px;padding:2px 7px;border-radius:4px;border:1px solid var(--border2);background:var(--surface2);color:var(--muted);cursor:pointer;line-height:1.5">View on Activities page</button>
@@ -1546,7 +1809,7 @@ async function loadStagePhotos(actId) {
     if(!media.length) return;
     _tourLbMedia = media;
     let html = `<div class="section-label" style="margin-top:12px;margin-bottom:6px">Photos</div>`;
-    html += `<div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:6px">`;
+    html += `<div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;touch-action:pan-x">`;
     media.forEach((m, i) => {
       if(m.type==='image') {
         html += `<img src="${m.url}" loading="lazy" style="height:80px;width:80px;object-fit:cover;border-radius:5px;cursor:pointer;flex-shrink:0" onclick="openTourLightbox(${i})">`;
@@ -2068,6 +2331,7 @@ document.addEventListener('DOMContentLoaded', () => {
 (async () => {
   await U.load();
   initMap();
+  _syncStageListHeight();
   await loadUsers();
   await loadTours();
   // Restore persisted prefs
@@ -2097,7 +2361,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // ── Publish / Share ───────────────────────────────────────────────────────────
 function openPublishModal() {
-  if(!tourInfo?.is_mine) return;
   const modal    = document.getElementById('publish-modal');
   const unpub    = document.getElementById('publish-unpublished');
   const pub      = document.getElementById('publish-published');
@@ -2151,5 +2414,27 @@ function copyShareUrl() {
 }
 </script>
 {% include '_about.html' %}
+
+<!-- ── Mobile header (phones only) ── -->
+<div id="mob-tour-header">
+  <button id="mob-tour-back" onclick="mobPortraitBack()">‹</button>
+  <span id="mob-tour-title">Tours</span>
+</div>
+
+<!-- ── Mobile bottom nav (landscape only, hidden in portrait by CSS) ── -->
+<div id="mob-tour-nav">
+  <a href="/activities" class="mob-tour-tab">
+    <span>≡</span>
+    <span>Activities</span>
+  </a>
+  <button class="mob-tour-tab active" id="mob-btn-stages" onclick="mobTourTab('stages')">
+    <span>☰</span>
+    <span>Stages</span>
+  </button>
+  <button class="mob-tour-tab" id="mob-btn-map" onclick="mobTourTab('map')">
+    <span>🗺</span>
+    <span>Map</span>
+  </button>
+</div>
 </body>
 </html>
