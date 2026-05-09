@@ -317,10 +317,10 @@ def _active_goal(con: sqlite3.Connection, user_id: Optional[int] = None) -> Opti
 def _goal_messages(con: sqlite3.Connection, goal_id: int, limit: int = 60) -> list:
     rows = con.execute(
         "SELECT role, content, created_at FROM coach_messages "
-        "WHERE goal_id = ? ORDER BY created_at ASC LIMIT ?",
+        "WHERE goal_id = ? ORDER BY created_at DESC LIMIT ?",
         (goal_id, limit)
     ).fetchall()
-    return [dict(r) for r in rows]
+    return [dict(r) for r in reversed(rows)]
 
 
 def _last_activity_ts(db, user_id: Optional[int] = None) -> int:

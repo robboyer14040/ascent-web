@@ -59,6 +59,7 @@ function buildActivityDetailHTML(a, opts) {
     locationElId     = 'wx-location-text',
     userMap          = {},
     showAiSummary    = false,
+    suppressTitle    = false,
     aiRefreshCb      = 'loadAISummary',
     escFn,
     fmtDateFn,
@@ -185,11 +186,16 @@ function buildActivityDetailHTML(a, opts) {
     : '';
 
   // ── Assemble ──────────────────────────────────────────────────────────────────
-  return `
-    <div class="act-title-bar">
+  const titleBarHtml = suppressTitle
+    ? (editBtn||deleteBtn||resyncBtn||exportBtn||saveRouteBtn||stravaLink
+        ? `<div class="act-title-bar"><div class="act-title-links" style="margin-left:0">${editBtn}${deleteBtn}${resyncBtn}${exportBtn}${saveRouteBtn}${stravaLink}</div></div>`
+        : '')
+    : `<div class="act-title-bar">
       <div style="display:flex;align-items:flex-start;min-width:0;flex:1">${avatarHtml}<div class="act-title">${esc(a.name||'(unnamed)')}${isDirty?'<span style="color:#f97316;font-size:10px;margin-left:5px;font-weight:400;vertical-align:middle">edited</span>':''}</div></div>
       <div class="act-title-links">${editBtn}${deleteBtn}${resyncBtn}${exportBtn}${saveRouteBtn}${stravaLink}</div>
-    </div>
+    </div>`;
+  return `
+    ${titleBarHtml}
     ${rpeKudosHtml}
     <div style="display:grid;grid-template-columns:auto 1fr;column-gap:20px;row-gap:4px;margin-bottom:6px;align-items:baseline">
       <span style="font-size:11.5px;color:var(--muted)">${fmtDate(a.start_time)}</span>
@@ -198,7 +204,7 @@ function buildActivityDetailHTML(a, opts) {
       <span id="${locationElId}" style="font-size:11px;color:var(--muted)"></span>
     </div>
     ${a.notes?`<div class="act-notes" style="margin-bottom:8px">${esc(a.notes)}</div>`:''}
-    <div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:8px;max-width:100%;overflow:hidden">
+    <div class="act-stats-row" style="display:flex;gap:10px;align-items:flex-start;margin-bottom:8px;max-width:100%;overflow:hidden">
       <div class="stats-grid">${chips.map(([l,v,sub])=>{const span=l==='Equipment'?Math.min(6,Math.max(1,Math.ceil(v.length/14))):1;const s=span>1?` style="grid-column:span ${span}"`:'';;return`<div class="stat-chip"${s}><div class="sc-label">${l}</div><div class="sc-val">${v}</div><div class="sc-sub">${sub||''}</div></div>`}).join('')}</div>
       ${aiChipHtml}
     </div>

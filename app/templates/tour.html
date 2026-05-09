@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Tours — Ascent</title>
 <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
 <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
@@ -36,7 +36,7 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
 .spacer{flex:1}
 
 /* ── Page layout ── */
-#page{display:flex;height:calc(100vh - 44px);overflow:hidden}
+#page{display:flex;height:calc(100vh - 44px - env(safe-area-inset-bottom,0px));overflow:hidden}
 
 /* ── Sidebar ── */
 #sidebar{width:320px;flex-shrink:0;display:flex;flex-direction:column;border-right:1px solid var(--border);overflow:hidden}
@@ -56,22 +56,32 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
 .sb-btn.ghost{background:none;border:1px solid var(--border2)}
 .sb-btn.ghost:hover{background:var(--surface2)}
 .sb-btn:disabled{opacity:0.35;cursor:not-allowed;pointer-events:none}
-#stage-list-wrap{flex:1;overflow-y:auto;overflow-x:hidden}
-#stage-list{padding:4px 0}
+#stage-list-wrap{flex:1;overflow:hidden;display:flex;flex-direction:column}
 
-/* ── Sidebar stage items (click-only, no drag) ── */
-.stage-item{display:flex;align-items:center;gap:7px;padding:7px 10px;cursor:pointer;border-left:3px solid transparent;user-select:none}
-.stage-item:hover{background:rgba(255,255,255,.04)}
-.stage-item.active{background:rgba(249,115,22,.1);border-left-color:var(--accent)}
-.stage-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
-.stage-item-body{flex:1;min-width:0}
-.stage-item-name{font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.stage-item-sub{font-size:10px;color:var(--muted);margin-top:1px}
-.stage-item-check{font-size:11px;flex-shrink:0}
-.stage-status{text-align:right;flex-shrink:0;min-width:52px}
-.stage-status-done{font-size:12px;font-weight:600;color:#22c55e;line-height:1.2}
-.stage-status-date{font-size:10px;color:var(--muted)}
-.stage-status-none{font-size:14px;color:var(--muted2);line-height:1}
+/* ── Stage column header ── */
+#stage-col-head-wrap{display:flex;align-items:center;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0;position:relative}
+#stage-col-head{flex:1;display:grid;grid-template-columns:var(--stage-cols);overflow:hidden;min-width:0}
+#stage-col-gear-btn{padding:2px 6px;font-size:15px;line-height:1;color:var(--muted);flex-shrink:0}
+#stage-col-gear-btn:hover{color:var(--text)}
+#stage-col-picker{display:none;position:absolute;top:100%;right:0;z-index:200;background:var(--surface);border:1px solid var(--border2);border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,.5);padding:8px;max-height:280px;overflow-y:auto;min-width:160px}
+#stage-col-picker.open{display:block}
+.cp-item{display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:5px;cursor:pointer;font-size:12.5px;color:var(--text);user-select:none}
+.cp-item:hover{background:var(--surface2)}
+.cp-item input{accent-color:#f97316;cursor:pointer;width:13px;height:13px}
+#stage-list-scroll{flex:1;overflow-y:auto;overflow-x:hidden}
+.stch{padding:5px 4px;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;cursor:pointer;user-select:none;display:flex;align-items:center;gap:2px;white-space:nowrap;overflow:hidden}
+.stch:hover{color:var(--text)}
+.stch.sorted{color:var(--accent)}
+.stch.nosort{cursor:default}
+.sort-arr{color:var(--accent);font-size:10px}
+.stage-row{display:grid;grid-template-columns:var(--stage-cols);border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer;align-items:center;height:34px}
+.stage-row:hover{background:rgba(255,255,255,.04)}
+.stage-row.active{background:rgba(249,115,22,.1);border-left:3px solid var(--accent)}
+.st-cell{padding:0 4px;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--muted)}
+.st-cell-right{text-align:right}
+.st-name-cell{display:flex;align-items:center;gap:5px;padding:0 4px 0 8px;min-width:0;overflow:hidden}
+.stage-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.st-name-text{font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)}
 #sidebar-empty{padding:20px 14px;color:var(--muted);font-size:12px;text-align:center}
 
 /* ── Main area ── */
@@ -193,8 +203,7 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
   #tour-controls{padding:8px}
   #tour-btn-row{grid-template-columns:repeat(4,1fr);gap:4px}
   .sb-btn{padding:6px 4px;font-size:11px;min-height:36px}
-  #stage-list-wrap{-webkit-overflow-scrolling:touch}
-  .stage-item{padding:10px}
+  #stage-list-scroll{-webkit-overflow-scrolling:touch}
   #stage-detail{-webkit-overflow-scrolling:touch;padding:12px}
 }
 /* ── Portrait: stacked column overview ── */
@@ -215,7 +224,8 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
   }
   /* Stage list: position:fixed (like stage-detail in stage-view) so iOS scroll works.
      top/bottom set by JS via _syncStageListHeight(). */
-  #stage-list-wrap{position:fixed;left:0;right:0;bottom:0;overflow-y:scroll;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;background:var(--bg);z-index:5}
+  #stage-list-wrap{position:fixed;left:0;right:0;bottom:0;overflow:hidden;display:flex;flex-direction:column;background:var(--bg);z-index:5}
+  #stage-list-scroll{overflow-y:scroll;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain}
   /* Stage detail is hidden in overview mode; shown in stage-view state */
   #stage-detail{display:none;padding:12px}
   /* Stage view: body gets .mob-stage-view when a stage is selected */
@@ -316,8 +326,15 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
       <button class="sb-btn ghost full" id="view-all-btn" style="display:none" onclick="viewEntireTour()">View Entire Tour</button>
     </div>
     <div id="stage-list-wrap">
-      <div id="stage-list"></div>
-      <div id="sidebar-empty" style="display:none">No stages defined.</div>
+      <div id="stage-col-head-wrap">
+        <div id="stage-col-head"></div>
+        <button id="stage-col-gear-btn" onclick="toggleStageColPicker(event)" title="Choose columns">⚙</button>
+        <div id="stage-col-picker"></div>
+      </div>
+      <div id="stage-list-scroll">
+        <div id="stage-list"></div>
+        <div id="sidebar-empty" style="display:none">No stages defined.</div>
+      </div>
     </div>
   </div>
 
@@ -568,6 +585,56 @@ const _endIcon = L.divIcon({
   className: '', iconSize: [17,20], iconAnchor: [2,20],
 });
 
+// ── Stage table columns ───────────────────────────────────────────────────────
+const STAGE_ALL_COLS = [
+  {id:'name',     label:'Title',   sort:'name',     w:'1fr',  align:'left',  titleCell:true,
+    render: s => `<span class="stage-dot" style="background:${stageColor(s)}"></span><span class="st-name-text">${esc(s.name)}</span>`},
+  {id:'dist',     label:'Dist',    sort:'dist',     w:'54px', align:'right',
+    unitLabel: () => U.metric ? 'km' : 'mi',
+    render: s => s.distance_mi ? (U.metric ? (s.distance_mi*1.60934).toFixed(1) : s.distance_mi.toFixed(1)) : '—'},
+  {id:'climb',    label:'Climb',   sort:'climb',    w:'58px', align:'right',
+    unitLabel: () => U.metric ? 'm' : 'ft',
+    render: s => s.climb_ft ? (U.metric ? Math.round(s.climb_ft*0.3048) : Math.round(s.climb_ft)) : '—'},
+  {id:'date',     label:'Date',    sort:'date',     w:'68px', align:'right',
+    render: s => s.completion ? s.completion.date : '—'},
+  {id:'duration', label:'MovTime', sort:'moving_s', w:'64px', align:'right',
+    render: s => s.completion?.moving_s ? fmtHMS(s.completion.moving_s) : '—'},
+  {id:'speed',    label:'Speed',   sort:'speed',    w:'64px', align:'right',
+    unitLabel: () => U.metric ? 'km/h' : 'mph',
+    render: s => s.completion?.avg_moving_speed_mph ? (U.metric?(s.completion.avg_moving_speed_mph*1.60934).toFixed(1):s.completion.avg_moving_speed_mph.toFixed(1)) : '—'},
+  {id:'hr',       label:'HR',      sort:'hr',       w:'44px', align:'right',
+    render: s => s.completion?.avg_hr ? Math.round(s.completion.avg_hr) : '—'},
+  {id:'calories', label:'Cal',     sort:'calories', w:'48px', align:'right',
+    render: s => s.completion?.calories ? Math.round(s.completion.calories) : '—'},
+];
+const STAGE_DEFAULT_COL_IDS = ['name','dist','climb','date','duration'];
+const STAGE_SORT_KEY = {
+  name:     s => (s.name||'').toLowerCase(),
+  dist:     s => s.distance_mi || 0,
+  climb:    s => s.climb_ft || 0,
+  date:     s => s.completion ? s.completion.date || '' : '',
+  moving_s: s => s.completion?.moving_s || 0,
+  speed:    s => s.completion?.avg_moving_speed_mph || 0,
+  hr:       s => s.completion?.avg_hr || 0,
+  calories: s => s.completion?.calories || 0,
+  stage_num:s => s.stage_num || 0,
+};
+
+function loadStageColPrefs() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('ascent-stage-cols') || 'null');
+    if(saved && Array.isArray(saved) && saved.length >= 1 && saved[0] === 'name') return saved;
+  } catch(e) {}
+  return STAGE_DEFAULT_COL_IDS.slice();
+}
+function saveStageColPrefs(ids) { try { localStorage.setItem('ascent-stage-cols', JSON.stringify(ids)); } catch(e) {} }
+function getActiveStageCols() { return stageColIds.map(id => STAGE_ALL_COLS.find(c => c.id === id)).filter(Boolean); }
+function buildStageColsTemplate() { return getActiveStageCols().map(c => c.w).join(' '); }
+
+let stageColIds  = loadStageColPrefs();
+let stageSortBy  = 'stage_num';
+let stageSortDir = 'asc';
+
 // ── State ─────────────────────────────────────────────────────────────────────
 const _currentUserId  = {{ current_user_id | tojson }};
 const _hasAnthropicKey = {{ has_anthropic_key | tojson }};
@@ -777,6 +844,7 @@ async function onTourSelect(id) {
   document.getElementById('map-and-detail').style.display = 'flex';
   setTimeout(() => { tourMap && tourMap.invalidateSize(); _syncStageListHeight(); }, 80);
 
+  buildStageColHead();
   renderStageList();
   await drawRoutes(null);
   renderDetail(null);
@@ -809,32 +877,107 @@ function closeTourDeleteModal() {
   document.getElementById('tour-delete-modal').style.display = 'none';
 }
 
-// ── Sidebar stage list (click only) ──────────────────────────────────────────
+// ── Stage table column header, picker, and row rendering ─────────────────────
+function buildStageColHead() {
+  const head = document.getElementById('stage-col-head');
+  if(!head) return;
+  const cols = getActiveStageCols();
+  const tpl  = buildStageColsTemplate();
+  head.style.setProperty('--stage-cols', tpl);
+  head.innerHTML = '';
+  cols.forEach(col => {
+    const isSorted = stageSortBy === col.sort && col.sort;
+    const div = document.createElement('div');
+    div.className = 'stch' + (isSorted ? ' sorted' : '') + (!col.sort ? ' nosort' : '');
+    div.style.justifyContent = col.align === 'right' ? 'flex-end' : '';
+    const unitSuffix = col.unitLabel ? ` <span style="font-size:8px;font-weight:400;opacity:.6;text-transform:none;letter-spacing:0">(${col.unitLabel()})</span>` : '';
+    div.innerHTML = col.label + unitSuffix + (isSorted ? ` <span class="sort-arr">${stageSortDir==='desc'?'↓':'↑'}</span>` : '');
+    if(col.sort) {
+      div.addEventListener('click', () => {
+        if(stageSortBy === col.sort) stageSortDir = stageSortDir === 'desc' ? 'asc' : 'desc';
+        else { stageSortBy = col.sort; stageSortDir = 'asc'; }
+        buildStageColHead();
+        renderStageList();
+      });
+    }
+    head.appendChild(div);
+  });
+}
+
+function buildStageColPicker() {
+  const picker = document.getElementById('stage-col-picker');
+  picker.innerHTML = '<div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:2px 8px 6px">Visible Columns</div>';
+  STAGE_ALL_COLS.forEach(col => {
+    if(col.id === 'name') return; // always shown
+    const checked = stageColIds.includes(col.id);
+    const item = document.createElement('label');
+    item.className = 'cp-item';
+    item.innerHTML = `<input type="checkbox" ${checked?'checked':''} data-col-id="${col.id}"> ${col.label}`;
+    item.querySelector('input').addEventListener('change', e => {
+      if(e.target.checked) {
+        if(!stageColIds.includes(col.id)) {
+          const defaultPos = STAGE_DEFAULT_COL_IDS.indexOf(col.id);
+          if(defaultPos <= 0) { stageColIds.push(col.id); }
+          else {
+            let insertAfter = 0;
+            for(let p = defaultPos - 1; p >= 0; p--) {
+              const idx = stageColIds.indexOf(STAGE_DEFAULT_COL_IDS[p]);
+              if(idx >= 0) { insertAfter = idx; break; }
+            }
+            stageColIds.splice(insertAfter + 1, 0, col.id);
+          }
+        }
+      } else {
+        if(stageColIds.filter(id => id !== 'name').length <= 1) { e.target.checked = true; return; }
+        stageColIds = stageColIds.filter(id => id !== col.id);
+      }
+      saveStageColPrefs(stageColIds);
+      buildStageColHead();
+      renderStageList();
+    });
+    picker.appendChild(item);
+  });
+}
+
+function toggleStageColPicker(e) {
+  e.stopPropagation();
+  const picker = document.getElementById('stage-col-picker');
+  if(!picker.classList.contains('open')) buildStageColPicker();
+  picker.classList.toggle('open');
+}
+
+document.addEventListener('click', e => {
+  if(!e.target.closest('#stage-col-head-wrap'))
+    document.getElementById('stage-col-picker')?.classList.remove('open');
+});
+
+function sortedStages() {
+  const list = tourStages.slice();
+  const keyFn = STAGE_SORT_KEY[stageSortBy] || STAGE_SORT_KEY.stage_num;
+  const dir = stageSortDir === 'desc' ? -1 : 1;
+  list.sort((a, b) => { const ka=keyFn(a), kb=keyFn(b); return ka<kb?-dir:ka>kb?dir:0; });
+  return list;
+}
+
 function renderStageList() {
   const list = document.getElementById('stage-list');
   list.innerHTML = '';
   document.getElementById('sidebar-empty').style.display = tourStages.length ? 'none' : '';
 
-  tourStages.forEach((s, idx) => {
-    const item = document.createElement('div');
-    item.className = 'stage-item' + (String(s.id)===String(selectedId) ? ' active' : '');
-    item.dataset.id = s.id;
+  const cols = getActiveStageCols();
+  const tpl  = buildStageColsTemplate();
 
-    const dotColor = stageColor(s);
-    const statusHtml = s.completion
-      ? `<div class="stage-status"><div class="stage-status-done">✓</div><div class="stage-status-date">${s.completion.date}</div></div>`
-      : `<div class="stage-status"><div class="stage-status-none">—</div></div>`;
-
-    item.innerHTML = `
-      <span class="stage-dot" style="background:${dotColor}"></span>
-      <div class="stage-item-body">
-        <div class="stage-item-name">${esc(s.name)}</div>
-        <div class="stage-item-sub">${U.distS(s.distance_mi)} · ${U.climbS(s.climb_ft)} climb</div>
-      </div>
-      ${statusHtml}`;
-
-    item.addEventListener('click', () => selectStage(String(s.id)));
-    list.appendChild(item);
+  sortedStages().forEach(s => {
+    const row = document.createElement('div');
+    row.className = 'stage-row' + (String(s.id)===String(selectedId) ? ' active' : '');
+    row.dataset.id = s.id;
+    row.style.setProperty('--stage-cols', tpl);
+    row.innerHTML = cols.map(col => {
+      if(col.titleCell) return `<div class="st-name-cell">${col.render(s)}</div>`;
+      return `<div class="st-cell${col.align==='right'?' st-cell-right':''}">${col.render(s)}</div>`;
+    }).join('');
+    row.addEventListener('click', () => selectStage(String(s.id)));
+    list.appendChild(row);
   });
 }
 
@@ -2331,6 +2474,7 @@ document.addEventListener('DOMContentLoaded', () => {
 (async () => {
   await U.load();
   initMap();
+  buildStageColHead();
   _syncStageListHeight();
   await loadUsers();
   await loadTours();

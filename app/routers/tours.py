@@ -57,6 +57,28 @@ def _ensure_tables(con):
     except Exception:
         pass
     con.execute("""
+        CREATE TABLE IF NOT EXISTS tour_shares (
+            tour_id  INTEGER NOT NULL,
+            user_id  INTEGER NOT NULL,
+            token    TEXT    NOT NULL,
+            PRIMARY KEY (tour_id, user_id)
+        )
+    """)
+    try:
+        con.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_tour_shares_token ON tour_shares(token)")
+    except Exception:
+        pass
+    # Migrate existing share_token / share_user_id rows into tour_shares
+    try:
+        con.execute("""
+            INSERT OR IGNORE INTO tour_shares (tour_id, user_id, token)
+            SELECT id, share_user_id, share_token FROM tours
+            WHERE share_token IS NOT NULL AND share_user_id IS NOT NULL
+        """)
+        con.commit()
+    except Exception:
+        pass
+    con.execute("""
         CREATE TABLE IF NOT EXISTS tour_stage_ai_advice (
             stage_id INTEGER NOT NULL,
             user_id  INTEGER NOT NULL,
@@ -456,11 +478,15 @@ async def get_tour(tour_id: int, request: Request, match_user_id: Optional[int] 
         _ensure_tables(con)
 
         row = con.execute(
-            "SELECT id, created_by, title, start_date, end_date, shared, share_token FROM tours WHERE id=?",
+            "SELECT id, created_by, title, start_date, end_date, shared FROM tours WHERE id=?",
             (tour_id,),
         ).fetchone()
         if not row:
             raise HTTPException(404, "Tour not found")
+
+        share_row = con.execute(
+            "SELECT token FROM tour_shares WHERE tour_id=? AND user_id=?", (tour_id, uid)
+        ).fetchone()
 
         tour = {
             "id":          row[0],
@@ -470,7 +496,7 @@ async def get_tour(tour_id: int, request: Request, match_user_id: Optional[int] 
             "end_date":    row[4],
             "shared":      bool(row[5]) if row[5] is not None else True,
             "is_mine":     row[1] == uid,
-            "share_token": row[6],
+            "share_token": share_row[0] if share_row else None,
         }
 
         stage_rows = con.execute(
@@ -983,7 +1009,7 @@ async def get_stage_ai_advice(
             raise HTTPException(404, "Stage not found")
 
         all_stage_rows = con.execute(
-            "SELECT id, stage_num, name, distance_mi, climb_ft "
+            "SELECT id, stage_num, name, distance_mi, climb_ft, start_lat, start_lon "
             "FROM tour_stages WHERE tour_id=? ORDER BY stage_num",
             (tour_id,),
         ).fetchall()
@@ -1004,7 +1030,8 @@ async def get_stage_ai_advice(
         con_cache.close()
 
     stages = [
-        {"id": r[0], "stage_num": r[1], "name": r[2], "distance_mi": r[3], "climb_ft": r[4]}
+        {"id": r[0], "stage_num": r[1], "name": r[2], "distance_mi": r[3], "climb_ft": r[4],
+         "start_lat": r[5], "start_lon": r[6]}
         for r in all_stage_rows
     ]
     target = next(s for s in stages if s["id"] == target_row[0])
@@ -1190,7 +1217,7 @@ async def get_stage_ai_summary(
 def _resolve_share_token(con, token: str):
     """Return (tour_id, share_user_id) for a valid token, or raise 404."""
     row = con.execute(
-        "SELECT id, share_user_id FROM tours WHERE share_token=?", (token,)
+        "SELECT tour_id, user_id FROM tour_shares WHERE token=?", (token,)
     ).fetchone()
     if not row:
         raise HTTPException(404, "Share link not found or revoked")
@@ -1199,7 +1226,7 @@ def _resolve_share_token(con, token: str):
 
 @router.post("/tours/{tour_id}/publish")
 async def publish_tour(tour_id: int, request: Request):
-    """Generate (or return existing) share token for a tour."""
+    """Generate (or return existing) share token for this user on a tour."""
     import secrets
     uid = get_session_user_id(request)
     if uid is None:
@@ -1208,16 +1235,17 @@ async def publish_tour(tour_id: int, request: Request):
     try:
         _ensure_tables(con)
         row = con.execute(
-            "SELECT created_by, share_token FROM tours WHERE id=?", (tour_id,)
+            "SELECT id FROM tours WHERE id=? AND (created_by=? OR shared=1)", (tour_id, uid)
         ).fetchone()
         if not row:
             raise HTTPException(404, "Tour not found")
-        if row[0] != uid:
-            raise HTTPException(403, "Not your tour")
-        token = row[1] or secrets.token_hex(20)
+        existing = con.execute(
+            "SELECT token FROM tour_shares WHERE tour_id=? AND user_id=?", (tour_id, uid)
+        ).fetchone()
+        token = existing[0] if existing else secrets.token_hex(20)
         con.execute(
-            "UPDATE tours SET share_token=?, share_user_id=? WHERE id=?",
-            (token, uid, tour_id),
+            "INSERT OR REPLACE INTO tour_shares (tour_id, user_id, token) VALUES (?,?,?)",
+            (tour_id, uid, token),
         )
         con.commit()
         return JSONResponse({"token": token})
@@ -1227,20 +1255,15 @@ async def publish_tour(tour_id: int, request: Request):
 
 @router.delete("/tours/{tour_id}/publish")
 async def revoke_tour_publish(tour_id: int, request: Request):
-    """Revoke the share token for a tour."""
+    """Revoke this user's share token for a tour."""
     uid = get_session_user_id(request)
     if uid is None:
         raise HTTPException(401, "Not authenticated")
     con = sqlite3.connect(db_getter().path, timeout=10)
     try:
         _ensure_tables(con)
-        row = con.execute("SELECT created_by FROM tours WHERE id=?", (tour_id,)).fetchone()
-        if not row:
-            raise HTTPException(404, "Tour not found")
-        if row[0] != uid:
-            raise HTTPException(403, "Not your tour")
         con.execute(
-            "UPDATE tours SET share_token=NULL, share_user_id=NULL WHERE id=?", (tour_id,)
+            "DELETE FROM tour_shares WHERE tour_id=? AND user_id=?", (tour_id, uid)
         )
         con.commit()
         return JSONResponse({"ok": True})
@@ -1254,13 +1277,13 @@ async def tour_share_page(token: str, request: Request):
     con = sqlite3.connect(db_getter().path, timeout=10)
     try:
         _ensure_tables(con)
-        tour_row = con.execute(
-            "SELECT id, title, start_date, end_date, share_user_id FROM tours WHERE share_token=?",
+        share_row = con.execute(
+            "SELECT ts.tour_id, ts.user_id, t.title FROM tour_shares ts JOIN tours t ON t.id=ts.tour_id WHERE ts.token=?",
             (token,),
         ).fetchone()
-        if not tour_row:
+        if not share_row:
             raise HTTPException(404, "Share link not found or revoked")
-        tour_id, title, start_date, end_date, share_uid = tour_row
+        tour_id, share_uid, title = share_row
         user_row = con.execute(
             "SELECT username FROM users WHERE id=?", (share_uid,)
         ).fetchone()
@@ -1283,7 +1306,8 @@ async def tour_share_data(token: str):
     try:
         _ensure_tables(con)
         tour_row = con.execute(
-            "SELECT id, title, start_date, end_date, share_user_id, ai_summary FROM tours WHERE share_token=?",
+            "SELECT t.id, t.title, t.start_date, t.end_date, ts.user_id, t.ai_summary "
+            "FROM tour_shares ts JOIN tours t ON t.id=ts.tour_id WHERE ts.token=?",
             (token,),
         ).fetchone()
         if not tour_row:
@@ -1329,7 +1353,7 @@ async def tour_share_points(token: str):
     try:
         _ensure_tables(con)
         tour_row = con.execute(
-            "SELECT id FROM tours WHERE share_token=?", (token,)
+            "SELECT tour_id FROM tour_shares WHERE token=?", (token,)
         ).fetchone()
         if not tour_row:
             raise HTTPException(404, "Share link not found or revoked")
@@ -1363,7 +1387,7 @@ async def tour_share_forecast(token: str, stage_id: int):
     try:
         _ensure_tables(con)
         tour_row = con.execute(
-            "SELECT id FROM tours WHERE share_token=?", (token,)
+            "SELECT tour_id FROM tour_shares WHERE token=?", (token,)
         ).fetchone()
         if not tour_row:
             raise HTTPException(404, "Share link not found or revoked")
@@ -1493,7 +1517,7 @@ async def tour_share_stage_export_gpx(token: str, stage_id: int):
     try:
         _ensure_tables(con)
         tour_row = con.execute(
-            "SELECT id FROM tours WHERE share_token=?", (token,)
+            "SELECT tour_id FROM tour_shares WHERE token=?", (token,)
         ).fetchone()
         if not tour_row:
             raise HTTPException(404, "Share link not found or revoked")
@@ -1531,11 +1555,11 @@ async def tour_share_activity(token: str, activity_id: int):
     try:
         _ensure_tables(con)
         tour_row = con.execute(
-            "SELECT id, share_user_id FROM tours WHERE share_token=?", (token,)
+            "SELECT ts.tour_id, ts.user_id FROM tour_shares ts WHERE ts.token=?", (token,)
         ).fetchone()
         if not tour_row:
             raise HTTPException(404, "Share link not found or revoked")
-        share_uid = tour_row["share_user_id"]
+        share_uid = tour_row["user_id"]
 
         act_row = con.execute(
             "SELECT * FROM activities WHERE id=? AND user_id=?", (activity_id, share_uid)
@@ -1572,13 +1596,112 @@ async def tour_share_activity(token: str, activity_id: int):
         con.close()
 
 
+@router.post("/tours/share/{token}/activities/{activity_id}/sync")
+async def tour_share_activity_sync(token: str, activity_id: int):
+    """Public endpoint — re-sync a completed stage activity from Strava."""
+    import httpx
+    from app.strava_importer import apply_strava_update
+    from app.routers.photos import resolve_photos
+    from app.routers.strava import get_fresh_token as _gft
+
+    con = sqlite3.connect(db_getter().path, timeout=10)
+    try:
+        _ensure_tables(con)
+        share_row = con.execute(
+            "SELECT tour_id, user_id FROM tour_shares WHERE token=?", (token,)
+        ).fetchone()
+        if not share_row:
+            raise HTTPException(404, "Share link not found or revoked")
+        share_uid = share_row[1]
+    finally:
+        con.close()
+
+    db = db_getter()
+    act = db.get_activity(activity_id)
+    if not act:
+        raise HTTPException(404, "Activity not found")
+    if act.get("user_id") != share_uid:
+        raise HTTPException(403, "Activity not accessible")
+
+    strava_id = act.get("strava_activity_id")
+    if not strava_id:
+        raise HTTPException(400, "Activity has no Strava ID")
+
+    strava_token = await _gft(user_id=share_uid)
+    if not strava_token:
+        raise HTTPException(503, "Share user not connected to Strava")
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.get(
+            f"https://www.strava.com/api/v3/activities/{strava_id}",
+            headers={"Authorization": f"Bearer {strava_token}"},
+            params={"include_all_efforts": "false"},
+        )
+        if resp.status_code == 404:
+            raise HTTPException(404, "Activity not found on Strava")
+        if resp.status_code == 401:
+            raise HTTPException(401, "Strava token invalid")
+        resp.raise_for_status()
+        sa = resp.json()
+
+    import sqlite3 as _sq2, os as _os
+    db_path = _os.environ.get("ASCENT_DB_PATH", "")
+    con2 = _sq2.connect(db_path, timeout=30)
+    try:
+        apply_strava_update(con2, activity_id, sa)
+        con2.commit()
+    finally:
+        con2.close()
+
+    await resolve_photos(activity_id, force=True)
+
+    # Return in the same format as tour_share_activity
+    import sqlite3 as _sq3
+    con3 = _sq3.connect(db_getter().path, timeout=10)
+    con3.row_factory = _sq3.Row
+    try:
+        act_row = con3.execute(
+            "SELECT * FROM activities WHERE id=? AND user_id=?", (activity_id, share_uid)
+        ).fetchone()
+        if not act_row:
+            raise HTTPException(404, "Activity not found after sync")
+        act2 = build_activity(act_row)
+    finally:
+        con3.close()
+
+    return JSONResponse({
+        "id":                    act2["id"],
+        "name":                  act2.get("name") or "",
+        "notes":                 act2.get("notes") or "",
+        "start_time":            act2.get("start_time"),
+        "activity_type":         act2.get("activity_type") or "",
+        "equipment":             act2.get("equipment") or "",
+        "strava_activity_id":    act2.get("strava_activity_id"),
+        "perceived_exertion":    act2.get("perceived_exertion"),
+        "distance_mi":           act2.get("distance_mi", 0),
+        "total_climb_ft":        act2.get("total_climb_ft", 0),
+        "total_descent_ft":      act2.get("total_descent_ft", 0),
+        "duration":              act2.get("duration", 0),
+        "active_time":           act2.get("active_time", 0),
+        "avg_speed_mph":         act2.get("avg_speed_mph", 0),
+        "avg_overall_speed_mph": act2.get("avg_overall_speed_mph", 0),
+        "avg_heartrate":         act2.get("avg_heartrate", 0),
+        "max_heartrate":         act2.get("max_heartrate", 0),
+        "calories":              act2.get("calories", 0),
+        "avg_cadence":           act2.get("avg_cadence", 0),
+        "avg_power":             act2.get("avg_power", 0),
+        "max_power":             act2.get("max_power", 0),
+        "suffer_score":          act2.get("suffer_score", 0),
+    })
+
+
 @router.get("/tours/share/{token}/stages/{stage_id}/ai-summary")
 async def tour_share_stage_ai_summary(token: str, stage_id: int):
     """Public endpoint — cached AI stage summary (read-only, no generation)."""
     con = sqlite3.connect(db_getter().path, timeout=10)
     try:
         _ensure_tables(con)
-        tour_row = con.execute("SELECT id FROM tours WHERE share_token=?", (token,)).fetchone()
+        tour_row = con.execute("SELECT tour_id FROM tour_shares WHERE token=?", (token,)).fetchone()
         if not tour_row:
             raise HTTPException(404, "Share link not found or revoked")
         stage_row = con.execute(

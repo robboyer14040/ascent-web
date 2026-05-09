@@ -440,6 +440,31 @@ function renderStageList() {
   }).join('');
 }
 
+// ── Strava sync for completed stage ───────────────────────────────────────────
+let _syncActId = null, _syncStageId = null;
+
+async function doShareSync() {
+  if(!_syncActId || !_syncStageId) return;
+  const btn = document.getElementById('share-sync-btn');
+  if(btn) { btn.disabled = true; btn.textContent = '↻ Syncing…'; }
+  try {
+    const r = await fetch(`/tours/share/${TOKEN}/activities/${_syncActId}/sync`, {method:'POST'});
+    if(!r.ok) {
+      if(btn) { btn.disabled=false; btn.textContent='↻ Sync'; }
+      return;
+    }
+    await renderDetail(_syncStageId);
+    const nb = document.getElementById('share-sync-btn');
+    if(nb) {
+      nb.textContent='✓ Synced'; nb.style.color='#30d158';
+      setTimeout(()=>{ nb.textContent='↻ Sync'; nb.style.color=''; }, 2500);
+    }
+  } catch(e) {
+    const b = document.getElementById('share-sync-btn');
+    if(b) { b.disabled=false; b.textContent='↻ Sync'; }
+  }
+}
+
 // ── Stage selection ───────────────────────────────────────────────────────────
 function selectStage(id) {
   selectedId = (String(id)===String(selectedId)) ? null : id;
@@ -579,6 +604,9 @@ async function renderDetail(activeId) {
       .then(act=>{
         const body=document.getElementById('act-detail-body'); if(!body) return;
 
+        // Register for sync
+        _syncActId=act.id; _syncStageId=activeId;
+
         function altPaceStr(mph,perMile){
           if(!mph||mph<=0) return null;
           const mins=perMile?60/mph:60/(mph*1.60934), m=Math.floor(mins), s=Math.round((mins-m)*60);
@@ -612,11 +640,14 @@ async function renderDetail(activeId) {
         const stravaLink=act.strava_activity_id
           ?`<a href="https://www.strava.com/activities/${act.strava_activity_id}" target="_blank" style="font-size:11px;font-weight:600;color:#fc4c02;border:1px solid rgba(252,76,2,.4);border-radius:4px;padding:3px 8px;text-decoration:none;line-height:1.4;flex-shrink:0">View on Strava ↗</a>`
           :'';
+        const syncBtn=act.strava_activity_id
+          ?`<button id="share-sync-btn" onclick="doShareSync()" style="font-size:11px;font-weight:600;color:var(--muted);border:1px solid var(--border2);border-radius:4px;padding:3px 8px;background:none;cursor:pointer;line-height:1.4;flex-shrink:0">↻ Sync</button>`
+          :'';
 
         let aHtml='';
         aHtml+=`<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:8px">
           <div style="font-size:14px;font-weight:600;line-height:1.3">${esc(act.name||'(unnamed)')}</div>
-          ${stravaLink?`<div>${stravaLink}</div>`:''}
+          <div style="display:flex;gap:6px;flex-shrink:0">${syncBtn}${stravaLink}</div>
         </div>`;
         const ts=act.start_time?fmtDate(act.start_time):'';
         aHtml+=`<div style="display:grid;grid-template-columns:auto 1fr;column-gap:20px;row-gap:3px;margin-bottom:7px;align-items:baseline">
@@ -646,6 +677,9 @@ async function renderDetail(activeId) {
 
         // Async: photos (flex-wrap, no autoplay)
         loadSharePhotos(act.id);
+
+        // Auto-sync if Strava description or photos not yet synced
+        if(act.strava_activity_id && !act.notes) doShareSync();
       }).catch(()=>_renderActFallback(c));
   }
 }

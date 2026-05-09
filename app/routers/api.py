@@ -707,11 +707,7 @@ async def resync_activity(activity_id: int, request: Request):
     Returns the refreshed activity dict (same shape as the activity list).
     """
     import sqlite3, time, httpx
-    from app.strava_importer import (
-        build_attributes_json, _decode_polyline_bbox,
-        iso_to_unix, parse_tz_name, parse_tz_offset,
-        _f, M_TO_MI, M_TO_FT, MPS_TO_MPH,
-    )
+    from app.strava_importer import apply_strava_update
     from app.routers.photos import resolve_photos
 
     db = db_getter()
@@ -761,92 +757,10 @@ async def resync_activity(activity_id: int, request: Request):
         resp.raise_for_status()
         sa = resp.json()
 
-    # Build updated fields using the same logic as insert_activity_summary
-    # Full activity detail includes a `gear` object with the name directly
-    gear_name  = (sa.get("gear") or {}).get("name") or None
-    attrs_json = build_attributes_json(sa, gear_name=gear_name)
-    dist_mi         = _f(sa.get("distance"), 0) * M_TO_MI
-    start_unix      = iso_to_unix(sa.get("start_date"))
-    src_max_speed   = _f(sa.get("max_speed"),    0) * MPS_TO_MPH
-    src_avg_hr      = _f(sa.get("average_heartrate"))
-    src_max_hr      = _f(sa.get("max_heartrate"))
-    src_avg_temp_f  = (_f(sa.get("average_temp"), 0) * 9/5 + 32) \
-                      if sa.get("average_temp") is not None else None
-    src_max_elev_ft = _f(sa.get("elev_high"), 0) * M_TO_FT
-    src_min_elev_ft = _f(sa.get("elev_low"),  0) * M_TO_FT
-    src_avg_power   = _f(sa.get("weighted_average_watts") or sa.get("average_watts"))
-    src_max_power   = _f(sa.get("max_watts"))
-    src_avg_cad     = _f(sa.get("average_cadence"))
-    src_total_climb = _f(sa.get("total_elevation_gain"), 0) * M_TO_FT
-    src_kj          = _f(sa.get("kilojoules"))
-    src_elapsed     = _f(sa.get("elapsed_time"))
-    src_moving      = _f(sa.get("moving_time"))
-
-    start_latlng = sa.get("start_latlng") or []
-    start_lat = float(start_latlng[0]) if len(start_latlng) >= 2 else None
-    start_lon = float(start_latlng[1]) if len(start_latlng) >= 2 else None
-
-    polyline = (sa.get("map") or {}).get("summary_polyline") or ""
-    bbox = _decode_polyline_bbox(polyline)
-    map_min_lat, map_max_lat, map_min_lon, map_max_lon = bbox if bbox else (None, None, None, None)
-
     db_path = os.environ.get("ASCENT_DB_PATH", "")
     con = sqlite3.connect(db_path, timeout=30)
     try:
-        src_pe = sa.get("perceived_exertion")
-        pe_val = int(src_pe) if src_pe is not None else None
-        con.execute("""
-            UPDATE activities SET
-                name                    = ?,
-                creation_time_s         = COALESCE(creation_time_s, ?),
-                distance_mi             = ?,
-                attributes_json         = ?,
-                src_distance            = ?,
-                src_max_speed           = ?,
-                src_avg_heartrate       = ?,
-                src_max_heartrate       = ?,
-                src_avg_temperature     = ?,
-                src_max_elevation       = ?,
-                src_min_elevation       = ?,
-                src_avg_power           = ?,
-                src_max_power           = ?,
-                src_avg_cadence         = ?,
-                src_total_climb         = ?,
-                src_kilojoules          = ?,
-                src_elapsed_time_s      = ?,
-                src_moving_time_s       = ?,
-                time_zone               = ?,
-                seconds_from_gmt_at_sync= ?,
-                start_lat               = ?,
-                start_lon               = ?,
-                map_min_lat             = ?,
-                map_max_lat             = ?,
-                map_min_lon             = ?,
-                map_max_lon             = ?,
-                strava_visibility       = ?,
-                perceived_exertion      = COALESCE(?, perceived_exertion),
-                local_media_items_json  = NULL,
-                local_video_urls_json   = NULL
-            WHERE id = ?
-        """, (
-            sa.get("name", ""),
-            start_unix,
-            dist_mi,
-            attrs_json,
-            dist_mi, src_max_speed,
-            src_avg_hr, src_max_hr,
-            src_avg_temp_f,
-            src_max_elev_ft, src_min_elev_ft,
-            src_avg_power, src_max_power,
-            src_avg_cad, src_total_climb,
-            src_kj, src_elapsed, src_moving,
-            parse_tz_name(sa), parse_tz_offset(sa),
-            start_lat, start_lon,
-            map_min_lat, map_max_lat, map_min_lon, map_max_lon,
-            sa.get("visibility"),
-            pe_val,
-            activity_id,
-        ))
+        apply_strava_update(con, activity_id, sa)
         con.commit()
     finally:
         con.close()
