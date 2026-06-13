@@ -31,7 +31,14 @@
       "WebFetch(domain:www.graphhopper.com)",
       "Bash(wc:*)",
       "Bash(ls:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(ASCENT_DB_PATH=/tmp/test.db SECRET_KEY=testkey venv/bin/python:*)",
+      "Bash(lsof:*)",
+      "Bash(curl:*)",
+      "WebFetch(domain:dgtzuqphqg23d.cloudfront.net)",
+      "Bash(uvicorn:*)",
+      "Bash(/usr/local/bin/python3.12:*)",
+      "Bash(pip3.11 show:*)"
     ]
   }
 }

@@ -57,9 +57,14 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
 .sb-btn.ghost:hover{background:var(--surface2)}
 .sb-btn:disabled{opacity:0.35;cursor:not-allowed;pointer-events:none}
 #stage-list-wrap{flex:1;overflow:hidden;display:flex;flex-direction:column;position:relative}
-#stage-h-scroll{flex:1;overflow:auto;min-height:0}
+#stage-h-scroll{flex:1;overflow:auto;min-height:0;scrollbar-width:none}
+#stage-h-scroll::-webkit-scrollbar{display:none}
 /* ── Stage column header ── */
 #stage-col-head{position:sticky;top:0;z-index:10;display:grid;grid-template-columns:var(--stage-cols);background:var(--surface);border-bottom:1px solid var(--border);min-width:var(--stage-min-w,0)}
+#stage-list-v-scroll{}
+#stage-hscroll-track{height:8px;background:var(--surface);border-top:1px solid var(--border);flex-shrink:0;position:relative;display:none}
+#stage-hscroll-thumb{position:absolute;top:1px;height:6px;border-radius:3px;background:var(--border2);cursor:pointer;min-width:20px}
+#stage-hscroll-thumb:hover,#stage-hscroll-thumb.dragging{background:var(--muted2)}
 #stage-col-gear-btn{position:absolute;top:0;right:0;z-index:20;padding:4px 6px;font-size:15px;line-height:1;color:var(--muted);background:var(--surface);border-left:1px solid var(--border);border-bottom:1px solid var(--border)}
 #stage-col-gear-btn:hover{color:var(--text)}
 #stage-col-picker{display:none;position:fixed;z-index:1000;background:var(--surface);border:1px solid var(--border2);border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,.5);padding:8px;max-height:280px;overflow-y:auto;min-width:160px}
@@ -67,13 +72,16 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
 .cp-item{display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:5px;cursor:pointer;font-size:12.5px;color:var(--text);user-select:none}
 .cp-item:hover{background:var(--surface2)}
 .cp-item input{accent-color:#f97316;cursor:pointer;width:13px;height:13px}
-#stage-list{min-width:var(--stage-min-w,0)}
-.stch{padding:5px 4px;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;cursor:pointer;user-select:none;display:flex;align-items:center;gap:2px;white-space:nowrap;overflow:hidden}
+#stage-list{}
+.stch{position:relative;padding:10px 4px 4px;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;cursor:pointer;user-select:none;display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-start;gap:2px;white-space:nowrap;overflow:visible;min-height:38px}
 .stch:hover{color:var(--text)}
 .stch.sorted{color:var(--accent)}
 .stch.nosort{cursor:default}
 .stch.dragging-col{opacity:.4;cursor:grabbing}
 .stch.drag-over{border-left:2px solid #f97316}
+.stch-sep{position:absolute;right:-10px;top:0;bottom:0;width:20px;cursor:col-resize;touch-action:none;z-index:15;display:flex;align-items:center;justify-content:center}
+.stch-sep::before{content:'';width:4px;height:calc(100% - 10px);background:var(--border2);border-radius:2px;pointer-events:none;transition:background .12s}
+.stch-sep:hover::before,.stch-sep.resizing::before{background:var(--accent)}
 .sort-arr{color:var(--accent);font-size:10px}
 .stage-row{display:grid;grid-template-columns:var(--stage-cols);border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer;align-items:center;height:34px;min-width:var(--stage-min-w,0)}
 .stage-row:hover{background:rgba(255,255,255,.04)}
@@ -91,11 +99,22 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
 .map-style-btn{background:rgba(0,0,0,.6);color:#ccc;border:1px solid rgba(255,255,255,.15);border-radius:4px;padding:2px 7px;font-size:11px;cursor:pointer;backdrop-filter:blur(4px);transition:all .15s}
 .map-style-btn:hover{background:rgba(0,0,0,.8);color:#fff}
 .map-style-btn.active{background:#f97316;color:#fff;border-color:#f97316}
-#resize-handle{height:6px;background:var(--surface2);cursor:row-resize;flex-shrink:0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);transition:background .1s}
-#resize-handle:hover,#resize-handle.dragging{background:var(--accent);opacity:.5}
-#sidebar-resize{width:6px;flex-shrink:0;cursor:col-resize;background:var(--surface2);border-left:1px solid var(--border);transition:background .1s;z-index:10}
-#sidebar-resize:hover,#sidebar-resize.dragging{background:var(--accent);opacity:.5}
+#resize-handle{height:12px;background:var(--surface2);cursor:row-resize;flex-shrink:0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);transition:background .1s;position:relative}
+#resize-handle::after{content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:36px;height:3px;border-radius:2px;background:var(--muted2);pointer-events:none;transition:background .1s}
+#resize-handle:hover,#resize-handle.dragging{background:var(--border2)}
+#resize-handle:hover::after,#resize-handle.dragging::after{background:var(--accent)}
+#sidebar-resize{width:6px;background:transparent;cursor:col-resize;flex-shrink:0;transition:background .15s;touch-action:none;position:relative;border-left:1px solid var(--border);border-right:1px solid var(--border);z-index:10}
+#sidebar-resize:hover,#sidebar-resize.dragging{background:var(--accent)}
+#sidebar-resize::after{content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:2px;height:30px;border-radius:1px;background:var(--muted2);pointer-events:none}
+@media(pointer:coarse){
+  #sidebar-resize{width:13px;background:rgba(249,115,22,0.15)}
+  #sidebar-resize::after{width:3px;height:44px;background:#f97316;opacity:0.6}
+  #resize-handle{height:20px}
+}
 #stage-detail{flex:1;overflow-y:auto;padding:16px 20px;min-height:0}
+#mob-portrait-stats{display:none;flex-shrink:0}
+#mob-portrait-stats.stats-collapsed{display:none}
+#stats-toggle{display:none;position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#fff;padding:6px;line-height:1;font-size:20px;font-weight:700;z-index:1;text-shadow:0 1px 4px rgba(0,0,0,.6)}
 #main-empty{flex:1;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:13px;text-align:center;line-height:1.9;padding:32px}
 
 /* ── Detail content ── */
@@ -182,7 +201,10 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
 
 /* ── Mobile layout ─────────────────────────────────────────────────── */
 #mob-tour-header,#mob-tour-nav{display:none}
-@media(max-width:767px){
+/* max-width:767px catches phones in portrait + small phones in landscape.
+   The second condition catches large iPhones (≥12) in landscape where the
+   rotated width (≈844px) exceeds 767px but the height (≈390px) doesn't. */
+@media(max-width:767px), (max-height:500px) and (orientation:landscape) and (pointer:coarse){
   nav{display:none}
   #mob-tour-header{
     display:flex;align-items:center;gap:8px;
@@ -195,7 +217,6 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
     background:none;border:none;cursor:pointer;
     padding:8px 4px;margin-right:2px;line-height:1
   }
-  #view-all-btn{display:none!important}
   #sidebar-resize{display:none}
   #resize-handle{
     height:28px;display:flex;align-items:center;justify-content:center;cursor:row-resize
@@ -212,6 +233,7 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
 }
 /* ── Portrait: stacked column overview ── */
 @media(max-width:767px) and (orientation:portrait){
+  #view-all-btn{display:none!important}
   #page{
     display:flex;flex-direction:column;
     height:calc(100vh - 52px - env(safe-area-inset-bottom, 0px));margin-top:52px;
@@ -229,7 +251,7 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
   /* Stage list: position:fixed (like stage-detail in stage-view) so iOS scroll works.
      top/bottom set by JS via _syncStageListHeight(). */
   #stage-list-wrap{position:fixed;left:0;right:0;bottom:0;overflow:hidden;display:flex;flex-direction:column;background:var(--bg);z-index:5}
-  #stage-h-scroll{overflow:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain}
+  #stage-h-scroll{-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain}
   /* Stage detail is hidden in overview mode; shown in stage-view state */
   #stage-detail{display:none;padding:12px}
   /* Stage view: body gets .mob-stage-view when a stage is selected */
@@ -248,43 +270,37 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
   body.mob-stage-view .act-stats-row{flex-direction:column!important;overflow:visible!important;max-width:none!important;gap:8px!important}
   body.mob-stage-view .act-stats-row #ai-summary-chip{width:100%!important;max-height:none!important;order:-1}
   body.mob-stage-view .act-stats-row .stats-grid{width:100%;flex:none}
+  /* Portrait tour overview: show compact stats between map and stage list */
+  #mob-portrait-stats{display:block;padding:8px;overflow-x:auto;border-bottom:1px solid var(--border)}
+  body.mob-stage-view #mob-portrait-stats{display:none}
+  #stats-toggle{display:block}
 }
-/* ── Landscape: preserve existing tab-based layout ── */
-@media(max-width:767px) and (orientation:landscape){
-  #mob-tour-nav{
-    display:flex;position:fixed;bottom:0;left:0;right:0;
-    height:58px;padding-bottom:env(safe-area-inset-bottom,0px);
-    background:var(--surface);border-top:1px solid var(--border);z-index:600
-  }
-  .mob-tour-tab{
-    flex:1;display:flex;flex-direction:column;align-items:center;
-    justify-content:center;gap:2px;font-size:10px;font-weight:500;
-    letter-spacing:.02em;text-transform:uppercase;
-    color:var(--muted);background:none;border:none;cursor:pointer;
-    text-decoration:none;padding:4px;-webkit-tap-highlight-color:transparent
-  }
-  .mob-tour-tab>span:first-child{font-size:22px;line-height:1.2}
-  .mob-tour-tab.active{color:var(--accent)}
+/* ── Landscape: sidebar always visible on left, map+detail on right ── */
+/* Use max-height (≤500px) not max-width: large iPhones are ~844px wide in landscape
+   but only ~390px tall, so height-based matching catches all phones correctly. */
+@media(max-height:500px) and (orientation:landscape) and (pointer:coarse){
+  #mob-tour-nav{display:none}
   #page{
-    flex-direction:row;height:calc(100vh - 52px - 58px - env(safe-area-inset-bottom,0px));
-    margin-top:52px;position:relative
+    display:flex;flex-direction:row;
+    height:calc(100vh - 52px - env(safe-area-inset-bottom,0px));
+    margin-top:52px;overflow:hidden
   }
   body.mob-landscape-stage #stage-detail{padding-bottom:calc(12px + env(safe-area-inset-bottom,0px))}
   #sidebar{
-    position:absolute;inset:0;width:100%;
-    display:none;z-index:2;flex-direction:column
+    width:200px;flex-shrink:0;
+    display:flex;flex-direction:column;
+    overflow:hidden;border-right:1px solid var(--border)
   }
-  #sidebar.mob-visible{display:flex}
+  /* stage-list-wrap: position:static so any portrait-set inline top is ignored */
+  #stage-list-wrap{position:static;flex:1;min-height:0}
+  /* Compact tour controls so stage list gets max vertical space */
+  #tour-controls{padding:6px;gap:4px}
+  #tour-btn-row{grid-template-columns:repeat(2,1fr);gap:4px}
   #main{
-    position:absolute;inset:0;
-    display:flex;flex-direction:column
+    flex:1;min-width:0;
+    display:flex;flex-direction:column;
+    overflow:hidden
   }
-  #main.mob-hidden{display:none}
-  /* Landscape stage selected: horizontal split — map left, detail right */
-  body.mob-landscape-stage #map-and-detail{flex-direction:row!important}
-  body.mob-landscape-stage #map{width:55%;height:100%!important;flex-shrink:0}
-  body.mob-landscape-stage #resize-handle{display:none}
-  body.mob-landscape-stage #stage-right-panel{width:45%;border-left:1px solid var(--border)}
 }
 </style>
 </head>
@@ -332,9 +348,12 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
     <div id="stage-list-wrap">
       <div id="stage-h-scroll">
         <div id="stage-col-head"></div>
-        <div id="stage-list"></div>
-        <div id="sidebar-empty" style="display:none">No stages defined.</div>
+        <div id="stage-list-v-scroll">
+          <div id="stage-list"></div>
+          <div id="sidebar-empty" style="display:none">No stages defined.</div>
+        </div>
       </div>
+      <div id="stage-hscroll-track"><div id="stage-hscroll-thumb"></div></div>
       <button id="stage-col-gear-btn" onclick="toggleStageColPicker(event)" title="Choose columns">⚙</button>
       <div id="stage-col-picker"></div>
     </div>
@@ -355,12 +374,15 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
         </div>
         <button onclick="resetMapZoom()" title="Reset zoom to fit route" style="position:absolute;bottom:24px;left:8px;z-index:500;background:rgba(0,0,0,.6);color:#ccc;border:1px solid rgba(255,255,255,.15);border-radius:4px;padding:3px 6px;font-size:13px;line-height:1;cursor:pointer;backdrop-filter:blur(4px)"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1 5V1h4M9 1h4v4M13 9v4H9M5 13H1V9"/></svg></button>
       </div>
-      <div id="resize-handle" title="Drag to resize map"></div>
+      <div id="resize-handle" title="Drag to resize map"><button id="stats-toggle" onmousedown="event.stopPropagation()" ontouchstart="event.stopPropagation()" onclick="toggleMobStats()" title="Toggle stats">▾</button></div>
+      <div id="mob-portrait-stats"></div>
       <div id="stage-right-panel" style="flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden">
-        <div id="stage-elev-strip" style="display:none;height:100px;flex-shrink:0;background:var(--bg);border-bottom:1px solid var(--border);position:relative">
+        <div id="stage-elev-strip" style="display:none;height:100px;flex-shrink:0;background:var(--bg);border-bottom:1px solid var(--border);position:relative;cursor:crosshair">
           <canvas id="stage-elev-canvas"></canvas>
           <div id="stage-elev-xhair" style="display:none;position:absolute;top:4px;bottom:0;width:1px;background:rgba(255,255,255,.45);pointer-events:none"></div>
           <div id="stage-elev-hud" style="display:none;position:absolute;top:4px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.62);color:#e2e8f0;font-size:10px;font-family:monospace;padding:2px 8px;border-radius:4px;white-space:nowrap;pointer-events:none;z-index:10"></div>
+          <div id="stage-elev-sel" style="display:none;position:absolute;top:0;bottom:0;background:rgba(249,115,22,.14);border-left:1px solid rgba(249,115,22,.55);border-right:1px solid rgba(249,115,22,.55);pointer-events:none"></div>
+          <button id="stage-elev-grades-btn" onmousedown="event.stopPropagation()" ontouchstart="event.stopPropagation();openGradesModal()" onclick="openGradesModal()" style="display:none;position:absolute;bottom:5px;font-size:11px;font-weight:600;background:var(--accent);color:#fff;border:none;border-radius:4px;padding:3px 9px;cursor:pointer;transform:translateX(-50%);z-index:20;white-space:nowrap;box-shadow:0 1px 6px rgba(0,0,0,.4)">Grades</button>
         </div>
         <div id="stage-detail"></div>
       </div>
@@ -448,9 +470,10 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
 
 <!-- ── Photo lightbox ── -->
 <div id="tour-lightbox" style="display:none;position:fixed;inset:0;background:var(--lb-bg);z-index:9999;align-items:center;justify-content:center;flex-direction:column" onclick="closeTourLightbox()">
-  <img id="tlb-img" alt="" style="max-width:90vw;max-height:82vh;object-fit:contain;border-radius:6px">
-  <video id="tlb-vid" controls playsinline style="display:none;max-width:90vw;max-height:82vh;border-radius:6px;background:#000" onclick="event.stopPropagation()"></video>
-  <div style="display:flex;align-items:center;gap:1rem;margin-top:12px" onclick="event.stopPropagation()">
+  <img id="tlb-img" alt="" style="max-width:90vw;max-height:80vh;object-fit:contain;border-radius:6px">
+  <video id="tlb-vid" controls playsinline style="display:none;max-width:90vw;max-height:80vh;border-radius:6px;background:#000" onclick="event.stopPropagation()"></video>
+  <div id="tlb-caption" style="display:none;color:var(--lb-text);font-size:13px;margin-top:10px;max-width:min(90vw,600px);text-align:center;line-height:1.4;opacity:.9" onclick="event.stopPropagation()"></div>
+  <div style="display:flex;align-items:center;gap:1rem;margin-top:10px" onclick="event.stopPropagation()">
     <button onclick="tourLbNav(-1)" style="background:var(--lb-btn);border:none;color:var(--lb-text);border-radius:6px;padding:6px 18px;cursor:pointer;font-size:18px">‹</button>
     <span id="tlb-count" style="color:var(--lb-muted);font-size:13px;min-width:50px;text-align:center"></span>
     <button onclick="tourLbNav(1)"  style="background:var(--lb-btn);border:none;color:var(--lb-text);border-radius:6px;padding:6px 18px;cursor:pointer;font-size:18px">›</button>
@@ -478,6 +501,20 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
     <div style="display:flex;gap:8px;justify-content:flex-end">
       <button onclick="closeStageSaveRouteDialog()" style="font-size:12px;font-weight:600;padding:5px 14px;border-radius:7px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);cursor:pointer">Cancel</button>
       <button id="sd-save-route-confirm" onclick="confirmStageSaveAsRoute()" style="font-size:12px;font-weight:600;padding:5px 14px;border-radius:7px;border:none;background:#f97316;color:#fff;cursor:pointer">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Grades modal ── -->
+<div id="grades-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:2000;align-items:center;justify-content:center" onclick="if(event.target===this)closeGradesModal()">
+  <div style="background:var(--surface);border:1px solid var(--border2);border-radius:12px;width:min(840px,96vw);display:flex;flex-direction:column;box-shadow:0 12px 60px rgba(0,0,0,.6)">
+    <div style="padding:14px 18px 10px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border);flex-shrink:0">
+      <div id="grades-modal-title" style="font-size:14px;font-weight:600;flex:1">Gradient Profile</div>
+      <button onclick="closeGradesModal()" style="background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;line-height:1;padding:0 4px">✕</button>
+    </div>
+    <div style="padding:16px 18px 14px;display:flex;flex-direction:column;gap:10px">
+      <div style="position:relative;height:220px"><canvas id="grades-canvas" style="display:block;width:100%;height:100%"></canvas></div>
+      <div id="grades-legend" style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center"></div>
     </div>
   </div>
 </div>
@@ -520,7 +557,7 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
 
 // ── Units ─────────────────────────────────────────────────────────────────────
 const U = {
-  metric: false,
+  metric: {{ ui_prefs.get('use_metric', false) | tojson }},
   distS:  (mi) => U.metric ? (+(mi*1.60934).toFixed(2))+' km' : (+mi).toFixed(1)+' mi',
   climbS: (ft) => U.metric ? Math.round(ft*0.3048)+' m' : Math.round(ft)+' ft',
   speedS: (mph)=> U.metric ? (+(mph*1.60934).toFixed(1))+' km/h' : (+mph).toFixed(1)+' mph',
@@ -592,12 +629,14 @@ const _endIcon = L.divIcon({
 const STAGE_ALL_COLS = [
   {id:'num',      label:'#',       sort:'stage_num', w:'28px', align:'right',
     render: s => s.stage_num},
-  {id:'name',     label:'Title',   sort:'name',     w:'minmax(60px,1fr)', align:'left',  titleCell:true,
-    render: s => `<span class="stage-dot" style="background:${stageColor(s)}"></span><span class="st-name-text">${esc(s.name)}</span>`},
+  {id:'name',     label:'Stage',   sort:'name',     w:'minmax(60px,1fr)', align:'left',  titleCell:true,
+    render: s => s.completion
+      ? `<span style="color:#22c55e;font-size:11px;line-height:1;flex-shrink:0;font-weight:700">✓</span><span class="st-name-text">${esc(s.name)}</span>`
+      : `<span class="stage-dot" style="background:${C.todo}"></span><span class="st-name-text">${esc(s.name)}</span>`},
   {id:'dist',     label:'Dist',    sort:'dist',     w:'54px', align:'right',
     unitLabel: () => U.metric ? 'km' : 'mi',
     render: s => s.distance_mi ? (U.metric ? (s.distance_mi*1.60934).toFixed(1) : s.distance_mi.toFixed(1)) : '—'},
-  {id:'climb',    label:'Climb',   sort:'climb',    w:'58px', align:'right',
+  {id:'climb',    label:'Ascent',  sort:'climb',    w:'58px', align:'right',
     unitLabel: () => U.metric ? 'm' : 'ft',
     render: s => s.climb_ft ? (U.metric ? Math.round(s.climb_ft*0.3048) : Math.round(s.climb_ft)) : '—'},
   {id:'date',     label:'Date',    sort:'date',     w:'68px', align:'right',
@@ -638,12 +677,19 @@ function loadStageColPrefs() {
 }
 function saveStageColPrefs(ids) { try { localStorage.setItem('ascent-stage-cols', JSON.stringify(ids)); } catch(e) {} }
 function getActiveStageCols() { return stageColIds.map(id => STAGE_ALL_COLS.find(c => c.id === id)).filter(Boolean); }
-function buildStageColsTemplate() { return getActiveStageCols().map(c => c.w).join(' '); }
+function buildStageColsTemplate() { return getActiveStageCols().map(c => stageColWidthOverrides[c.id] || c.w).join(' '); }
 
 let stageColIds  = loadStageColPrefs();
+let stageColWidthOverrides = {};
+try { stageColWidthOverrides = JSON.parse(localStorage.getItem('ascent-stage-col-widths') || '{}'); } catch(e) {}
+function saveStageColWidths() { try { localStorage.setItem('ascent-stage-col-widths', JSON.stringify(stageColWidthOverrides)); } catch(e) {} }
 let stageSortBy  = 'stage_num';
 let stageSortDir = 'asc';
 let _suppressStageColClick = false;
+let _stageTouchDragPending = null;  // { colId, div, startX, startY }
+let _stageTouchDrag = null;          // { colId, ghost, startX, origLeft, toId }
+let _stageHScrollbarDrag = false, _stageHScrollbarStartX = 0, _stageHScrollbarStartScroll = 0;
+const isStageColFixed = id => id === 'num' || id === 'name';
 
 // ── State ─────────────────────────────────────────────────────────────────────
 const _currentUserId  = {{ current_user_id | tojson }};
@@ -660,6 +706,10 @@ let _lastRouteBounds = null; // { bounds, opts } — used by resetMapZoom
 let _stageElevChart  = null; // Chart.js instance for the elevation strip
 let _stageElevRawPts = null; // [[lat,lon,alt_ft], ...] parallel to chartPts for hover lookup
 let _stageHoverDot   = null; // Leaflet marker for yellow hover dot on map
+let _elevSelIdxA     = null; // drag-selection start index into chartPts
+let _elevSelIdxB     = null; // drag-selection end index
+let _elevDragAnchorX = null; // clientX at mousedown
+let _elevDragging    = false;
 
 // Modal state
 let modalMode   = 'define';   // 'define' | 'edit'
@@ -685,36 +735,27 @@ function setTourMapStyle(styleKey) {
     b.classList.toggle('active', b.dataset.style === styleKey));
 }
 
-// ── Mobile tab switching (landscape only) ─────────────────────────────────────
+// ── Mobile tab switching (landscape: sidebar always visible, just invalidate map) ──
 function mobTourTab(tab) {
   if (!isMobTour() || isPortrait()) return;
-  const sidebar = document.getElementById('sidebar');
-  const main    = document.getElementById('main');
-  const btnStages = document.getElementById('mob-btn-stages');
-  const btnMap    = document.getElementById('mob-btn-map');
-  if (btnStages) btnStages.classList.toggle('active', tab==='stages');
-  if (btnMap)    btnMap.classList.toggle('active',    tab==='map');
-  if (tab === 'stages') {
-    sidebar.classList.add('mob-visible');
-    main.classList.add('mob-hidden');
-  } else {
-    sidebar.classList.remove('mob-visible');
-    main.classList.remove('mob-hidden');
-    if (tourMap) setTimeout(() => tourMap.invalidateSize(), 50);
-  }
+  if (tourMap) setTimeout(() => tourMap.invalidateSize(), 50);
 }
 
 // ── Map init + resize ─────────────────────────────────────────────────────────
-const isMobTour  = () => window.innerWidth <= 767;
+// Use min(width,height) so isMobTour stays true after rotating to landscape
+// (large iPhones go from 390px wide portrait to 844px wide landscape).
+const isMobTour  = () => Math.min(window.innerWidth, window.innerHeight) <= 767;
 const isPortrait = () => window.innerWidth < window.innerHeight;
-// Portrait has no bottom nav (52px header only); landscape keeps the 58px tab bar
-const tourChromeH = () => isMobTour() ? (isPortrait() ? 52 : 110) : 44;
+// Portrait has no bottom nav (52px header only); landscape also 52px (no tab bar)
+const tourChromeH = () => isMobTour() ? 52 : 44;
 // Returns the correct `top` for the portrait fixed stage-detail panel,
 // accounting for map + resize handle + elevation strip (if visible).
 function _stageDetailTop() {
   const strip = document.getElementById('stage-elev-strip');
+  const rh    = document.getElementById('resize-handle');
   const elevH = (strip && strip.style.display !== 'none') ? strip.offsetHeight : 0;
-  return (tourChromeH() + mapH + 6 + elevH) + 'px';
+  const rhH   = rh ? rh.offsetHeight : 6;
+  return (tourChromeH() + mapH + rhH + elevH) + 'px';
 }
 
 // iOS rubber-band fix: #stage-list-wrap is position:fixed in portrait; set its
@@ -722,8 +763,12 @@ function _stageDetailTop() {
 // Must NOT use getBoundingClientRect on the wrap itself — once fixed, that returns
 // the current fixed position, not the correct target position.
 function _syncStageListHeight() {
-  if (!isMobTour() || !isPortrait()) return;
-  const wrap     = document.getElementById('stage-list-wrap');
+  const wrap = document.getElementById('stage-list-wrap');
+  if (!isMobTour() || !isPortrait()) {
+    // In landscape (or desktop), clear any portrait-set top so the sidebar layout is normal
+    if (wrap) wrap.style.top = '';
+    return;
+  }
   const controls = document.getElementById('tour-controls');
   const main     = document.getElementById('main');
   if (!wrap) return;
@@ -743,10 +788,9 @@ function initMap() {
   const savedStyle = (() => { try { return localStorage.getItem('ascent-map-style') || 'osm'; } catch(e) { return 'osm'; } })();
   setTourMapStyle(savedStyle);
   MapUtils.addScale(tourMap, U.metric);
-  // Landscape only: start with map visible (sidebar hidden until Stages tab)
-  if (isMobTour() && !isPortrait()) {
-    document.getElementById('main').classList.remove('mob-hidden');
-  }
+  // Invalidate Leaflet size whenever the map container is resized (e.g. sidebar drag)
+  new ResizeObserver(() => { tourMap && tourMap.invalidateSize({ animate: false }); })
+    .observe(document.getElementById('map'));
 }
 
 (function() {
@@ -763,21 +807,50 @@ function initMap() {
   handle.addEventListener('touchend',   endDrag);
 })();
 
+function toggleMobStats() {
+  const mps = document.getElementById('mob-portrait-stats');
+  const btn = document.getElementById('stats-toggle');
+  if (!mps || !btn) return;
+  const collapsed = mps.classList.toggle('stats-collapsed');
+  btn.textContent = collapsed ? '▸' : '▾';
+  _syncStageListHeight();
+}
+
 // ── Sidebar horizontal resize ─────────────────────────────────────────────────
 (function() {
   const handle  = document.getElementById('sidebar-resize');
   const sidebar = document.getElementById('sidebar');
   const MIN_W = 180, MAX_W = 600;
-  let drag=false, startX=0, startW=0;
   function _saveW(w) { try { localStorage.setItem('ascent-tour-sidebar-w', w); } catch(e) {} }
-  function startDrag(x) { drag=true; startX=x; startW=sidebar.offsetWidth; handle.classList.add('dragging'); document.body.style.cursor='col-resize'; }
-  function moveDrag(x)  { if(!drag) return; const w=Math.max(MIN_W,Math.min(MAX_W,startW+(x-startX))); sidebar.style.width=w+'px'; tourMap&&tourMap.invalidateSize(); }
-  function endDrag()    { if(!drag) return; drag=false; handle.classList.remove('dragging'); document.body.style.cursor=''; _saveW(sidebar.offsetWidth); }
-  handle.addEventListener('mousedown', e => { startDrag(e.clientX); e.preventDefault(); });
-  document.addEventListener('mousemove', e => moveDrag(e.clientX));
-  document.addEventListener('mouseup',   endDrag);
-  // Restore saved width on load
-  try { const w=parseInt(localStorage.getItem('ascent-tour-sidebar-w')); if(w>=MIN_W&&w<=MAX_W) sidebar.style.width=w+'px'; } catch(e) {}
+  handle.addEventListener('pointerdown', e => {
+    if (e.button !== undefined && e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    try { handle.setPointerCapture(e.pointerId); } catch(_) {}
+    const startX = e.clientX, startW = sidebar.offsetWidth;
+    handle.classList.add('dragging');
+    document.body.style.cssText = 'cursor:col-resize;user-select:none';
+    function pm(ev) {
+      const w = Math.max(MIN_W, Math.min(MAX_W, startW + (ev.clientX - startX)));
+      sidebar.style.width = w + 'px';
+    }
+    function pu(ev) {
+      try { handle.releasePointerCapture(ev.pointerId); } catch(_) {}
+      handle.classList.remove('dragging');
+      document.body.style.cssText = '';
+      _saveW(sidebar.offsetWidth);
+      handle.removeEventListener('pointermove',   pm);
+      handle.removeEventListener('pointerup',     pu);
+      handle.removeEventListener('pointercancel', pu);
+    }
+    handle.addEventListener('pointermove',   pm);
+    handle.addEventListener('pointerup',     pu);
+    handle.addEventListener('pointercancel', pu);
+  });
+  // Restore saved width on load (desktop only — mobile has CSS-controlled widths)
+  if (!isMobTour()) {
+    try { const w=parseInt(localStorage.getItem('ascent-tour-sidebar-w')); if(w>=MIN_W&&w<=MAX_W) sidebar.style.width=w+'px'; } catch(e) {}
+  }
 })();
 
 // ── User selector ─────────────────────────────────────────────────────────────
@@ -796,8 +869,12 @@ async function loadUsers() {
       o.textContent = u.username;
       sel.appendChild(o);
     });
-    // Default to first user; will be overridden by persisted pref in init
-    if(users.length) { tourMatchUserId = users[0].id; sel.value = users[0].id; }
+    // Default to the current logged-in user; will be overridden by persisted pref in init
+    if(users.length) {
+      const myUser = users.find(u => u.id === _currentUserId);
+      const defUser = myUser || users[0];
+      tourMatchUserId = defUser.id; sel.value = defUser.id;
+    }
   } catch(e) { console.error('loadUsers', e); }
 }
 
@@ -907,22 +984,20 @@ function closeTourDeleteModal() {
 // ── Stage table column header, picker, and row rendering ─────────────────────
 function buildStageColHead() {
   const head    = document.getElementById('stage-col-head');
-  const hScroll = document.getElementById('stage-h-scroll');
   if(!head) return;
   const cols = getActiveStageCols();
-  const tpl  = buildStageColsTemplate();
-  const minW = cols.reduce((t, c) => t + (c.w.includes('minmax') ? 60 : (parseInt(c.w) || 60)), 0);
-  head.style.setProperty('--stage-cols', tpl);
-  if(hScroll) hScroll.style.setProperty('--stage-min-w', minW + 'px');
+  head.style.setProperty('--stage-cols', buildStageColsTemplate());
   head.innerHTML = '';
-  const isFixed = id => id === 'num' || id === 'name';
-  cols.forEach(col => {
+  cols.forEach((col, i) => {
     const isSorted = stageSortBy === col.sort && col.sort;
     const div = document.createElement('div');
     div.className = 'stch' + (isSorted ? ' sorted' : '') + (!col.sort ? ' nosort' : '');
-    div.style.justifyContent = col.align === 'right' ? 'flex-end' : '';
-    const unitSuffix = col.unitLabel ? ` <span style="font-size:8px;font-weight:400;opacity:.6;text-transform:none;letter-spacing:0">(${col.unitLabel()})</span>` : '';
-    div.innerHTML = col.label + unitSuffix + (isSorted ? ` <span class="sort-arr">${stageSortDir==='desc'?'↓':'↑'}</span>` : '');
+    div.style.alignItems = col.align === 'right' ? 'flex-end' : 'flex-start';
+    if(col.id === 'name') div.style.paddingLeft = '21px';
+    div.dataset.colId = col.id;
+    const sortArrow = isSorted ? ` <span class="sort-arr">${stageSortDir==='desc'?'↓':'↑'}</span>` : '';
+    const unitLine = col.unitLabel ? `<span style="font-size:8px;font-weight:400;opacity:.5;text-transform:none;letter-spacing:0;line-height:1">(${col.unitLabel()})</span>` : '';
+    div.innerHTML = `<span style="overflow:hidden;min-width:0;display:flex;flex-direction:column;gap:2px"><span style="line-height:1">${col.label}${sortArrow}</span>${unitLine}</span>`;
     if(col.sort) {
       div.addEventListener('click', () => {
         if(_suppressStageColClick) { _suppressStageColClick = false; return; }
@@ -933,7 +1008,7 @@ function buildStageColHead() {
       });
     }
     // Drag-to-reorder (optional columns only)
-    if(!isFixed(col.id)) {
+    if(!isStageColFixed(col.id)) {
       div.draggable = true;
       div.addEventListener('dragstart', e => {
         e.dataTransfer.setData('text/plain', col.id);
@@ -947,7 +1022,7 @@ function buildStageColHead() {
         div.classList.remove('drag-over');
         const fromId = e.dataTransfer.getData('text/plain');
         const toId   = col.id;
-        if(fromId === toId || isFixed(fromId)) return;
+        if(fromId === toId || isStageColFixed(fromId)) return;
         const fromIdx = stageColIds.indexOf(fromId);
         const toIdx   = stageColIds.indexOf(toId);
         if(fromIdx < 0 || toIdx < 0) return;
@@ -958,9 +1033,167 @@ function buildStageColHead() {
         buildStageColHead();
         renderStageList();
       });
+      // Touch drag-to-reorder (iOS/iPad — HTML5 DnD not supported)
+      div.addEventListener('touchstart', e => {
+        if(e.touches.length !== 1) return;
+        if(e.target.classList.contains('stch-sep')) return;
+        const t = e.touches[0];
+        _stageTouchDragPending = { colId: col.id, div, startX: t.clientX, startY: t.clientY };
+      }, {passive: true});
+    }
+    // Resize separator between columns (works for mouse and touch)
+    if(i < cols.length - 1) {
+      const sep = document.createElement('div');
+      sep.className = 'stch-sep';
+      sep.addEventListener('pointerdown', e => {
+        e.preventDefault();
+        e.stopPropagation();
+        if(!isStageColFixed(col.id)) div.draggable = false;
+        sep.setPointerCapture(e.pointerId);
+        sep.classList.add('resizing');
+        const startX  = e.clientX;
+        const startPx = div.offsetWidth || (parseInt(col.w) || 60);
+        function onMove(me) {
+          const newPx = Math.max(28, startPx + (me.clientX - startX));
+          stageColWidthOverrides[col.id] = col.id === 'name'
+            ? `minmax(${newPx}px,1fr)` : newPx + 'px';
+          const tpl = buildStageColsTemplate();
+          head.style.setProperty('--stage-cols', tpl);
+          document.querySelectorAll('.stage-row').forEach(r => r.style.setProperty('--stage-cols', tpl));
+        }
+        function onUp() {
+          if(!isStageColFixed(col.id)) div.draggable = true;
+          sep.classList.remove('resizing');
+          sep.removeEventListener('pointermove', onMove);
+          sep.removeEventListener('pointerup',   onUp);
+          sep.removeEventListener('pointercancel', onUp);
+          saveStageColWidths();
+          buildStageColHead();
+          renderStageList();
+        }
+        sep.addEventListener('pointermove',  onMove);
+        sep.addEventListener('pointerup',    onUp);
+        sep.addEventListener('pointercancel', onUp);
+      });
+      div.appendChild(sep);
     }
     head.appendChild(div);
   });
+  // Set --stage-min-w on the scroll container so header + rows enforce overflow
+  const hScroll = document.getElementById('stage-h-scroll');
+  const minW = getActiveStageCols().reduce((t, c) => {
+    const w = stageColWidthOverrides[c.id] || c.w;
+    if (w.startsWith('minmax')) { const m = w.match(/minmax\((\d+)/); return t + (m ? parseInt(m[1]) : 60); }
+    return t + (parseInt(w) || 60);
+  }, 0);
+  if (hScroll) hScroll.style.setProperty('--stage-min-w', minW + 'px');
+  requestAnimationFrame(() => updateStageHScrollbar());
+}
+
+// ── Stage column touch drag (iOS/iPad) — mirrors Activities page pattern ──────
+document.addEventListener('touchmove', e => {
+  // Scrollbar thumb drag (handled separately in initStageHScrollbar)
+  if (_stageHScrollbarDrag) return;
+
+  if (_stageTouchDragPending) {
+    const t = e.touches[0];
+    const dx = Math.abs(t.clientX - _stageTouchDragPending.startX);
+    const dy = Math.abs(t.clientY - _stageTouchDragPending.startY);
+    if (dx > 8 || dy > 4) {
+      const div  = _stageTouchDragPending.div;
+      const rect = div.getBoundingClientRect();
+      const ghost = document.createElement('div');
+      ghost.textContent = div.textContent.replace(/[↑↓]/g,'').trim();
+      ghost.style.cssText = `position:fixed;top:${rect.top}px;left:${rect.left}px;width:${rect.width}px;height:${rect.height}px;display:flex;align-items:center;padding:0 4px;pointer-events:none;z-index:9999;opacity:.85;background:#3a3a3c;border-radius:4px;box-shadow:0 4px 16px rgba(0,0,0,.5);font-size:10px;font-weight:600;color:#f5f5f7;text-transform:uppercase;letter-spacing:.04em`;
+      document.body.appendChild(ghost);
+      div.classList.add('dragging-col');
+      _stageTouchDrag = { colId: _stageTouchDragPending.colId, ghost, startX: t.clientX, origLeft: rect.left, toId: null };
+      _stageTouchDragPending = null;
+    }
+  }
+  if (!_stageTouchDrag) return;
+  e.preventDefault();
+  const t = e.touches[0];
+  _stageTouchDrag.ghost.style.left = (_stageTouchDrag.origLeft + (t.clientX - _stageTouchDrag.startX)) + 'px';
+  _stageTouchDrag.ghost.style.display = 'none';
+  const el = document.elementFromPoint(t.clientX, t.clientY);
+  _stageTouchDrag.ghost.style.display = '';
+  const target = el && el.closest('.stch[data-col-id]');
+  document.querySelectorAll('.stch').forEach(h => h.classList.remove('drag-over'));
+  if (target && target.dataset.colId !== _stageTouchDrag.colId && !isStageColFixed(target.dataset.colId)) {
+    target.classList.add('drag-over');
+    _stageTouchDrag.toId = target.dataset.colId;
+  } else {
+    _stageTouchDrag.toId = null;
+  }
+}, {passive: false});
+
+document.addEventListener('touchend', () => {
+  _stageTouchDragPending = null;
+  if (!_stageTouchDrag) return;
+  document.querySelectorAll('.stch').forEach(h => { h.classList.remove('drag-over'); h.classList.remove('dragging-col'); });
+  _stageTouchDrag.ghost.remove();
+  const { colId, toId } = _stageTouchDrag;
+  _stageTouchDrag = null;
+  if (!toId || toId === colId) return;
+  const fromIdx = stageColIds.indexOf(colId);
+  const toIdx   = stageColIds.indexOf(toId);
+  if (fromIdx < 0 || toIdx < 0) return;
+  stageColIds.splice(fromIdx, 1);
+  stageColIds.splice(toIdx, 0, colId);
+  saveStageColPrefs(stageColIds);
+  _suppressStageColClick = true;
+  buildStageColHead();
+  renderStageList();
+});
+
+document.addEventListener('touchcancel', () => {
+  _stageTouchDragPending = null;
+  if (_stageTouchDrag) { _stageTouchDrag.ghost.remove(); _stageTouchDrag = null; }
+  document.querySelectorAll('.stch').forEach(h => { h.classList.remove('drag-over'); h.classList.remove('dragging-col'); });
+});
+
+// ── Stage horizontal scrollbar ────────────────────────────────────────────────
+function updateStageHScrollbar() {
+  const hScroll = document.getElementById('stage-h-scroll');
+  const track   = document.getElementById('stage-hscroll-track');
+  const thumb   = document.getElementById('stage-hscroll-thumb');
+  if (!hScroll || !track || !thumb) return;
+  const sw = hScroll.scrollWidth, cw = hScroll.clientWidth;
+  if (sw <= cw + 1) { track.style.display = 'none'; return; }
+  track.style.display = 'block';
+  const thumbW = Math.max(20, Math.round((cw / sw) * cw));
+  thumb.style.width = thumbW + 'px';
+  thumb.style.left  = Math.round((hScroll.scrollLeft / sw) * cw) + 'px';
+}
+
+function initStageHScrollbar() {
+  const hScroll = document.getElementById('stage-h-scroll');
+  const thumb   = document.getElementById('stage-hscroll-thumb');
+  if (!hScroll || !thumb) return;
+  hScroll.addEventListener('scroll', updateStageHScrollbar);
+  window.addEventListener('resize', updateStageHScrollbar);
+
+  function tbStart(clientX) {
+    _stageHScrollbarDrag = true;
+    _stageHScrollbarStartX = clientX;
+    _stageHScrollbarStartScroll = hScroll.scrollLeft;
+    thumb.classList.add('dragging');
+  }
+  function tbMove(clientX) {
+    if (!_stageHScrollbarDrag) return;
+    const sw = hScroll.scrollWidth, cw = hScroll.clientWidth;
+    hScroll.scrollLeft = _stageHScrollbarStartScroll + (clientX - _stageHScrollbarStartX) * (sw / cw);
+    updateStageHScrollbar();
+  }
+  function tbEnd() { _stageHScrollbarDrag = false; thumb.classList.remove('dragging'); }
+
+  thumb.addEventListener('mousedown',  e => { tbStart(e.clientX); e.preventDefault(); });
+  document.addEventListener('mousemove', e => { if (_stageHScrollbarDrag) tbMove(e.clientX); });
+  document.addEventListener('mouseup',   tbEnd);
+  thumb.addEventListener('touchstart',  e => { tbStart(e.touches[0].clientX); }, {passive: true});
+  document.addEventListener('touchmove', e => { if (_stageHScrollbarDrag) { tbMove(e.touches[0].clientX); e.preventDefault(); } }, {passive: false});
+  document.addEventListener('touchend',  tbEnd);
 }
 
 function buildStageColPicker() {
@@ -1110,32 +1343,56 @@ async function viewEntireTour() {
 
 // ── Orientation change: re-apply correct mobile layout ────────────────────────
 (function() {
+  // Apply correct heights for current orientation.
+  // Sets explicit pixel values (not 100vh) to bypass iOS Safari stale-value bug.
+  // Also sets sidebar.style.height so flex:1 stage-list-wrap always gets space.
+  function _applyMapH() {
+    const mapEl     = document.getElementById('map');
+    const pageEl    = document.getElementById('page');
+    const sidebarEl = document.getElementById('sidebar');
+    if (!mapEl) return;
+    const chromeH = tourChromeH();
+    const availH  = window.innerHeight - chromeH;
+    if (pageEl)    pageEl.style.height    = availH + 'px';
+    if (sidebarEl) sidebarEl.style.height = isPortrait() ? '' : availH + 'px';
+    const frac = isPortrait() ? 0.38 : 0.55;
+    mapH = Math.round(availH * frac);
+    mapEl.style.height = mapH + 'px';
+  }
+
+  function _doOrientFix() {
+    if (!selectedId) {
+      document.body.classList.remove('mob-stage-view', 'mob-landscape-stage');
+      document.getElementById('stage-detail').style.top = '';
+      _syncStageListHeight();
+      _applyMapH();
+      tourMap && tourMap.invalidateSize();
+      return;
+    }
+    if (isPortrait()) {
+      document.body.classList.remove('mob-landscape-stage');
+      document.body.classList.add('mob-stage-view');
+      _applyMapH();
+      document.getElementById('stage-detail').style.top = _stageDetailTop();
+    } else {
+      document.body.classList.remove('mob-stage-view');
+      document.getElementById('stage-detail').style.top = '';
+      _syncStageListHeight();
+      document.body.classList.add('mob-landscape-stage');
+      _applyMapH();
+      mobTourTab('map');
+    }
+    tourMap && tourMap.invalidateSize();
+  }
+
   let _orientTimer = null;
   window.addEventListener('resize', () => {
     if (!isMobTour()) return;
     clearTimeout(_orientTimer);
+    // First pass at 100ms; second pass at 500ms catches iOS settling late.
     _orientTimer = setTimeout(() => {
-      if (!selectedId) {
-        // No stage: clean up any stale classes
-        document.body.classList.remove('mob-stage-view', 'mob-landscape-stage');
-        document.getElementById('stage-detail').style.top = '';
-        _syncStageListHeight();
-        tourMap && tourMap.invalidateSize();
-        return;
-      }
-      if (isPortrait()) {
-        // Switched to portrait with stage selected
-        document.body.classList.remove('mob-landscape-stage');
-        document.body.classList.add('mob-stage-view');
-        document.getElementById('stage-detail').style.top = _stageDetailTop();
-      } else {
-        // Switched to landscape with stage selected
-        document.body.classList.remove('mob-stage-view');
-        document.getElementById('stage-detail').style.top = '';
-        document.body.classList.add('mob-landscape-stage');
-        mobTourTab('map');
-      }
-      tourMap && tourMap.invalidateSize();
+      _doOrientFix();
+      setTimeout(() => { _applyMapH(); tourMap && tourMap.invalidateSize(); }, 400);
     }, 100);
   });
 })();
@@ -1467,12 +1724,12 @@ function onElevLeave() {
   _removeStageHoverDot();
 }
 
-function onElevHover(e) {
+function _onElevClientX(clientX) {
   if(!_stageElevChart || !_stageElevRawPts) return;
   const chart  = _stageElevChart;
   const xAxis  = chart.scales.x;
   const rect   = chart.canvas.getBoundingClientRect();
-  const mouseX = e.clientX - rect.left;
+  const mouseX = clientX - rect.left;
 
   // Clamp to chart area
   if(mouseX < xAxis.left || mouseX > xAxis.right) { onElevLeave(); return; }
@@ -1523,12 +1780,99 @@ function onElevHover(e) {
   }
 }
 
+function _elevPxToIdx(clientX) {
+  if(!_stageElevChart) return null;
+  const xAxis  = _stageElevChart.scales.x;
+  const rect   = _stageElevChart.canvas.getBoundingClientRect();
+  const mouseX = Math.max(xAxis.left, Math.min(xAxis.right, clientX - rect.left));
+  const dataX  = xAxis.getValueForPixel(mouseX);
+  const pts    = _stageElevChart._elevChartPts;
+  let lo=0, hi=pts.length-1;
+  while(lo<hi){ const mid=(lo+hi)>>1; if(pts[mid].x<dataX) lo=mid+1; else hi=mid; }
+  return (lo>0 && Math.abs(pts[lo-1].x-dataX)<Math.abs(pts[lo].x-dataX)) ? lo-1 : lo;
+}
+
+function _updateElevSel(ia, ib) {
+  const selEl = document.getElementById('stage-elev-sel');
+  const btnEl = document.getElementById('stage-elev-grades-btn');
+  if(!selEl || !_stageElevChart) return;
+  if(ia===null || ib===null || ia===ib) { selEl.style.display='none'; if(btnEl) btnEl.style.display='none'; return; }
+  const pts  = _stageElevChart._elevChartPts;
+  const xA   = _stageElevChart.scales.x;
+  const px0  = xA.getPixelForValue(pts[ia].x);
+  const px1  = xA.getPixelForValue(pts[ib].x);
+  selEl.style.display=''; selEl.style.left=px0+'px'; selEl.style.width=(px1-px0)+'px';
+  if(btnEl){ btnEl.style.display=''; btnEl.style.left=((px0+px1)/2)+'px'; }
+}
+
+function clearElevSelection() {
+  _elevSelIdxA=null; _elevSelIdxB=null;
+  _updateElevSel(null,null);
+}
+
+function onElevMouseDown(e) {
+  if(!_stageElevChart) return;
+  e.preventDefault();
+  _elevDragging=true; _elevDragAnchorX=e.clientX;
+  _elevSelIdxA=_elevPxToIdx(e.clientX); _elevSelIdxB=_elevSelIdxA;
+  const selEl=document.getElementById('stage-elev-sel');
+  const btnEl=document.getElementById('stage-elev-grades-btn');
+  if(selEl) selEl.style.display='none'; if(btnEl) btnEl.style.display='none';
+}
+
+function onElevMouseMove(e) {
+  if(_elevDragging) {
+    const idx=_elevPxToIdx(e.clientX);
+    if(idx!==null){ _elevSelIdxB=idx; _updateElevSel(_elevSelIdxA,idx); }
+    const xhair=document.getElementById('stage-elev-xhair');
+    const hud=document.getElementById('stage-elev-hud');
+    if(xhair) xhair.style.display='none'; if(hud) hud.style.display='none';
+    _removeStageHoverDot();
+  } else {
+    _onElevClientX(e.clientX);
+  }
+}
+
+function onElevTouchStart(e) {
+  e.preventDefault(); if(!e.touches[0]) return;
+  _elevDragging=true; _elevDragAnchorX=e.touches[0].clientX;
+  _elevSelIdxA=_elevPxToIdx(e.touches[0].clientX); _elevSelIdxB=_elevSelIdxA;
+  const selEl=document.getElementById('stage-elev-sel');
+  const btnEl=document.getElementById('stage-elev-grades-btn');
+  if(selEl) selEl.style.display='none'; if(btnEl) btnEl.style.display='none';
+}
+
+function onElevTouchMove(e) {
+  e.preventDefault(); if(!e.touches[0]) return;
+  if(_elevDragging) {
+    const idx=_elevPxToIdx(e.touches[0].clientX);
+    if(idx!==null){ _elevSelIdxB=idx; _updateElevSel(_elevSelIdxA,idx); }
+    const xhair=document.getElementById('stage-elev-xhair');
+    const hud=document.getElementById('stage-elev-hud');
+    if(xhair) xhair.style.display='none'; if(hud) hud.style.display='none';
+  } else {
+    _onElevClientX(e.touches[0].clientX);
+  }
+}
+
+function onElevTouchEnd(e) {
+  if(!_elevDragging) { onElevLeave(); return; }
+  _elevDragging=false;
+  const endX=e.changedTouches[0]?.clientX ?? _elevDragAnchorX;
+  const dragDist=Math.abs(endX-(_elevDragAnchorX||endX));
+  if(dragDist<8) clearElevSelection();
+  else _updateElevSel(Math.min(_elevSelIdxA,_elevSelIdxB), Math.max(_elevSelIdxA,_elevSelIdxB));
+  _elevDragAnchorX=null;
+  onElevLeave();
+}
+
 function drawStageElevation(pts) {
   const strip  = document.getElementById('stage-elev-strip');
   const canvas = document.getElementById('stage-elev-canvas');
   if(!strip || !canvas) return;
 
   // Destroy previous chart
+  clearElevSelection();
   if(_stageElevChart) { _stageElevChart.destroy(); _stageElevChart = null; }
   _stageElevRawPts = null;
   _removeStageHoverDot();
@@ -1599,24 +1943,153 @@ function drawStageElevation(pts) {
   // Store chartPts on chart instance for hover handler
   _stageElevChart._elevChartPts = chartPts;
 
-  // Wire hover events
-  strip.removeEventListener('mousemove', onElevHover);
+  // Wire hover/touch/drag events
+  clearElevSelection();
+  strip.removeEventListener('mousedown',  onElevMouseDown);
+  strip.removeEventListener('mousemove',  onElevMouseMove);
   strip.removeEventListener('mouseleave', onElevLeave);
-  strip.addEventListener('mousemove', onElevHover);
+  strip.removeEventListener('touchstart', onElevTouchStart);
+  strip.removeEventListener('touchmove',  onElevTouchMove);
+  strip.removeEventListener('touchend',   onElevTouchEnd);
+  strip.removeEventListener('touchcancel',onElevTouchEnd);
+  strip.addEventListener('mousedown',  onElevMouseDown);
+  strip.addEventListener('mousemove',  onElevMouseMove);
   strip.addEventListener('mouseleave', onElevLeave);
+  strip.addEventListener('touchstart', onElevTouchStart, { passive: false });
+  strip.addEventListener('touchmove',  onElevTouchMove,  { passive: false });
+  strip.addEventListener('touchend',   onElevTouchEnd);
+  strip.addEventListener('touchcancel',onElevTouchEnd);
 }
 
 function hideStageElevation() {
   const strip = document.getElementById('stage-elev-strip');
   if(strip) {
     strip.style.display = 'none';
-    strip.removeEventListener('mousemove', onElevHover);
+    strip.removeEventListener('mousedown',  onElevMouseDown);
+    strip.removeEventListener('mousemove',  onElevMouseMove);
     strip.removeEventListener('mouseleave', onElevLeave);
+    strip.removeEventListener('touchstart', onElevTouchStart);
+    strip.removeEventListener('touchmove',  onElevTouchMove);
+    strip.removeEventListener('touchend',   onElevTouchEnd);
+    strip.removeEventListener('touchcancel',onElevTouchEnd);
   }
+  clearElevSelection();
   if(_stageElevChart) { _stageElevChart.destroy(); _stageElevChart = null; }
   _stageElevRawPts = null;
   _removeStageHoverDot();
   onElevLeave();
+}
+
+// ── Grades modal ──────────────────────────────────────────────────────────────
+const GRADE_BANDS = [
+  { max: -4,       color: '#818cf8', label: '< -4%'  },
+  { max:  0,       color: '#38bdf8', label: '-4–0%'  },
+  { max:  4,       color: '#4ade80', label: '0–4%'   },
+  { max:  8,       color: '#facc15', label: '4–8%'   },
+  { max: 12,       color: '#fb923c', label: '8–12%'  },
+  { max: 16,       color: '#ef4444', label: '12–16%' },
+  { max: Infinity, color: '#a855f7', label: '> 16%'  },
+];
+function _gradeColor(pct) { for(const b of GRADE_BANDS) if(pct<b.max) return b.color; return '#a855f7'; }
+
+function openGradesModal() {
+  if(_elevSelIdxA===null||_elevSelIdxB===null) return;
+  const ia  = Math.min(_elevSelIdxA,_elevSelIdxB);
+  const ib  = Math.max(_elevSelIdxA,_elevSelIdxB);
+  const pts = (_stageElevRawPts||[]).slice(ia, ib+1);
+  if(pts.length<2) return;
+  const stage   = tourStages.find(s=>String(s.id)===String(selectedId));
+  const titleEl = document.getElementById('grades-modal-title');
+  if(titleEl) titleEl.textContent = stage
+    ? `Stage ${stage.stage_num}: ${stage.name} — Gradient Profile`
+    : 'Gradient Profile';
+  const modal = document.getElementById('grades-modal');
+  modal.style.display = 'flex';
+  const legendEl = document.getElementById('grades-legend');
+  if(legendEl) legendEl.innerHTML = GRADE_BANDS.map(b =>
+    `<div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--muted)"><div style="width:14px;height:10px;background:${b.color};border-radius:2px;flex-shrink:0"></div><span>${b.label}</span></div>`
+  ).join('');
+  requestAnimationFrame(()=>requestAnimationFrame(()=>_drawGradesChart(pts)));
+}
+
+function closeGradesModal() {
+  document.getElementById('grades-modal').style.display = 'none';
+}
+
+function _drawGradesChart(pts) {
+  const canvas = document.getElementById('grades-canvas');
+  if(!canvas) return;
+  const rect = canvas.getBoundingClientRect();
+  if(!rect.width||!rect.height) return;
+  const dpr = window.devicePixelRatio||1;
+  canvas.width=rect.width*dpr; canvas.height=rect.height*dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr,dpr);
+  const W=rect.width, H=rect.height;
+  const ml=52,mr=10,mt=8,mb=26, cw=W-ml-mr, ch=H-mt-mb;
+
+  // Downsample to ≤800
+  const step=Math.max(1,Math.floor(pts.length/800));
+  let cumDist=0; const data=[];
+  for(let i=0;i<pts.length;i++){
+    if(i>0) cumDist+=_haversineMi(pts[i-1][0],pts[i-1][1],pts[i][0],pts[i][1]);
+    if(i%step===0||i===pts.length-1) data.push([cumDist,pts[i][2]||0]);
+  }
+  if(data.length<2) return;
+
+  // Smooth
+  const sm=data.map(([d,a],i)=>{
+    const lo=Math.max(0,i-3),hi=Math.min(data.length-1,i+3);
+    let s=0,n=0; for(let j=lo;j<=hi;j++){s+=data[j][1];n++;} return [d,s/n];
+  });
+
+  const totalD=sm[sm.length-1][0];
+  const alts=sm.map(p=>p[1]);
+  const minA=Math.min(...alts), maxA=Math.max(...alts);
+  const yFloor=Math.floor(minA/50)*50, yCeil=Math.ceil(maxA/50)*50;
+  const yRange=yCeil-yFloor||1;
+  const xS=d=>ml+(d/totalD)*cw;
+  const yS=a=>mt+ch-((a-yFloor)/yRange)*ch;
+  const yBase=yS(yFloor);
+
+  ctx.clearRect(0,0,W,H);
+
+  // Gradient-colored fill
+  for(let i=1;i<sm.length;i++){
+    const [d0,a0]=sm[i-1],[d1,a1]=sm[i];
+    const distFt=(d1-d0)*5280;
+    const grade=distFt>0.001?((a1-a0)/distFt)*100:0;
+    ctx.beginPath();
+    ctx.moveTo(xS(d0),yBase); ctx.lineTo(xS(d0),yS(a0));
+    ctx.lineTo(xS(d1),yS(a1)); ctx.lineTo(xS(d1),yBase);
+    ctx.closePath(); ctx.fillStyle=_gradeColor(grade); ctx.fill();
+  }
+
+  // Ridge line
+  ctx.beginPath(); ctx.moveTo(xS(sm[0][0]),yS(sm[0][1]));
+  for(let i=1;i<sm.length;i++) ctx.lineTo(xS(sm[i][0]),yS(sm[i][1]));
+  ctx.strokeStyle='rgba(255,255,255,.55)'; ctx.lineWidth=1.2; ctx.stroke();
+
+  // Y-axis
+  const yUnit=U.metric?'m':'ft';
+  const yConv=U.metric?ft=>Math.round(ft*0.3048):ft=>Math.round(ft);
+  ctx.fillStyle='#64748b'; ctx.font='9px -apple-system,sans-serif'; ctx.textAlign='right';
+  for(let i=0;i<=4;i++){
+    const a=yFloor+yRange*i/4, y=yS(a);
+    ctx.fillText(yConv(a)+' '+yUnit,ml-5,y+3.5);
+    ctx.beginPath(); ctx.strokeStyle='rgba(255,255,255,.05)'; ctx.lineWidth=1;
+    ctx.moveTo(ml,y); ctx.lineTo(ml+cw,y); ctx.stroke();
+  }
+
+  // X-axis
+  const xUnit=U.metric?'km':'mi';
+  const xConv=U.metric?mi=>(mi*1.60934).toFixed(1):mi=>mi.toFixed(1);
+  ctx.textAlign='center'; ctx.fillStyle='#64748b';
+  const nT=Math.min(8,Math.floor(cw/65));
+  for(let i=0;i<=nT;i++){
+    const d=totalD*i/nT;
+    ctx.fillText(xConv(d)+' '+xUnit,xS(d),H-mb+15);
+  }
 }
 
 // ── Client-side multi-point geocoding for trajectory ─────────────────────────
@@ -1642,7 +2115,7 @@ async function renderDetail(activeId) {
 
   if(!activeId) {
     hideStageElevation();
-    if(!tourStages.length) { el.innerHTML=''; return; }
+    if(!tourStages.length) { el.innerHTML=''; const _m=document.getElementById('mob-portrait-stats'); if(_m)_m.innerHTML=''; return; }
     const done       = tourStages.filter(s=>s.completion);
     const totalDist  = tourStages.reduce((s,x)=>s+(x.distance_mi||0),0);
     const totalClimb = tourStages.reduce((s,x)=>s+(x.climb_ft||0),0);
@@ -1664,15 +2137,15 @@ async function renderDetail(activeId) {
     const altMaxDStr   = U.metric ? maxDist.toFixed(1)+' mi'     : (maxDist*1.60934).toFixed(1)+' km';
     const altMaxCStr   = U.metric ? Math.round(maxClimb)+' ft'   : Math.round(maxClimb*0.3048)+' m';
 
-    let html = `<div class="stats-grid" style="grid-template-columns:repeat(7,1fr);margin-bottom:14px">`;
-    html += `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Stages</div><div class="sc-val">${done.length} / ${tourStages.length}</div><div class="sc-sub">completed</div></div>`;
-    html += `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Total Dist</div><div class="sc-val">${U.distS(totalDist)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${altDistStr}</div><div class="sc-sub">${U.distS(doneDist)} done (${pctD}%)</div></div>`;
-    html += `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Total Climb</div><div class="sc-val">${U.climbS(totalClimb)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${altClimbStr}</div><div class="sc-sub">${U.climbS(doneClimb)} done (${pctC}%)</div></div>`;
-    html += `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Avg Dist</div><div class="sc-val">${U.distS(avgDist)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${altAvgDStr}</div><div class="sc-sub">per stage</div></div>`;
-    html += `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Avg Climb</div><div class="sc-val">${U.climbS(avgClimb)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${altAvgCStr}</div><div class="sc-sub">per stage</div></div>`;
-    html += `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Max Stage Dist</div><div class="sc-val">${U.distS(maxDist)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${altMaxDStr}</div><div class="sc-sub">Stage ${maxDistIdx+1}</div></div>`;
-    html += `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Max Ascent</div><div class="sc-val">${U.climbS(maxClimb)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${altMaxCStr}</div><div class="sc-sub">Stage ${maxClimbIdx+1}</div></div>`;
-    html += `</div>`;
+    const _chips =
+      `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Stages</div><div class="sc-val">${done.length} / ${tourStages.length}</div><div class="sc-sub">completed</div></div>` +
+      `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Total Dist</div><div class="sc-val">${U.distS(totalDist)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${altDistStr}</div><div class="sc-sub">${U.distS(doneDist)} done (${pctD}%)</div></div>` +
+      `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Total Ascent</div><div class="sc-val">${U.climbS(totalClimb)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${altClimbStr}</div><div class="sc-sub">${U.climbS(doneClimb)} done (${pctC}%)</div></div>` +
+      `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Avg Dist</div><div class="sc-val">${U.distS(avgDist)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${altAvgDStr}</div><div class="sc-sub">per stage</div></div>` +
+      `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Avg Ascent</div><div class="sc-val">${U.climbS(avgClimb)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${altAvgCStr}</div><div class="sc-sub">per stage</div></div>` +
+      `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Max Stage Dist</div><div class="sc-val">${U.distS(maxDist)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${altMaxDStr}</div><div class="sc-sub">Stage ${maxDistIdx+1}</div></div>` +
+      `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Max Ascent</div><div class="sc-val">${U.climbS(maxClimb)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${altMaxCStr}</div><div class="sc-sub">Stage ${maxClimbIdx+1}</div></div>`;
+    let html = `<div class="stats-grid" style="grid-template-columns:repeat(7,1fr);margin-bottom:14px">${_chips}</div>`;
 
     // Locations
     const first = tourStages[0];
@@ -1690,6 +2163,9 @@ async function renderDetail(activeId) {
       html += `<div style="font-size:12px"><span style="color:var(--muted);margin-right:6px">Last completed:</span><span id="ov-last-loc">Loading…</span></div>`;
     html += `</div>`;
     el.innerHTML = html;
+    // Portrait overview: populate compact stats strip between map and stage list
+    const _mpsEl = document.getElementById('mob-portrait-stats');
+    if (_mpsEl) _mpsEl.innerHTML = `<div class="stats-grid">${_chips}</div>`;
 
     function _geocacheFill(lat, lon, elId, cacheKey) {
       const _ls = s => { try { return localStorage.getItem(s); } catch(e) { return null; } };
@@ -1752,8 +2228,17 @@ async function renderDetail(activeId) {
 
   const stage = tourStages.find(s=>String(s.id)===String(activeId));
   if(!stage) { el.innerHTML=''; return; }
+  const _mps = document.getElementById('mob-portrait-stats');
+  if (_mps) _mps.innerHTML = '';
 
-  const stageHead = `<div style="font-size:15px;font-weight:600;margin-bottom:10px">Stage ${stage.stage_num}: ${esc(stage.name)}</div>`;
+  const _sIdx = tourStages.findIndex(s => String(s.id) === String(stage.id));
+  const _prevS = _sIdx > 0 ? tourStages[_sIdx - 1] : null;
+  const _nextS = _sIdx < tourStages.length - 1 ? tourStages[_sIdx + 1] : null;
+  const _navBtn = (s, arrow) => s
+    ? `<button onclick="selectStage('${s.id}')" title="Stage ${s.stage_num}" style="background:none;border:1px solid var(--border2);border-radius:4px;width:26px;height:24px;font-size:13px;color:var(--text);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${arrow}</button>`
+    : `<button disabled style="background:none;border:1px solid var(--border2);border-radius:4px;width:26px;height:24px;font-size:13px;color:var(--muted);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;opacity:.3">${arrow}</button>`;
+  const _stageNavHtml = `<div style="display:flex;gap:4px;margin-right:4px;flex-shrink:0">${_navBtn(_prevS,'←')}${_navBtn(_nextS,'→')}</div>`;
+  const stageHead = `<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><div style="font-size:15px;font-weight:600;line-height:1.3;flex:1">Stage ${stage.stage_num}: ${esc(stage.name)}</div>${_stageNavHtml}</div>`;
 
   if(!stage.completion) {
     // Non-completed: draw elevation strip then show chips + location + forecast
@@ -1785,9 +2270,9 @@ async function renderDetail(activeId) {
     html += `<div class="section-label" style="margin-bottom:6px">Estimated Route</div>`;
     html += `<div class="stats-grid" style="grid-template-columns:repeat(${bigClimbFt>0?3:2},1fr);margin-bottom:10px">`;
     html += chip4('Distance',     distP, distS,     '&nbsp;');
-    html += chip4('Total Climb',  climP, climS,     '&nbsp;');
+    html += chip4('Total Ascent',  climP, climS,     '&nbsp;');
     if(bigClimbFt > 0)
-      html += chip4('Biggest Climb', bigClimbP, bigClimbS, bigClimbAtStr);
+      html += chip4('Biggest Ascent', bigClimbP, bigClimbS, bigClimbAtStr);
     html += `</div>`;
     html += `<div style="display:flex;align-items:baseline;gap:10px;min-height:1.4em">
       <div style="flex:1;font-size:11px;color:var(--muted)"><span style="font-size:10px;text-transform:uppercase;letter-spacing:.06em">Trajectory:</span> <span id="stage-loc-text">Loading…</span></div>
@@ -1947,6 +2432,7 @@ async function renderDetail(activeId) {
       `<div style="display:flex;align-items:center;gap:9px;margin-bottom:8px">
         ${_avHtml}
         <div style="flex:1;font-size:15px;font-weight:600;line-height:1.3;min-width:0">Stage ${stage.stage_num}: ${esc(stage.name)}</div>
+        ${_stageNavHtml}
       </div>` +
       `<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
         <div style="font-size:11px;color:#22c55e;font-weight:500">✓ Completed ${stage.completion.date}</div>
@@ -2018,12 +2504,13 @@ async function loadStagePhotos(actId) {
     if(!media.length) return;
     _tourLbMedia = media;
     let html = `<div class="section-label" style="margin-top:12px;margin-bottom:6px">Photos</div>`;
-    html += `<div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;touch-action:pan-x">`;
+    html += `<div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;touch-action:pan-x;align-items:flex-start">`;
     media.forEach((m, i) => {
+      const cap = m.caption ? `<div style="font-size:10px;color:var(--muted);margin-top:3px;line-height:1.3;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-word">${esc(m.caption)}</div>` : '';
       if(m.type==='image') {
-        html += `<img src="${m.url}" loading="lazy" style="height:80px;width:80px;object-fit:cover;border-radius:5px;cursor:pointer;flex-shrink:0" onclick="openTourLightbox(${i})">`;
+        html += `<div style="flex-shrink:0;width:80px"><img src="${m.url}" loading="lazy" style="height:80px;width:80px;object-fit:cover;border-radius:5px;cursor:pointer;display:block" onclick="openTourLightbox(${i})">${cap}</div>`;
       } else if(m.type==='video') {
-        html += `<div style="position:relative;height:80px;width:80px;border-radius:5px;overflow:hidden;flex-shrink:0;cursor:pointer;background:#000" onclick="openTourLightbox(${i})">
+        html += `<div style="flex-shrink:0;width:80px"><div style="position:relative;height:80px;width:80px;border-radius:5px;overflow:hidden;cursor:pointer;background:#000" onclick="openTourLightbox(${i})">
           <video src="${m.hls_url||m.url}" muted preload="metadata" playsinline
             style="width:100%;height:100%;object-fit:cover;pointer-events:none"
             onloadedmetadata="this.currentTime=0.1"></video>
@@ -2032,7 +2519,7 @@ async function loadStagePhotos(actId) {
               <span style="font-size:13px;margin-left:2px">▶</span>
             </div>
           </div>
-        </div>`;
+        </div>${cap}</div>`;
       }
     });
     html += `</div>`;
@@ -2053,6 +2540,7 @@ function _tourLbShow(m) {
   const img = document.getElementById('tlb-img');
   const vid = document.getElementById('tlb-vid');
   const dl  = document.getElementById('tlb-download');
+  const cap = document.getElementById('tlb-caption');
   if(m.type==='video') {
     img.style.display='none';
     vid.style.display='';
@@ -2063,6 +2551,10 @@ function _tourLbShow(m) {
     img.style.display='';
   }
   if(dl) { dl.href = (m.url||'') + '/download'; dl.download = m.url.split('/').pop(); }
+  if(cap) {
+    if(m.caption) { cap.textContent = m.caption; cap.style.display=''; }
+    else { cap.textContent=''; cap.style.display='none'; }
+  }
 }
 
 function tourLbNav(delta) {
@@ -2517,13 +3009,24 @@ document.addEventListener('DOMContentLoaded', () => {
     if(e.target === this) closeModal();
   });
 
-  // Lightbox keyboard navigation
+  // Global mouseup: finalize elevation drag-selection if released outside the strip
+  document.addEventListener('mouseup', function(e) {
+    if(!_elevDragging) return;
+    _elevDragging = false;
+    const dragDist = Math.abs(e.clientX - (_elevDragAnchorX || e.clientX));
+    if(dragDist < 8) clearElevSelection();
+    _elevDragAnchorX = null;
+  });
+
+  // Keyboard navigation
   document.addEventListener('keydown', e => {
     const lb = document.getElementById('tour-lightbox');
     if(lb.style.display==='flex') {
       if(e.key==='ArrowRight') tourLbNav(1);
       else if(e.key==='ArrowLeft') tourLbNav(-1);
       else if(e.key==='Escape') closeTourLightbox();
+    } else if(e.key==='Escape' && document.getElementById('grades-modal').style.display==='flex') {
+      closeGradesModal();
     }
   });
 
@@ -2540,6 +3043,7 @@ document.addEventListener('DOMContentLoaded', () => {
 (async () => {
   await U.load();
   initMap();
+  initStageHScrollbar();
   buildStageColHead();
   _syncStageListHeight();
   await loadUsers();

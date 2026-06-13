@@ -260,13 +260,13 @@ def _global_stage_matching(con, uid: int, start_date: str, end_date: str, stages
     """
     Assign activities to stages using global greedy scoring.
 
-    Scores each (stage, activity) pair on three factors:
-      - GPS proximity  (weight 2.0) — strong signal when both have coordinates
-      - Distance match (weight 1.0) — how close the distances are within ±35%
-      - Date order     (weight 0.5) — activity rank within the tour aligns with stage_num rank
+    Supports one activity covering multiple consecutive stages (e.g. riding stages 1+2
+    in a single activity). Candidates include both single-stage and multi-stage groups.
 
-    The date-order factor resolves ambiguity for no-GPS activities: an activity that
-    happened on day 5 of the tour should beat a same-distance stage from day 17.
+    Scores each (stage-group, activity) pair on three factors:
+      - GPS proximity  (weight 2.0) — checks activity start vs first stage's start
+      - Distance match (weight 1.0) — activity distance vs sum of stages in group
+      - Date order     (weight 0.5) — activity rank aligns with first stage's rank
 
     The tour date window is extended by ±1 day to catch activities recorded the day
     before/after the official tour start/end (common when tour dates are approximate).
@@ -300,60 +300,97 @@ def _global_stage_matching(con, uid: int, start_date: str, end_date: str, stages
     n_acts   = len(rows)
     n_stages = len(stages)
 
-    candidates: list = []  # (score, stage_index, act_index)
-    for si, stage in enumerate(stages):
-        stage_dist = stage["distance_mi"]
-        slat       = stage["start_lat"]
-        slon       = stage["start_lon"]
-        dist_lo    = stage_dist * 0.65
-        dist_hi    = stage_dist * 1.35
-        stage_rank = (stage["stage_num"] - 1) / max(n_stages - 1, 1)
+    def _score_group(si_list: list, ai: int) -> Optional[float]:
+        """Score an activity against a consecutive group of stages. Returns None if no match."""
+        first_stage   = stages[si_list[0]]
+        combined_dist = sum(stages[si]["distance_mi"] for si in si_list)
+        slat          = first_stage["start_lat"]
+        slon          = first_stage["start_lon"]
 
-        lat_d = lon_d = None
-        if slat is not None and slon is not None:
-            lat_d = 5.0 / 111.0
-            lon_d = 5.0 / (111.0 * math.cos(math.radians(slat)))
+        act_id, act_ts, act_dist, act_lat, act_lon, _ = rows[ai]
+        act_dist_v = act_dist or 0.0
 
-        for ai, (act_id, act_ts, act_dist, act_lat, act_lon, _) in enumerate(rows):
-            act_dist_v = act_dist or 0.0
-            if not (dist_lo <= act_dist_v <= dist_hi):
-                continue
+        if not (combined_dist * 0.65 <= act_dist_v <= combined_dist * 1.35):
+            return None
 
-            # GPS proximity
-            gps_score = 0.0
-            if act_lat is not None and act_lon is not None:
-                if lat_d is not None:
-                    if (slat - lat_d <= act_lat <= slat + lat_d and
-                            slon - lon_d <= act_lon <= slon + lon_d):
-                        gps_score = 2.0   # confirmed GPS match
-                    else:
-                        continue          # activity GPS outside this stage's area — skip
+        # GPS proximity — anchored to first stage's start point
+        gps_score = 0.0
+        if act_lat is not None and act_lon is not None:
+            if slat is not None and slon is not None:
+                lat_d = 5.0 / 111.0
+                lon_d = 5.0 / (111.0 * math.cos(math.radians(slat)))
+                if (slat - lat_d <= act_lat <= slat + lat_d and
+                        slon - lon_d <= act_lon <= slon + lon_d):
+                    gps_score = 2.0   # confirmed GPS match
                 else:
-                    gps_score = 0.3       # activity has GPS but stage doesn't — mild bonus
-            # else: no GPS on activity — GPS-neutral (gps_score = 0)
+                    return None       # activity GPS outside this stage's area — skip
+            else:
+                gps_score = 0.3       # activity has GPS but stage doesn't — mild bonus
 
-            # Distance score: 1.0 = perfect, 0.0 = at the ±35% edge
-            dist_score = 1.0 - abs(act_dist_v - stage_dist) / (stage_dist * 0.35)
+        # Distance score: 1.0 = perfect, 0.0 = at the ±35% edge
+        dist_score = 1.0 - abs(act_dist_v - combined_dist) / (combined_dist * 0.35)
 
-            # Date-order score: activity's chronological rank vs stage's positional rank
-            act_rank   = ai / max(n_acts - 1, 1)
-            date_score = 1.0 - abs(act_rank - stage_rank)
+        # Date-order score: activity rank vs first stage's positional rank
+        stage_rank = (first_stage["stage_num"] - 1) / max(n_stages - 1, 1)
+        act_rank   = ai / max(n_acts - 1, 1)
+        date_score = 1.0 - abs(act_rank - stage_rank)
 
-            score = gps_score + dist_score + 0.5 * date_score
-            candidates.append((score, si, ai))
+        return gps_score + dist_score + 0.5 * date_score
 
-    # Greedy assignment — highest score first; each stage and activity used at most once
+    # Build candidates: (score, [si_list], ai)
+    # Include single-stage and multi-stage (up to 4 consecutive) groups
+    candidates: list = []
+    for ai in range(len(rows)):
+        for group_size in range(1, min(5, n_stages + 1)):
+            for start_si in range(n_stages - group_size + 1):
+                si_list = list(range(start_si, start_si + group_size))
+                score   = _score_group(si_list, ai)
+                if score is not None:
+                    candidates.append((score, si_list, ai))
+
+    # Greedy assignment — highest score first
+    # An activity assigned to multiple stages consumes all of them at once
     candidates.sort(key=lambda x: -x[0])
     used_stages: set = set()
     used_acts:   set = set()
     assignments: dict = {}  # stage_id -> row index into `rows`
 
-    for _score, si, ai in candidates:
-        if si in used_stages or ai in used_acts:
+    for _score, si_list, ai in candidates:
+        if any(si in used_stages for si in si_list) or ai in used_acts:
             continue
-        assignments[stages[si]["id"]] = ai
-        used_stages.add(si)
+        for si in si_list:
+            assignments[stages[si]["id"]] = ai
+            used_stages.add(si)
         used_acts.add(ai)
+
+    # ── Repair pass ───────────────────────────────────────────────────────────
+    # When a single-stage match wins over a multi-stage group (e.g. the
+    # activity distance is slightly closer to one stage's distance than to the
+    # combined distance), adjacent stages may be left orphaned.  Walk through
+    # orphaned stages and extend a neighbouring assignment when the neighbour's
+    # activity distance is also compatible with the combined 2-stage distance.
+    # Repeat until no more extensions are possible (handles 3+ consecutive
+    # orphaned stages in a single long activity).
+    repair_changed = True
+    while repair_changed:
+        repair_changed = False
+        for si in range(n_stages):
+            if stages[si]["id"] in assignments:
+                continue  # already matched
+            orphan_dist = stages[si].get("distance_mi") or 0.0
+            for adj_si in (si - 1, si + 1):
+                if not (0 <= adj_si < n_stages):
+                    continue
+                if stages[adj_si]["id"] not in assignments:
+                    continue  # neighbour also unmatched
+                ai         = assignments[stages[adj_si]["id"]]
+                nbr_dist   = stages[adj_si].get("distance_mi") or 0.0
+                combined   = orphan_dist + nbr_dist
+                act_dist_v = rows[ai][2] or 0.0
+                if combined > 0 and combined * 0.65 <= act_dist_v <= combined * 1.35:
+                    assignments[stages[si]["id"]] = ai
+                    repair_changed = True
+                    break
 
     return {
         stage["id"]: (_build_completion(rows[assignments[stage["id"]]]) if stage["id"] in assignments else None)
@@ -1290,12 +1327,18 @@ async def tour_share_page(token: str, request: Request):
         display_name = user_row[0] if user_row else "Unknown"
     finally:
         con.close()
+    try:
+        owner_profile = db_getter().get_user_profile(share_uid)
+        use_metric = owner_profile.get("use_metric", False)
+    except Exception:
+        use_metric = False
     return templates.TemplateResponse("tour_share.html", {
         "request":      request,
         "token":        token,
         "tour_title":   title,
         "display_name": display_name,
         "share_uid":    share_uid,
+        "use_metric":   use_metric,
     })
 
 
@@ -1728,8 +1771,10 @@ async def tour_page(request: Request):
     is_admin = bool(user and user.get("is_admin"))
     try:
         ui_prefs = db_getter().get_ui_prefs(uid)
+        profile  = db_getter().get_user_profile(uid)
+        ui_prefs["use_metric"] = profile.get("use_metric", False)
     except Exception:
-        ui_prefs = {}
+        ui_prefs = {"use_metric": False}
     return templates.TemplateResponse("tour.html", {
         "request": request,
         "current_user_id": uid,

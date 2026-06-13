@@ -201,7 +201,7 @@ const ALL_COLS = [
   {id:'dist',      label:'Dist',        sort:'distance_m',   w:'78px',  align:'right', unitLabel: () => U.distUnit(),  render: a => fmtN(U.dist(a.distance_mi),2)},
   {id:'active',    label:'MovTime',     sort:'active_time',  w:'76px',  align:'right', render: a => fmtHMS(a.active_time)},
   {id:'duration',  label:'Duration',    sort:'duration',     w:'76px',  align:'right', render: a => fmtHMS(a.duration)},
-  {id:'climb',     label:'Climb',       sort:'total_climb_m',w:'72px',  align:'right', unitLabel: () => U.climbUnit(), render: a => a.total_climb_ft?U.climb(a.total_climb_ft):'—'},
+  {id:'climb',     label:'Ascent',      sort:'total_climb_m',w:'72px',  align:'right', unitLabel: () => U.climbUnit(), render: a => a.total_climb_ft?U.climb(a.total_climb_ft):'—'},
   {id:'mvspd',     label:'MvSpd',       sort:'avg_speed_mps',w:'88px',  align:'right', unitLabel: () => U.speedUnit(), render: a => fmtN(U.speed(a.avg_speed_mph),1)},
   {id:'avgspd',    label:'AvgSpd',      sort:'',             w:'88px',  align:'right', unitLabel: () => U.speedUnit(), render: a => { const s=(a.duration&&a.distance_mi)?(a.distance_mi/(a.duration/3600)):0; return fmtN(U.speed(s),1); }},
   {id:'hr',        label:'HR',          sort:'avg_heartrate',w:'52px',  align:'right', render: a => a.avg_heartrate?Math.round(a.avg_heartrate):'—'},
@@ -499,6 +499,13 @@ function setCmpMapStyle(styleKey) {
   document.querySelectorAll('.map-style-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.style === styleKey);
   });
+}
+
+function cmpRecenter() {
+  if (!cmp.map || !cmp.tracks || !cmp.tracks.length) return;
+  const allLL = [];
+  cmp.tracks.forEach(t => { if (t) t.getLatLngs().forEach(ll => allLL.push(ll)); });
+  if (allLL.length) cmp.map.fitBounds(L.latLngBounds(allLL), {padding:[16,16]});
 }
 
 function clearMap() {
@@ -819,6 +826,7 @@ function buildDetailHTML(a) {
     userMap,
     showAiSummary:    _hasAnthropicKey,
     aiRefreshCb:      'loadAISummary',
+    shareCb:          'openActivityShareDialog',
     escFn:            escHtml,
     fmtDateFn:        fmtDate,
     fmtHMSFn:         fmtHMS,
@@ -1384,7 +1392,7 @@ function buildColHead() {
     div.style.justifyContent = col.align === 'right' ? 'flex-end' : '';
     div.draggable = true;
     const unitSuffix = col.unitLabel ? ` <span style="font-size:9px;font-weight:400;opacity:.6;text-transform:none;letter-spacing:0">(${col.unitLabel()})</span>` : '';
-    div.innerHTML = col.label + unitSuffix + (state.sortBy === col.sort ? ` <span class="sort-arr">${state.sortDir==='desc'?'↓':'↑'}</span>` : '');
+    div.innerHTML = `<span style="overflow:hidden;min-width:0;flex:1">${col.label}${unitSuffix}${state.sortBy === col.sort ? ` <span class="sort-arr">${state.sortDir==='desc'?'↓':'↑'}</span>` : ''}</span>`;
 
     // Sort on click (not drag)
     div.addEventListener('click', () => {
@@ -1398,7 +1406,6 @@ function buildColHead() {
     // Touch drag-to-reorder (iOS doesn't support HTML5 DnD)
     div.addEventListener('touchstart', e => {
       if (e.touches.length !== 1) return;
-      // Don't start if touch is on the resize separator
       if (e.target.classList.contains('ch-sep')) return;
       const t = e.touches[0];
       _colDragPending = { colId: col.id, div, startX: t.clientX, startY: t.clientY };
@@ -1428,7 +1435,7 @@ function buildColHead() {
       renderVirtualList();
     });
 
-    // Add resize separator INSIDE header div (so it doesn't affect grid)
+    // Resize separator between columns (works for mouse and touch)
     if (i < cols.length - 1) {
       const sep = document.createElement('div');
       sep.className = 'ch-sep';
@@ -2114,4 +2121,49 @@ async function _runImportQueue(files) {
 document.getElementById('import-overlay').addEventListener('click', function(e) {
   if (e.target === this) closeImportModal();
 });
+
+// ── Activity Share ─────────────────────────────────────────────────────────────
+let _shareActivityId = null;
+
+async function openActivityShareDialog(activityId) {
+  _shareActivityId = activityId;
+  const overlay = document.getElementById('share-activity-overlay');
+  const urlInput = document.getElementById('share-activity-url');
+  const copyBtn  = document.getElementById('share-activity-copy-btn');
+  if (copyBtn) { copyBtn.textContent = 'Copy'; copyBtn.style.background = '#f97316'; }
+  urlInput.value = 'Generating link…';
+  overlay.style.display = 'flex';
+  try {
+    const resp = await fetch(`/activities/${activityId}/publish`, { method: 'POST' });
+    if (!resp.ok) throw new Error('Failed');
+    const data = await resp.json();
+    urlInput.value = `${window.location.origin}/activities/share/${data.token}`;
+  } catch (e) {
+    urlInput.value = 'Error generating link';
+  }
+}
+
+function closeActivityShare() {
+  document.getElementById('share-activity-overlay').style.display = 'none';
+}
+
+async function copyActivityShareLink() {
+  const url = document.getElementById('share-activity-url').value;
+  const btn  = document.getElementById('share-activity-copy-btn');
+  try {
+    await navigator.clipboard.writeText(url);
+    btn.textContent = 'Copied!';
+    btn.style.background = '#22c55e';
+    setTimeout(() => { btn.textContent = 'Copy'; btn.style.background = '#f97316'; }, 2000);
+  } catch (e) {
+    document.getElementById('share-activity-url').select();
+  }
+}
+
+async function revokeActivityShare() {
+  if (!_shareActivityId) return;
+  if (!confirm('Revoke this share link? The link will stop working for anyone you shared it with.')) return;
+  await fetch(`/activities/${_shareActivityId}/publish`, { method: 'DELETE' });
+  closeActivityShare();
+}
 

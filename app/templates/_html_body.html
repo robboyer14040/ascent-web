@@ -52,6 +52,7 @@
         <button class="map-style-btn"        data-style="carto-light" onclick="setMapStyle('carto-light')">Light</button>
         <button class="map-style-btn"        data-style="esri-sat"    onclick="setMapStyle('esri-sat')">Satellite</button>
       </div>
+      <button onclick="refitMap()" title="Re-center map" style="position:absolute;bottom:8px;left:8px;z-index:500;background:rgba(0,0,0,.6);color:#ccc;border:1px solid rgba(255,255,255,.15);border-radius:4px;padding:3px 6px;font-size:13px;line-height:1;cursor:pointer;backdrop-filter:blur(4px)"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1 5V1h4M9 1h4v4M13 9v4H9M5 13H1V9"/></svg></button>
     </div>
   </div>
   </div><!-- #top-row -->
@@ -76,6 +77,7 @@
             <span id="photo-count" style="color:#fff;font-size:11px"></span>
             <button onclick="event.stopPropagation();photoNav(1)" style="background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:14px">›</button>
           </div>
+          <div id="photo-caption" style="display:none;position:absolute;bottom:0;left:0;right:0;padding:4px 8px;background:rgba(0,0,0,.55);color:#fff;font-size:11px;line-height:1.3;text-align:center;pointer-events:none"></div>
           <button id="photo-dl-btn" onclick="event.stopPropagation();downloadCurrentMedia()" style="display:none;position:absolute;bottom:6px;right:6px;background:rgba(0,0,0,.55);border:none;color:#fff;border-radius:4px;padding:4px 6px;cursor:pointer;line-height:1" title="Download"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
         </div>
       </div>
@@ -86,6 +88,7 @@
       <div id="lightbox" style="display:none;position:fixed;inset:0;background:var(--lb-bg);z-index:9999;align-items:center;justify-content:center;flex-direction:column" onclick="closeLightbox()">
         <img id="lb-img" alt="" style="max-width:90vw;max-height:85vh;object-fit:contain;border-radius:6px">
         <video id="lb-vid" controls playsinline style="display:none;max-width:90vw;max-height:85vh;border-radius:6px;background:#000" onclick="event.stopPropagation()"></video>
+        <div id="lb-caption" style="display:none;color:var(--lb-text);font-size:13px;margin-top:10px;max-width:min(90vw,600px);text-align:center;line-height:1.4;opacity:.9" onclick="event.stopPropagation()"></div>
         <div style="display:flex;align-items:center;gap:1rem;margin-top:12px">
           <button onclick="event.stopPropagation();photoNav(-1,true)" style="background:var(--lb-btn);border:none;color:var(--lb-text);border-radius:6px;padding:6px 18px;cursor:pointer;font-size:18px">‹</button>
           <span id="lb-count" style="color:var(--lb-muted);font-size:13px"></span>
@@ -144,7 +147,7 @@
               <option value="speed">Speed</option>
               <option value="power">Power</option>
               <option value="hr">Heart Rate</option>
-              <option value="climb">Climb</option>
+              <option value="climb">Ascent</option>
               <option value="pace">Pace</option>
               <option value="cadence">Cadence</option>
               <option value="temp">Temperature</option>

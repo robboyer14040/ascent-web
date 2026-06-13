@@ -96,16 +96,16 @@ select.filter-sel{background:var(--surface2);border:1px solid var(--border2);col
     <div class="card"><div class="card-label">Activities</div><div class="card-val">{{ stats.get("total_activities",0)|int }}</div></div>
     <div class="card" id="stat-distance" data-mi="{{ stats.get('total_distance_mi',0) }}" data-km="{{ stats.get('total_distance_km',0) }}"><div class="card-label">Distance</div><div class="card-val">{{ stats.get("total_distance_mi",0) }}</div><div class="card-sub">{{ stats.get("total_distance_km",0) }} km</div></div>
     <div class="card"><div class="card-label">Total Time</div><div class="card-val" style="font-size:1.3rem">{{ stats.get("total_active_hms","—") }}</div></div>
-    <div class="card" id="stat-climbing" data-ft="{{ stats.get('total_climb_ft',0)|int }}" data-m="{{ stats.get('total_climb_m',0)|int }}"><div class="card-label">Climbing</div><div class="card-val">{{ "{:,}".format(stats.get("total_climb_ft",0)|int) }}</div><div class="card-sub">{{ "{:,}".format(stats.get("total_climb_m",0)|int) }} m</div></div>
+    <div class="card" id="stat-climbing" data-ft="{{ stats.get('total_climb_ft',0)|int }}" data-m="{{ stats.get('total_climb_m',0)|int }}"><div class="card-label">Ascent</div><div class="card-val">{{ "{:,}".format(stats.get("total_climb_ft",0)|int) }}</div><div class="card-sub">{{ "{:,}".format(stats.get("total_climb_m",0)|int) }} m</div></div>
     <div class="card"><div class="card-label">Avg Heart Rate</div><div class="card-val">{{ stats.get("avg_heartrate",0)|int }}</div><div class="card-sub">bpm</div></div>
     <div class="card" id="stat-longest" data-mi="{{ stats.get('longest_mi',0) }}"><div class="card-label">Longest</div><div class="card-val">{{ stats.get("longest_mi",0) }}</div><div class="card-sub">{{ "%.1f"|format(stats.get("longest_mi",0) * 1.60934) }} km</div></div>
-    <div class="card" id="stat-bestclimb" data-ft="{{ stats.get('most_climb_ft',0)|int }}"><div class="card-label">Best Climb</div><div class="card-val">{{ "{:,}".format(stats.get("most_climb_ft",0)|int) }}</div><div class="card-sub">{{ "{:,}".format((stats.get("most_climb_ft",0) / 3.28084)|int) }} m</div></div>
+    <div class="card" id="stat-bestclimb" data-ft="{{ stats.get('most_climb_ft',0)|int }}"><div class="card-label">Best Ascent</div><div class="card-val">{{ "{:,}".format(stats.get("most_climb_ft",0)|int) }}</div><div class="card-sub">{{ "{:,}".format((stats.get("most_climb_ft",0) / 3.28084)|int) }} m</div></div>
   </div>
 
   <!-- Chart section with period toggle -->
   <div class="section">
     <div class="section-head">
-      <h2 id="chartTitle">Distance &amp; Climb by Month</h2>
+      <h2 id="chartTitle">Distance &amp; Ascent by Month</h2>
       <div class="section-controls">
         <div class="period-toggle">
           <button class="period-btn" data-period="week" onclick="setPeriod('week')">Week</button>
@@ -177,7 +177,7 @@ select.filter-sel{background:var(--surface2);border:1px solid var(--border2);col
     <div class="card" style="padding:0;overflow:hidden">
       <table>
         <thead><tr>
-          <th>Date</th><th>Name</th><th>Type</th><th>Distance</th><th>Time</th><th>Climb</th><th>Avg HR</th>
+          <th>Date</th><th>Name</th><th>Type</th><th>Distance</th><th>Time</th><th>Ascent</th><th>Avg HR</th>
         </tr></thead>
         <tbody id="recentTbody"><tr><td colspan="7" style="text-align:center;color:var(--muted);padding:1.5rem">Loading…</td></tr></tbody>
       </table>
@@ -384,7 +384,7 @@ async function loadChart(save = true) {
   let titleBase, data;
 
   if (currentPeriod === 'week') {
-    titleBase = 'Distance & Climb by Day';
+    titleBase = 'Distance & Ascent by Day';
     const week = selVal('weekSel');
     if (!week) { buildChart([], []); updatePeriodStats([]); loadZoneCharts(); return; }
     const r = await fetch(`/api/stats/daily?week_start=${week}`);
@@ -392,7 +392,7 @@ async function loadChart(save = true) {
     buildChart(data.map(d => dayLabel(d.day)), data);
 
   } else if (currentPeriod === 'month') {
-    titleBase = 'Distance & Climb by Day';
+    titleBase = 'Distance & Ascent by Day';
     const year  = selVal('yearSel')  || new Date().getFullYear();
     const month = selVal('monthSel') || (new Date().getMonth() + 1);
     const r = await fetch(`/api/stats/daily-month?year=${year}&month=${month}`);
@@ -402,12 +402,12 @@ async function loadChart(save = true) {
   } else {
     const year = selVal('yearSel');
     if (year) {
-      titleBase = `Distance & Climb by Month`;
+      titleBase = `Distance & Ascent by Month`;
       const r = await fetch(`/api/stats/monthly?year=${year}`);
       data = await r.json();
       buildChart(data.map(d => monthLabel(d.month)), data);
     } else {
-      titleBase = 'Distance & Climb by Year';
+      titleBase = 'Distance & Ascent by Year';
       const r = await fetch('/api/stats/yearly');
       data = await r.json();
       buildChart(data.map(d => d.year), data);
@@ -488,7 +488,7 @@ function updatePeriodStats(data) {
       <div class="ps-sub">${dSecVal} ${dSecU}</div>
     </div>
     <div class="ps-card">
-      <div class="ps-label">Total Climb</div>
+      <div class="ps-label">Total Ascent</div>
       <div class="ps-val">${cPrimVal} <span style="font-size:.8rem;font-weight:400;color:var(--muted)">${cPrimU}</span></div>
       <div class="ps-sub">${cSecVal} ${cSecU}</div>
     </div>
@@ -503,9 +503,9 @@ function updatePeriodStats(data) {
       <div class="ps-sub">${totalActs} activities</div>
     </div>
     <div class="ps-card">
-      <div class="ps-label">Max Climb</div>
+      <div class="ps-label">Max Ascent</div>
       <div class="ps-val">${maxClimb > 0 ? maxClimbPrim : '—'} <span style="font-size:.8rem;font-weight:400;color:var(--muted)">${maxClimb > 0 ? maxClimbPrimU : ''}</span></div>
-      <div class="ps-sub">${maxClimb > 0 ? maxClimbSec + ' ' + maxClimbSecU : 'no climb data'}</div>
+      <div class="ps-sub">${maxClimb > 0 ? maxClimbSec + ' ' + maxClimbSecU : 'no ascent data'}</div>
     </div>
     <div class="ps-card">
       <div class="ps-label">Avg Power</div>
@@ -551,7 +551,7 @@ function buildChart(labels, data) {
           yAxisID: 'y',
         },
         {
-          label: 'Climb',
+          label: 'Ascent',
           data: data.map(d => ((d.climb_ft||0)/1000).toFixed(2)),
           type: 'line',
           borderColor: '#3b82f6',
@@ -568,7 +568,7 @@ function buildChart(labels, data) {
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
-        legend: { labels: { color: PC, font: { size: 13, weight: 'bold' }, usePointStyle: true, generateLabels: chart => chart.data.datasets.map((ds, i) => ds.label === 'Climb'
+        legend: { labels: { color: PC, font: { size: 13, weight: 'bold' }, usePointStyle: true, generateLabels: chart => chart.data.datasets.map((ds, i) => ds.label === 'Ascent'
             ? { text: ds.label, fillStyle: 'transparent', strokeStyle: ds.borderColor, lineWidth: 3, pointStyle: 'line', hidden: false, datasetIndex: i, fontColor: PC }
             : { text: ds.label, fillStyle: ds.backgroundColor, strokeStyle: ds.backgroundColor, lineWidth: 0, pointStyle: 'rect', hidden: false, datasetIndex: i, fontColor: PC }
           ) } },

@@ -21,6 +21,7 @@
             <button class="map-style-btn" data-style="carto-light"  onclick="setCmpMapStyle('carto-light')">Light</button>
             <button class="map-style-btn" data-style="esri-sat"     onclick="setCmpMapStyle('esri-sat')">Satellite</button>
           </div>
+          <button onclick="cmpRecenter()" title="Re-center map" style="position:absolute;bottom:8px;left:8px;z-index:500;background:rgba(0,0,0,.6);color:#ccc;border:1px solid rgba(255,255,255,.15);border-radius:4px;padding:3px 6px;font-size:13px;line-height:1;cursor:pointer;backdrop-filter:blur(4px)"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1 5V1h4M9 1h4v4M13 9v4H9M5 13H1V9"/></svg></button>
         </div>
         <div id="compare-zoom"></div>
       </div>
@@ -266,6 +267,25 @@
     </div>
     <div style="display:flex;justify-content:flex-end;margin-top:14px;flex:none">
       <button onclick="closeBestEfforts()" style="font-size:12px;font-weight:600;padding:6px 18px;border-radius:7px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);cursor:pointer">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Share Activity Modal ───────────────────────────────────────────────── -->
+<div id="share-activity-overlay" style="display:none;position:fixed;inset:0;z-index:3500;align-items:center;justify-content:center" onclick="if(event.target===this)closeActivityShare()">
+  <div style="position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(2px)"></div>
+  <div style="position:relative;z-index:1;background:var(--surface);border:1px solid var(--border2);border-radius:12px;padding:20px 22px;width:480px;max-width:calc(100vw - 2rem);box-shadow:0 20px 60px rgba(0,0,0,.6)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <div style="font-size:15px;font-weight:700;color:var(--text)">Share Activity</div>
+      <button onclick="closeActivityShare()" style="background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;line-height:1;padding:0 2px">✕</button>
+    </div>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Anyone with this link can view this activity without an Ascent account.</p>
+    <div style="display:flex;gap:6px;margin-bottom:12px">
+      <input id="share-activity-url" type="text" readonly onclick="this.select()" style="flex:1;background:var(--surface2);border:1px solid var(--border2);border-radius:6px;padding:7px 10px;font-size:11.5px;color:var(--text);outline:none;font-family:monospace;cursor:text">
+      <button id="share-activity-copy-btn" onclick="copyActivityShareLink()" style="padding:7px 14px;background:#f97316;border:none;border-radius:6px;color:#fff;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0">Copy</button>
+    </div>
+    <div style="display:flex;justify-content:flex-end">
+      <button onclick="revokeActivityShare()" style="font-size:11px;color:#ef4444;background:none;border:none;cursor:pointer;padding:0;text-decoration:underline;text-underline-offset:2px">Revoke link</button>
     </div>
   </div>
 </div>

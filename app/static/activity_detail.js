@@ -61,6 +61,7 @@ function buildActivityDetailHTML(a, opts) {
     showAiSummary    = false,
     suppressTitle    = false,
     aiRefreshCb      = 'loadAISummary',
+    shareCb          = null,
     escFn,
     fmtDateFn,
     fmtHMSFn,
@@ -97,6 +98,9 @@ function buildActivityDetailHTML(a, opts) {
     ? `<button class="edit-btn delete-act-btn" id="delete-act-btn" onclick="${deleteCallback}()" title="Delete this activity">Delete</button>`
     : '';
   const exportBtn = `<a href="/activities/${a.id}/export/gpx" class="edit-btn" style="text-decoration:none" title="Download as GPX file">↓ GPX</a>`;
+  const shareBtn = (isOwner && shareCb)
+    ? `<button class="edit-btn" onclick="${shareCb}(${a.id})" title="Share this activity — create a public link for friends"><svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.15em;margin-right:3px"><circle cx="10" cy="2.5" r="1.5"/><circle cx="2.5" cy="6.5" r="1.5"/><circle cx="10" cy="10.5" r="1.5"/><line x1="4" y1="7.3" x2="8.5" y2="9.7"/><line x1="8.5" y1="3.3" x2="4" y2="5.7"/></svg>Share</button>`
+    : '';
   const saveRouteBtn = (saveRouteCb && (a.points_count > 0 || a.points_saved))
     ? `<button class="edit-btn" id="save-route-btn" onclick="${saveRouteCb}(${a.id},'${(a.name||'Route').replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')" title="Save GPS track as a route">+ Route</button>`
     : '';
@@ -117,7 +121,7 @@ function buildActivityDetailHTML(a, opts) {
                                                   : (+(a.distance_mi*1.60934).toFixed(2))+' km') : null],
     ['Mov Time',  a.active_time       ? fmtHMS(a.active_time)                                          : null, null],
     ['Duration',  a.duration          ? fmtHMS(a.duration)                                             : null, null],
-    ['Climb',     a.total_climb_ft    ? U.climbS(a.total_climb_ft)                                     : null,
+    ['Ascent',    a.total_climb_ft    ? U.climbS(a.total_climb_ft)                                     : null,
                   a.total_climb_ft    ? (U.metric ? Math.round(a.total_climb_ft)+' ft'
                                                   : Math.round(a.total_climb_ft*0.3048)+' m') : null],
     ['Descent',   a.total_descent_ft  ? U.climbS(a.total_descent_ft)                                   : null,
@@ -187,12 +191,12 @@ function buildActivityDetailHTML(a, opts) {
 
   // ── Assemble ──────────────────────────────────────────────────────────────────
   const titleBarHtml = suppressTitle
-    ? (editBtn||deleteBtn||resyncBtn||exportBtn||saveRouteBtn||stravaLink
-        ? `<div class="act-title-bar"><div class="act-title-links" style="margin-left:0">${editBtn}${deleteBtn}${resyncBtn}${exportBtn}${saveRouteBtn}${stravaLink}</div></div>`
+    ? (editBtn||deleteBtn||resyncBtn||exportBtn||shareBtn||saveRouteBtn||stravaLink
+        ? `<div class="act-title-bar"><div class="act-title-links" style="margin-left:0">${editBtn}${deleteBtn}${resyncBtn}${exportBtn}${shareBtn}${saveRouteBtn}${stravaLink}</div></div>`
         : '')
     : `<div class="act-title-bar">
       <div style="display:flex;align-items:flex-start;min-width:0;flex:1">${avatarHtml}<div class="act-title">${esc(a.name||'(unnamed)')}${isDirty?'<span style="color:#f97316;font-size:10px;margin-left:5px;font-weight:400;vertical-align:middle">edited</span>':''}</div></div>
-      <div class="act-title-links">${editBtn}${deleteBtn}${resyncBtn}${exportBtn}${saveRouteBtn}${stravaLink}</div>
+      <div class="act-title-links">${editBtn}${deleteBtn}${resyncBtn}${exportBtn}${shareBtn}${saveRouteBtn}${stravaLink}</div>
     </div>`;
   return `
     ${titleBarHtml}

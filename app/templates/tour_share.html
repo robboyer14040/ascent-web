@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>{{ tour_title }} — Ascent</title>
 <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
 <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
@@ -28,7 +28,7 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
 .nav-version{font-size:10px;color:var(--muted);margin-left:4px}
 .spacer{flex:1}
 .nav-sub{font-size:11px;color:var(--muted)}
-#page{display:flex;height:calc(100vh - 44px);overflow:hidden}
+#page{display:flex;height:calc(100vh - 44px - env(safe-area-inset-bottom,0px));overflow:hidden}
 #sidebar{width:300px;flex-shrink:0;display:flex;flex-direction:column;border-right:1px solid var(--border);overflow:hidden}
 #tour-header{padding:10px 12px;border-bottom:1px solid var(--border);flex-shrink:0}
 #tour-header-title{font-size:13px;font-weight:600;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -51,8 +51,12 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
 .map-style-btn{background:rgba(0,0,0,.6);color:#ccc;border:1px solid rgba(255,255,255,.15);border-radius:4px;padding:2px 7px;font-size:11px;cursor:pointer;backdrop-filter:blur(4px);transition:all .15s}
 .map-style-btn:hover{background:rgba(0,0,0,.8);color:#fff}
 .map-style-btn.active{background:#f97316;color:#fff;border-color:#f97316}
-#resize-handle{height:6px;background:var(--surface2);cursor:row-resize;flex-shrink:0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);transition:background .1s}
+#resize-handle{height:6px;background:var(--surface2);cursor:row-resize;flex-shrink:0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);transition:background .1s;position:relative}
 #resize-handle:hover,#resize-handle.dragging{background:var(--accent);opacity:.5}
+@media(pointer:coarse){ #resize-handle{height:20px}}
+#mob-portrait-stats{display:none;flex-shrink:0}
+#mob-portrait-stats.stats-collapsed{display:none}
+#stats-toggle{display:none;position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#fff;padding:6px;line-height:1;font-size:20px;font-weight:700;z-index:1;text-shadow:0 1px 4px rgba(0,0,0,.6)}
 #stage-elev-strip{height:100px;flex-shrink:0;background:var(--bg);border-bottom:1px solid var(--border);position:relative;display:none}
 #stage-elev-canvas{width:100%;height:100%;display:block}
 #stage-elev-xhair{display:none;position:absolute;top:4px;bottom:0;width:1px;background:rgba(255,255,255,.45);pointer-events:none}
@@ -70,6 +74,59 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
 .ai-card-label{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--accent);margin-bottom:5px;font-weight:600}
 .ai-card-body{font-size:12px;color:var(--text);line-height:1.6}
 .ai-card-loading{font-size:11px;color:var(--muted);font-style:italic}
+
+/* ── Mobile layout ─────────────────────────────────────────────────── */
+#mob-tour-header{display:none}
+@media(max-width:767px),(max-height:500px) and (orientation:landscape) and (pointer:coarse){
+  nav{display:none}
+  #mob-tour-header{
+    display:flex;align-items:center;gap:8px;
+    position:fixed;top:0;left:0;right:0;height:52px;
+    background:var(--surface);border-bottom:1px solid var(--border);
+    z-index:600;padding:0 14px;font-size:14px;font-weight:600;flex-shrink:0
+  }
+  #mob-tour-back{
+    font-size:16px;font-weight:500;color:var(--accent);
+    background:none;border:none;cursor:pointer;
+    padding:8px 4px;margin-right:2px;line-height:1
+  }
+  #resize-handle{height:28px;display:flex;align-items:center;justify-content:center;cursor:row-resize}
+  #resize-handle::after{content:'';display:block;width:40px;height:4px;background:var(--border2);border-radius:2px}
+  #stage-detail{-webkit-overflow-scrolling:touch;padding:12px}
+}
+/* ── Portrait: stacked layout ── */
+@media(max-width:767px) and (orientation:portrait){
+  #page{
+    display:flex;flex-direction:column;
+    height:calc(100vh - 52px - env(safe-area-inset-bottom,0px));margin-top:52px;
+    overflow:hidden;position:static
+  }
+  #sidebar{display:contents}
+  #tour-header{order:1;flex-shrink:0;border-bottom:1px solid var(--border)}
+  #main{order:2;flex:0 0 auto;position:static;width:100%;display:flex;flex-direction:column}
+  #stage-list-wrap{position:fixed;left:0;right:0;bottom:0;overflow-y:auto;display:flex;flex-direction:column;background:var(--bg);z-index:5;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain}
+  #stage-detail{display:none;padding:12px}
+  body.mob-stage-view #tour-header{display:none}
+  body.mob-stage-view #stage-list-wrap{display:none}
+  body.mob-stage-view #main{flex:1}
+  body.mob-stage-view #stage-detail{display:block;position:fixed;left:0;right:0;bottom:0;overflow-y:scroll;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;background:var(--bg);z-index:20;padding:12px 12px 60px}
+  #mob-portrait-stats{display:block;padding:8px;overflow-x:auto;border-bottom:1px solid var(--border)}
+  body.mob-stage-view #mob-portrait-stats{display:none}
+  #stats-toggle{display:block}
+}
+/* ── Landscape: sidebar left, map+detail right ── */
+@media(max-height:500px) and (orientation:landscape) and (pointer:coarse){
+  #page{
+    display:flex;flex-direction:row;
+    height:calc(100vh - 52px - env(safe-area-inset-bottom,0px));
+    margin-top:52px;overflow:hidden
+  }
+  body.mob-landscape-stage #stage-detail{padding-bottom:calc(12px + env(safe-area-inset-bottom,0px))}
+  #sidebar{width:200px;flex-shrink:0;display:flex;flex-direction:column;overflow:hidden;border-right:1px solid var(--border)}
+  #stage-list-wrap{position:static;flex:1;min-height:0}
+  #tour-header{padding:6px}
+  #main{flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden}
+}
 </style>
 </head>
 <body>
@@ -81,6 +138,11 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
   <div class="spacer"></div>
   <span class="nav-sub">Progress shared by <strong style="color:var(--text)">{{ display_name }}</strong></span>
 </nav>
+
+<div id="mob-tour-header">
+  <button id="mob-tour-back" onclick="mobShareBack()">‹</button>
+  <span id="mob-tour-title">{{ tour_title }}</span>
+</div>
 
 <div id="page">
   <div id="sidebar">
@@ -108,7 +170,8 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
       </div>
       <button onclick="resetZoom()" title="Reset zoom" style="position:absolute;bottom:24px;left:8px;z-index:500;background:rgba(0,0,0,.6);color:#ccc;border:1px solid rgba(255,255,255,.15);border-radius:4px;padding:3px 6px;font-size:13px;cursor:pointer;backdrop-filter:blur(4px)"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1 5V1h4M9 1h4v4M13 9v4H9M5 13H1V9"/></svg></button>
     </div>
-    <div id="resize-handle" title="Drag to resize map"></div>
+    <div id="resize-handle" title="Drag to resize map"><button id="stats-toggle" onmousedown="event.stopPropagation()" ontouchstart="event.stopPropagation()" onclick="toggleMobStats()" title="Toggle stats">▾</button></div>
+    <div id="mob-portrait-stats"></div>
     <div id="stage-elev-strip">
       <canvas id="stage-elev-canvas"></canvas>
       <div id="stage-elev-xhair"></div>
@@ -123,8 +186,9 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
   <button onclick="closeShareLightbox()" style="position:absolute;top:14px;right:18px;font-size:22px;color:var(--lb-text);background:none;border:none;cursor:pointer;line-height:1">✕</button>
   <button onclick="event.stopPropagation();shareNavLb(-1)" style="position:absolute;left:12px;font-size:28px;color:var(--lb-text);background:none;border:none;cursor:pointer;line-height:1;top:50%;transform:translateY(-50%)">‹</button>
   <button onclick="event.stopPropagation();shareNavLb(1)"  style="position:absolute;right:12px;font-size:28px;color:var(--lb-text);background:none;border:none;cursor:pointer;line-height:1;top:50%;transform:translateY(-50%)">›</button>
-  <img id="slb-img" src="" style="max-width:90vw;max-height:80vh;object-fit:contain;border-radius:6px">
-  <video id="slb-vid" controls playsinline style="display:none;max-width:90vw;max-height:80vh;border-radius:6px;background:#000" onclick="event.stopPropagation()"></video>
+  <img id="slb-img" src="" style="max-width:90vw;max-height:78vh;object-fit:contain;border-radius:6px">
+  <video id="slb-vid" controls playsinline style="display:none;max-width:90vw;max-height:78vh;border-radius:6px;background:#000" onclick="event.stopPropagation()"></video>
+  <div id="slb-caption" style="display:none;color:var(--lb-text);font-size:13px;margin-top:10px;max-width:min(90vw,600px);text-align:center;line-height:1.4;opacity:.9" onclick="event.stopPropagation()"></div>
   <div style="display:flex;align-items:center;gap:14px;margin-top:10px" onclick="event.stopPropagation()">
     <span id="slb-count" style="color:var(--lb-muted);font-size:12px;min-width:50px;text-align:center"></span>
     <a id="slb-download" href="#" download style="font-size:12px;font-weight:600;color:#f97316;border:1px solid #f97316;border-radius:4px;padding:3px 10px;text-decoration:none">↓ Download</a>
@@ -138,9 +202,9 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
 <script>
 const TOKEN = {{ token | tojson }};
 
-// ── Units (default statute; toggled by URL ?metric=1) ────────────────────────
+// ── Units ────────────────────────────────────────────────────────────────────
 const U = {
-  metric: new URLSearchParams(location.search).get('metric') === '1',
+  metric: {{ use_metric | tojson }},
   distS:  mi  => U.metric ? (mi*1.60934).toFixed(1)+' km' : mi.toFixed(1)+' mi',
   climbS: ft  => U.metric ? Math.round(ft*0.3048)+' m' : Math.round(ft)+' ft',
   speedS: mph => U.metric ? (mph*1.60934).toFixed(1)+' km/h' : mph.toFixed(1)+' mph',
@@ -200,11 +264,16 @@ const TILE_LAYERS = {
   'esri-sat':    ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}','© Esri'],
 };
 function initMap() {
+  const mapFrac = (isMobTour() && isPortrait()) ? 0.38 : 0.55;
+  mapH = Math.round((window.innerHeight - tourChromeH()) * mapFrac);
+  document.getElementById('map').style.height = mapH + 'px';
   shareMap = L.map('map', {zoomControl:false, attributionControl:true}).setView([20,0], 2);
   L.control.zoom({position:'bottomright'}).addTo(shareMap);
   setMapStyle('osm', true);
   routeGroup = L.featureGroup().addTo(shareMap);
   MapUtils.addScale(shareMap, U.metric);
+  new ResizeObserver(() => { shareMap && shareMap.invalidateSize({animate:false}); })
+    .observe(document.getElementById('map'));
 }
 function setMapStyle(key, init=false) {
   document.querySelectorAll('.map-style-btn').forEach(b => b.classList.toggle('active', b.dataset.style===key));
@@ -219,21 +288,34 @@ function resetZoom() {
 // ── Resize handle ─────────────────────────────────────────────────────────────
 (function() {
   const handle = document.getElementById('resize-handle');
-  const mapEl  = document.getElementById('map');
-  let dragging = false, startY = 0, startH = 0;
-  handle.addEventListener('mousedown', e => {
-    dragging = true; startY = e.clientY; startH = mapEl.offsetHeight;
-    document.body.style.userSelect = 'none'; handle.classList.add('dragging');
-  });
-  document.addEventListener('mousemove', e => {
-    if(!dragging) return;
-    const h = Math.max(80, Math.min(startH + e.clientY - startY, window.innerHeight * 0.8));
-    mapEl.style.height = h + 'px'; shareMap && shareMap.invalidateSize();
-  });
-  document.addEventListener('mouseup', () => {
-    dragging = false; document.body.style.userSelect = ''; handle.classList.remove('dragging');
-  });
+  let drag = false, startY = 0, startH = 0;
+  function startDrag(y) { drag=true; startY=y; startH=mapH; handle.classList.add('dragging'); document.body.style.cursor='row-resize'; }
+  function moveDrag(y)  {
+    if(!drag) return;
+    mapH = Math.max(80, Math.min(window.innerHeight - tourChromeH() - 80, startH + (y - startY)));
+    document.getElementById('map').style.height = mapH + 'px';
+    shareMap && shareMap.invalidateSize();
+    if (document.body.classList.contains('mob-stage-view') && isPortrait()) {
+      document.getElementById('stage-detail').style.top = _stageDetailTop();
+    } else { _syncStageListHeight(); }
+  }
+  function endDrag()    { if(!drag) return; drag=false; handle.classList.remove('dragging'); document.body.style.cursor=''; shareMap && shareMap.invalidateSize(); }
+  handle.addEventListener('mousedown', e => { startDrag(e.clientY); e.preventDefault(); });
+  document.addEventListener('mousemove', e => moveDrag(e.clientY));
+  document.addEventListener('mouseup', endDrag);
+  handle.addEventListener('touchstart', e => { startDrag(e.touches[0].clientY); e.preventDefault(); }, {passive:false});
+  handle.addEventListener('touchmove',  e => { moveDrag(e.touches[0].clientY); e.preventDefault(); }, {passive:false});
+  handle.addEventListener('touchend',   endDrag);
 })();
+
+function toggleMobStats() {
+  const mps = document.getElementById('mob-portrait-stats');
+  const btn = document.getElementById('stats-toggle');
+  if (!mps || !btn) return;
+  const collapsed = mps.classList.toggle('stats-collapsed');
+  btn.textContent = collapsed ? '▸' : '▾';
+  _syncStageListHeight();
+}
 
 // ── Elevation strip ───────────────────────────────────────────────────────────
 let _elevChart = null, _elevRawPts = null, _elevHoverDot = null;
@@ -342,8 +424,30 @@ async function reverseGeocode(lat, lon) {
   } catch(e) { return null; }
 }
 
+// ── Mobile helpers ─────────────────────────────────────────────────────────────
+const isMobTour  = () => Math.min(window.innerWidth, window.innerHeight) <= 767;
+const isPortrait = () => window.innerWidth < window.innerHeight;
+const tourChromeH = () => isMobTour() ? 52 : 44;
+function _stageDetailTop() {
+  const strip = document.getElementById('stage-elev-strip');
+  const rh    = document.getElementById('resize-handle');
+  const elevH = (strip && strip.style.display !== 'none') ? strip.offsetHeight : 0;
+  const rhH   = rh ? rh.offsetHeight : 6;
+  return (tourChromeH() + mapH + rhH + elevH) + 'px';
+}
+function _syncStageListHeight() {
+  const wrap = document.getElementById('stage-list-wrap');
+  if (!isMobTour() || !isPortrait()) { if (wrap) wrap.style.top = ''; return; }
+  const header = document.getElementById('tour-header');
+  const main   = document.getElementById('main');
+  if (!wrap) return;
+  const top = 52 + (header ? header.offsetHeight : 0) + (main ? main.offsetHeight : 0);
+  wrap.style.top = top + 'px';
+}
+
 // ── State ─────────────────────────────────────────────────────────────────────
 let tourInfo = null, pointsCache = {}, selectedId = null;
+let mapH = 0;
 let _shareLbMedia = [], _shareLbIdx = 0;
 
 // ── Lightbox ──────────────────────────────────────────────────────────────────
@@ -352,6 +456,7 @@ function openShareLightbox(idx) {
   _shareLbIdx = idx;
   const m=_shareLbMedia[idx], img=document.getElementById('slb-img'), vid=document.getElementById('slb-vid');
   const cnt=document.getElementById('slb-count'), dl=document.getElementById('slb-download');
+  const cap=document.getElementById('slb-caption');
   if(m.type==='video'){
     img.style.display='none'; vid.style.display=''; vid.src=m.hls_url||m.url||'';
   } else {
@@ -359,6 +464,7 @@ function openShareLightbox(idx) {
   }
   cnt.textContent = _shareLbMedia.length>1 ? `${idx+1} / ${_shareLbMedia.length}` : '';
   if(dl){dl.href=(m.url||'')+'/download'; dl.download=m.url.split('/').pop();}
+  if(cap){if(m.caption){cap.textContent=m.caption;cap.style.display='';}else{cap.textContent='';cap.style.display='none';}}
   document.getElementById('share-lightbox').style.display='flex';
 }
 function shareNavLb(d){openShareLightbox((_shareLbIdx+d+_shareLbMedia.length)%_shareLbMedia.length);}
@@ -374,12 +480,19 @@ document.addEventListener('keydown', e => {
     else if(e.key==='ArrowRight')shareNavLb(1);
   }
 });
+(function(){
+  let _lbTx=0;
+  const lb=document.getElementById('share-lightbox');
+  lb.addEventListener('touchstart',e=>{_lbTx=e.touches[0].clientX;},{passive:true});
+  lb.addEventListener('touchend',e=>{
+    const dx=e.changedTouches[0].clientX-_lbTx;
+    if(Math.abs(dx)>40) shareNavLb(dx<0?1:-1);
+  },{passive:true});
+})();
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 (async function init() {
   initMap();
-  shareMap.getContainer().style.height = '320px';
-  document.getElementById('map').style.height = '320px';
 
   try {
     tourInfo = await fetch(`/tours/share/${TOKEN}/data`).then(r=>r.json());
@@ -396,6 +509,7 @@ document.addEventListener('keydown', e => {
   drawRoutes(null);
   renderStageList();
   renderDetail(null);
+  _syncStageListHeight();
 
   setTimeout(() => { shareMap.invalidateSize(); if(_lastBounds) shareMap.fitBounds(_lastBounds, {padding:[24,24]}); }, 150);
 })();
@@ -473,7 +587,85 @@ function selectStage(id) {
     const pts=pointsCache[String(selectedId)];
     if(pts?.length) shareMap.fitBounds(L.latLngBounds(pts.map(p=>[p[0],p[1]])),{padding:[24,24]});
   } else { resetZoom(); }
+  if (isMobTour()) {
+    if (isPortrait()) {
+      if (selectedId) {
+        document.body.classList.add('mob-stage-view');
+        document.getElementById('stage-detail').style.top = _stageDetailTop();
+        const s = (tourInfo?.stages||[]).find(s => String(s.id) === String(selectedId));
+        document.getElementById('mob-tour-title').textContent = s ? `Stage ${s.stage_num}: ${s.name}` : 'Stage';
+      } else {
+        document.body.classList.remove('mob-stage-view');
+        document.getElementById('stage-detail').style.top = '';
+        document.getElementById('mob-tour-title').textContent = tourInfo?.title || '{{ tour_title }}';
+        _syncStageListHeight();
+      }
+      setTimeout(() => shareMap && shareMap.invalidateSize(), 50);
+    } else {
+      if (selectedId) { document.body.classList.add('mob-landscape-stage'); }
+      else { document.body.classList.remove('mob-landscape-stage'); }
+      setTimeout(() => shareMap && shareMap.invalidateSize(), 60);
+    }
+  }
 }
+
+// ── Portrait back button ───────────────────────────────────────────────────────
+function mobShareBack() {
+  if (document.body.classList.contains('mob-stage-view')) {
+    document.body.classList.remove('mob-stage-view');
+    document.getElementById('stage-detail').style.top = '';
+    selectedId = null;
+    document.getElementById('mob-tour-title').textContent = tourInfo?.title || '{{ tour_title }}';
+    renderStageList(); drawRoutes(null); renderDetail(null);
+    setTimeout(() => { shareMap && shareMap.invalidateSize(); _syncStageListHeight(); }, 50);
+  } else {
+    window.location.href = '/';
+  }
+}
+
+// ── Orientation change ────────────────────────────────────────────────────────
+(function() {
+  function _applyMapH() {
+    const mapEl  = document.getElementById('map');
+    const pageEl = document.getElementById('page');
+    if (!mapEl) return;
+    const availH = window.innerHeight - tourChromeH();
+    if (pageEl) pageEl.style.height = availH + 'px';
+    const frac = isPortrait() ? 0.38 : 0.55;
+    mapH = Math.round(availH * frac);
+    mapEl.style.height = mapH + 'px';
+  }
+  function _doOrientFix() {
+    if (!selectedId) {
+      document.body.classList.remove('mob-stage-view', 'mob-landscape-stage');
+      document.getElementById('stage-detail').style.top = '';
+      _syncStageListHeight(); _applyMapH();
+      shareMap && shareMap.invalidateSize();
+      return;
+    }
+    if (isPortrait()) {
+      document.body.classList.remove('mob-landscape-stage');
+      document.body.classList.add('mob-stage-view');
+      _applyMapH();
+      document.getElementById('stage-detail').style.top = _stageDetailTop();
+    } else {
+      document.body.classList.remove('mob-stage-view');
+      document.getElementById('stage-detail').style.top = '';
+      document.body.classList.add('mob-landscape-stage');
+      _applyMapH();
+    }
+    shareMap && shareMap.invalidateSize();
+  }
+  let _orientTimer = null;
+  window.addEventListener('resize', () => {
+    if (!isMobTour()) return;
+    clearTimeout(_orientTimer);
+    _orientTimer = setTimeout(() => {
+      _doOrientFix();
+      setTimeout(() => { _applyMapH(); shareMap && shareMap.invalidateSize(); }, 400);
+    }, 100);
+  });
+})();
 
 // ── Detail pane ───────────────────────────────────────────────────────────────
 async function renderDetail(activeId) {
@@ -502,9 +694,9 @@ async function renderDetail(activeId) {
     let html=`<div class="stats-grid" style="grid-template-columns:repeat(7,1fr);margin-bottom:14px">`;
     html+=`<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Stages</div><div class="sc-val">${done.length} / ${stages.length}</div><div class="sc-sub">completed</div></div>`;
     html+=`<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Total Dist</div><div class="sc-val">${U.distS(totalDist)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${ad}</div><div class="sc-sub">${U.distS(doneDist)} done (${pctD}%)</div></div>`;
-    html+=`<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Total Climb</div><div class="sc-val">${U.climbS(totalClimb)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${ac}</div><div class="sc-sub">${U.climbS(doneClimb)} done (${pctC}%)</div></div>`;
+    html+=`<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Total Ascent</div><div class="sc-val">${U.climbS(totalClimb)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${ac}</div><div class="sc-sub">${U.climbS(doneClimb)} done (${pctC}%)</div></div>`;
     html+=`<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Avg Dist</div><div class="sc-val">${U.distS(avgDist)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${aad}</div><div class="sc-sub">per stage</div></div>`;
-    html+=`<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Avg Climb</div><div class="sc-val">${U.climbS(avgClimb)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${aac}</div><div class="sc-sub">per stage</div></div>`;
+    html+=`<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Avg Ascent</div><div class="sc-val">${U.climbS(avgClimb)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${aac}</div><div class="sc-sub">per stage</div></div>`;
     html+=`<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Max Stage Dist</div><div class="sc-val">${U.distS(maxDist)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${amd}</div><div class="sc-sub">Stage ${maxDistIdx+1}</div></div>`;
     html+=`<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Max Ascent</div><div class="sc-val">${U.climbS(maxClimb)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${amc}</div><div class="sc-sub">Stage ${maxClimbIdx+1}</div></div>`;
     html+=`</div>`;
@@ -515,6 +707,12 @@ async function renderDetail(activeId) {
     if(lastPt) html+=`<div style="font-size:12px"><span style="color:var(--muted);margin-right:6px">End:</span><span id="ov-end-loc">Loading…</span></div>`;
     html+=`</div>`;
     el.innerHTML=html;
+    const _mpsEl=document.getElementById('mob-portrait-stats');
+    if(_mpsEl) _mpsEl.innerHTML=`<div class="stats-grid">${
+      `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Stages</div><div class="sc-val">${done.length} / ${stages.length}</div><div class="sc-sub">completed</div></div>`+
+      `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Total Dist</div><div class="sc-val">${U.distS(totalDist)}</div><div class="sc-sub">${U.distS(doneDist)} done</div></div>`+
+      `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Total Ascent</div><div class="sc-val">${U.climbS(totalClimb)}</div><div class="sc-sub">${U.climbS(doneClimb)} done</div></div>`
+    }</div>`;
     if(first?.start_lat!=null) reverseGeocode(first.start_lat,first.start_lon).then(loc=>{const e=document.getElementById('ov-start-loc');if(e)e.textContent=loc||'—';});
     if(lastPt) reverseGeocode(lastPt[0],lastPt[1]).then(loc=>{const e=document.getElementById('ov-end-loc');if(e)e.textContent=loc||'—';});
     if(tourInfo.ai_summary) {
@@ -525,11 +723,18 @@ async function renderDetail(activeId) {
 
   const stage=stages.find(s=>String(s.id)===String(activeId));
   if(!stage){el.innerHTML='';return;}
+  const _mps=document.getElementById('mob-portrait-stats');
+  if(_mps) _mps.innerHTML='';
 
-  const stageHead=`<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:10px">
-    <div style="flex:1;min-width:0;font-size:15px;font-weight:600">Stage ${stage.stage_num}: ${esc(stage.name)}</div>
-    <button onclick="selectStage('${stage.id}')" style="flex-shrink:0;font-size:11px;font-weight:600;color:var(--text);border:1px solid var(--border2);border-radius:4px;padding:3px 8px;background:none;cursor:pointer;white-space:nowrap;line-height:1.4">← Entire Tour</button>
-  </div>`;
+  const _sIdx=stages.findIndex(s=>String(s.id)===String(stage.id));
+  const _prevS=_sIdx>0?stages[_sIdx-1]:null;
+  const _nextS=_sIdx<stages.length-1?stages[_sIdx+1]:null;
+  const _navBtn=(s,arrow)=>s
+    ?`<button onclick="selectStage('${s.id}')" title="Stage ${s.stage_num}" style="background:none;border:1px solid var(--border2);border-radius:4px;width:26px;height:24px;font-size:13px;color:var(--text);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${arrow}</button>`
+    :`<button disabled style="background:none;border:1px solid var(--border2);border-radius:4px;width:26px;height:24px;font-size:13px;color:var(--muted);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;opacity:.3">${arrow}</button>`;
+  const _stageNavHtml=`<div style="display:flex;gap:4px;margin-right:4px;flex-shrink:0">${_navBtn(_prevS,'←')}${_navBtn(_nextS,'→')}</div>`;
+  const _entireTourBtn=`<div style="padding:14px 0 6px"><button onclick="selectStage('${stage.id}')" style="width:100%;padding:11px;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;font-size:13px;font-weight:500;color:var(--text);cursor:pointer;text-align:center">← Entire Tour</button></div>`;
+  const stageHead=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><div style="font-size:15px;font-weight:600;line-height:1.3;flex:1">Stage ${stage.stage_num}: ${esc(stage.name)}</div>${_stageNavHtml}</div>`;
 
   if(!stage.completion) {
     // ── Uncompleted stage ────────────────────────────────────────────────────
@@ -549,8 +754,8 @@ async function renderDetail(activeId) {
     html+=`<div class="section-label" style="margin-bottom:6px">Estimated Route</div>`;
     html+=`<div class="stats-grid" style="grid-template-columns:repeat(${bigFt>0?3:2},1fr);margin-bottom:10px">`;
     html+=chip4('Distance',distP,distS,'&nbsp;');
-    html+=chip4('Total Climb',climP,climS,'&nbsp;');
-    if(bigFt>0) html+=chip4('Biggest Climb',bigP,bigS,bigAt);
+    html+=chip4('Total Ascent',climP,climS,'&nbsp;');
+    if(bigFt>0) html+=chip4('Biggest Ascent',bigP,bigS,bigAt);
     html+=`</div>`;
     html+=`<div style="display:flex;align-items:baseline;gap:10px;min-height:1.4em">
       <div style="flex:1;font-size:11px;color:var(--muted)"><span style="font-size:10px;text-transform:uppercase;letter-spacing:.06em">Trajectory:</span> <span id="share-loc-text">Loading…</span></div>
@@ -585,13 +790,13 @@ async function renderDetail(activeId) {
     // AI Stage Summary — cached only, no regeneration. AI Coach Advice NOT shown.
     fetch(`/tours/share/${TOKEN}/stages/${stage.id}/ai-summary`)
       .then(r=>r.ok?r.json():null).then(d=>{
-        if(!d?.summary) return;
-        el.insertAdjacentHTML('beforeend',`<div class="ai-card"><div class="ai-card-label">AI Stage Summary</div><div class="ai-card-body">${esc(d.summary)}</div></div>`);
-      }).catch(()=>{});
+        if(d?.summary) el.insertAdjacentHTML('beforeend',`<div class="ai-card"><div class="ai-card-label">AI Stage Summary</div><div class="ai-card-body">${esc(d.summary)}</div></div>`);
+        el.insertAdjacentHTML('beforeend',_entireTourBtn);
+      }).catch(()=>{ el.insertAdjacentHTML('beforeend',_entireTourBtn); });
 
   } else {
     // ── Completed stage ──────────────────────────────────────────────────────
-    hideStageElevation();
+    drawStageElevation(pointsCache[String(activeId)]);
     const c=stage.completion;
     el.innerHTML=stageHead+
       `<div style="font-size:11px;color:#22c55e;font-weight:500;margin-bottom:10px">✓ Completed ${c.date}</div>`+
@@ -616,7 +821,7 @@ async function renderDetail(activeId) {
           ['Distance',  act.distance_mi?U.distS(act.distance_mi):null, act.distance_mi?(U.metric?(+act.distance_mi.toFixed(2))+' mi':(+(act.distance_mi*1.60934).toFixed(2))+' km'):null],
           ['Mov Time',  act.active_time?fmtHMS(act.active_time):null, null],
           ['Duration',  act.duration?fmtHMS(act.duration):null, null],
-          ['Climb',     act.total_climb_ft?U.climbS(act.total_climb_ft):null, act.total_climb_ft?(U.metric?Math.round(act.total_climb_ft)+' ft':Math.round(act.total_climb_ft*0.3048)+' m'):null],
+          ['Ascent',    act.total_climb_ft?U.climbS(act.total_climb_ft):null, act.total_climb_ft?(U.metric?Math.round(act.total_climb_ft)+' ft':Math.round(act.total_climb_ft*0.3048)+' m'):null],
           ['Descent',   act.total_descent_ft?U.climbS(act.total_descent_ft):null, act.total_descent_ft?(U.metric?Math.round(act.total_descent_ft)+' ft':Math.round(act.total_descent_ft*0.3048)+' m'):null],
           ['Mov Spd',   act.avg_speed_mph?U.speedS(act.avg_speed_mph):null, act.avg_speed_mph?(U.metric?act.avg_speed_mph.toFixed(1)+' mph':(act.avg_speed_mph*1.60934).toFixed(1)+' km/h'):null],
           ['Avg Spd',   (act.duration&&act.distance_mi)?U.speedS(+(act.distance_mi/(act.duration/3600)).toFixed(1)):null,(act.duration&&act.distance_mi)?(()=>{const mph=+(act.distance_mi/(act.duration/3600)).toFixed(1);return U.metric?mph+' mph':(+(mph*1.60934).toFixed(1))+' km/h';})():null],
@@ -666,6 +871,7 @@ async function renderDetail(activeId) {
         });
         aHtml+=`</div>`;
         aHtml+=`<div id="share-photos"></div>`;
+        aHtml+=_entireTourBtn;
         body.innerHTML=aHtml;
 
         // Async: weather + location
@@ -694,12 +900,13 @@ async function loadSharePhotos(actId) {
     _shareLbMedia=media;
     const el=document.getElementById('share-photos'); if(!el) return;
     let ph=`<div class="section-label" style="margin-top:12px;margin-bottom:6px">Photos</div>`;
-    ph+=`<div style="display:flex;flex-wrap:wrap;gap:6px;padding-bottom:6px">`;
+    ph+=`<div style="display:flex;flex-wrap:wrap;gap:6px;padding-bottom:6px;align-items:flex-start">`;
     media.forEach((m,i)=>{
+      const cap=m.caption?`<div style="font-size:10px;color:var(--muted);margin-top:3px;line-height:1.3;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-word">${esc(m.caption)}</div>`:'';
       if(m.type==='image'){
-        ph+=`<img src="${m.url}" loading="lazy" style="height:80px;width:80px;object-fit:cover;border-radius:5px;cursor:pointer;flex-shrink:0" onclick="openShareLightbox(${i})">`;
+        ph+=`<div style="flex-shrink:0;width:80px"><img src="${m.url}" loading="lazy" style="height:80px;width:80px;object-fit:cover;border-radius:5px;cursor:pointer;display:block" onclick="openShareLightbox(${i})">${cap}</div>`;
       } else {
-        ph+=`<div style="position:relative;height:80px;width:80px;border-radius:5px;overflow:hidden;flex-shrink:0;cursor:pointer;background:#000" onclick="openShareLightbox(${i})">
+        ph+=`<div style="flex-shrink:0;width:80px"><div style="position:relative;height:80px;width:80px;border-radius:5px;overflow:hidden;cursor:pointer;background:#000" onclick="openShareLightbox(${i})">
           <video src="${m.hls_url||m.url}" muted preload="metadata" playsinline
             style="width:100%;height:100%;object-fit:cover;pointer-events:none"
             onloadedmetadata="this.currentTime=0.1"></video>
@@ -708,7 +915,7 @@ async function loadSharePhotos(actId) {
               <span style="font-size:13px;margin-left:2px">▶</span>
             </div>
           </div>
-        </div>`;
+        </div>${cap}</div>`;
       }
     });
     ph+=`</div>`;
@@ -720,7 +927,7 @@ function _renderActFallback(c) {
   const body=document.getElementById('act-detail-body'); if(!body) return;
   let fb=`<div class="stats-grid">`;
   if(c.distance_mi) fb+=mkStatChip('Distance',U.distS(c.distance_mi),'');
-  if(c.climb_ft)    fb+=mkStatChip('Climb',U.climbS(c.climb_ft),'');
+  if(c.climb_ft)    fb+=mkStatChip('Ascent',U.climbS(c.climb_ft),'');
   if(c.moving_s)    fb+=mkStatChip('Mov Time',fmtHMS(c.moving_s),'');
   if(c.duration_s)  fb+=mkStatChip('Duration',fmtHMS(c.duration_s),'');
   if(c.avg_hr)      fb+=mkStatChip('Avg HR',Math.round(c.avg_hr)+' bpm','');

@@ -57,6 +57,7 @@ async function showPhoto(idx) {
   const nav   = document.getElementById('photo-nav');
   const count = document.getElementById('photo-count');
   const dlBtn = document.getElementById('photo-dl-btn');
+  const cap   = document.getElementById('photo-caption');
 
   if (idx === null || !photoState.media.length) {
     img.style.display = 'none';
@@ -64,6 +65,7 @@ async function showPhoto(idx) {
     ph.style.display  = '';
     nav.style.display = 'none';
     if (dlBtn) dlBtn.style.display = 'none';
+    if (cap) { cap.textContent = ''; cap.style.display = 'none'; }
     return;
   }
 
@@ -91,6 +93,10 @@ async function showPhoto(idx) {
     nav.style.display = 'none';
   }
   if (dlBtn) dlBtn.style.display = 'block';
+  if (cap) {
+    if (item.caption) { cap.textContent = item.caption; cap.style.display = ''; }
+    else { cap.textContent = ''; cap.style.display = 'none'; }
+  }
 }
 
 function downloadCurrentMedia() {
@@ -108,6 +114,7 @@ function downloadCurrentMedia() {
 async function _lbShow(item) {
   const lbImg = document.getElementById('lb-img');
   const lbVid = document.getElementById('lb-vid');
+  const lbCap = document.getElementById('lb-caption');
   if (item.type === 'video' && item.hls_url) {
     lbImg.style.display = 'none';
     lbVid.style.display = 'block';
@@ -118,6 +125,10 @@ async function _lbShow(item) {
     _lbDetach();
     lbImg.src = item.url;
     lbImg.style.display = 'block';
+  }
+  if (lbCap) {
+    if (item.caption) { lbCap.textContent = item.caption; lbCap.style.display = ''; }
+    else { lbCap.textContent = ''; lbCap.style.display = 'none'; }
   }
 }
 
