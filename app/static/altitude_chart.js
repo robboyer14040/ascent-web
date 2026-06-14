@@ -675,7 +675,7 @@ async function drawElevation(data, version) {
       const altHover = lerp(data.alt_ft, idx);
       const dot = document.getElementById('elev-anim-dot');
       if (dot && yScale && altHover != null) {
-        const dotPy = yScale.getPixelForValue(Math.round(altHover));
+        const dotPy = yScale.getPixelForValue(U.metric ? Math.round(altHover * 0.3048) : Math.round(altHover));
         dot.style.display = 'block';
         dot.style.left    = px + 'px';
         dot.style.top     = dotPy + 'px';
@@ -1268,7 +1268,7 @@ function animUpdateUI(i) {
         dot.style.display = 'none';
       } else {
         const px  = xScale.getPixelForValue(xMi);
-        const py  = yScale.getPixelForValue(Math.round(alt || 0));
+        const py  = yScale.getPixelForValue(U.metric ? Math.round((alt || 0) * 0.3048) : Math.round(alt || 0));
         dot.style.display = 'block';
         dot.style.left    = px + 'px';
         dot.style.top     = py + 'px';
