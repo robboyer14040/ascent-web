@@ -28,14 +28,14 @@ No test suite exists. Testing is manual via browser.
 
 ## Architecture
 
-**Backend:** FastAPI with Jinja2 server-rendered templates. No frontend build step — `main.html` is a self-contained ~6000-line SPA with embedded CSS and JavaScript.
+**Backend:** FastAPI with Jinja2 server-rendered templates. No frontend build step.
 
 **Key files:**
 - `app/main.py` — FastAPI entry, lifespan setup, router wiring
 - `app/db.py` — All SQLite queries; the core data layer (~51KB)
 - `app/auth.py` — bcrypt password hashing + itsdangerous session tokens
-- `app/routers/` — Route handlers split by domain (api, coach, strava, photos, settings, weather, auth, activities)
-- `app/templates/main.html` — Primary SPA interface
+- `app/routers/` — Route handlers split by domain: `activities`, `api`, `auth`, `coach`, `fitgpx` (GPX/FIT export+import), `photos`, `route_builder` (route planning), `settings`, `strava`, `tours` (shared tours with per-user stage completion), `weather`
+- `app/templates/` — Jinja2 templates; partials are prefixed with `_`. JavaScript is extracted to `.js` files that live alongside the templates (e.g. `main.js`, `coach.js`, `activity_detail.js`).
 
 **Router dependency injection pattern:** Routers receive `db_getter` and `templates` at startup in `main.py` rather than using FastAPI's `Depends()`. Each router module has a `create_router(db_getter, templates)` factory function.
 
@@ -50,7 +50,7 @@ No test suite exists. Testing is manual via browser.
 The Ascent SQLite schema has non-obvious unit conventions:
 
 - `points.latitude_e7` / `longitude_e7` — stored as plain degrees (naming is misleading; not multiplied by 1e7)
-- `points.orig_altitude_cm` — actually feet, not centimeters
+- `points.orig_altitude_cm` — centimetres (convert to feet: `× (1/100) × 3.28084`)
 - `points.temperature_c10` — tenths of °F, not °C
 - `activities.attributes_json` — flat NSArray serialized as `["key", "value", "key", "value", ...]`
 
@@ -73,6 +73,7 @@ SMTP_PORT            # Optional: SMTP port — 587 (STARTTLS, default) or 465 (S
 SMTP_USER            # Optional: SMTP login username
 SMTP_PASSWORD        # Optional: SMTP login password / app password
 SMTP_FROM            # Optional: From address (defaults to SMTP_USER)
+STADIA_API_KEY       # Optional: Stadia Maps tile API key (route builder; falls back to OSM)
 ```
 
 ## Versioning
