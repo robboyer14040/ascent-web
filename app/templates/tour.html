@@ -1569,13 +1569,19 @@ async function viewEntireTour() {
 async function drawRoutes(activeId) {
   if(!tourMap || !routeGroup || !tourInfo) return;
   routeGroup.clearLayers();
+  MapUtils.clearPhotoMarkers(tourMap);
   try {
-    const byStage = await fetch(`/tours/${tourInfo.id}/points`).then(r=>r.json());
-    _tourPointsCache = byStage;
+    const _muParam = tourMatchUserId ? `?match_user_id=${tourMatchUserId}` : '';
+    const [byStage, actPts] = await Promise.all([
+      fetch(`/tours/${tourInfo.id}/points`).then(r=>r.json()),
+      fetch(`/tours/${tourInfo.id}/activity-points${_muParam}`).then(r=>r.json()).catch(()=>({})),
+    ]);
+    _tourPointsCache = {...byStage};
+    Object.entries(actPts).forEach(([sid, pts]) => { if(pts?.length) _tourPointsCache[sid] = pts; });
     const allPts  = [];
 
     tourStages.forEach((s) => {
-      const pts = byStage[String(s.id)];
+      const pts = _tourPointsCache[String(s.id)];
       if(!pts?.length) return;
       const isActive = activeId && String(s.id)===String(activeId);
       L.polyline(pts, {
@@ -1606,13 +1612,13 @@ async function drawRoutes(activeId) {
       });
 
       // Finish flag at end of last stage
-      const lastPts = tourStages.length ? byStage[String(tourStages[tourStages.length-1].id)] : null;
+      const lastPts = tourStages.length ? _tourPointsCache[String(tourStages[tourStages.length-1].id)] : null;
       if(lastPts?.length)
         L.marker(lastPts[lastPts.length-1], { icon: _endIcon, zIndexOffset: 200, interactive: false }).addTo(routeGroup);
     }
 
     if(activeId) {
-      const pts = byStage[String(activeId)];
+      const pts = _tourPointsCache[String(activeId)];
       if(pts?.length) {
         L.marker(pts[0],            { icon: _startIcon, zIndexOffset: 200, interactive: false }).addTo(routeGroup);
         L.marker(pts[pts.length-1], { icon: _endIcon,   zIndexOffset: 200, interactive: false }).addTo(routeGroup);
@@ -2101,8 +2107,8 @@ async function renderDetail(activeId) {
     const done       = tourStages.filter(s=>s.completion);
     const totalDist  = tourStages.reduce((s,x)=>s+(x.distance_mi||0),0);
     const totalClimb = tourStages.reduce((s,x)=>s+(x.climb_ft||0),0);
-    const doneDist   = done.reduce((s,x)=>s+(x.distance_mi||0),0);
-    const doneClimb  = done.reduce((s,x)=>s+(x.climb_ft||0),0);
+    const doneDist   = done.reduce((s,x)=>s+(x.completion?.distance_mi??x.distance_mi??0),0);
+    const doneClimb  = done.reduce((s,x)=>s+(x.completion?.climb_ft??x.climb_ft??0),0);
     const pctD = totalDist >0 ? Math.round(doneDist /totalDist *100) : 0;
     const pctC = totalClimb>0 ? Math.round(doneClimb/totalClimb*100) : 0;
     const n            = tourStages.length || 1;
@@ -2482,6 +2488,7 @@ let _tourLbIdx   = 0;
 async function loadStagePhotos(actId) {
   const el = document.getElementById('sd-photos');
   if(!el) return;
+  MapUtils.clearPhotoMarkers(tourMap);
   try {
     const r = await fetch(`/activities/${actId}/photos`);
     if(!r.ok) return;
@@ -2510,6 +2517,7 @@ async function loadStagePhotos(actId) {
     });
     html += `</div>`;
     el.innerHTML = html;
+    MapUtils.placePhotoMarkers(tourMap, media, idx => openTourLightbox(idx));
   } catch(e) {}
 }
 

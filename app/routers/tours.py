@@ -592,6 +592,75 @@ async def get_tour_points(tour_id: int, request: Request):
         con.close()
 
 
+_VALID_GPS = (
+    "latitude_e7 != 999.0 AND longitude_e7 != 999.0"
+    " AND latitude_e7 BETWEEN -90 AND 90"
+    " AND longitude_e7 BETWEEN -180 AND 180"
+    " AND NOT (latitude_e7 = 0.0 AND longitude_e7 = 0.0)"
+)
+
+
+def _activity_pts_for_stages(con, stages: list, completions: dict) -> dict:
+    """Return {stage_id: [[lat, lon, alt_ft], ...]} from actual activity GPS for completed stages."""
+    result: dict = {}
+    for stage in stages:
+        comp = completions.get(stage["id"])
+        if not comp or not comp.get("activity_id"):
+            continue
+        rows = con.execute(
+            f"SELECT latitude_e7, longitude_e7, orig_altitude_cm "
+            f"FROM points WHERE track_id=? AND {_VALID_GPS} "
+            f"ORDER BY wall_clock_delta_s ASC, active_time_delta_s ASC",
+            (comp["activity_id"],),
+        ).fetchall()
+        if not rows:
+            continue
+        step = max(1, len(rows) // 800)
+        sampled = list(rows[::step])
+        if rows[-1] not in sampled:
+            sampled.append(rows[-1])
+        result[str(stage["id"])] = [
+            [lat, lon, round(float(alt or 0), 1)]
+            for lat, lon, alt in sampled
+        ]
+    return result
+
+
+@router.get("/tours/{tour_id}/activity-points")
+async def get_tour_activity_points(
+    tour_id: int, request: Request,
+    match_user_id: Optional[int] = Query(default=None),
+):
+    """GPS points from matched actual activities for completed stages, keyed by stage_id."""
+    uid = require_user(request)
+    actual_uid = match_user_id if match_user_id is not None else uid
+
+    con = sqlite3.connect(db_getter().path, timeout=15)
+    try:
+        _ensure_tables(con)
+        row = con.execute(
+            "SELECT start_date, end_date FROM tours WHERE id=?", (tour_id,)
+        ).fetchone()
+        if not row:
+            raise HTTPException(404, "Tour not found")
+
+        stage_rows = con.execute(
+            "SELECT id, stage_num, name, distance_mi, climb_ft, start_lat, start_lon "
+            "FROM tour_stages WHERE tour_id=? ORDER BY stage_num",
+            (tour_id,),
+        ).fetchall()
+        stages = [{
+            "id": sr[0], "stage_num": sr[1], "name": sr[2],
+            "distance_mi": sr[3], "climb_ft": sr[4],
+            "start_lat": sr[5], "start_lon": sr[6],
+        } for sr in stage_rows]
+
+        completions = _global_stage_matching(con, actual_uid, row[0], row[1], stages)
+        return JSONResponse(_activity_pts_for_stages(con, stages, completions))
+    finally:
+        con.close()
+
+
 @router.delete("/tours/{tour_id}")
 async def delete_tour(tour_id: int, request: Request):
     uid = require_user(request)
@@ -1388,6 +1457,38 @@ async def tour_share_points(token: str):
                 by_stage[key] = []
             by_stage[key].append([lat, lon, alt_ft])
         return JSONResponse(by_stage)
+    finally:
+        con.close()
+
+
+@router.get("/tours/share/{token}/activity-points")
+async def tour_share_activity_points(token: str):
+    """Public endpoint — GPS points from actual completed activities for a shared tour."""
+    con = sqlite3.connect(db_getter().path, timeout=15)
+    try:
+        _ensure_tables(con)
+        tour_row = con.execute(
+            "SELECT t.id, t.start_date, t.end_date, ts.user_id "
+            "FROM tour_shares ts JOIN tours t ON t.id=ts.tour_id WHERE ts.token=?",
+            (token,),
+        ).fetchone()
+        if not tour_row:
+            raise HTTPException(404, "Share link not found or revoked")
+        tour_id, start_date, end_date, share_uid = tour_row
+
+        stage_rows = con.execute(
+            "SELECT id, stage_num, name, distance_mi, climb_ft, start_lat, start_lon "
+            "FROM tour_stages WHERE tour_id=? ORDER BY stage_num",
+            (tour_id,),
+        ).fetchall()
+        stages = [{
+            "id": sr[0], "stage_num": sr[1], "name": sr[2],
+            "distance_mi": sr[3], "climb_ft": sr[4],
+            "start_lat": sr[5], "start_lon": sr[6],
+        } for sr in stage_rows]
+
+        completions = _global_stage_matching(con, share_uid, start_date, end_date, stages)
+        return JSONResponse(_activity_pts_for_stages(con, stages, completions))
     finally:
         con.close()
 

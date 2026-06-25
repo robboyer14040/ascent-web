@@ -362,9 +362,13 @@ function stageElevInteraction(opts) {
     // steepest gradient
     let maxGradVal = null, maxGradCptsIdx = null;
     if (gpts?.length) {
-      let maxAbs = -Infinity;
-      for (let i = lo; i <= Math.min(hi, gpts.length - 1); i++) {
-        if (Math.abs(gpts[i].y) > maxAbs) { maxAbs = Math.abs(gpts[i].y); maxGradVal = gpts[i].y; maxGradCptsIdx = i; }
+      const hiClamped = Math.min(hi, gpts.length - 1);
+      const hasPos = Array.from({length: hiClamped - lo + 1}, (_, k) => gpts[lo + k].y).some(g => g > 0);
+      let best = -Infinity;
+      for (let i = lo; i <= hiClamped; i++) {
+        const g = gpts[i].y;
+        if (hasPos && g <= 0) continue;
+        if (Math.abs(g) > best) { best = Math.abs(g); maxGradVal = g; maxGradCptsIdx = i; }
       }
     }
 

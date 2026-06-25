@@ -316,6 +316,7 @@ async function openCompare() {
   const loading  = document.getElementById('cmp-loading');
   const titleEl  = document.getElementById('compare-title');
   overlay.classList.add('open');
+  _overlayPushHistory(_closeCompareImpl);
 
   // Restore persisted settings
   const panel = document.getElementById('compare-panel');
@@ -452,7 +453,7 @@ function initCompareOverlayClose() {
 }
 initCompareOverlayClose();
 
-function closeCompare() {
+function _closeCompareImpl() {
   document.getElementById('compare-overlay').classList.remove('open');
   // Persist panel size
   const _panel = document.getElementById('compare-panel');
@@ -471,6 +472,14 @@ function closeCompare() {
   cmp.zoomMarkers  = [];
   cmp.tracks       = [];
   cmp.savedSegments = [];
+}
+
+function closeCompare() {
+  if (window._overlayHistBack === _closeCompareImpl) {
+    window._overlayHistBack = null;
+    history.back();
+  }
+  _closeCompareImpl();
 }
 
 function buildCompareLegend() {

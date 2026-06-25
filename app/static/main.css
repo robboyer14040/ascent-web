@@ -850,8 +850,9 @@ select.edit-act-input{appearance:none;-webkit-appearance:none;cursor:pointer;pad
   .sc-val{font-size:15px!important}
   /* Analysis tab */
   #mob-tab-analysis #analysis-titlebar{cursor:default!important;touch-action:auto!important}
-  #mob-tab-analysis #chart-toolbar{display:flex!important;padding:4px 8px 2px!important}
-  #mob-tab-analysis #elev-zoom-bar{display:flex!important}
+  #mob-tab-analysis #chart-toolbar{display:flex!important;flex-wrap:wrap!important;padding:4px 8px 2px!important}
+  #mob-tab-analysis #zones-main-btn{margin-left:0!important;margin-right:0!important}
+
   #mob-tab-analysis .sp-tb-btn{min-height:36px;font-size:16px;padding:4px 10px}
   /* Resize handle between chart and info in analysis tab */
   #mob-chart-resize-handle{flex:none;height:16px;display:flex;align-items:center;justify-content:center;background:var(--surface);border-top:1px solid var(--border);border-bottom:1px solid var(--border);touch-action:none;cursor:row-resize;flex-shrink:0}
@@ -865,7 +866,7 @@ select.edit-act-input{appearance:none;-webkit-appearance:none;cursor:pointer;pad
   /* Hide Info tab button — info is now embedded in Analysis tab */
   #mob-detail-tabbar .mob-tab-btn[data-tab="info"]{display:none!important}
   .zones-btn{min-height:36px!important;padding:4px 12px!important;font-size:13px!important}
-  .elev-zoom-btn{min-height:36px!important;padding:4px 10px!important}
+
   /* Photos tab */
   #mob-tab-photos #info-right{width:100%!important;flex:1;background:#111;display:flex!important}
   /* Detail tab bar */

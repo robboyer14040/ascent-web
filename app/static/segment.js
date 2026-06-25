@@ -69,6 +69,7 @@ function openDefineSegment() {
   const overlay = document.getElementById('seg-overlay');
   overlay.classList.add('open');
   seg.open = true;
+  _overlayPushHistory(_closeDefineSegmentImpl);
 
   // Reset zoom slider to 50% (= current view)
   const slider = document.getElementById('seg-zoom-slider');
@@ -114,7 +115,7 @@ function openDefineSegment() {
   });
 }
 
-function closeDefineSegment() {
+function _closeDefineSegmentImpl() {
   if (seg.chart) { seg.chart.destroy(); seg.chart = null; }
   if (seg.map)   { seg.map.remove(); seg.map = null; }
   seg.segPoly = null; seg.prePoly = null; seg.postPoly = null;
@@ -127,6 +128,14 @@ function closeDefineSegment() {
   // Also close Compare if it was open behind this modal
   const cmpOverlay = document.getElementById('compare-overlay');
   if (cmpOverlay && cmpOverlay.classList.contains('open')) closeCompare();
+}
+
+function closeDefineSegment() {
+  if (window._overlayHistBack === _closeDefineSegmentImpl) {
+    window._overlayHistBack = null;
+    history.back();
+  }
+  _closeDefineSegmentImpl();
 }
 
 // ── Smart defaults ─────────────────────────────────────────────────────────────

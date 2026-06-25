@@ -23,6 +23,21 @@ async function _uiPrefsSaveToServer() {
   } catch(e) {}
 }
 
+// ── OVERLAY HISTORY (back-button closes modal instead of navigating away) ────
+// When a full-screen overlay opens, push a history state and register a close
+// callback here. The popstate listener fires it when the user swipes/taps back.
+// Closing via ✕ also pops the state so history stays clean.
+window._overlayHistBack = null;
+window.addEventListener('popstate', () => {
+  const fn = window._overlayHistBack;
+  window._overlayHistBack = null;
+  if (fn) fn();
+});
+function _overlayPushHistory(closeFn) {
+  window._overlayHistBack = closeFn;
+  history.pushState({ ascentOverlay: true }, '');
+}
+
 // ── STATE ────────────────────────────────────────────────────────────────────
 let elevRenderVersion = 0; // incremented each selectActivity call to cancel stale renders
 let currentAct    = null;  // last selected activity object
@@ -511,7 +526,13 @@ function cmpRecenter() {
 function clearMap() {
   [trackLayer,startMark,endMark].forEach(l=>{ if(l) leafMap.removeLayer(l); });
   trackLayer=startMark=endMark=null;
+  MapUtils.clearPhotoMarkers(leafMap);
 }
+function placePhotoMarkers(media) {
+  if (!leafMap) return;
+  MapUtils.placePhotoMarkers(leafMap, media, idx => { showPhoto(idx); photoClick(); });
+}
+
 function drawTrack(geojson) {
   clearMap();
   const coords = geojson?.geometry?.coordinates;
@@ -563,6 +584,7 @@ function drawTrack(geojson) {
   }
   leafMap.fitBounds(trackLayer.getBounds(),{padding:[20,20]});
   document.getElementById('mapPlaceholder').style.display='none';
+  if (typeof photoState !== 'undefined' && photoState.media.length) placePhotoMarkers(photoState.media);
 }
 
 
@@ -2006,6 +2028,7 @@ async function openBestEfforts() {
   if (allSection) allSection.style.display = 'none';
   if (title)   title.textContent = 'Best Efforts';
   ov.style.display = 'flex';
+  _overlayPushHistory(_closeBestEffortsImpl);
 
   try {
     const url = `/api/segments/${segId}/best-efforts?activity_id=${actId || 0}`;
@@ -2060,9 +2083,17 @@ async function openBestEfforts() {
   }
 }
 
-function closeBestEfforts() {
+function _closeBestEffortsImpl() {
   const ov = document.getElementById('best-efforts-overlay');
   if (ov) ov.style.display = 'none';
+}
+
+function closeBestEfforts() {
+  if (window._overlayHistBack === _closeBestEffortsImpl) {
+    window._overlayHistBack = null;
+    history.back();
+  }
+  _closeBestEffortsImpl();
 }
 
 function openImportModal() {

@@ -8,6 +8,7 @@ async function loadPhotos(activityId) {
   photoState.idx = 0;
   _panelDetach();
   showPhoto(null);
+  if (typeof placePhotoMarkers === 'function') placePhotoMarkers([]);
 
   try {
     const r = await fetch(`/activities/${activityId}/photos`);
@@ -19,7 +20,10 @@ async function loadPhotos(activityId) {
       // backward compat
       photoState.media = d.photos.map(f => ({url: d.base_url + f, type: 'image'}));
     }
-    if (photoState.media.length) showPhoto(0);
+    if (photoState.media.length) {
+      showPhoto(0);
+      if (typeof placePhotoMarkers === 'function') placePhotoMarkers(photoState.media);
+    }
   } catch(e) {}
 }
 
@@ -196,7 +200,7 @@ document.addEventListener('keydown', e => {
   // Panel arrow keys (when not in lightbox, not typing)
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
   if (document.getElementById('coach-overlay')?.classList.contains('open')) return;
-  if (photoState.photos.length > 1) {
+  if (photoState.media.length > 1) {
     if (e.key === '[') { photoNav(-1); return; }
     if (e.key === ']') { photoNav(1);  return; }
   }

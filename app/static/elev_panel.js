@@ -29,7 +29,7 @@ function elevHudRender(panel, rows, px, containerWidth) {
 //   rows       — [[{label,val}, {label,val}], ...] — one pair per grid row
 //   hudBtn     — HUD toggle button element (anchors vertical position)
 //   containerEl — the CSS offset parent of box
-function elevSelRender(box, pxLo, pxHi, ca, headerHtml, rows, hudBtn, containerEl, onMaxClick) {
+function elevSelRender(box, pxLo, pxHi, ca, headerHtml, rows, hudBtn, containerEl, onMaxClick, onDismiss) {
   let html = headerHtml + '<div class="es-grid">';
   for (const [L, R] of rows) {
     const lCls  = (onMaxClick && L.clickIdx != null) ? ' es-max-lbl' : '';
@@ -43,12 +43,19 @@ function elevSelRender(box, pxLo, pxHi, ca, headerHtml, rows, hudBtn, containerE
   box.innerHTML = html;
   box.style.display = 'block';
 
+  // Keep onDismiss up to date (may change between renders).
+  box._onDismiss = onDismiss || null;
+
   // Stop mousedown/touchstart from bubbling to the chart wrap on every interaction with the
   // pane — prevents any touch or click anywhere in the pane from starting a drag that would
   // clear the selection. Added once per box element (flag prevents stacking on re-renders).
   if (!box._selPaneStopAdded) {
     box.addEventListener('mousedown',  e => { e.stopPropagation(); e.preventDefault(); });
     box.addEventListener('touchstart', e => e.stopPropagation(), {passive: true});
+    // Tapping anywhere in the pane (except underlined "max" seek labels) dismisses it.
+    box.addEventListener('click', e => {
+      if (!e.target.closest('.es-max-lbl') && box._onDismiss) box._onDismiss();
+    });
     box._selPaneStopAdded = true;
   }
 

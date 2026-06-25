@@ -667,7 +667,14 @@ document.addEventListener('keydown', e => {
   document.getElementById('tour-header-sub').textContent =
     `${tourInfo.start_date} – ${tourInfo.end_date}  ·  ${done}/${stages.length} stages complete`;
 
-  try { pointsCache = await fetch(`/tours/share/${TOKEN}/points`).then(r=>r.json()); } catch(e) {}
+  try {
+    const [_planned, _actual] = await Promise.all([
+      fetch(`/tours/share/${TOKEN}/points`).then(r=>r.json()),
+      fetch(`/tours/share/${TOKEN}/activity-points`).then(r=>r.json()).catch(()=>({})),
+    ]);
+    pointsCache = {..._planned};
+    Object.entries(_actual).forEach(([sid, pts]) => { if(pts?.length) pointsCache[sid] = pts; });
+  } catch(e) {}
   drawRoutes(null);
   renderStageList();
   renderDetail(null);
@@ -679,6 +686,7 @@ document.addEventListener('keydown', e => {
 // ── Routes ────────────────────────────────────────────────────────────────────
 function drawRoutes(selId) {
   routeGroup.clearLayers();
+  MapUtils.clearPhotoMarkers(shareMap);
   const stages=tourInfo?.stages||[], allPts=[], hasSel=selId!=null;
   stages.forEach(s => {
     const pts=pointsCache[String(s.id)]; if(!pts?.length) return;
@@ -839,8 +847,8 @@ async function renderDetail(activeId) {
     const done=stages.filter(s=>s.completion);
     const totalDist=stages.reduce((a,x)=>a+(x.distance_mi||0),0);
     const totalClimb=stages.reduce((a,x)=>a+(x.climb_ft||0),0);
-    const doneDist=done.reduce((a,x)=>a+(x.distance_mi||0),0);
-    const doneClimb=done.reduce((a,x)=>a+(x.climb_ft||0),0);
+    const doneDist=done.reduce((a,x)=>a+(x.completion?.distance_mi??x.distance_mi??0),0);
+    const doneClimb=done.reduce((a,x)=>a+(x.completion?.climb_ft??x.climb_ft??0),0);
     const pctD=totalDist>0?Math.round(doneDist/totalDist*100):0;
     const pctC=totalClimb>0?Math.round(doneClimb/totalClimb*100):0;
     const n=stages.length||1, avgDist=totalDist/n, avgClimb=totalClimb/n;
@@ -1054,6 +1062,7 @@ async function renderDetail(activeId) {
 
 // ── Photos / videos ───────────────────────────────────────────────────────────
 async function loadSharePhotos(actId) {
+  MapUtils.clearPhotoMarkers(shareMap);
   try {
     const r=await fetch(`/activities/${actId}/photos`); if(!r.ok) return;
     const d=await r.json();
@@ -1082,6 +1091,7 @@ async function loadSharePhotos(actId) {
     });
     ph+=`</div>`;
     el.innerHTML=ph;
+    MapUtils.placePhotoMarkers(shareMap, media, idx => openShareLightbox(idx));
   } catch(e) {}
 }
 

@@ -975,10 +975,15 @@ async function drawElevation(data, version) {
     const _argmaxAb = arr => { let bi=-1,ba=-Infinity; for(let i=0;i<arr.length;i++) if(Math.abs(arr[i])>ba){ba=Math.abs(arr[i]);bi=i;} return bi<0?null:bi; };
     const toG = i => i==null ? null : safeLo+i;  // local slice index → global data index
 
-    let maxGradVal = null;
+    let maxGradVal = null, _maxGradLocalIdx = null;
     if (grads.length) {
-      let maxAbs = -Infinity;
-      for (const g of grads) { if (Math.abs(g) > maxAbs) { maxAbs = Math.abs(g); maxGradVal = g; } }
+      const hasPos = grads.some(g => g > 0);
+      let best = -Infinity;
+      for (let i = 0; i < grads.length; i++) {
+        const g = grads[i];
+        if (hasPos && g <= 0) continue;
+        if (Math.abs(g) > best) { best = Math.abs(g); maxGradVal = g; _maxGradLocalIdx = i; }
+      }
     }
     let avgGrad = null;
     if (alts.length >= 2) {
@@ -999,7 +1004,7 @@ async function drawElevation(data, version) {
 
     // Global data indices for each "Max" field (used for click-to-seek)
     const maxAltGIdx  = toG(_argmaxF(alts));
-    const maxGradGIdx = toG(_argmaxAb(grads));
+    const maxGradGIdx = toG(_maxGradLocalIdx);
     const maxHRGIdx   = toG(_argmaxF(hrs,    v => v > 0));
     const maxPwrGIdx  = toG(_argmaxF(powers, v => v > 0));
     const maxSpdGIdx  = toG(_argmaxF(speeds, v => v > 0));
@@ -1075,7 +1080,8 @@ async function drawElevation(data, version) {
           if (maxAtVal) maxAtVal.textContent = `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
           if (maxAtEl)  maxAtEl.style.visibility = 'visible';
         }
-      });
+      },
+      clearElevSelection);
   }
 
   function clearElevSelection() {

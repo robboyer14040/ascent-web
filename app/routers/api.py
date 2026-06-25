@@ -280,8 +280,7 @@ async def suggest_activity_title(activity_id: int, request: Request):
 
 _VALID_SUMMARY_MODELS = {
     "claude-haiku-4-5-20251001",
-    "claude-sonnet-4-5-20250929",
-    "claude-sonnet-4-20250514",
+    "claude-sonnet-4-6",
 }
 
 def _ensure_summary_table(con):

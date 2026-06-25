@@ -46,7 +46,17 @@
       "Bash(fly sftp *)",
       "Bash(ASCENT_DB_PATH=/Users/rob/Desktop/Ascent.ascentdb /Users/rob/projects/ascent-web/venv_arm64/bin/uvicorn app.main:app *)",
       "Bash(/Users/rob/projects/ascent-web/venv_arm64/bin/pip install *)",
-      "Bash(fly proxy *)"
+      "Bash(fly proxy *)",
+      "Bash(kill 86765 86763)",
+      "Bash(/Users/rob/projects/ascent-web/venv_arm64/bin/python3 *)",
+      "Bash(pkill -f \"uvicorn app.main\")",
+      "Bash(awk '/^[{\\(;!].*function.*\\\\\\(\\\\\\)/ {print NR\": \"$0}' /Users/rob/projects/ascent-web/app/static/altitude_chart.js)",
+      "Bash(git -C /Users/rob/projects/ascent-web diff HEAD app/static/main.js)",
+      "Bash(git -C /Users/rob/projects/ascent-web diff HEAD app/routers/api.py)",
+      "Bash(git -C /Users/rob/projects/ascent-web diff HEAD app/static/activity_detail.js)",
+      "Skill(run)",
+      "Bash(ASCENT_DB_PATH=/data/Ascent.ascentdb uvicorn app.main:app --port 8001)",
+      "Skill(claude-api)"
     ]
   }
 }
