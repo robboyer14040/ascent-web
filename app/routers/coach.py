@@ -351,7 +351,7 @@ def _last_coach_message_ts(con: sqlite3.Connection, goal_id: int) -> int:
 @router.get("/coach/state")
 async def coach_state(request: Request):
     """Return current goal info and whether there are new activities since last coach message."""
-    from app.auth import get_session_user_id
+    from app.auth import get_session_user_id, require_user
     uid = get_session_user_id(request)
     db  = db_getter()
     con = _get_con(db)
@@ -498,10 +498,7 @@ async def coach_today(request: Request, model: str = DEFAULT_MODEL):
     Generate 'what should I do today?' advice based on recent activities and goal.
     Returns advice text + up to 3 candidate activity IDs with simplified track coords.
     """
-    from app.auth import get_session_user_id
-    uid = get_session_user_id(request)
-    if uid is None:
-        raise HTTPException(401, "Not authenticated")
+    uid = require_user(request)
 
     db  = db_getter()
     con = _get_con(db)

@@ -15,7 +15,7 @@ import zipfile
 from fastapi import APIRouter, Body, File, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 
-from app.auth import get_session_user_id
+from app.auth import get_session_user_id, require_user
 
 router    = APIRouter()
 db_getter: Callable = None
@@ -286,9 +286,7 @@ def _gpx_chunks(act: dict, pts: list):
 
 @router.get("/activities/{activity_id}/export/gpx")
 async def export_gpx(activity_id: int, request: Request):
-    uid = get_session_user_id(request)
-    if uid is None:
-        raise HTTPException(401, "Not authenticated")
+    uid = require_user(request)
 
     db  = db_getter()
     act = db.get_activity(activity_id)
@@ -314,9 +312,7 @@ async def export_gpx(activity_id: int, request: Request):
 
 @router.post("/export/gpx/batch")
 async def export_gpx_batch(request: Request, body: dict = Body(...)):
-    uid = get_session_user_id(request)
-    if uid is None:
-        raise HTTPException(401, "Not authenticated")
+    uid = require_user(request)
 
     ids = body.get("ids") or []
     if not ids:
@@ -377,9 +373,7 @@ def _parse_gpx_timestamp(text: str) -> Optional[int]:
 
 @router.post("/import/gpx")
 async def import_gpx(request: Request, file: UploadFile = File(...)):
-    uid = get_session_user_id(request)
-    if uid is None:
-        raise HTTPException(401, "Not authenticated")
+    uid = require_user(request)
 
     data = await file.read()
     try:
@@ -478,9 +472,7 @@ async def import_gpx(request: Request, file: UploadFile = File(...)):
 
 @router.post("/import/fit")
 async def import_fit(request: Request, file: UploadFile = File(...)):
-    uid = get_session_user_id(request)
-    if uid is None:
-        raise HTTPException(401, "Not authenticated")
+    uid = require_user(request)
 
     try:
         import fitparse

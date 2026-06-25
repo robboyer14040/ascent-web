@@ -6,7 +6,7 @@ import secrets as _secrets
 from fastapi import APIRouter, Request, Query, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from typing import Callable, Optional
-from app.auth import get_session_user_id
+from app.auth import get_session_user_id, require_user
 
 router = APIRouter()
 db_getter: Callable = None
@@ -46,9 +46,7 @@ async def activities_json(
     include_friends: bool          = Query(False),
     view_user_ids:   str           = Query(""),
 ):
-    uid = get_session_user_id(request)
-    if uid is None:
-        raise HTTPException(401, "Not authenticated")
+    uid = require_user(request)
     # Parse comma-separated user IDs for multi-user view
     user_ids_filter = [int(x) for x in view_user_ids.split(',') if x.strip().isdigit()] if view_user_ids else []
     db    = db_getter()
@@ -75,9 +73,7 @@ async def filter_options(
     include_friends: bool = Query(False),
     view_user_ids: str = Query(""),
 ):
-    uid = get_session_user_id(request)
-    if uid is None:
-        raise HTTPException(401, "Not authenticated")
+    uid = require_user(request)
     user_ids_filter = [int(x) for x in view_user_ids.split(',') if x.strip().isdigit()] if view_user_ids else []
     db = db_getter()
     return {
@@ -215,9 +211,7 @@ async def activity_share_points(token: str):
 
 @router.get("/activities/{activity_id}/json")
 async def activity_json(activity_id: int, request: Request):
-    uid = get_session_user_id(request)
-    if uid is None:
-        raise HTTPException(401, "Not authenticated")
+    uid = require_user(request)
     db  = db_getter()
     act = db.get_activity(activity_id)
     if not act:
@@ -243,9 +237,7 @@ async def activity_detail(request: Request, activity_id: int):
 
 @router.delete("/activities/{activity_id}")
 async def delete_activity(activity_id: int, request: Request):
-    uid = get_session_user_id(request)
-    if uid is None:
-        raise HTTPException(401, "Not authenticated")
+    uid = require_user(request)
     db  = db_getter()
     act = db.get_activity(activity_id)
     if not act:
@@ -261,9 +253,7 @@ async def delete_activity(activity_id: int, request: Request):
 
 @router.delete("/activities")
 async def delete_activities_bulk(request: Request):
-    uid = get_session_user_id(request)
-    if uid is None:
-        raise HTTPException(401, "Not authenticated")
+    uid = require_user(request)
     body = await request.json()
     ids  = body.get("ids", [])
     if not ids:
@@ -290,9 +280,7 @@ async def delete_activities_bulk(request: Request):
 @router.post("/activities/{activity_id}/publish")
 async def publish_activity(activity_id: int, request: Request):
     """Generate (or return existing) public share token for this activity."""
-    uid = get_session_user_id(request)
-    if uid is None:
-        raise HTTPException(401, "Not authenticated")
+    uid = require_user(request)
     db = db_getter()
     act = db.get_activity(activity_id)
     if not act:
@@ -320,9 +308,7 @@ async def publish_activity(activity_id: int, request: Request):
 @router.delete("/activities/{activity_id}/publish")
 async def revoke_activity_publish(activity_id: int, request: Request):
     """Revoke this user's share token for an activity."""
-    uid = get_session_user_id(request)
-    if uid is None:
-        raise HTTPException(401, "Not authenticated")
+    uid = require_user(request)
     db = db_getter()
     con = sqlite3.connect(db.path, timeout=10)
     try:

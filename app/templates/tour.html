@@ -103,6 +103,10 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
 #resize-handle::after{content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:36px;height:3px;border-radius:2px;background:var(--muted2);pointer-events:none;transition:background .1s}
 #resize-handle:hover,#resize-handle.dragging{background:var(--border2)}
 #resize-handle:hover::after,#resize-handle.dragging::after{background:var(--accent)}
+#elev-resize-handle{height:8px;background:var(--surface2);cursor:row-resize;flex-shrink:0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);transition:background .1s;position:relative}
+#elev-resize-handle::after{content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:28px;height:2px;border-radius:1px;background:var(--muted2);pointer-events:none;transition:background .1s}
+#elev-resize-handle:hover,#elev-resize-handle.dragging{background:var(--border2)}
+#elev-resize-handle:hover::after,#elev-resize-handle.dragging::after{background:var(--accent)}
 #sidebar-resize{width:6px;background:transparent;cursor:col-resize;flex-shrink:0;transition:background .15s;touch-action:none;position:relative;border-left:1px solid var(--border);border-right:1px solid var(--border);z-index:10}
 #sidebar-resize:hover,#sidebar-resize.dragging{background:var(--accent)}
 #sidebar-resize::after{content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:2px;height:30px;border-radius:1px;background:var(--muted2);pointer-events:none}
@@ -110,6 +114,7 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
   #sidebar-resize{width:13px;background:rgba(249,115,22,0.15)}
   #sidebar-resize::after{width:3px;height:44px;background:#f97316;opacity:0.6}
   #resize-handle{height:20px}
+  #elev-resize-handle{height:18px}
 }
 #stage-detail{flex:1;overflow-y:auto;padding:16px 20px;min-height:0}
 #mob-portrait-stats{display:none;flex-shrink:0}
@@ -302,6 +307,29 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
     overflow:hidden
   }
 }
+/* ── Stage elevation HUD / selection overlay ── */
+.se-hover-panel{position:absolute;top:8px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.18);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:7px 14px;pointer-events:none;display:none;z-index:15;min-width:150px;white-space:nowrap}
+[data-theme="light"] .se-hover-panel{background:rgba(15,15,25,.72);border-color:rgba(0,0,0,.18)}
+@media(prefers-color-scheme:light){:root:not([data-theme]) .se-hover-panel{background:rgba(15,15,25,.72);border-color:rgba(0,0,0,.18)}}
+.se-hover-panel .eh-row{display:flex;justify-content:space-between;gap:18px;font-size:11px;line-height:1.75;font-family:-apple-system,sans-serif}
+.se-hover-panel .eh-label{color:rgba(255,255,255,.45);letter-spacing:.01em}
+.se-hover-panel .eh-val{font-weight:600;font-variant-numeric:tabular-nums;text-shadow:0 0 8px currentColor}
+.se-sel-stats{position:absolute;background:rgba(0,0,0,.22);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid rgba(74,222,128,.28);border-radius:10px;padding:7px 13px;pointer-events:auto;display:none;z-index:16;white-space:nowrap}
+.se-sel-stats .es-header{display:flex;justify-content:space-between;gap:24px;font-size:11px;line-height:1.7;border-bottom:1px solid rgba(255,255,255,.12);margin-bottom:3px;padding-bottom:2px}
+.se-sel-stats .es-grid{display:grid;grid-template-columns:1fr 1fr;column-gap:18px;row-gap:0}
+.se-sel-stats .es-row{display:flex;justify-content:space-between;gap:14px;font-size:11px;line-height:1.7}
+.se-sel-stats .es-lbl{color:rgba(255,255,255,.42);letter-spacing:.01em}
+.se-sel-stats .es-val{font-weight:600;font-variant-numeric:tabular-nums;color:rgba(255,255,255,.88)}
+.se-sel-stats .es-max-lbl{text-decoration:underline;cursor:pointer;pointer-events:auto}
+.se-sel-stats .es-maxat{flex:1;text-align:center}
+#stage-elev-hud-btn{position:absolute;top:4px;left:6px;z-index:15;font-size:10px;padding:2px 5px;line-height:1.4;background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.2);color:#ccc;border-radius:5px;cursor:pointer;user-select:none;-webkit-user-select:none}
+#stage-elev-hud-btn.active{background:#f97316;border-color:#f97316;color:#fff}
+#mob-elev-hdr,#mob-info-hdr{display:none;height:28px;flex-shrink:0;background:var(--surface2);border-bottom:1px solid var(--border);align-items:center;padding:0 4px 0 12px;gap:4px}
+#mob-elev-hdr span,#mob-info-hdr span{flex:1;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.mob-disclose{background:none;border:none;color:var(--text);font-size:14px;cursor:pointer;padding:0 8px;line-height:1;display:flex;align-items:center;height:28px;flex-shrink:0}
+.mob-arr{display:inline-block;transform:scale(2.25);transform-origin:center;transition:transform .2s}
+.mob-arr.collapsed{transform:scale(2.25) rotate(-90deg)}
+body.mob-stage-view #mob-elev-hdr,body.mob-stage-view #mob-info-hdr{display:flex}
 </style>
 </head>
 <body>
@@ -374,16 +402,29 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
         </div>
         <button onclick="resetMapZoom()" title="Reset zoom to fit route" style="position:absolute;bottom:24px;left:8px;z-index:500;background:rgba(0,0,0,.6);color:#ccc;border:1px solid rgba(255,255,255,.15);border-radius:4px;padding:3px 6px;font-size:13px;line-height:1;cursor:pointer;backdrop-filter:blur(4px)"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1 5V1h4M9 1h4v4M13 9v4H9M5 13H1V9"/></svg></button>
       </div>
-      <div id="resize-handle" title="Drag to resize map"><button id="stats-toggle" onmousedown="event.stopPropagation()" ontouchstart="event.stopPropagation()" onclick="toggleMobStats()" title="Toggle stats">▾</button></div>
+      <div id="resize-handle" title="Drag to resize map"></div>
       <div id="mob-portrait-stats"></div>
       <div id="stage-right-panel" style="flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden">
+        <div id="mob-elev-hdr"><span>Elevation</span><button class="mob-disclose" id="mob-elev-disclose" onclick="toggleMobElev()" title="Collapse elevation chart"><span class="mob-arr">▾</span></button></div>
         <div id="stage-elev-strip" style="display:none;height:100px;flex-shrink:0;background:var(--bg);border-bottom:1px solid var(--border);position:relative;cursor:crosshair">
           <canvas id="stage-elev-canvas"></canvas>
-          <div id="stage-elev-xhair" style="display:none;position:absolute;top:4px;bottom:0;width:1px;background:rgba(255,255,255,.45);pointer-events:none"></div>
-          <div id="stage-elev-hud" style="display:none;position:absolute;top:4px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.62);color:#e2e8f0;font-size:10px;font-family:monospace;padding:2px 8px;border-radius:4px;white-space:nowrap;pointer-events:none;z-index:10"></div>
-          <div id="stage-elev-sel" style="display:none;position:absolute;top:0;bottom:0;background:rgba(249,115,22,.14);border-left:1px solid rgba(249,115,22,.55);border-right:1px solid rgba(249,115,22,.55);pointer-events:none"></div>
-          <button id="stage-elev-grades-btn" onmousedown="event.stopPropagation()" ontouchstart="event.stopPropagation();openGradesModal()" onclick="openGradesModal()" style="display:none;position:absolute;bottom:5px;font-size:11px;font-weight:600;background:var(--accent);color:#fff;border:none;border-radius:4px;padding:3px 9px;cursor:pointer;transform:translateX(-50%);z-index:20;white-space:nowrap;box-shadow:0 1px 6px rgba(0,0,0,.4)">Grades</button>
+          <div id="stage-elev-xhair" style="display:none;position:absolute;pointer-events:none"></div>
+          <button id="stage-elev-hud-btn" onclick="_stageElevHudToggle()" title="Toggle hover HUD" onmousedown="event.stopPropagation()" ontouchstart="event.stopPropagation()">HUD</button>
+          <button id="stage-settings-btn" onclick="toggleStageSettings(event)" title="Chart settings" onmousedown="event.stopPropagation()" ontouchstart="event.stopPropagation()" style="position:absolute;top:4px;right:6px;z-index:15;font-size:18px;padding:2px 5px;line-height:1;background:rgba(0,0,0,.4);border:none;color:#ccc;border-radius:5px;cursor:pointer;user-select:none;-webkit-user-select:none">⚙</button>
         </div>
+        <div id="elev-resize-handle" style="display:none" title="Drag to resize elevation chart"></div>
+        <div id="stage-chart-settings" style="display:none;position:fixed;z-index:500;background:var(--surface);border:1px solid var(--border2);border-radius:8px;padding:10px 12px;box-shadow:0 4px 16px rgba(0,0,0,.5);min-width:130px">
+          <div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:6px">Overlays</div>
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text);cursor:pointer;margin-bottom:10px">
+            <input type="checkbox" id="stage-grade-cb" onchange="onStageGradeCbChange(this)" style="accent-color:#f97316"> Gradient
+          </label>
+          <div style="border-top:1px solid var(--border);padding-top:8px">
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text);cursor:pointer">
+              <input type="checkbox" id="stage-grade-colorcode" onchange="toggleStageColorCode()" style="accent-color:#f97316"> Color-code
+            </label>
+          </div>
+        </div>
+        <div id="mob-info-hdr"><span>Stage Info</span><button class="mob-disclose" id="mob-info-disclose" onclick="toggleMobInfo()" title="Collapse stage info"><span class="mob-arr">▾</span></button></div>
         <div id="stage-detail"></div>
       </div>
     </div>
@@ -551,6 +592,8 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="/static/activity_detail.js?v={{ app_version }}"></script>
 <script src="/static/map_utils.js?v={{ app_version }}"></script>
+<script src="/static/elev_panel.js?v={{ app_version }}"></script>
+<script src="/static/stage_elev_chart.js?v={{ app_version }}"></script>
 <script src="/static/strava_sync_btn.js?v={{ app_version }}" defer></script>
 <script>
 'use strict';
@@ -701,15 +744,59 @@ let tourInfo         = null;
 let tourStages       = [];
 let selectedId       = null;
 let mapH             = 0;
+let _mobElevCollapsed = false;
+let _mobInfoCollapsed = false;
 let _tourPointsCache = {};   // byStage points for current tour, keyed by stage_id string
 let _lastRouteBounds = null; // { bounds, opts } — used by resetMapZoom
 let _stageElevChart  = null; // Chart.js instance for the elevation strip
 let _stageElevRawPts = null; // [[lat,lon,alt_ft], ...] parallel to chartPts for hover lookup
+let _stageChartPts   = null; // downsampled [{x,y}] for redraw on grade toggle
+let _stageGradPts    = null; // pre-computed gradient [{x,y}] from full-res raw pts
+let _stageGradeOn    = false;
+let _stageColorCode  = false;
 let _stageHoverDot   = null; // Leaflet marker for yellow hover dot on map
-let _elevSelIdxA     = null; // drag-selection start index into chartPts
-let _elevSelIdxB     = null; // drag-selection end index
-let _elevDragAnchorX = null; // clientX at mousedown
-let _elevDragging    = false;
+let _stageActData    = null; // per-point chart data for completed stage ({dist_m,hr,speed,power,cadence,time})
+
+function onStageGradeCbChange(cb) {
+  _stageGradeOn = cb.checked;
+  if (_stageChartPts) _rebuildStageElevChart();
+}
+function toggleStageColorCode() {
+  _stageColorCode = document.getElementById('stage-grade-colorcode')?.checked ?? false;
+  if (_stageChartPts && _stageGradeOn) _rebuildStageElevChart();
+}
+let _stageSettingsOpen = false;
+function toggleStageSettings(e) {
+  e.stopPropagation();
+  const pop = document.getElementById('stage-chart-settings');
+  if (!pop) return;
+  if (_stageSettingsOpen) { pop.style.display = 'none'; _stageSettingsOpen = false; return; }
+  const btn = document.getElementById('stage-settings-btn');
+  if (btn) {
+    const r = btn.getBoundingClientRect();
+    pop.style.top   = (r.bottom + 4) + 'px';
+    pop.style.right = (window.innerWidth - r.right) + 'px';
+    pop.style.left  = 'auto';
+  }
+  pop.style.display = 'block';
+  _stageSettingsOpen = true;
+}
+document.addEventListener('click', e => {
+  if (!_stageSettingsOpen) return;
+  const pop = document.getElementById('stage-chart-settings');
+  const btn = document.getElementById('stage-settings-btn');
+  if (pop && !pop.contains(e.target) && e.target !== btn) {
+    pop.style.display = 'none'; _stageSettingsOpen = false;
+  }
+});
+function _rebuildStageElevChart() {
+  const canvas = document.getElementById('stage-elev-canvas');
+  if (!canvas || !_stageChartPts) return;
+  if (_stageElevChart) { _stageElevChart.destroy(); _stageElevChart = null; }
+  _stageElevChart = buildStageElevChart(canvas, _stageChartPts, { gradeOn: _stageGradeOn, colorCode: _stageColorCode, gradPts: _stageGradPts });
+  _stageElevChart._elevChartPts = _stageChartPts;
+  window._stageElevReapplySel?.();
+}
 
 // Modal state
 let modalMode   = 'define';   // 'define' | 'edit'
@@ -753,9 +840,41 @@ const tourChromeH = () => isMobTour() ? 52 : 44;
 function _stageDetailTop() {
   const strip = document.getElementById('stage-elev-strip');
   const rh    = document.getElementById('resize-handle');
+  const erh   = document.getElementById('elev-resize-handle');
+  const meh   = document.getElementById('mob-elev-hdr');
+  const mih   = document.getElementById('mob-info-hdr');
+  const rhH   = rh  ? rh.offsetHeight  : 6;
+  const mehH  = meh ? meh.offsetHeight : 0;
   const elevH = (strip && strip.style.display !== 'none') ? strip.offsetHeight : 0;
-  const rhH   = rh ? rh.offsetHeight : 6;
-  return (tourChromeH() + mapH + rhH + elevH) + 'px';
+  const erhH  = erh ? erh.offsetHeight : 0;
+  const mihH  = mih ? mih.offsetHeight : 0;
+  return (tourChromeH() + mapH + rhH + mehH + elevH + erhH + mihH) + 'px';
+}
+function toggleMobElev() {
+  if (!isMobTour()) return;
+  const strip = document.getElementById('stage-elev-strip');
+  const erh   = document.getElementById('elev-resize-handle');
+  const btn   = document.getElementById('mob-elev-disclose');
+  const arr   = btn && btn.querySelector('.mob-arr');
+  if (!strip || (strip.style.display === 'none' && !_mobElevCollapsed)) return;
+  _mobElevCollapsed = !_mobElevCollapsed;
+  strip.style.display = _mobElevCollapsed ? 'none' : '';
+  if (erh) erh.style.display = _mobElevCollapsed ? 'none' : '';
+  if (arr) arr.classList.toggle('collapsed', _mobElevCollapsed);
+  if (document.body.classList.contains('mob-stage-view') && isPortrait()) {
+    const sd = document.getElementById('stage-detail');
+    if (sd) sd.style.top = _stageDetailTop();
+  }
+}
+function toggleMobInfo() {
+  if (!isMobTour()) return;
+  const detail = document.getElementById('stage-detail');
+  const btn    = document.getElementById('mob-info-disclose');
+  const arr    = btn && btn.querySelector('.mob-arr');
+  if (!detail) return;
+  _mobInfoCollapsed = !_mobInfoCollapsed;
+  detail.style.display = _mobInfoCollapsed ? 'none' : '';
+  if (arr) arr.classList.toggle('collapsed', _mobInfoCollapsed);
 }
 
 // iOS rubber-band fix: #stage-list-wrap is position:fixed in portrait; set its
@@ -851,6 +970,55 @@ function toggleMobStats() {
   if (!isMobTour()) {
     try { const w=parseInt(localStorage.getItem('ascent-tour-sidebar-w')); if(w>=MIN_W&&w<=MAX_W) sidebar.style.width=w+'px'; } catch(e) {}
   }
+})();
+
+// ── Elevation strip vertical resize ──────────────────────────────────────────
+const _ELEV_H_KEY = 'ascent-stage-elev-h';
+const _ELEV_H_MIN = 60, _ELEV_H_MAX = 400, _ELEV_H_DEF = 100;
+function _elevHSaved() {
+  try { const v = parseInt(localStorage.getItem(_ELEV_H_KEY)); return (v >= _ELEV_H_MIN && v <= _ELEV_H_MAX) ? v : _ELEV_H_DEF; } catch(e) { return _ELEV_H_DEF; }
+}
+function _elevHSave(h) { try { localStorage.setItem(_ELEV_H_KEY, h); } catch(e) {} }
+
+(function() {
+  const handle = document.getElementById('elev-resize-handle');
+  if (!handle) return;
+  let drag = false, startY = 0, startH = 0;
+  function startDrag(y) {
+    const strip = document.getElementById('stage-elev-strip');
+    if (!strip) return;
+    drag = true; startY = y; startH = strip.offsetHeight;
+    handle.classList.add('dragging');
+    document.body.style.cursor = 'row-resize';
+    document.body.style.userSelect = 'none';
+  }
+  function moveDrag(y) {
+    if (!drag) return;
+    const strip = document.getElementById('stage-elev-strip');
+    if (!strip) return;
+    const newH = Math.max(_ELEV_H_MIN, Math.min(_ELEV_H_MAX, startH + (y - startY)));
+    strip.style.height = newH + 'px';
+    _stageElevChart?.resize?.();
+    if (document.body.classList.contains('mob-stage-view') && isPortrait()) {
+      document.getElementById('stage-detail').style.top = _stageDetailTop();
+    }
+  }
+  function endDrag() {
+    if (!drag) return;
+    drag = false;
+    handle.classList.remove('dragging');
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+    const strip = document.getElementById('stage-elev-strip');
+    if (strip) _elevHSave(strip.offsetHeight);
+    _stageElevChart?.resize?.();
+  }
+  handle.addEventListener('mousedown',  e => { startDrag(e.clientY); e.preventDefault(); });
+  document.addEventListener('mousemove', e => moveDrag(e.clientY));
+  document.addEventListener('mouseup',   endDrag);
+  handle.addEventListener('touchstart', e => { startDrag(e.touches[0].clientY); e.preventDefault(); }, {passive:false});
+  handle.addEventListener('touchmove',  e => { moveDrag(e.touches[0].clientY); e.preventDefault(); }, {passive:false});
+  handle.addEventListener('touchend',   endDrag);
 })();
 
 // ── User selector ─────────────────────────────────────────────────────────────
@@ -1700,183 +1868,28 @@ function _haversineMi(lat1, lon1, lat2, lon2) {
   return R * 2 * Math.asin(Math.sqrt(a));
 }
 
-function calcStageGradient(chartPts, idx) {
-  const win = Math.min(5, Math.floor(chartPts.length / 20)) || 1;
-  const i0  = Math.max(0, idx - win);
-  const i1  = Math.min(chartPts.length - 1, idx + win);
-  if(i1 === i0) return 0;
-  const dx = chartPts[i1].x - chartPts[i0].x;
-  const dy = chartPts[i1].y - chartPts[i0].y;
-  if(!dx) return 0;
-  const factor = U.metric ? 1000 : 5280; // km→m or mi→ft
-  return dy / (dx * factor) * 100;
-}
-
-function _removeStageHoverDot() {
-  if(_stageHoverDot) { _stageHoverDot.remove(); _stageHoverDot = null; }
-}
-
-function onElevLeave() {
-  const xhair = document.getElementById('stage-elev-xhair');
-  const hud   = document.getElementById('stage-elev-hud');
-  if(xhair) xhair.style.display = 'none';
-  if(hud)   hud.style.display   = 'none';
-  _removeStageHoverDot();
-}
-
-function _onElevClientX(clientX) {
-  if(!_stageElevChart || !_stageElevRawPts) return;
-  const chart  = _stageElevChart;
-  const xAxis  = chart.scales.x;
-  const rect   = chart.canvas.getBoundingClientRect();
-  const mouseX = clientX - rect.left;
-
-  // Clamp to chart area
-  if(mouseX < xAxis.left || mouseX > xAxis.right) { onElevLeave(); return; }
-
-  const dataX  = xAxis.getValueForPixel(mouseX);
-  const pts    = _stageElevChart._elevChartPts;
-  const rawPts = _stageElevRawPts;
-
-  // Binary search for nearest point
-  let lo = 0, hi = pts.length - 1;
-  while(lo < hi) {
-    const mid = (lo + hi) >> 1;
-    if(pts[mid].x < dataX) lo = mid + 1; else hi = mid;
-  }
-  const idx = (lo > 0 && Math.abs(pts[lo-1].x - dataX) < Math.abs(pts[lo].x - dataX)) ? lo - 1 : lo;
-  const pt  = pts[idx];
-  const px  = xAxis.getPixelForValue(pt.x);
-
-  // Crosshair
-  const xhair = document.getElementById('stage-elev-xhair');
-  if(xhair) { xhair.style.display = ''; xhair.style.left = px + 'px'; }
-
-  // HUD
-  const hud = document.getElementById('stage-elev-hud');
-  if(hud) {
-    const grad    = calcStageGradient(pts, idx);
-    const xUnit   = U.metric ? 'km' : 'mi';
-    const yUnit   = U.metric ? 'm'  : 'ft';
-    const distStr = `${pt.x.toFixed(2)} ${xUnit}`;
-    const altStr  = `${pt.y} ${yUnit}`;
-    const gradStr = `${grad >= 0 ? '+' : ''}${grad.toFixed(1)}%`;
-    hud.innerHTML = `DIST&nbsp;${distStr}&nbsp;&nbsp;ALT&nbsp;${altStr}&nbsp;&nbsp;GRAD&nbsp;${gradStr}`;
-    hud.style.display = '';
-  }
-
-  // Yellow map dot
-  if(rawPts[idx] && tourMap) {
-    const [lat, lon] = rawPts[idx];
-    const dotHtml = `<div style="width:10px;height:10px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#ffe066,#f59e0b 55%,#b45309);border:1.5px solid #fff;box-shadow:0 0 3px rgba(0,0,0,.5)"></div>`;
-    if(!_stageHoverDot) {
-      _stageHoverDot = L.marker([lat, lon], {
-        icon: L.divIcon({ html: dotHtml, className: '', iconSize: [10,10], iconAnchor: [5,5] }),
-        zIndexOffset: 1000, interactive: false,
-      }).addTo(tourMap);
-    } else {
-      _stageHoverDot.setLatLng([lat, lon]);
-    }
-  }
-}
-
-function _elevPxToIdx(clientX) {
-  if(!_stageElevChart) return null;
-  const xAxis  = _stageElevChart.scales.x;
-  const rect   = _stageElevChart.canvas.getBoundingClientRect();
-  const mouseX = Math.max(xAxis.left, Math.min(xAxis.right, clientX - rect.left));
-  const dataX  = xAxis.getValueForPixel(mouseX);
-  const pts    = _stageElevChart._elevChartPts;
-  let lo=0, hi=pts.length-1;
-  while(lo<hi){ const mid=(lo+hi)>>1; if(pts[mid].x<dataX) lo=mid+1; else hi=mid; }
-  return (lo>0 && Math.abs(pts[lo-1].x-dataX)<Math.abs(pts[lo].x-dataX)) ? lo-1 : lo;
-}
-
-function _updateElevSel(ia, ib) {
-  const selEl = document.getElementById('stage-elev-sel');
-  const btnEl = document.getElementById('stage-elev-grades-btn');
-  if(!selEl || !_stageElevChart) return;
-  if(ia===null || ib===null || ia===ib) { selEl.style.display='none'; if(btnEl) btnEl.style.display='none'; return; }
-  const pts  = _stageElevChart._elevChartPts;
-  const xA   = _stageElevChart.scales.x;
-  const px0  = xA.getPixelForValue(pts[ia].x);
-  const px1  = xA.getPixelForValue(pts[ib].x);
-  selEl.style.display=''; selEl.style.left=px0+'px'; selEl.style.width=(px1-px0)+'px';
-  if(btnEl){ btnEl.style.display=''; btnEl.style.left=((px0+px1)/2)+'px'; }
-}
-
-function clearElevSelection() {
-  _elevSelIdxA=null; _elevSelIdxB=null;
-  _updateElevSel(null,null);
-}
-
-function onElevMouseDown(e) {
-  if(!_stageElevChart) return;
-  e.preventDefault();
-  _elevDragging=true; _elevDragAnchorX=e.clientX;
-  _elevSelIdxA=_elevPxToIdx(e.clientX); _elevSelIdxB=_elevSelIdxA;
-  const selEl=document.getElementById('stage-elev-sel');
-  const btnEl=document.getElementById('stage-elev-grades-btn');
-  if(selEl) selEl.style.display='none'; if(btnEl) btnEl.style.display='none';
-}
-
-function onElevMouseMove(e) {
-  if(_elevDragging) {
-    const idx=_elevPxToIdx(e.clientX);
-    if(idx!==null){ _elevSelIdxB=idx; _updateElevSel(_elevSelIdxA,idx); }
-    const xhair=document.getElementById('stage-elev-xhair');
-    const hud=document.getElementById('stage-elev-hud');
-    if(xhair) xhair.style.display='none'; if(hud) hud.style.display='none';
-    _removeStageHoverDot();
-  } else {
-    _onElevClientX(e.clientX);
-  }
-}
-
-function onElevTouchStart(e) {
-  e.preventDefault(); if(!e.touches[0]) return;
-  _elevDragging=true; _elevDragAnchorX=e.touches[0].clientX;
-  _elevSelIdxA=_elevPxToIdx(e.touches[0].clientX); _elevSelIdxB=_elevSelIdxA;
-  const selEl=document.getElementById('stage-elev-sel');
-  const btnEl=document.getElementById('stage-elev-grades-btn');
-  if(selEl) selEl.style.display='none'; if(btnEl) btnEl.style.display='none';
-}
-
-function onElevTouchMove(e) {
-  e.preventDefault(); if(!e.touches[0]) return;
-  if(_elevDragging) {
-    const idx=_elevPxToIdx(e.touches[0].clientX);
-    if(idx!==null){ _elevSelIdxB=idx; _updateElevSel(_elevSelIdxA,idx); }
-    const xhair=document.getElementById('stage-elev-xhair');
-    const hud=document.getElementById('stage-elev-hud');
-    if(xhair) xhair.style.display='none'; if(hud) hud.style.display='none';
-  } else {
-    _onElevClientX(e.touches[0].clientX);
-  }
-}
-
-function onElevTouchEnd(e) {
-  if(!_elevDragging) { onElevLeave(); return; }
-  _elevDragging=false;
-  const endX=e.changedTouches[0]?.clientX ?? _elevDragAnchorX;
-  const dragDist=Math.abs(endX-(_elevDragAnchorX||endX));
-  if(dragDist<8) clearElevSelection();
-  else _updateElevSel(Math.min(_elevSelIdxA,_elevSelIdxB), Math.max(_elevSelIdxA,_elevSelIdxB));
-  _elevDragAnchorX=null;
-  onElevLeave();
-}
-
 function drawStageElevation(pts) {
   const strip  = document.getElementById('stage-elev-strip');
   const canvas = document.getElementById('stage-elev-canvas');
   if(!strip || !canvas) return;
 
-  // Destroy previous chart
-  clearElevSelection();
+  // Reset state
+  _stageActData = null;
+  window._stageElevClearSel?.();
   if(_stageElevChart) { _stageElevChart.destroy(); _stageElevChart = null; }
+  if(_stageHoverDot) { _stageHoverDot.remove(); _stageHoverDot = null; }
   _stageElevRawPts = null;
-  _removeStageHoverDot();
-  onElevLeave();
+  _stageChartPts   = null;
+  _stageGradPts    = null;
+  // Reset mobile collapse state for new stage
+  _mobElevCollapsed = false;
+  _mobInfoCollapsed = false;
+  const _mehBtn = document.getElementById('mob-elev-disclose');
+  if (_mehBtn) { const _a = _mehBtn.querySelector('.mob-arr'); if(_a) _a.classList.remove('collapsed'); }
+  const _mihBtn = document.getElementById('mob-info-disclose');
+  if (_mihBtn) { const _a = _mihBtn.querySelector('.mob-arr'); if(_a) _a.classList.remove('collapsed'); }
+  const _detailEl = document.getElementById('stage-detail');
+  if (_detailEl) _detailEl.style.display = '';
 
   // Need altitude data — pts is [[lat,lon,alt_ft], ...]
   if(!pts?.length || pts[0].length < 3) { strip.style.display = 'none'; return; }
@@ -1887,8 +1900,6 @@ function drawStageElevation(pts) {
   const step = Math.max(1, Math.floor(pts.length / 600));
   const distConv = U.metric ? (mi => +(mi * 1.60934).toFixed(3)) : (mi => +mi.toFixed(3));
   const altConv  = U.metric ? (ft => Math.round(ft * 0.3048))    : (ft => Math.round(ft));
-  const xUnit    = U.metric ? 'km' : 'mi';
-  const yUnit    = U.metric ? 'm'  : 'ft';
 
   let cumDist = 0;
   const chartPts = [];
@@ -1905,79 +1916,51 @@ function drawStageElevation(pts) {
   if(!chartPts.length) { strip.style.display = 'none'; return; }
 
   _stageElevRawPts = rawPts;
-
-  const totalX = chartPts[chartPts.length - 1].x;
-  const minY   = Math.min(...chartPts.map(p => p.y));
-  const yFloor = Math.floor(minY / 100) * 100;
-
+  _stageChartPts   = chartPts;
+  _stageGradPts    = computeStageGradFromRawPts(pts, step, distConv);
+  strip.style.height = _elevHSaved() + 'px';
   strip.style.display = '';
-  _stageElevChart = new Chart(canvas, {
-    type: 'line',
-    data: { datasets: [{
-      data: chartPts, fill: true,
-      borderColor: '#3b82f6', backgroundColor: 'rgba(30,80,180,.55)',
-      borderWidth: 1.5, pointRadius: 0, tension: 0.3,
-    }]},
-    options: {
-      responsive: true, maintainAspectRatio: false, animation: false,
-      layout: { padding: { top: 4, right: 10, bottom: 0, left: 0 } },
-      plugins: { legend: { display: false }, tooltip: { enabled: false } },
-      scales: {
-        x: {
-          type: 'linear', min: 0, max: totalX,
-          ticks: { color: '#64748b', font: { size: 9 }, maxTicksLimit: 8,
-                   callback: v => `${(+v).toFixed(1)} ${xUnit}` },
-          grid: { color: 'rgba(255,255,255,.04)' },
-        },
-        y: {
-          position: 'left', min: yFloor,
-          afterBuildTicks(axis) { if(axis.ticks.length > 1) axis.ticks.pop(); },
-          ticks: { color: '#64748b', font: { size: 9 }, maxTicksLimit: 4,
-                   callback: v => `${v} ${yUnit}` },
-          grid: { color: 'rgba(255,255,255,.06)' },
-        },
-      },
-    },
+  const _elevHandle = document.getElementById('elev-resize-handle');
+  if (_elevHandle) _elevHandle.style.display = '';
+  _rebuildStageElevChart();
+
+  // Attach HUD + drag-selection interaction
+  stageElevInteraction({
+    getChart:    () => _stageElevChart,
+    getChartPts: () => _stageChartPts,
+    getGradPts:  () => _stageGradPts,
+    getRawPts:   () => _stageElevRawPts,
+    getActData:  () => _stageActData,
+    getMap:      () => tourMap,
+    getMapDot:   () => _stageHoverDot,
+    setMapDot:   m  => { _stageHoverDot = m; },
+    onSelection: (lo, hi) => { /* grades modal reads via window._stageElevGetSel() */ },
+    onClear:     () => {},
   });
-
-  // Store chartPts on chart instance for hover handler
-  _stageElevChart._elevChartPts = chartPts;
-
-  // Wire hover/touch/drag events
-  clearElevSelection();
-  strip.removeEventListener('mousedown',  onElevMouseDown);
-  strip.removeEventListener('mousemove',  onElevMouseMove);
-  strip.removeEventListener('mouseleave', onElevLeave);
-  strip.removeEventListener('touchstart', onElevTouchStart);
-  strip.removeEventListener('touchmove',  onElevTouchMove);
-  strip.removeEventListener('touchend',   onElevTouchEnd);
-  strip.removeEventListener('touchcancel',onElevTouchEnd);
-  strip.addEventListener('mousedown',  onElevMouseDown);
-  strip.addEventListener('mousemove',  onElevMouseMove);
-  strip.addEventListener('mouseleave', onElevLeave);
-  strip.addEventListener('touchstart', onElevTouchStart, { passive: false });
-  strip.addEventListener('touchmove',  onElevTouchMove,  { passive: false });
-  strip.addEventListener('touchend',   onElevTouchEnd);
-  strip.addEventListener('touchcancel',onElevTouchEnd);
 }
 
 function hideStageElevation() {
   const strip = document.getElementById('stage-elev-strip');
   if(strip) {
     strip.style.display = 'none';
-    strip.removeEventListener('mousedown',  onElevMouseDown);
-    strip.removeEventListener('mousemove',  onElevMouseMove);
-    strip.removeEventListener('mouseleave', onElevLeave);
-    strip.removeEventListener('touchstart', onElevTouchStart);
-    strip.removeEventListener('touchmove',  onElevTouchMove);
-    strip.removeEventListener('touchend',   onElevTouchEnd);
-    strip.removeEventListener('touchcancel',onElevTouchEnd);
+    const _elevHandle = document.getElementById('elev-resize-handle');
+    if (_elevHandle) _elevHandle.style.display = 'none';
   }
-  clearElevSelection();
+  window._stageElevClearSel?.();
   if(_stageElevChart) { _stageElevChart.destroy(); _stageElevChart = null; }
+  if(_stageHoverDot) { _stageHoverDot.remove(); _stageHoverDot = null; }
   _stageElevRawPts = null;
-  _removeStageHoverDot();
-  onElevLeave();
+  _stageChartPts   = null;
+  _stageActData    = null;
+  // Reset mobile collapse state
+  _mobElevCollapsed = false;
+  _mobInfoCollapsed = false;
+  const _mehBtn2 = document.getElementById('mob-elev-disclose');
+  if (_mehBtn2) { const _a = _mehBtn2.querySelector('.mob-arr'); if(_a) _a.classList.remove('collapsed'); }
+  const _mihBtn2 = document.getElementById('mob-info-disclose');
+  if (_mihBtn2) { const _a = _mihBtn2.querySelector('.mob-arr'); if(_a) _a.classList.remove('collapsed'); }
+  const _detailEl2 = document.getElementById('stage-detail');
+  if (_detailEl2) _detailEl2.style.display = '';
 }
 
 // ── Grades modal ──────────────────────────────────────────────────────────────
@@ -1993,9 +1976,8 @@ const GRADE_BANDS = [
 function _gradeColor(pct) { for(const b of GRADE_BANDS) if(pct<b.max) return b.color; return '#a855f7'; }
 
 function openGradesModal() {
-  if(_elevSelIdxA===null||_elevSelIdxB===null) return;
-  const ia  = Math.min(_elevSelIdxA,_elevSelIdxB);
-  const ib  = Math.max(_elevSelIdxA,_elevSelIdxB);
+  const _sel = window._stageElevGetSel?.(); if(!_sel) return;
+  const ia = _sel.lo, ib = _sel.hi;
   const pts = (_stageElevRawPts||[]).slice(ia, ib+1);
   if(pts.length<2) return;
   const stage   = tourStages.find(s=>String(s.id)===String(selectedId));
@@ -2421,7 +2403,11 @@ async function renderDetail(activeId) {
   drawStageElevation(_tourPointsCache[String(stage.id)]);
   el.innerHTML = `<div style="color:var(--muted);font-size:12px">Loading…</div>`;
   try {
-    const act = await fetch(`/activities/${stage.completion.activity_id}/json`).then(r=>r.json());
+    const [act, _chartData] = await Promise.all([
+      fetch(`/activities/${stage.completion.activity_id}/json`).then(r=>r.json()),
+      fetch(`/api/activities/${stage.completion.activity_id}/charts`).then(r=>r.json()).catch(()=>null),
+    ]);
+    _stageActData = _chartData;
     // Build avatar for stage header
     const _u = _tourUserMap[act.user_id];
     const _avUrl = _u?.avatar_url ? _u.avatar_url.replace('?thumb=1','')+'?thumb=1' : null;
@@ -3007,15 +2993,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('tour-modal').addEventListener('click', function(e) {
     if(e.target === this) closeModal();
-  });
-
-  // Global mouseup: finalize elevation drag-selection if released outside the strip
-  document.addEventListener('mouseup', function(e) {
-    if(!_elevDragging) return;
-    _elevDragging = false;
-    const dragDist = Math.abs(e.clientX - (_elevDragAnchorX || e.clientX));
-    if(dragDist < 8) clearElevSelection();
-    _elevDragAnchorX = null;
   });
 
   // Keyboard navigation

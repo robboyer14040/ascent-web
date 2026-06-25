@@ -427,7 +427,7 @@ async function loadAll() {
     const _target = state.filtered.find(a => String(a.id) === _pendingActId);
     if (_target) { selectActivity(_target.id); scrollToSelected(); return; }
   }
-  if (state.filtered.length) selectActivity(state.filtered[0].id);
+  if (state.filtered.length && !_isPhoneLayout()) selectActivity(state.filtered[0].id);
 }
 
 // ── MAP ───────────────────────────────────────────────────────────────────────
@@ -1184,13 +1184,26 @@ function loadPaneSizes() {
 
 const STATS_TITLE_H = 28;
 function toggleStats() {
-  if (_isPhoneLayout()) return; // no collapse on phone — info panel is a full-screen tab
   const panel   = document.getElementById('info-panel');
   const btn     = document.getElementById('stats-disclose');
+  if (!panel || !btn) return;
   const content = panel.querySelector('.stats-content');
   const titlebar = document.getElementById('stats-titlebar');
-  if (!panel || !btn) return;
   const isOpen = !btn.classList.contains('collapsed');
+  if (_isPhoneLayout()) {
+    // Phone: use CSS class to collapse (flex:1!important can't be overridden by inline height)
+    if (isOpen) {
+      panel.classList.add('stats-collapsed');
+      if (content) content.style.display = 'none';
+      btn.classList.add('collapsed');
+    } else {
+      panel.classList.remove('stats-collapsed');
+      if (content) content.style.display = '';
+      btn.classList.remove('collapsed');
+    }
+    try { _uiPrefsSet('ascent-stats-open', isOpen ? '0' : '1'); } catch(e) {}
+    return;
+  }
   if (isOpen) {
     savePaneSizes({infoH: panel.offsetHeight});
     panel.style.height = STATS_TITLE_H + 'px';
@@ -1296,31 +1309,32 @@ function toggleStats() {
 // Analysis titlebar — toggle collapse + drag to resize chart
 const ANALYSIS_TITLE_H = 28;
 function toggleAnalysis() {
-  if (_isPhoneLayout()) return; // no collapse on phone — analysis is a full-screen tab
   const wrap = document.getElementById('chart-wrap');
   const btn  = document.getElementById('analysis-disclose');
   const tb   = document.getElementById('analysis-titlebar');
   if (!wrap || !btn) return;
   const isOpen = !btn.classList.contains('collapsed');
+  const drh = document.getElementById('mob-chart-resize-handle');
   const _repaintList = () => {
     const al = document.getElementById('act-list');
     if (al) al.dispatchEvent(new Event('scroll'));
   };
   if (isOpen) {
-    savePaneSizes({chartH: wrap.offsetHeight});
+    if (!_isPhoneLayout()) savePaneSizes({chartH: wrap.offsetHeight});
     wrap.style.height = ANALYSIS_TITLE_H + 'px';
     btn.classList.add('collapsed');
-    if (tb) tb.style.cursor = 'default';
+    if (!_isPhoneLayout() && tb) tb.style.cursor = 'default';
+    if (drh) drh.style.display = 'none';
     setTimeout(() => { refitMap(); _repaintList(); }, 220);
   } else {
     const ps = loadPaneSizes();
-    const h = Math.max(ANALYSIS_TITLE_H + 60, ps.chartH || 200);
+    const h = Math.max(ANALYSIS_TITLE_H + 60, ps.chartH || (_isPhoneLayout() ? 220 : 200));
     wrap.style.height = h + 'px';
     btn.classList.remove('collapsed');
-    if (tb) tb.style.cursor = 'row-resize';
+    if (!_isPhoneLayout() && tb) tb.style.cursor = 'row-resize';
+    if (drh) drh.style.display = '';
     setTimeout(() => {
       if (elevChart) elevChart.resize();
-
       refitMap();
       _repaintList();
     }, 220);
@@ -1352,6 +1366,7 @@ function toggleAnalysis() {
   let touchActive = false;
   titlebar.addEventListener('touchstart', e => {
     if (isBtn(e)) return;
+    if (_isPhoneLayout()) return; // phone uses the bottom handle for resize
     e.preventDefault();
     touchActive = true;
     const startH = chartWrap.getBoundingClientRect().height;
@@ -1365,6 +1380,7 @@ function toggleAnalysis() {
 
   titlebar.addEventListener('pointerdown', e => {
     if (touchActive || isBtn(e)) return;
+    if (_isPhoneLayout()) return; // phone uses the bottom handle for resize
     if (e.button !== undefined && e.button !== 0) return;
     e.preventDefault();
     const startH = chartWrap.getBoundingClientRect().height;

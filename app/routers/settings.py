@@ -1,7 +1,7 @@
 """routers/settings.py — Database management and API key settings."""
 
 import os
-from app.auth import get_session_user_id
+from app.auth import get_session_user_id, require_user
 import getpass
 from pathlib import Path
 from typing import Callable, Optional
@@ -197,9 +197,7 @@ async def save_anthropic_key(req: ApiKeyRequest, request: Request):
 @router.get("/api/settings/training-zones")
 async def get_training_zones(request: Request):
     """Return the user profile (max HR, FTP, age, weight) from the database."""
-    uid = get_session_user_id(request)
-    if uid is None:
-        raise HTTPException(401, "Not authenticated")
+    uid = require_user(request)
     try:
         profile = db_getter().get_user_profile(uid)
         return {"status": "ok", **profile}
@@ -210,9 +208,7 @@ async def get_training_zones(request: Request):
 @router.post("/api/settings/training-zones")
 async def save_training_zones(request: Request, req: dict):
     """Save user profile fields to the database."""
-    uid = get_session_user_id(request)
-    if uid is None:
-        raise HTTPException(401, "Not authenticated")
+    uid = require_user(request)
 
     def to_int(v):
         try: return int(v) if v not in (None, "", "null") else None
@@ -256,17 +252,13 @@ async def save_training_zones(request: Request, req: dict):
 
 @router.get("/api/settings/ui-prefs")
 async def get_ui_prefs(request: Request):
-    uid = get_session_user_id(request)
-    if uid is None:
-        raise HTTPException(401, "Not authenticated")
+    uid = require_user(request)
     return db_getter().get_ui_prefs(uid)
 
 
 @router.post("/api/settings/ui-prefs")
 async def save_ui_prefs(request: Request):
-    uid = get_session_user_id(request)
-    if uid is None:
-        raise HTTPException(401, "Not authenticated")
+    uid = require_user(request)
     body = await request.json()
     prefs = body.get("prefs", {})
     if not isinstance(prefs, dict):
@@ -279,10 +271,7 @@ async def save_ui_prefs(request: Request):
 
 @router.get("/api/settings/sharing")
 async def get_sharing(request: Request):
-    from app.auth import get_session_user_id
-    uid = get_session_user_id(request)
-    if uid is None:
-        raise HTTPException(401, "Not authenticated")
+    uid = require_user(request)
     user = db_getter().get_user(uid)
     if not user:
         raise HTTPException(404, "User not found")
@@ -294,10 +283,7 @@ async def get_sharing(request: Request):
 
 @router.post("/api/settings/sharing")
 async def save_sharing(request: Request):
-    from app.auth import get_session_user_id
-    uid = get_session_user_id(request)
-    if uid is None:
-        raise HTTPException(401, "Not authenticated")
+    uid = require_user(request)
     body = await request.json()
     db_getter().update_user_settings(
         uid,
@@ -316,9 +302,7 @@ class UserInfoRequest(BaseModel):
 
 @router.post("/api/settings/user-info")
 async def save_user_info(req: UserInfoRequest, request: Request):
-    uid = get_session_user_id(request)
-    if uid is None:
-        raise HTTPException(401, "Not authenticated")
+    uid = require_user(request)
     db = db_getter()
     if req.username is not None:
         name = req.username.strip()
@@ -342,9 +326,7 @@ def _avatar_dir(db) -> Path:
 async def upload_avatar(request: Request, file: UploadFile = File(...)):
     from PIL import Image
     import io
-    uid = get_session_user_id(request)
-    if uid is None:
-        raise HTTPException(401, "Not authenticated")
+    uid = require_user(request)
     data = await file.read()
     try:
         img = Image.open(io.BytesIO(data)).convert("RGB")

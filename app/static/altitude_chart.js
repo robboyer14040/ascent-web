@@ -98,6 +98,38 @@ async function drawElevationFromSummary(act, version) {
 // ── ELEVATION CHART ───────────────────────────────────────────────────────────
 // Chart overlay state
 let elevChartData = null;  // store last chart data for re-render
+let gradArr = null;        // gradient array from last drawElevation; read by calcGradient in hover IIFE
+let hudModeActive = false;
+let hudDataIdx    = -1;    // data index of last HUD position; used for keyboard nav
+let _showElevHudAt = null; // assigned by hover IIFE; called from touch handler
+
+function toggleElevHudMode() {
+  hudModeActive = !hudModeActive;
+  const btn = document.getElementById('elev-hud-btn');
+  if (btn) btn.classList.toggle('active', hudModeActive);
+  if (!hudModeActive) {
+    const _p = document.getElementById('elev-hover-panel');
+    const _c = document.getElementById('elev-crosshair');
+    if (_p) _p.style.display = 'none';
+    if (_c) _c.style.display = 'none';
+  }
+  window._clearElevSelection?.();
+}
+
+function _hudMoveToIdx(i) {
+  if (!elevChart || !elevChartData || !_showElevHudAt) return;
+  const data = elevChartData;
+  const n = data.dist_m.length;
+  i = Math.max(0, Math.min(n - 1, i));
+  hudDataIdx = i;
+  const useTimeAxis = (document.getElementById('xaxis-time')?.checked ?? false)
+                      && data.time && data.time.length === n;
+  const xVal = useTimeAxis ? data.time[i] : (U.metric ? data.dist_m[i] / 1000 : data.dist_m[i] / 1609.344);
+  const px = elevChart.scales.x.getPixelForValue(xVal);
+  const wrap = document.getElementById('elev-canvas-area') || document.getElementById('chart-wrap');
+  if (!wrap) return;
+  _showElevHudAt(wrap.getBoundingClientRect().left + px);
+}
 
 let _chartSettingsJustOpened = false;
 function toggleChartSettings(e) {
@@ -244,6 +276,43 @@ function _heatColor(frac, light=false) {
   return light ? 'rgb(127,29,29)' : 'rgb(239,68,68)';
 }
 
+// Gradient % → color: blue (downhill) → green (flat) → yellow → orange → red (steep)
+function _gradientColor(pct, alpha=1, light=false) {
+  const stops = light
+    ? [[-20,29,78,216],[-5,96,165,250],[0,21,128,61],[5,161,98,7],[10,194,65,12],[20,185,28,28]]
+    : [[-20,37,99,235],[-5,96,165,250],[0,34,197,94],[5,234,179,8],[10,249,115,22],[20,239,68,68]];
+  const clamped = Math.max(stops[0][0], Math.min(stops[stops.length-1][0], pct));
+  for (let i = 0; i < stops.length - 1; i++) {
+    const [t0,r0,g0,b0] = stops[i], [t1,r1,g1,b1] = stops[i+1];
+    if (clamped <= t1) {
+      const t = (clamped - t0) / (t1 - t0);
+      const r = Math.round(r0+(r1-r0)*t), g = Math.round(g0+(g1-g0)*t), b = Math.round(b0+(b1-b0)*t);
+      return alpha < 1 ? `rgba(${r},${g},${b},${alpha})` : `rgb(${r},${g},${b})`;
+    }
+  }
+  return light ? `rgba(185,28,28,${alpha})` : `rgba(239,68,68,${alpha})`;
+}
+
+// Compute per-point gradient % using a smoothing window (~1% of track length each side)
+// Distance-based window: 25m each side — practical GPS-noise floor (~3–5% noise on flat) while
+// still capturing pitches as short as ~50m at close to their true grade.
+function computeGradientArray(dist_m, alt_ft) {
+  const n = alt_ft.length;
+  const result = new Array(n).fill(0);
+  const half = 25; // metres each side
+  for (let i = 0; i < n; i++) {
+    let lo = i, hi = i;
+    while (lo > 0 && dist_m[i] - dist_m[lo - 1] <= half) lo--;
+    while (hi < n - 1 && dist_m[hi + 1] - dist_m[i] <= half) hi++;
+    // If the target distance didn't reach any neighbor, use the nearest point each side
+    if (lo === hi) { if (lo > 0) lo--; else if (hi < n - 1) hi++; }
+    const dAlt  = (alt_ft[hi] - alt_ft[lo]) * 0.3048; // ft → m
+    const dDist = dist_m[hi] - dist_m[lo];
+    result[i] = dDist > 1 ? (dAlt / dDist) * 100 : 0;
+  }
+  return result;
+}
+
 function _fmtSplitVal(value, metric) {
   if (metric === 'speed') return (U.metric ? (value * 1.60934).toFixed(1) : value.toFixed(1));
   if (metric === 'climb') return Math.round(U.metric ? value * 0.3048 : value);
@@ -328,17 +397,30 @@ async function drawElevation(data, version) {
   };
 
   const temp_disp = temp_f ? temp_f.map(v => v ? +(U.metric ? ((v - 32) * 5 / 9).toFixed(1) : v) : 0) : null;
-  const overlayArrs   = { hr, speed, power, cadence, temp: temp_disp };
-  const overlayUnits  = { hr: 'bpm', speed: U.speedUnit(), power: 'W', cadence: 'rpm', temp: U.tempUnit() };
-  const overlayLabels = { hr: 'Heart Rate', speed: 'Speed', power: 'Power', cadence: 'Cadence', temp: 'Temperature' };
+  gradArr = (dist_m && alt_ft) ? computeGradientArray(dist_m, alt_ft) : null;
+  const overlayArrs   = { hr, speed, power, cadence, temp: temp_disp, gradient: gradArr };
+  const overlayUnits  = { hr: 'bpm', speed: U.speedUnit(), power: 'W', cadence: 'rpm', temp: U.tempUnit(), gradient: '%' };
+  const overlayLabels = { hr: 'Heart Rate', speed: 'Speed', power: 'Power', cadence: 'Cadence', temp: 'Temperature', gradient: 'Gradient' };
 
   function makeOverlayPoints(key) {
     const arr = overlayArrs[key];
     if (!arr) return [];
     const pts = [];
-    for (let i = 0; i < total; i += step) {
-      const v = arr[i];
-      if (v != null) pts.push({ x: ptX(i), y: Math.round(v * 10) / 10, _raw: v });
+    if (key === 'gradient') {
+      // Use bin-max sampling so short steep sections aren't swallowed by the display step
+      for (let i = 0; i < total; i += step) {
+        const end = Math.min(i + step, total);
+        let maxAbsG = 0, maxG = arr[i];
+        for (let j = i; j < end; j++) {
+          if (arr[j] != null && Math.abs(arr[j]) > maxAbsG) { maxAbsG = Math.abs(arr[j]); maxG = arr[j]; }
+        }
+        if (maxG != null) pts.push({ x: ptX(i), y: Math.round(maxG * 10) / 10, _raw: maxG });
+      }
+    } else {
+      for (let i = 0; i < total; i += step) {
+        const v = arr[i];
+        if (v != null) pts.push({ x: ptX(i), y: Math.round(v * 10) / 10, _raw: v });
+      }
     }
     return pts;
   }
@@ -355,6 +437,12 @@ async function drawElevation(data, version) {
         if (!pt) return METRIC_COLORS.temp;
         const frac = maxV > minV ? (pt.y - minV) / (maxV - minV) : 0.5;
         return _heatColor(frac, light);
+      };
+    }
+    if (key === 'gradient') {
+      return (ctx) => {
+        const pt = pts[ctx.p0DataIndex];
+        return pt ? _gradientColor(pt.y, 1, light) : '#f97316';
       };
     }
     if (key !== 'hr' && key !== 'power') return null;
@@ -420,7 +508,7 @@ async function drawElevation(data, version) {
   if (o1key) {
     const o1pts = makeOverlayPoints(o1key);
     if (o1pts.length) {
-      const c1 = METRIC_COLORS[o1key] || '#22d3ee';
+      const c1 = o1key === 'gradient' ? '#f97316' : (METRIC_COLORS[o1key] || '#22d3ee');
       const seg1 = makeSegmentColor(o1key, o1pts);
       datasets.push({
         data: o1pts, fill: false,
@@ -430,14 +518,29 @@ async function drawElevation(data, version) {
         borderWidth: 1.5, pointRadius: 0, tension: 0.3, order: 2,
         yAxisID: 'yLeft',
       });
-      const o1max = Math.max(...o1pts.map(p => p.y));
-      scales.yLeft = {
-        position: 'left', offset: true,
-        ...clampAxis(o1max),
-        ticks: { color: c1, font: { size: 9 }, maxTicksLimit: 5, callback: v => `${v}` },
-        grid: { display: false },
-        title: { display: true, text: overlayUnits[o1key], color: c1, font: { size: 9 } },
-      };
+      if (o1key === 'gradient') {
+        const gradVals = o1pts.map(p => p.y).filter(v => isFinite(v));
+        const gradMin = Math.min(0, ...gradVals);
+        const gradMax = Math.max(0, ...gradVals);
+        const pad = Math.max(1, (gradMax - gradMin) * 0.08);
+        scales.yLeft = {
+          position: 'left', offset: true,
+          min: Math.floor(gradMin - pad),
+          max: Math.ceil(gradMax + pad),
+          ticks: { color: '#f97316', font: { size: 9 }, maxTicksLimit: 5, callback: v => `${v.toFixed(0)}%` },
+          grid: { display: false },
+          title: { display: true, text: 'gradient %', color: '#f97316', font: { size: 9 } },
+        };
+      } else {
+        const o1max = Math.max(...o1pts.map(p => p.y));
+        scales.yLeft = {
+          position: 'left', offset: true,
+          ...clampAxis(o1max),
+          ticks: { color: c1, font: { size: 9 }, maxTicksLimit: 5, callback: v => `${v}` },
+          grid: { display: false },
+          title: { display: true, text: overlayUnits[o1key], color: c1, font: { size: 9 } },
+        };
+      }
     }
   }
 
@@ -595,7 +698,8 @@ async function drawElevation(data, version) {
             title: items => xAxisTime ? fmtChartTime(items[0].parsed.x) : `${Number(items[0].parsed.x).toFixed(1)} ${xUnit}`,
             label: c => {
               const ds = c.datasetIndex;
-              if (ds === 0) return `${c.parsed.y} ft`;
+              if (ds === 0) return `${c.parsed.y} ${U.altUnit()}`;
+              if (o1key === 'gradient') return `${c.parsed.y.toFixed(1)}%`;
               return `${c.parsed.y} ${overlayUnits[o1key]||''}`;
             },
           },
@@ -623,15 +727,130 @@ async function drawElevation(data, version) {
   }
 
   function calcGradient(data, idx) {
+    if (gradArr) {
+      const i = Math.round(idx);
+      const v = gradArr[Math.max(0, Math.min(gradArr.length - 1, i))];
+      if (v != null) return v;
+    }
     const n = data.alt_ft.length;
-    const w = Math.max(1, Math.floor(n / 200)); // window
+    const w = Math.max(1, Math.floor(n / 200));
     const lo = Math.max(0, Math.floor(idx) - w);
     const hi = Math.min(n-1, Math.floor(idx) + w);
-    const dAlt = (data.alt_ft[hi] - data.alt_ft[lo]) * 0.3048; // ft→m
-    const dDist = (data.dist_m[hi] - data.dist_m[lo]);           // already metres
+    const dAlt = (data.alt_ft[hi] - data.alt_ft[lo]) * 0.3048;
+    const dDist = (data.dist_m[hi] - data.dist_m[lo]);
     if (dDist < 1) return 0;
     return (dAlt / dDist) * 100;
   }
+
+  function showHudAt(clientX) {
+    const wrap = document.getElementById('elev-canvas-area') || document.getElementById('chart-wrap');
+    const panel = document.getElementById('elev-hover-panel');
+    const cross = document.getElementById('elev-crosshair');
+    if (!wrap || !panel || !cross) return;
+    if (!elevChart || !elevChartData) { panel.style.display='none'; cross.style.display='none'; return; }
+    const rect = wrap.getBoundingClientRect();
+    const px   = clientX - rect.left;
+    const ca   = elevChart.chartArea;
+    if (!ca || px < ca.left || px > ca.right) { panel.style.display='none'; cross.style.display='none'; return; }
+
+    const xScale = elevChart.scales.x;
+    const xVal   = xScale.getValueForPixel(px);
+
+    // Map x-axis value → data index
+    const data = elevChartData;
+    const n    = data.dist_m.length;
+    const useTimeAxis = (document.getElementById('xaxis-time')?.checked ?? false)
+                        && data.time && data.time.length === n;
+    let lo=0, hi=n-1, idx;
+    if (useTimeAxis) {
+      while (lo < hi-1) { const mid=Math.floor((lo+hi)/2); if (data.time[mid] < xVal) lo=mid; else hi=mid; }
+      idx = lo + (xVal - data.time[lo]) / Math.max(1, data.time[hi] - data.time[lo]);
+    } else {
+      const xM = U.metric ? xVal * 1000 : xVal * 1609.344;
+      while (lo < hi-1) { const mid=Math.floor((lo+hi)/2); if (data.dist_m[mid] < xM) lo=mid; else hi=mid; }
+      idx = lo + (xM - data.dist_m[lo]) / Math.max(1, data.dist_m[hi] - data.dist_m[lo]);
+    }
+    hudDataIdx = Math.round(idx); // track for keyboard nav
+
+    // Crosshair
+    cross.style.display = 'block';
+    cross.style.left    = px + 'px';
+    cross.style.top     = ca.top + 'px';
+    cross.style.height  = (ca.bottom - ca.top) + 'px';
+
+    // Move elevation dot to hover position
+    const yScale = elevChart.scales.yElev || elevChart.scales.y;
+    const altHover = lerp(data.alt_ft, idx);
+    const dot = document.getElementById('elev-anim-dot');
+    if (dot && yScale && altHover != null) {
+      const dotPy = yScale.getPixelForValue(U.metric ? Math.round(altHover * 0.3048) : Math.round(altHover));
+      dot.style.display = 'block';
+      dot.style.left    = px + 'px';
+      dot.style.top     = dotPy + 'px';
+    }
+
+    // Update scrub slider and timecode to match hover position
+    // idx is relative to elevChartData.dist_m — map it to anim.pts by fraction
+    const hoverFrac = Math.max(0, Math.min(1, idx / (data.dist_m.length - 1)));
+    const scrub = document.getElementById('t-scrub');
+    if (scrub) scrub.value = Math.round(hoverFrac * 1000);
+    // Timecode from anim.pts if available, else from elevChartData.time
+    const timeArr = (anim.pts && anim.pts.time) ? anim.pts.time : data.time;
+    let hoverSecs = null;
+    if (timeArr && timeArr.length) {
+      const tIdx = Math.round(hoverFrac * (timeArr.length - 1));
+      hoverSecs = timeArr[Math.max(0, Math.min(timeArr.length-1, tIdx))] || 0;
+      const h = Math.floor(hoverSecs/3600), m = Math.floor((hoverSecs%3600)/60), s = Math.floor(hoverSecs%60);
+      const ttime = document.getElementById('t-time');
+      if (ttime) ttime.textContent = `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    }
+
+    // Move map dot to hover position
+    if (anim.latLon && anim.latLon.length > 0) {
+      const mapIdx = Math.max(0, Math.min(anim.latLon.length - 1, Math.round(idx * anim.latLon.length / data.dist_m.length)));
+      const ll = anim.latLon[mapIdx];
+      if (ll && leafMap) {
+        if (!anim.mapDot) {
+          anim.mapDot = L.marker(ll, {
+            icon: L.divIcon({
+              html: `<div style="width:10px;height:10px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#ffe066,#f59e0b 55%,#b45309);box-shadow:0 1px 3px rgba(0,0,0,.6)"></div>`,
+              iconSize:[10,10], iconAnchor:[5,5], className:''
+            }), zIndexOffset: 1000
+          }).addTo(leafMap);
+        } else {
+          anim.mapDot.setLatLng(ll);
+        }
+      }
+    }
+
+    // Values
+    const alt   = lerp(data.alt_ft,  idx);
+    const hr    = lerp(data.hr,      idx);
+    const pwr   = lerp(data.power,   idx);
+    const cad   = lerp(data.cadence, idx);
+    const spd   = lerp(data.speed,   idx);
+    const grad  = calcGradient(data, idx);
+    const dist  = lerp(data.dist_m,  idx);
+
+    const _prof = cachedProfile || {};
+    const _hrZC = (hr && hr>0) ? (zoneColorFor(hr,  hrBoundsFor(_prof, currentAct))  || COLORS.hr)    : COLORS.hr;
+    const _pwZC = (pwr && pwr>0)? (zoneColorFor(pwr, pwrBoundsFor(_prof, currentAct)) || COLORS.power) : COLORS.power;
+    const rows = [
+      { label:'Time',     val: hoverSecs != null ? (()=>{ const h=Math.floor(hoverSecs/3600),m=Math.floor((hoverSecs%3600)/60),s=Math.floor(hoverSecs%60); return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`; })() : '—', color: 'rgba(255,255,255,.75)' },
+      { label:'Distance', val: dist != null ? U.distS(+(dist/1609.344).toFixed(2)) : '—', color: COLORS.distance },
+      { label:'Altitude', val: alt  != null ? U.altS(alt)                      : '—', color: COLORS.altitude },
+      { label:'Gradient', val: grad != null ? grad.toFixed(1)+'%'              : '—', color: COLORS.gradient },
+      { label:'Heart Rate',val:hr && hr>0   ? Math.round(hr)+' bpm'           : '—', color: _hrZC },
+      { label:'Power',    val: pwr && pwr>0  ? Math.round(pwr)+' W'           : '—', color: _pwZC },
+      { label:'Cadence',  val: cad && cad>0 ? Math.round(cad)+' rpm'          : '—', color: COLORS.cadence },
+      { label:'Speed',    val: spd && spd>0 ? U.speedS(spd)                   : '—', color: COLORS.speed },
+    ];
+
+    elevHudRender(panel, rows, px, rect.width);
+  }
+
+  // Expose for touch HUD mode
+  _showElevHudAt = showHudAt;
 
   function setupHover() {
     const wrap = document.getElementById('elev-canvas-area') || document.getElementById('chart-wrap');
@@ -640,128 +859,8 @@ async function drawElevation(data, version) {
     if (!wrap || !panel || !cross) return;
 
     wrap.addEventListener('mousemove', e => {
-      if (!elevChart || !elevChartData) { panel.style.display='none'; cross.style.display='none'; return; }
-      const rect = wrap.getBoundingClientRect();
-      const px   = e.clientX - rect.left;
-      const ca   = elevChart.chartArea;
-      if (!ca || px < ca.left || px > ca.right) { panel.style.display='none'; cross.style.display='none'; return; }
-
-      const xScale = elevChart.scales.x;
-      const xVal   = xScale.getValueForPixel(px);
-
-      // Map x-axis value → data index
-      const data = elevChartData;
-      const n    = data.dist_m.length;
-      const useTimeAxis = (document.getElementById('xaxis-time')?.checked ?? false)
-                          && data.time && data.time.length === n;
-      let lo=0, hi=n-1, idx;
-      if (useTimeAxis) {
-        while (lo < hi-1) { const mid=Math.floor((lo+hi)/2); if (data.time[mid] < xVal) lo=mid; else hi=mid; }
-        idx = lo + (xVal - data.time[lo]) / Math.max(1, data.time[hi] - data.time[lo]);
-      } else {
-        const xM = U.metric ? xVal * 1000 : xVal * 1609.344;
-        while (lo < hi-1) { const mid=Math.floor((lo+hi)/2); if (data.dist_m[mid] < xM) lo=mid; else hi=mid; }
-        idx = lo + (xM - data.dist_m[lo]) / Math.max(1, data.dist_m[hi] - data.dist_m[lo]);
-      }
-
-      // Crosshair
-      cross.style.display = 'block';
-      cross.style.left    = px + 'px';
-      cross.style.top     = ca.top + 'px';
-      cross.style.height  = (ca.bottom - ca.top) + 'px';
-
-      // Move elevation dot to hover position
-      const yScale = elevChart.scales.yElev || elevChart.scales.y;
-      const altHover = lerp(data.alt_ft, idx);
-      const dot = document.getElementById('elev-anim-dot');
-      if (dot && yScale && altHover != null) {
-        const dotPy = yScale.getPixelForValue(U.metric ? Math.round(altHover * 0.3048) : Math.round(altHover));
-        dot.style.display = 'block';
-        dot.style.left    = px + 'px';
-        dot.style.top     = dotPy + 'px';
-      }
-
-      // Update scrub slider and timecode to match hover position
-      // idx is relative to elevChartData.dist_m — map it to anim.pts by fraction
-      const hoverFrac = Math.max(0, Math.min(1, idx / (data.dist_m.length - 1)));
-      const scrub = document.getElementById('t-scrub');
-      if (scrub) scrub.value = Math.round(hoverFrac * 1000);
-      // Timecode from anim.pts if available, else from elevChartData.time
-      const timeArr = (anim.pts && anim.pts.time) ? anim.pts.time : data.time;
-      let hoverSecs = null;
-      if (timeArr && timeArr.length) {
-        const tIdx = Math.round(hoverFrac * (timeArr.length - 1));
-        hoverSecs = timeArr[Math.max(0, Math.min(timeArr.length-1, tIdx))] || 0;
-        const h = Math.floor(hoverSecs/3600), m = Math.floor((hoverSecs%3600)/60), s = Math.floor(hoverSecs%60);
-        const ttime = document.getElementById('t-time');
-        if (ttime) ttime.textContent = `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-      }
-
-      // Move map dot to hover position
-      if (anim.latLon && anim.latLon.length > 0) {
-        const mapIdx = Math.max(0, Math.min(anim.latLon.length - 1, Math.round(idx * anim.latLon.length / data.dist_m.length)));
-        const ll = anim.latLon[mapIdx];
-        if (ll && leafMap) {
-          if (!anim.mapDot) {
-            anim.mapDot = L.marker(ll, {
-              icon: L.divIcon({
-                html: `<div style="width:10px;height:10px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#ffe066,#f59e0b 55%,#b45309);box-shadow:0 1px 3px rgba(0,0,0,.6)"></div>`,
-                iconSize:[10,10], iconAnchor:[5,5], className:''
-              }), zIndexOffset: 1000
-            }).addTo(leafMap);
-          } else {
-            anim.mapDot.setLatLng(ll);
-          }
-        }
-      }
-
-      // Values
-      const alt   = lerp(data.alt_ft,  idx);
-      const hr    = lerp(data.hr,      idx);
-      const pwr   = lerp(data.power,   idx);
-      const cad   = lerp(data.cadence, idx);
-      const spd   = lerp(data.speed,   idx);
-      const grad  = calcGradient(data, idx);
-      const dist  = lerp(data.dist_m,  idx);
-
-      const _prof = cachedProfile || {};
-      const _hrZC = (hr && hr>0) ? (zoneColorFor(hr,  hrBoundsFor(_prof, currentAct))  || COLORS.hr)    : COLORS.hr;
-      const _pwZC = (pwr && pwr>0)? (zoneColorFor(pwr, pwrBoundsFor(_prof, currentAct)) || COLORS.power) : COLORS.power;
-      const rows = [
-        { label:'Time',     val: hoverSecs != null ? (()=>{ const h=Math.floor(hoverSecs/3600),m=Math.floor((hoverSecs%3600)/60),s=Math.floor(hoverSecs%60); return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`; })() : '—', color: 'rgba(255,255,255,.75)' },
-        { label:'Distance', val: dist != null ? U.distS(+(dist/1609.344).toFixed(2)) : '—', color: COLORS.distance },
-        { label:'Altitude', val: alt  != null ? U.altS(alt)                      : '—', color: COLORS.altitude },
-        { label:'Gradient', val: grad != null ? grad.toFixed(1)+'%'              : '—', color: COLORS.gradient },
-        { label:'Heart Rate',val:hr && hr>0   ? Math.round(hr)+' bpm'           : '—', color: _hrZC },
-        { label:'Power',    val: pwr && pwr>0  ? Math.round(pwr)+' W'           : '—', color: _pwZC },
-        { label:'Cadence',  val: cad && cad>0 ? Math.round(cad)+' rpm'          : '—', color: COLORS.cadence },
-        { label:'Speed',    val: spd && spd>0 ? U.speedS(spd)                   : '—', color: COLORS.speed },
-      ];
-
-      panel.innerHTML = rows.map(r =>
-        `<div class="eh-row">
-          <span class="eh-label">${r.label}</span>
-          <span class="eh-val" style="color:${r.color}">${r.val}</span>
-        </div>`
-      ).join('');
-
-      // Position panel: left or right of crosshair to avoid overflow
-      panel.style.display = 'block';
-      const pw = panel.offsetWidth;
-      const ww = rect.width;
-      if (px + pw/2 + 8 > ww) {
-        panel.style.left  = '';
-        panel.style.right = (ww - px + 8) + 'px';
-        panel.style.transform = 'none';
-      } else if (px - pw/2 < 8) {
-        panel.style.left  = (px + 8) + 'px';
-        panel.style.right = '';
-        panel.style.transform = 'none';
-      } else {
-        panel.style.left      = px + 'px';
-        panel.style.right     = '';
-        panel.style.transform = 'translateX(-50%)';
-      }
+      if (!hudModeActive) { panel.style.display='none'; cross.style.display='none'; return; }
+      showHudAt(e.clientX);
     });
 
     wrap.addEventListener('mouseleave', () => {
@@ -816,6 +915,7 @@ async function drawElevation(data, version) {
       });
     }
     elevChart.update('none');
+    showSelectionStats(lo, hi);
 
     // ── Auto-run compare if overlay is open and waiting for a selection ───────
     const _cmpOverlay = document.getElementById('compare-overlay');
@@ -844,8 +944,144 @@ async function drawElevation(data, version) {
     }
   }
 
+  function showSelectionStats(lo, hi) {
+    const data = elevChartData;
+    const box  = document.getElementById('elev-sel-stats');
+    if (!data || !elevChart || !box) { if (box) box.style.display = 'none'; return; }
+    if (hi - lo < 5) { box.style.display = 'none'; return; }
+
+    const n      = data.dist_m.length;
+    const safeLo = Math.max(0, lo);
+    const safeHi = Math.min(hi, n - 1);
+
+    const speeds = data.speed   ? data.speed.slice(safeLo, safeHi + 1)   : [];
+    const hrs    = data.hr      ? data.hr.slice(safeLo, safeHi + 1)      : [];
+    const powers = data.power   ? data.power.slice(safeLo, safeHi + 1)   : [];
+    const cads   = data.cadence ? data.cadence.slice(safeLo, safeHi + 1) : [];
+    const alts   = data.alt_ft  ? data.alt_ft.slice(safeLo, safeHi + 1)  : [];
+    const grads  = gradArr      ? gradArr.slice(safeLo, safeHi + 1)       : [];
+
+    const validSpeeds = speeds.filter(v => v > 0);
+    const movSpeeds   = speeds.filter(v => v >= 0.5);
+    const validHrs    = hrs.filter(v => v > 0);
+    const validPowers = powers.filter(v => v > 0);
+    const validCads   = cads.filter(v => v > 0);
+
+    const _avg = arr => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null;
+    const _max = arr => arr.length ? Math.max(...arr) : null;
+    const _min = arr => arr.length ? Math.min(...arr) : null;
+    // Returns index of max (optionally filtered by pred), or null if nothing qualifies
+    const _argmaxF  = (arr, pred=()=>true) => { let bi=-1,bv=-Infinity; for(let i=0;i<arr.length;i++) if(pred(arr[i])&&arr[i]>bv){bv=arr[i];bi=i;} return bi<0?null:bi; };
+    const _argmaxAb = arr => { let bi=-1,ba=-Infinity; for(let i=0;i<arr.length;i++) if(Math.abs(arr[i])>ba){ba=Math.abs(arr[i]);bi=i;} return bi<0?null:bi; };
+    const toG = i => i==null ? null : safeLo+i;  // local slice index → global data index
+
+    let maxGradVal = null;
+    if (grads.length) {
+      let maxAbs = -Infinity;
+      for (const g of grads) { if (Math.abs(g) > maxAbs) { maxAbs = Math.abs(g); maxGradVal = g; } }
+    }
+    let avgGrad = null;
+    if (alts.length >= 2) {
+      const distSpan = data.dist_m[safeHi] - data.dist_m[safeLo];
+      if (distSpan > 0) avgGrad = (alts[alts.length - 1] - alts[0]) * 0.3048 / distSpan * 100;
+    }
+
+    let totalClimb = 0, totalDescent = 0;
+    for (let i = 1; i < alts.length; i++) {
+      const d = alts[i] - alts[i-1];
+      if (d > 0) totalClimb += d; else totalDescent += Math.abs(d);
+    }
+
+    const hasPower   = validPowers.length > 0;
+    const hasHR      = validHrs.length > 0;
+    const hasSpeed   = validSpeeds.length > 0;
+    const hasCadence = validCads.length > 0;
+
+    // Global data indices for each "Max" field (used for click-to-seek)
+    const maxAltGIdx  = toG(_argmaxF(alts));
+    const maxGradGIdx = toG(_argmaxAb(grads));
+    const maxHRGIdx   = toG(_argmaxF(hrs,    v => v > 0));
+    const maxPwrGIdx  = toG(_argmaxF(powers, v => v > 0));
+    const maxSpdGIdx  = toG(_argmaxF(speeds, v => v > 0));
+    const maxCadGIdx  = toG(_argmaxF(cads,   v => v > 0));
+
+    const fmtSpd  = v => v != null ? `${U.speed(v).toFixed(1)} ${U.speedUnit()}` : '—';
+    const fmtHR   = v => v != null ? `${Math.round(v)} bpm` : '—';
+    const fmtAlt  = v => v != null ? `${Math.round(U.metric ? v * 0.3048 : v)} ${U.altUnit()}` : '—';
+    const fmtClmb = v => v > 0 ? `${Math.round(U.metric ? v * 0.3048 : v)} ${U.altUnit()}` : '—';
+    const fmtPwr  = v => v != null ? `${Math.round(v)} W` : '—';
+    const fmtGrad = v => v != null ? `${v.toFixed(1)}%` : '—';
+    const fmtCad  = v => v != null ? `${Math.round(v)} rpm` : '—';
+
+    // Start time and duration from time array
+    let headerHtml = '';
+    if (data.time && data.time.length > safeHi) {
+      const startSec = data.time[safeLo] || 0;
+      const durSec   = Math.round((data.time[safeHi] || 0) - startSec);
+      const fmtElapsed = s => {
+        const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), ss = s % 60;
+        return h > 0
+          ? `${h}:${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}`
+          : `${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
+      };
+      headerHtml = `<div class="es-header">` +
+        `<span><span class="es-lbl">Start </span><span class="es-val">${fmtElapsed(Math.round(startSec))}</span></span>` +
+        `<span class="es-maxat" style="visibility:hidden"><span class="es-lbl">max@ </span><span class="es-val es-maxat-val"></span></span>` +
+        `<span><span class="es-lbl">Duration </span><span class="es-val">${fmtElapsed(durSec)}</span></span>` +
+        `</div>`;
+    }
+
+    const rows = [
+      [{ label: 'Min Altitude',  val: fmtAlt(alts.length ? _min(alts) : null) },
+       { label: 'Max Altitude',  val: fmtAlt(alts.length ? _max(alts) : null), clickIdx: maxAltGIdx }],
+      [{ label: 'Total Climb',   val: fmtClmb(totalClimb) },
+       { label: 'Total Descent', val: fmtClmb(totalDescent) }],
+      [{ label: 'Max Gradient',  val: fmtGrad(maxGradVal), clickIdx: maxGradGIdx },
+       { label: 'Avg Gradient',  val: fmtGrad(avgGrad) }],
+      ...(hasHR      ? [[{ label: 'Max HR',       val: fmtHR(_max(validHrs)),    clickIdx: maxHRGIdx  },
+                         { label: 'Avg HR',       val: fmtHR(_avg(validHrs))  }]] : []),
+      ...(hasPower   ? [[{ label: 'Max 3s Power', val: fmtPwr(_max(validPowers)), clickIdx: maxPwrGIdx },
+                         { label: 'Avg 3s Power', val: fmtPwr(_avg(validPowers)) }]] : []),
+      ...(hasSpeed   ? [[{ label: 'Max Speed',    val: fmtSpd(_max(validSpeeds)), clickIdx: maxSpdGIdx },
+                         { label: 'Mov Speed',    val: fmtSpd(_avg(movSpeeds))  }]] : []),
+      ...(hasCadence ? [[{ label: 'Max Cadence',  val: fmtCad(_max(validCads)),   clickIdx: maxCadGIdx },
+                         { label: 'Avg Cadence',  val: fmtCad(_avg(validCads))  }]] : []),
+    ];
+
+    const useTimeAxis = (document.getElementById('xaxis-time')?.checked ?? false)
+                        && data.time && data.time.length === n;
+    const xConv = U.metric ? (m => m/1000) : (m => m/1609.344);
+    const xLo  = useTimeAxis ? data.time[safeLo] : xConv(data.dist_m[safeLo]);
+    const xHi  = useTimeAxis ? data.time[safeHi] : xConv(data.dist_m[safeHi]);
+    const pxLo = elevChart.scales.x.getPixelForValue(xLo);
+    const pxHi = elevChart.scales.x.getPixelForValue(xHi);
+    const ca   = elevChart.chartArea;
+    const wrap = document.getElementById('elev-canvas-area');
+    const hasTime = !!(data.time && data.time.length > safeHi);
+    elevSelRender(box, pxLo, pxHi, ca, headerHtml, rows,
+      document.getElementById('elev-hud-btn'), wrap,
+      (idx, b) => {
+        _hudMoveToIdx(idx);
+        // _hudMoveToIdx shows the hover panel/crosshair — hide them so the stats pane stays visible
+        const _hp = document.getElementById('elev-hover-panel');
+        const _xh = document.getElementById('elev-crosshair');
+        if (_hp) _hp.style.display = 'none';
+        if (_xh) _xh.style.display = 'none';
+        if (hasTime) {
+          const t = data.time[idx] || 0;
+          const h = Math.floor(t/3600), m = Math.floor((t%3600)/60), s = Math.floor(t%60);
+          const maxAtEl = b.querySelector('.es-maxat');
+          const maxAtVal = b.querySelector('.es-maxat-val');
+          if (maxAtVal) maxAtVal.textContent = `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+          if (maxAtEl)  maxAtEl.style.visibility = 'visible';
+        }
+      });
+  }
+
   function clearElevSelection() {
     setElevSelection(null, null);
+    const box = document.getElementById('elev-sel-stats');
+    if (box) box.style.display = 'none';
     if (elevChart) {
       elevChart.data.datasets = elevChart.data.datasets.filter(d => !d._elevSel);
       elevChart.update('none');
@@ -939,7 +1175,24 @@ async function drawElevation(data, version) {
     // Touch (iPad)
     wrap.addEventListener('touchstart', e => {
       const t = e.touches[0];
-      if (!t || !beginDrag(t.clientX)) return;
+      if (!t) return;
+      if (hudModeActive) {
+        // HUD mode: drag shows hover panel instead of region selection
+        if (_showElevHudAt) _showElevHudAt(t.clientX);
+        function onHudMove(ev) { const t2 = ev.touches[0]; if (t2 && _showElevHudAt) _showElevHudAt(t2.clientX); }
+        function onHudEnd() {
+          document.removeEventListener('touchmove', onHudMove);
+          document.removeEventListener('touchend', onHudEnd);
+          const _p = document.getElementById('elev-hover-panel');
+          const _c = document.getElementById('elev-crosshair');
+          if (_p) _p.style.display = 'none';
+          if (_c) _c.style.display = 'none';
+        }
+        document.addEventListener('touchmove', onHudMove, {passive: true});
+        document.addEventListener('touchend', onHudEnd, {passive: true});
+        return;
+      }
+      if (!beginDrag(t.clientX)) return;
       // Don't preventDefault — allow scroll unless we actually started dragging
       function onMove(ev) { const t2 = ev.touches[0]; if (t2) moveDrag(t2.clientX); }
       function onEnd(ev)  { const t2 = ev.changedTouches[0];
@@ -1295,11 +1548,17 @@ function animReset() {
   anim.idx = 0;
 }
 
-// Keyboard shortcuts: space = play/pause, left/right = step
+// Keyboard shortcuts: space = play/pause, left/right = step (or HUD nav when HUD is active)
 document.addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
   if (document.getElementById('coach-overlay')?.classList.contains('open')) return;
   if (document.getElementById('lightbox').style.display === 'flex') return;
+  if (hudModeActive && elevChartData && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
+    e.preventDefault();
+    const cur = hudDataIdx >= 0 ? hudDataIdx : 0;
+    _hudMoveToIdx(cur + (e.key === 'ArrowRight' ? 1 : -1));
+    return;
+  }
   if (!anim.pts) return;
   if (e.key === ' ')          { e.preventDefault(); anim.playing ? animStop() : animPlay(); }
   if (e.key === 'ArrowRight') { animJump((anim.idx + 10) / anim.pts.time.length); }

@@ -109,6 +109,7 @@
         <button id="analysis-disclose" onclick="toggleAnalysis()" title="Collapse/expand analysis"><span class="arr">▾</span></button>
       </div>
       <div id="chart-toolbar" style="padding-right:10px">
+        <button id="elev-hud-btn" class="zones-btn" onclick="toggleElevHudMode()" title="Toggle HUD — shows stats on drag/hover" style="margin-top:2px">HUD</button>
         <button class="zones-btn" onclick="openZones()" style="margin-top:2px;margin-left:auto;margin-right:200px">Zones…</button>
         <span id="seg-selector-prefix" style="font-size:12px;font-weight:600;color:var(--text);align-self:center;display:none">Segment:</span>
         <div id="seg-selector-wrap" class="zones-btn" style="margin-top:2px;padding:2px 5px;display:none;position:relative;user-select:none;-webkit-user-select:none" title="Highlight a segment on the chart">
@@ -129,6 +130,7 @@
             <div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:4px">Overlay</div>
             <select id="overlay1-sel" style="width:100%;background:var(--surface2);border:1px solid var(--border2);color:var(--text);border-radius:5px;padding:3px 6px;font-size:12px;margin-bottom:4px" onchange="redrawElevWithOverlays()">
               <option value="">None</option>
+              <option value="gradient">Gradient</option>
               <option value="hr">Heart Rate</option>
               <option value="speed">Speed</option>
               <option value="power">Power</option>
@@ -211,6 +213,7 @@
         <div id="elev-crosshair"></div>
         <div id="elev-sel-rect"></div>
         <div id="elev-hover-panel"></div>
+        <div id="elev-sel-stats"></div>
       </div>
       <div id="elev-zoom-bar">
         <button class="elev-zoom-btn" onclick="elevZoomReset()" title="Reset zoom">⟲</button>

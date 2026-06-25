@@ -12,7 +12,7 @@ from typing import Callable, List, Optional
 from fastapi import APIRouter, Body, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
-from app.auth import get_session_user_id
+from app.auth import get_session_user_id, require_user
 from app.routers.fitgpx import _haversine_m
 from app.db import build_activity
 
@@ -402,9 +402,7 @@ def _global_stage_matching(con, uid: int, start_date: str, end_date: str, stages
 
 @router.get("/tours")
 async def list_tours(request: Request):
-    uid = get_session_user_id(request)
-    if uid is None:
-        raise HTTPException(401, "Not authenticated")
+    uid = require_user(request)
 
     con = sqlite3.connect(db_getter().path, timeout=10)
     try:
@@ -437,9 +435,7 @@ async def create_tour(
     shared:     int               = Form(default=1),
     files:      List[UploadFile]  = File(...),
 ):
-    uid = get_session_user_id(request)
-    if uid is None:
-        raise HTTPException(401, "Not authenticated")
+    uid = require_user(request)
 
     if not title.strip():
         raise HTTPException(400, "Title is required")
@@ -506,9 +502,7 @@ async def create_tour(
 
 @router.get("/tours/{tour_id}")
 async def get_tour(tour_id: int, request: Request, match_user_id: Optional[int] = Query(default=None)):
-    uid = get_session_user_id(request)
-    if uid is None:
-        raise HTTPException(401, "Not authenticated")
+    uid = require_user(request)
 
     con = sqlite3.connect(db_getter().path, timeout=15)
     try:
@@ -569,9 +563,7 @@ async def get_tour(tour_id: int, request: Request, match_user_id: Optional[int] 
 @router.get("/tours/{tour_id}/points")
 async def get_tour_points(tour_id: int, request: Request):
     """All stage route points grouped by stage_id — used for full-tour map rendering."""
-    uid = get_session_user_id(request)
-    if uid is None:
-        raise HTTPException(401, "Not authenticated")
+    uid = require_user(request)
 
     con = sqlite3.connect(db_getter().path, timeout=10)
     try:
@@ -602,9 +594,7 @@ async def get_tour_points(tour_id: int, request: Request):
 
 @router.delete("/tours/{tour_id}")
 async def delete_tour(tour_id: int, request: Request):
-    uid = get_session_user_id(request)
-    if uid is None:
-        raise HTTPException(401, "Not authenticated")
+    uid = require_user(request)
 
     con = sqlite3.connect(db_getter().path, timeout=10)
     try:
@@ -628,9 +618,7 @@ async def delete_tour(tour_id: int, request: Request):
 
 @router.patch("/tours/{tour_id}/stages/reorder")
 async def reorder_stages(tour_id: int, request: Request, body: dict = Body(...)):
-    uid = get_session_user_id(request)
-    if uid is None:
-        raise HTTPException(401, "Not authenticated")
+    uid = require_user(request)
 
     stage_ids = body.get("stage_ids") or []
     if not stage_ids:
@@ -672,9 +660,7 @@ async def update_tour(
     files:       Optional[List[UploadFile]] = File(default=None),
 ):
     """Edit an existing tour: update metadata, reorder/remove/add stages."""
-    uid = get_session_user_id(request)
-    if uid is None:
-        raise HTTPException(401, "Not authenticated")
+    uid = require_user(request)
 
     if not title.strip():
         raise HTTPException(400, "Title is required")
@@ -785,9 +771,7 @@ async def update_tour(
 @router.get("/tours/{tour_id}/stages/{stage_id}/locations")
 async def get_stage_locations(tour_id: int, stage_id: int, request: Request):
     """Sample points along a tour stage and reverse-geocode to a location string."""
-    uid = get_session_user_id(request)
-    if uid is None:
-        raise HTTPException(401, "Not authenticated")
+    uid = require_user(request)
 
     con = sqlite3.connect(db_getter().path, timeout=10)
     try:
@@ -815,9 +799,7 @@ async def get_stage_locations(tour_id: int, stage_id: int, request: Request):
 @router.get("/tours/{tour_id}/stages/{stage_id}/forecast")
 async def get_stage_forecast(tour_id: int, stage_id: int, request: Request):
     """Return an Open-Meteo forecast for the estimated date of an uncompleted tour stage."""
-    uid = get_session_user_id(request)
-    if uid is None:
-        raise HTTPException(401, "Not authenticated")
+    uid = require_user(request)
 
     from datetime import date as _date, timedelta
     import httpx
@@ -899,9 +881,7 @@ async def get_tour_ai_summary(tour_id: int, request: Request, model: Optional[st
     """Return an AI-generated summary of the entire tour (structure only, no activity data)."""
     import os, httpx
     from app.routers.coach import MODELS, DEFAULT_MODEL
-    uid = get_session_user_id(request)
-    if uid is None:
-        raise HTTPException(401, "Not authenticated")
+    uid = require_user(request)
 
     db = db_getter()
     api_key = (db.get_user(uid) or {}).get("anthropic_api_key") or ""
@@ -1001,9 +981,7 @@ async def get_stage_ai_advice(
     """
     import os, httpx
     from app.routers.coach import MODELS, DEFAULT_MODEL
-    uid = get_session_user_id(request)
-    if uid is None:
-        raise HTTPException(401, "Not authenticated")
+    uid = require_user(request)
 
     actual_uid = match_user_id if match_user_id is not None else uid
 
@@ -1149,9 +1127,7 @@ async def get_stage_ai_summary(
     """Return an AI-generated summary of a tour stage in the context of the overall tour."""
     import os, httpx
     from app.routers.coach import MODELS, DEFAULT_MODEL
-    uid = get_session_user_id(request)
-    if uid is None:
-        raise HTTPException(401, "Not authenticated")
+    uid = require_user(request)
 
     db = db_getter()
     api_key = (db.get_user(uid) or {}).get("anthropic_api_key") or ""
@@ -1265,9 +1241,7 @@ def _resolve_share_token(con, token: str):
 async def publish_tour(tour_id: int, request: Request):
     """Generate (or return existing) share token for this user on a tour."""
     import secrets
-    uid = get_session_user_id(request)
-    if uid is None:
-        raise HTTPException(401, "Not authenticated")
+    uid = require_user(request)
     con = sqlite3.connect(db_getter().path, timeout=10)
     try:
         _ensure_tables(con)
@@ -1293,9 +1267,7 @@ async def publish_tour(tour_id: int, request: Request):
 @router.delete("/tours/{tour_id}/publish")
 async def revoke_tour_publish(tour_id: int, request: Request):
     """Revoke this user's share token for a tour."""
-    uid = get_session_user_id(request)
-    if uid is None:
-        raise HTTPException(401, "Not authenticated")
+    uid = require_user(request)
     con = sqlite3.connect(db_getter().path, timeout=10)
     try:
         _ensure_tables(con)
@@ -1520,9 +1492,7 @@ def _stage_gpx_response(stage_name: str, pts: list) -> bytes:
 @router.get("/tours/stages/{stage_id}/export/gpx")
 async def tour_stage_export_gpx(stage_id: int, request: Request):
     """Authenticated — download route GPX for a tour stage."""
-    uid = get_session_user_id(request)
-    if uid is None:
-        raise HTTPException(401, "Not authenticated")
+    uid = require_user(request)
     con = sqlite3.connect(db_getter().path, timeout=10)
     try:
         _ensure_tables(con)

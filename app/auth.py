@@ -14,8 +14,7 @@ import secrets
 import time
 from typing import Optional
 
-from fastapi import Request
-from fastapi.responses import RedirectResponse
+from fastapi import Request, HTTPException
 
 # ── Password hashing ──────────────────────────────────────────────────────────
 # Use bcrypt directly (works with bcrypt 4.x and 5.x), fall back to pbkdf2
@@ -102,19 +101,11 @@ def clear_session_cookie(response):
 # ── Auth dependency ───────────────────────────────────────────────────────────
 
 def require_user(request: Request) -> int:
-    """
-    FastAPI dependency that returns user_id or raises a redirect to /login.
-    Usage: user_id: int = Depends(require_user)
-    """
+    """Return user_id or raise HTTPException(401). Call at the top of any route that requires auth."""
     uid = get_session_user_id(request)
     if uid is None:
-        # Store intended destination for post-login redirect
-        raise _LoginRedirect(request.url.path)
+        raise HTTPException(401, "Not authenticated")
     return uid
-
-class _LoginRedirect(Exception):
-    def __init__(self, next_path: str):
-        self.next_path = next_path
 
 # ── Invite token helpers ──────────────────────────────────────────────────────
 

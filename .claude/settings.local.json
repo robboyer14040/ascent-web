@@ -38,7 +38,15 @@
       "WebFetch(domain:dgtzuqphqg23d.cloudfront.net)",
       "Bash(uvicorn:*)",
       "Bash(/usr/local/bin/python3.12:*)",
-      "Bash(pip3.11 show:*)"
+      "Bash(pip3.11 show:*)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(npx --yes acorn --ecma2020 --module app/static/main_mobile.js)",
+      "Bash(npx acorn *)",
+      "Bash(fly sftp *)",
+      "Bash(ASCENT_DB_PATH=/Users/rob/Desktop/Ascent.ascentdb /Users/rob/projects/ascent-web/venv_arm64/bin/uvicorn app.main:app *)",
+      "Bash(/Users/rob/projects/ascent-web/venv_arm64/bin/pip install *)",
+      "Bash(fly proxy *)"
     ]
   }
 }

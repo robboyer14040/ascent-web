@@ -2,7 +2,7 @@ import os
 import httpx
 from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
-from app.auth import get_session_user_id
+from app.auth import get_session_user_id, require_user
 
 router = APIRouter()
 db_getter = None
@@ -39,26 +39,20 @@ async def route_builder_page(request: Request):
 
 @router.delete("/api/routes/thumbnails")
 async def clear_thumbnails(request: Request):
-    uid = get_session_user_id(request)
-    if uid is None:
-        raise HTTPException(401)
+    uid = require_user(request)
     n = db_getter().clear_all_thumbnails(uid)
     return JSONResponse({"cleared": n})
 
 
 @router.get("/api/routes/list")
 async def list_routes(request: Request):
-    uid = get_session_user_id(request)
-    if uid is None:
-        raise HTTPException(401)
+    uid = require_user(request)
     return JSONResponse(db_getter().get_routes(uid))
 
 
 @router.post("/api/routes/save")
 async def save_route(request: Request):
-    uid = get_session_user_id(request)
-    if uid is None:
-        raise HTTPException(401)
+    uid = require_user(request)
     body = await request.json()
     route_id = db_getter().save_route(
         user_id=uid,
@@ -76,9 +70,7 @@ async def save_route(request: Request):
 async def download_route_gpx(route_id: int, request: Request):
     from fastapi.responses import Response
     import xml.etree.ElementTree as ET
-    uid = get_session_user_id(request)
-    if uid is None:
-        raise HTTPException(401)
+    uid = require_user(request)
     route = db_getter().get_route(route_id, uid)
     if not route:
         raise HTTPException(404, "Route not found")
@@ -122,9 +114,7 @@ async def download_route_gpx(route_id: int, request: Request):
 @router.get("/api/routes/{route_id}/thumbnail")
 async def get_route_thumbnail(route_id: int, request: Request):
     from fastapi.responses import Response
-    uid = get_session_user_id(request)
-    if uid is None:
-        raise HTTPException(401)
+    uid = require_user(request)
     data = db_getter().get_route_thumbnail(route_id, uid)
     if not data:
         raise HTTPException(404)
@@ -134,9 +124,7 @@ async def get_route_thumbnail(route_id: int, request: Request):
 
 @router.post("/api/routes/{route_id}/thumbnail")
 async def save_route_thumbnail(route_id: int, request: Request):
-    uid = get_session_user_id(request)
-    if uid is None:
-        raise HTTPException(401)
+    uid = require_user(request)
     data = await request.body()
     if len(data) < 100:
         raise HTTPException(400, "Invalid image data")
@@ -146,9 +134,7 @@ async def save_route_thumbnail(route_id: int, request: Request):
 
 @router.get("/api/routes/{route_id}")
 async def get_route(route_id: int, request: Request):
-    uid = get_session_user_id(request)
-    if uid is None:
-        raise HTTPException(401)
+    uid = require_user(request)
     route = db_getter().get_route(route_id, uid)
     if not route:
         raise HTTPException(404, "Route not found")
@@ -157,9 +143,7 @@ async def get_route(route_id: int, request: Request):
 
 @router.put("/api/routes/{route_id}")
 async def update_route(route_id: int, request: Request):
-    uid = get_session_user_id(request)
-    if uid is None:
-        raise HTTPException(401)
+    uid = require_user(request)
     body = await request.json()
     ok = db_getter().update_route(
         route_id=route_id,
@@ -178,9 +162,7 @@ async def update_route(route_id: int, request: Request):
 
 @router.delete("/api/routes/{route_id}")
 async def delete_route(route_id: int, request: Request):
-    uid = get_session_user_id(request)
-    if uid is None:
-        raise HTTPException(401)
+    uid = require_user(request)
     ok = db_getter().delete_route(route_id, uid)
     if not ok:
         raise HTTPException(404, "Route not found")
@@ -191,9 +173,7 @@ async def delete_route(route_id: int, request: Request):
 
 @router.post("/api/routes/snap")
 async def snap_route(request: Request):
-    uid = get_session_user_id(request)
-    if uid is None:
-        raise HTTPException(401, "Not authenticated")
+    uid = require_user(request)
     body = await request.json()
     locations = body.get("locations", [])
     costing   = body.get("costing", "pedestrian")
@@ -273,9 +253,7 @@ async def _get_fresh_strava_token(uid: int):
 
 @router.post("/api/routes/strava-sync")
 async def strava_sync(request: Request):
-    uid = get_session_user_id(request)
-    if uid is None:
-        raise HTTPException(401)
+    uid = require_user(request)
 
     body = await request.json()
     delete_removed = body.get("delete_removed", True)
@@ -359,9 +337,7 @@ async def strava_sync(request: Request):
 
 @router.put("/api/routes/{route_id}/favorite")
 async def toggle_local_favorite(route_id: int, request: Request):
-    uid = get_session_user_id(request)
-    if uid is None:
-        raise HTTPException(401)
+    uid = require_user(request)
     body = await request.json()
     starred = bool(body.get("starred", False))
     db_getter().set_local_starred(route_id, uid, starred)

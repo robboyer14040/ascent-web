@@ -2,7 +2,7 @@
 
 import os, json
 from datetime import datetime
-from app.auth import get_session_user_id
+from app.auth import get_session_user_id, require_user
 from pathlib import Path
 from fastapi import APIRouter, Request, HTTPException, Query
 from fastapi.responses import FileResponse
@@ -36,24 +36,18 @@ async def yearly_stats(request: Request, year: Optional[int] = Query(None)):
 
 @router.get("/stats/daily")
 async def daily_stats(request: Request, week_start: str = Query(...)):
-    uid = get_session_user_id(request)
-    if uid is None:
-        raise HTTPException(401, "Not authenticated")
+    uid = require_user(request)
     return db_getter().get_daily_totals(user_id=uid, week_start=week_start)
 
 @router.get("/stats/daily-month")
 async def daily_month_stats(request: Request, year: int = Query(...), month: int = Query(...)):
-    uid = get_session_user_id(request)
-    if uid is None:
-        raise HTTPException(401, "Not authenticated")
+    uid = require_user(request)
     return db_getter().get_daily_totals_for_month(user_id=uid, year=year, month=month)
 
 @router.get("/stats/zones")
 async def zone_stats(request: Request, year: Optional[int] = Query(None),
                      month: Optional[int] = Query(None), week_start: Optional[str] = Query(None)):
-    uid = get_session_user_id(request)
-    if uid is None:
-        raise HTTPException(401, "Not authenticated")
+    uid = require_user(request)
     return db_getter().get_zone_time(user_id=uid, year=year, month=month, week_start=week_start)
 
 @router.get("/stats/fingerprint")
@@ -61,26 +55,20 @@ async def fingerprint_stats(request: Request, year: Optional[int] = Query(None),
                              month: Optional[int] = Query(None),
                              week_start: Optional[str] = Query(None),
                              skip_zones: bool = Query(False)):
-    uid = get_session_user_id(request)
-    if uid is None:
-        raise HTTPException(401, "Not authenticated")
+    uid = require_user(request)
     return db_getter().get_fingerprint_data(user_id=uid, year=year, month=month, week_start=week_start, skip_zones=skip_zones)
 
 @router.get("/stats/hre")
 async def hre_stats(request: Request, year: Optional[int] = Query(None),
                     month: Optional[int] = Query(None),
                     week_start: Optional[str] = Query(None)):
-    uid = get_session_user_id(request)
-    if uid is None:
-        raise HTTPException(401, "Not authenticated")
+    uid = require_user(request)
     return db_getter().get_hre_data(user_id=uid, year=year, month=month, week_start=week_start)
 
 @router.get("/stats/missing-points")
 async def missing_points(request: Request, year: Optional[int] = Query(None),
                          month: Optional[int] = Query(None), week_start: Optional[str] = Query(None)):
-    uid = get_session_user_id(request)
-    if uid is None:
-        raise HTTPException(401, "Not authenticated")
+    uid = require_user(request)
     return db_getter().get_activities_missing_points(user_id=uid, year=year, month=month, week_start=week_start)
 
 
@@ -96,9 +84,7 @@ async def activity_geojson(activity_id: int):
 async def save_activity_as_route(activity_id: int, request: Request):
     """Save an activity's GPS track as a local route, optionally uploading to Strava."""
     import httpx, xml.etree.ElementTree as ET
-    uid = get_session_user_id(request)
-    if uid is None:
-        raise HTTPException(401)
+    uid = require_user(request)
 
     body     = await request.json()
     name     = body.get("name", "Route").strip() or "Route"
@@ -214,9 +200,7 @@ async def delete_activities(req: DeleteActivitiesRequest):
 
 @router.get("/me")
 async def me(request: Request):
-    uid = get_session_user_id(request)
-    if uid is None:
-        raise HTTPException(401, "Not authenticated")
+    uid = require_user(request)
     user = db_getter().get_user(uid)
     if not user:
         raise HTTPException(404, "User not found")
@@ -235,9 +219,7 @@ async def suggest_activity_title(activity_id: int, request: Request):
     """Call Claude to generate a witty/humorous activity title based on stats."""
     import httpx
 
-    uid = get_session_user_id(request)
-    if uid is None:
-        raise HTTPException(401, "Not authenticated")
+    uid = require_user(request)
 
     db   = db_getter()
     act  = db.get_activity(activity_id)
@@ -341,9 +323,7 @@ async def activity_ai_summary(activity_id: int, request: Request, model: str = "
     """Return a cached or freshly generated AI summary for an activity."""
     import httpx, sqlite3, time as _time
 
-    uid = get_session_user_id(request)
-    if uid is None:
-        raise HTTPException(401, "Not authenticated")
+    uid = require_user(request)
 
     db  = db_getter()
     act = db.get_activity(activity_id)
@@ -512,9 +492,7 @@ async def activity_ai_summary(activity_id: int, request: Request, model: str = "
 
 @router.get("/users")
 async def list_users(request: Request):
-    uid = get_session_user_id(request)
-    if uid is None:
-        raise HTTPException(401, "Not authenticated")
+    uid = require_user(request)
     from pathlib import Path
     db = db_getter()
     users = db.list_users()
@@ -536,9 +514,7 @@ async def list_users(request: Request):
 @router.get("/debug/activity-user-counts")
 async def debug_activity_user_counts(request: Request):
     """Diagnostic: return count of activities per user_id value in the DB."""
-    uid = get_session_user_id(request)
-    if uid is None:
-        raise HTTPException(401, "Not authenticated")
+    uid = require_user(request)
     import sqlite3
     db = db_getter()
     rows = db._con.execute(
@@ -637,9 +613,7 @@ async def fetch_points_from_strava(activity_id: int, request: Request):
 @router.post("/activities/{activity_id}/update")
 async def update_activity_local(activity_id: int, req: dict, request: Request):
     """Save local edits (name, description, sport_type, gear) as pending — pushed to Strava on next resync."""
-    uid = get_session_user_id(request)
-    if uid is None:
-        raise HTTPException(401, "Not authenticated")
+    uid = require_user(request)
     name        = (req.get("name") or "").strip() or None
     description = req.get("description")   # empty string is valid (clears description)
     visibility  = req.get("visibility")
@@ -777,9 +751,7 @@ async def strava_gear(request: Request):
     """Return the authenticated user's bikes and shoes from Strava."""
     import httpx
     from app.routers.strava import load_tokens, tokens_are_fresh, refresh_tokens
-    uid = get_session_user_id(request)
-    if uid is None:
-        raise HTTPException(401, "Not authenticated")
+    uid = require_user(request)
     tokens = load_tokens(user_id=uid)
     if not tokens.get("access_token"):
         return {"bikes": [], "shoes": []}
@@ -2018,9 +1990,7 @@ def _match_segment_elapsed(db, act_id, start_lat, start_lon, end_lat, end_lon, r
 async def check_prs(body: dict, request: Request):
     """Check if newly synced activities set PRs on saved segments."""
     import json as json_mod, time as _time
-    uid = get_session_user_id(request)
-    if uid is None:
-        raise HTTPException(401, "Not authenticated")
+    uid = require_user(request)
 
     db = db_getter()
     activity_ids = body.get("activity_ids", [])
@@ -2154,9 +2124,7 @@ async def segment_best_efforts(segment_id: int, request: Request,
                                activity_id: int = Query(...)):
     """Return PR holders per time window for a saved segment."""
     import json as json_mod, time as _time, datetime
-    uid = get_session_user_id(request)
-    if uid is None:
-        raise HTTPException(401, "Not authenticated")
+    uid = require_user(request)
 
     db = db_getter()
     seg = db.get_segment(segment_id)

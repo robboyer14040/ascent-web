@@ -20,12 +20,99 @@ function _mobMoveElements() {
   const infoRight  = document.getElementById('info-right');
   if (photoDragH) photoDragH.remove();
   if (infoRight)  tabPhotos.appendChild(infoRight);
-  // Info panel → info tab
-  const infoPanel = document.getElementById('info-panel');
-  if (infoPanel)  tabInfo.appendChild(infoPanel);
   // Chart wrap → analysis tab
   const chartWrap = document.getElementById('chart-wrap');
-  if (chartWrap)  tabAnalysis.appendChild(chartWrap);
+  if (chartWrap) tabAnalysis.appendChild(chartWrap);
+  // Set initial chart height from saved prefs
+  if (chartWrap) {
+    const ps = loadPaneSizes();
+    chartWrap.style.height = (ps.chartH || 220) + 'px';
+  }
+  // Drag handle between chart and info for resizing
+  let mobHandle = document.getElementById('mob-chart-resize-handle');
+  if (!mobHandle) {
+    mobHandle = document.createElement('div');
+    mobHandle.id = 'mob-chart-resize-handle';
+    tabAnalysis.appendChild(mobHandle);
+    _mobSetupChartResize(mobHandle, chartWrap);
+  }
+  // Info panel → analysis tab (below chart), collapsible
+  const infoPanel = document.getElementById('info-panel');
+  if (infoPanel) tabAnalysis.appendChild(infoPanel);
+  // Restore phone-specific collapse states
+  try {
+    const analysisBtn = document.getElementById('analysis-disclose');
+    if (_uiPrefsGet('ascent-analysis-open') === '0') {
+      if (chartWrap) chartWrap.style.height = ANALYSIS_TITLE_H + 'px';
+      if (analysisBtn) analysisBtn.classList.add('collapsed');
+      if (mobHandle) mobHandle.style.display = 'none';
+    }
+    if (_uiPrefsGet('ascent-stats-open') === '0') {
+      if (infoPanel) infoPanel.classList.add('stats-collapsed');
+      const content = infoPanel && infoPanel.querySelector('.stats-content');
+      if (content) content.style.display = 'none';
+      const statsBtn = document.getElementById('stats-disclose');
+      if (statsBtn) statsBtn.classList.add('collapsed');
+    }
+  } catch(e) {}
+}
+
+function _mobSetupChartResize(handle, chartWrap) {
+  if (!handle || !chartWrap) return;
+  let _startY = null, _startH = 0;
+  const MIN_H = 80;
+
+  handle.addEventListener('touchstart', e => {
+    e.preventDefault();
+    _startY = e.touches[0].clientY;
+    _startH = chartWrap.getBoundingClientRect().height;
+  }, {passive: false});
+
+  document.addEventListener('touchmove', e => {
+    if (_startY === null) return;
+    e.preventDefault();
+    const delta = e.touches[0].clientY - _startY;
+    const maxH = Math.round(window.innerHeight * 0.75);
+    chartWrap.style.height = Math.max(MIN_H, Math.min(maxH, _startH + delta)) + 'px';
+    if (typeof elevChart !== 'undefined' && elevChart) elevChart.resize();
+  }, {passive: false});
+
+  function _endResize() {
+    if (_startY === null) return;
+    _startY = null;
+    savePaneSizes({chartH: chartWrap.getBoundingClientRect().height});
+    if (typeof elevChart !== 'undefined' && elevChart) elevChart.resize();
+    if (typeof redrawElevWithOverlays === 'function') redrawElevWithOverlays();
+  }
+
+  document.addEventListener('touchend', _endResize);
+  document.addEventListener('touchcancel', () => { _startY = null; });
+
+  handle.addEventListener('pointerdown', e => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    _startY = e.clientY;
+    _startH = chartWrap.getBoundingClientRect().height;
+    try { handle.setPointerCapture(e.pointerId); } catch(_) {}
+    function pm(ev) {
+      const delta = ev.clientY - _startY;
+      const maxH = Math.round(window.innerHeight * 0.75);
+      chartWrap.style.height = Math.max(MIN_H, Math.min(maxH, _startH + delta)) + 'px';
+      if (typeof elevChart !== 'undefined' && elevChart) elevChart.resize();
+    }
+    function pu(ev) {
+      try { handle.releasePointerCapture(ev.pointerId); } catch(_) {}
+      savePaneSizes({chartH: chartWrap.getBoundingClientRect().height});
+      if (typeof elevChart !== 'undefined' && elevChart) elevChart.resize();
+      if (typeof redrawElevWithOverlays === 'function') redrawElevWithOverlays();
+      handle.removeEventListener('pointermove', pm);
+      handle.removeEventListener('pointerup', pu);
+      handle.removeEventListener('pointercancel', pu);
+    }
+    handle.addEventListener('pointermove', pm);
+    handle.addEventListener('pointerup', pu);
+    handle.addEventListener('pointercancel', pu);
+  });
 }
 
 function _mobRefitMap() {

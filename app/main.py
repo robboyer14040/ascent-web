@@ -128,7 +128,7 @@ def type_badge(t):
 
 templates.env.filters["fmt_date"]   = fmt_date
 templates.env.filters["type_badge"] = type_badge
-templates.env.globals["app_version"] = "v0.7.128"
+templates.env.globals["app_version"] = "v0.7.161"
 
 # ── wire routers ──────────────────────────────────────────────────────────────
 activities.db_getter = get_db
@@ -172,6 +172,7 @@ app.include_router(route_builder.router)
 async def favicon():
     from fastapi.responses import Response
     return Response(status_code=204)
+
 
 
 # ── root: dashboard ───────────────────────────────────────────────────────────

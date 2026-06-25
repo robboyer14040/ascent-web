@@ -759,11 +759,33 @@ select.edit-act-input{appearance:none;-webkit-appearance:none;cursor:pointer;pad
 #elev-hover-panel .eh-label{color:rgba(255,255,255,.45);letter-spacing:.01em}
 #elev-hover-panel .eh-val{font-weight:600;font-variant-numeric:tabular-nums;
   text-shadow:0 0 8px currentColor}
+#elev-hud-btn.active{background:#f97316;border-color:#f97316;color:#fff}
+#elev-hud-btn.active:hover{background:#ea6c0a;border-color:#ea6c0a;color:#fff}
 #elev-sel-rect{
   position:absolute;top:0;bottom:0;background:rgba(74,222,128,.15);
   border-left:1px solid rgba(74,222,128,.5);border-right:1px solid rgba(74,222,128,.5);
   pointer-events:none;display:none;z-index:4;
 }
+#elev-sel-stats{
+  position:absolute;background:rgba(0,0,0,.22);
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  border:1px solid rgba(74,222,128,.28);border-radius:10px;
+  padding:7px 13px;pointer-events:auto;display:none;z-index:16;white-space:nowrap;
+}
+[data-theme="light"] #elev-sel-stats{background:rgba(12,12,20,.38);border-color:rgba(74,222,128,.38)}
+@media(prefers-color-scheme:light){
+  :root:not([data-theme]) #elev-sel-stats{background:rgba(12,12,20,.38);border-color:rgba(74,222,128,.38)}
+}
+#elev-sel-stats .es-header{display:flex;justify-content:space-between;gap:24px;
+  font-size:11px;line-height:1.7;font-family:-apple-system,"SF Pro Text",sans-serif;
+  border-bottom:1px solid rgba(255,255,255,.12);margin-bottom:3px;padding-bottom:2px}
+#elev-sel-stats .es-grid{display:grid;grid-template-columns:1fr 1fr;column-gap:18px;row-gap:0}
+#elev-sel-stats .es-row{display:flex;justify-content:space-between;gap:14px;
+  font-size:11px;line-height:1.7;font-family:-apple-system,"SF Pro Text",sans-serif}
+#elev-sel-stats .es-lbl{color:rgba(255,255,255,.42);letter-spacing:.01em}
+#elev-sel-stats .es-val{font-weight:600;font-variant-numeric:tabular-nums;color:rgba(255,255,255,.88)}
+#elev-sel-stats .es-max-lbl{text-decoration:underline;cursor:pointer;pointer-events:auto}
+#elev-sel-stats .es-maxat{flex:1;text-align:center}
 #elev-crosshair{position:absolute;top:0;bottom:0;width:1px;
   background:rgba(255,255,255,.25);pointer-events:none;display:none;z-index:14}
 #elev-anim-dot{position:absolute;width:10px;height:10px;border-radius:50%;
@@ -816,7 +838,7 @@ select.edit-act-input{appearance:none;-webkit-appearance:none;cursor:pointer;pad
   .mob-tab-panel #map-wrap{flex:1;min-height:0}
   .mob-tab-panel #transport-bar{display:flex!important;flex-shrink:0;padding:8px 10px calc(4px + env(safe-area-inset-bottom)) 10px}
   .mob-tab-panel #info-panel{display:flex!important;flex-direction:column;height:auto!important;flex:none;overflow:visible}
-  .mob-tab-panel #chart-wrap{display:flex!important;flex-direction:column;height:auto!important;flex:1;overflow:hidden}
+  .mob-tab-panel #chart-wrap{display:flex!important;flex-direction:column;height:auto;flex:none!important;overflow:hidden}
   .mob-tab-panel #info-right{display:flex!important;width:100%!important;flex:1;background:#111}
   /* Info tab */
   #mob-tab-info{overflow-y:auto;-webkit-overflow-scrolling:touch}
@@ -828,10 +850,20 @@ select.edit-act-input{appearance:none;-webkit-appearance:none;cursor:pointer;pad
   .sc-val{font-size:15px!important}
   /* Analysis tab */
   #mob-tab-analysis #analysis-titlebar{cursor:default!important;touch-action:auto!important}
-  #mob-tab-analysis #analysis-disclose{display:none!important}
   #mob-tab-analysis #chart-toolbar{display:flex!important;padding:4px 8px 2px!important}
   #mob-tab-analysis #elev-zoom-bar{display:flex!important}
   #mob-tab-analysis .sp-tb-btn{min-height:36px;font-size:16px;padding:4px 10px}
+  /* Resize handle between chart and info in analysis tab */
+  #mob-chart-resize-handle{flex:none;height:16px;display:flex;align-items:center;justify-content:center;background:var(--surface);border-top:1px solid var(--border);border-bottom:1px solid var(--border);touch-action:none;cursor:row-resize;flex-shrink:0}
+  #mob-chart-resize-handle::after{content:'';display:block;width:36px;height:4px;background:var(--muted);border-radius:2px;opacity:.5}
+  /* Info panel below chart in analysis tab */
+  #mob-tab-analysis #info-panel{flex:1!important;min-height:28px;overflow:hidden!important}
+  #mob-tab-analysis #info-panel.stats-collapsed{flex:none!important;max-height:28px!important;overflow:hidden!important}
+  #mob-tab-analysis #stats-titlebar{display:flex!important;cursor:default!important;touch-action:auto!important}
+  #mob-tab-analysis .stats-content{flex-direction:column!important;overflow-y:auto!important;-webkit-overflow-scrolling:touch;flex:1!important}
+  #mob-tab-analysis #info-left{overflow:visible!important;padding:12px 14px calc(20px + env(safe-area-inset-bottom)) 14px!important;flex:none}
+  /* Hide Info tab button — info is now embedded in Analysis tab */
+  #mob-detail-tabbar .mob-tab-btn[data-tab="info"]{display:none!important}
   .zones-btn{min-height:36px!important;padding:4px 12px!important;font-size:13px!important}
   .elev-zoom-btn{min-height:36px!important;padding:4px 10px!important}
   /* Photos tab */

@@ -53,6 +53,7 @@ Unit notes:
 
 import sqlite3
 import json
+import math
 import os
 from typing import Optional, Optional
 
@@ -284,6 +285,26 @@ def build_activity(row: sqlite3.Row) -> dict:
     a["min_temp_f"] = round(safe_float(attrs.get("minTemperature")), 1)
 
     return a
+
+
+# ── GPS helpers ───────────────────────────────────────────────────────────────
+
+def _haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Great-circle distance in metres between two (lat, lon) degree points."""
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a = (math.sin(dlat / 2) ** 2 +
+         math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) *
+         math.sin(dlon / 2) ** 2)
+    return 6371000.0 * 2 * math.asin(min(1.0, math.sqrt(a)))
+
+# SQL fragment to exclude sentinel/invalid GPS points in WHERE clauses
+_VALID_GPS_SQL = (
+    "latitude_e7 != 999.0 AND longitude_e7 != 999.0"
+    " AND latitude_e7 BETWEEN -90 AND 90"
+    " AND longitude_e7 BETWEEN -180 AND 180"
+    " AND NOT (latitude_e7 = 0.0 AND longitude_e7 = 0.0)"
+)
 
 
 # ── AscentDB ──────────────────────────────────────────────────────────────────
@@ -567,19 +588,15 @@ class AscentDB:
         Opens its own connection so it is safe to call from any thread.
         Returns number of rows inserted.
         """
-        import math
         con = sqlite3.connect(self.path, timeout=30)
         con.row_factory = sqlite3.Row
         try:
             con.execute("PRAGMA journal_mode=WAL")
             rows = con.execute(
-                """SELECT latitude_e7, longitude_e7, wall_clock_delta_s
+                f"""SELECT latitude_e7, longitude_e7, wall_clock_delta_s
                    FROM points
                    WHERE track_id = ?
-                     AND latitude_e7 != 999.0 AND longitude_e7 != 999.0
-                     AND latitude_e7 BETWEEN -90 AND 90
-                     AND longitude_e7 BETWEEN -180 AND 180
-                     AND NOT (latitude_e7 = 0.0 AND longitude_e7 = 0.0)
+                     AND {_VALID_GPS_SQL}
                    ORDER BY wall_clock_delta_s ASC, active_time_delta_s ASC""",
                 (activity_id,)
             ).fetchall()
@@ -587,18 +604,9 @@ class AscentDB:
             if len(rows) < 2:
                 return 0
 
-            # Cumulative distance (metres) using full-resolution points
-            R = 6371000.0
             cum = [0.0]
             for i in range(1, len(rows)):
-                lat1, lon1 = rows[i-1][0], rows[i-1][1]
-                lat2, lon2 = rows[i][0], rows[i][1]
-                dlat = math.radians(lat2 - lat1)
-                dlon = math.radians(lon2 - lon1)
-                a = (math.sin(dlat/2)**2 +
-                     math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) *
-                     math.sin(dlon/2)**2)
-                cum.append(cum[-1] + R * 2 * math.asin(min(1.0, math.sqrt(a))))
+                cum.append(cum[-1] + _haversine_m(rows[i-1][0], rows[i-1][1], rows[i][0], rows[i][1]))
 
             # Subsample evenly; always include last point
             step = max(1, len(rows) // n_samples)
@@ -649,7 +657,6 @@ class AscentDB:
         background thread without touching self._con.
         Returns {"processed": N, "skipped": M}.
         """
-        import math
         con = sqlite3.connect(self.path, timeout=60)
         con.row_factory = sqlite3.Row
         con.execute("PRAGMA journal_mode=WAL")
@@ -675,13 +682,10 @@ class AscentDB:
             act_id = row[0]
             try:
                 pts = con.execute(
-                    """SELECT latitude_e7, longitude_e7, wall_clock_delta_s
+                    f"""SELECT latitude_e7, longitude_e7, wall_clock_delta_s
                        FROM points
                        WHERE track_id = ?
-                         AND latitude_e7 != 999.0 AND longitude_e7 != 999.0
-                         AND latitude_e7 BETWEEN -90 AND 90
-                         AND longitude_e7 BETWEEN -180 AND 180
-                         AND NOT (latitude_e7 = 0.0 AND longitude_e7 = 0.0)
+                         AND {_VALID_GPS_SQL}
                        ORDER BY wall_clock_delta_s ASC, active_time_delta_s ASC""",
                     (act_id,)
                 ).fetchall()
@@ -690,17 +694,9 @@ class AscentDB:
                     skipped += 1
                     continue
 
-                R = 6371000.0
                 cum = [0.0]
                 for i in range(1, len(pts)):
-                    lat1, lon1 = pts[i-1][0], pts[i-1][1]
-                    lat2, lon2 = pts[i][0], pts[i][1]
-                    dlat = math.radians(lat2 - lat1)
-                    dlon = math.radians(lon2 - lon1)
-                    a = (math.sin(dlat/2)**2 +
-                         math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) *
-                         math.sin(dlon/2)**2)
-                    cum.append(cum[-1] + R * 2 * math.asin(min(1.0, math.sqrt(a))))
+                    cum.append(cum[-1] + _haversine_m(pts[i-1][0], pts[i-1][1], pts[i][0], pts[i][1]))
 
                 step = max(1, len(pts) // n_samples)
                 indices = list(range(0, len(pts), step))
@@ -742,7 +738,6 @@ class AscentDB:
         return {"processed": processed, "skipped": skipped}
 
     def get_chart_data_for_points(self, activity_id: int) -> dict:
-        import math
         all_pts = self.get_track_points(activity_id)
         # Exclude BAD_LATLON (999.0) dead zone markers from chart data
         # Also exclude points where distance is BAD_DISTANCE (1000000m) 
@@ -774,13 +769,7 @@ class AscentDB:
             # Calculate cumulative distance from GPS coordinates (haversine) in metres
             dist_m = [0.0]
             for i in range(1, len(pts)):
-                lat1, lon1 = math.radians(pts[i-1]["lat"]), math.radians(pts[i-1]["lon"])
-                lat2, lon2 = math.radians(pts[i]["lat"]),   math.radians(pts[i]["lon"])
-                dlat = lat2 - lat1
-                dlon = lon2 - lon1
-                a = math.sin(dlat/2)**2 + math.cos(lat1)*math.cos(lat2)*math.sin(dlon/2)**2
-                d_m = 6371000 * 2 * math.asin(min(1, math.sqrt(a)))
-                dist_m.append(dist_m[-1] + d_m)  # keep in metres
+                dist_m.append(dist_m[-1] + _haversine_m(pts[i-1]["lat"], pts[i-1]["lon"], pts[i]["lat"], pts[i]["lon"]))
 
         return {
             "time":    [p["t"] for p in pts],   # wall_clock_delta_s = cumulative elapsed seconds
@@ -942,11 +931,7 @@ class AscentDB:
             for r in rows
         ]
 
-    def get_daily_totals(self, user_id: int, week_start: str) -> list[dict]:
-        """Return daily activity totals for the 7-day week starting on week_start (YYYY-MM-DD)."""
-        from datetime import date, timedelta
-        d0 = date.fromisoformat(week_start)
-        week_end = (d0 + timedelta(days=6)).isoformat()
+    def _daily_totals_raw(self, user_id: int, d_start: str, d_end: str) -> dict:
         rows = self._con.execute("""
             SELECT
                 date(datetime(creation_time_s,'unixepoch')) AS day,
@@ -962,24 +947,32 @@ class AscentDB:
               AND date(datetime(creation_time_s,'unixepoch')) BETWEEN ? AND ?
             GROUP BY day
             ORDER BY day ASC
-        """, (user_id, week_start, week_end)).fetchall()
-        day_map = {r["day"]: r for r in rows}
-        result = []
-        for i in range(7):
-            day = (d0 + timedelta(days=i)).isoformat()
-            r = day_map.get(day)
-            result.append({
-                "day":          day,
-                "count":        r["count"] if r else 0,
-                "active_days":  1 if r else 0,
-                "dist_mi":      round((r["dist_mi"]  or 0) if r else 0, 1),
-                "climb_ft":     round((r["climb_ft"] or 0) if r else 0),
-                "active_h":     round(((r["moving_s"] or 0) if r else 0) / 3600, 2),
-                "max_climb_ft": round((r["max_climb_ft"] or 0) if r else 0),
-                "avg_power_w":  round((r["avg_power_w"]  or 0) if r else 0),
-                "avg_hr":       round((r["avg_hr"]       or 0) if r else 0),
-            })
-        return result
+        """, (user_id, d_start, d_end)).fetchall()
+        return {r["day"]: r for r in rows}
+
+    @staticmethod
+    def _day_entry(day: str, r) -> dict:
+        return {
+            "day":          day,
+            "count":        r["count"] if r else 0,
+            "active_days":  1 if r else 0,
+            "dist_mi":      round((r["dist_mi"]  or 0) if r else 0, 1),
+            "climb_ft":     round((r["climb_ft"] or 0) if r else 0),
+            "active_h":     round(((r["moving_s"] or 0) if r else 0) / 3600, 2),
+            "max_climb_ft": round((r["max_climb_ft"] or 0) if r else 0),
+            "avg_power_w":  round((r["avg_power_w"]  or 0) if r else 0),
+            "avg_hr":       round((r["avg_hr"]       or 0) if r else 0),
+        }
+
+    def get_daily_totals(self, user_id: int, week_start: str) -> list[dict]:
+        """Return daily activity totals for the 7-day week starting on week_start (YYYY-MM-DD)."""
+        from datetime import date, timedelta
+        d0 = date.fromisoformat(week_start)
+        week_end = (d0 + timedelta(days=6)).isoformat()
+        day_map = self._daily_totals_raw(user_id, week_start, week_end)
+        return [self._day_entry((d0 + timedelta(days=i)).isoformat(),
+                                day_map.get((d0 + timedelta(days=i)).isoformat()))
+                for i in range(7)]
 
     def get_daily_totals_for_month(self, user_id: int, year: int, month: int) -> list[dict]:
         """Return daily activity totals for every day in the given month."""
@@ -988,39 +981,10 @@ class AscentDB:
         d0 = date(year, month, 1)
         days_in_month = calendar.monthrange(year, month)[1]
         d_end = date(year, month, days_in_month)
-        rows = self._con.execute("""
-            SELECT
-                date(datetime(creation_time_s,'unixepoch')) AS day,
-                COUNT(*)               AS count,
-                SUM(distance_mi)       AS dist_mi,
-                SUM(src_total_climb)   AS climb_ft,
-                SUM(src_moving_time_s) AS moving_s,
-                MAX(src_total_climb)   AS max_climb_ft,
-                AVG(CASE WHEN src_avg_power     > 0 THEN src_avg_power     END) AS avg_power_w,
-                AVG(CASE WHEN src_avg_heartrate > 0 THEN src_avg_heartrate END) AS avg_hr
-            FROM activities
-            WHERE user_id = ?
-              AND date(datetime(creation_time_s,'unixepoch')) BETWEEN ? AND ?
-            GROUP BY day
-            ORDER BY day ASC
-        """, (user_id, d0.isoformat(), d_end.isoformat())).fetchall()
-        day_map = {r["day"]: r for r in rows}
-        result = []
-        for i in range(days_in_month):
-            day = (d0 + timedelta(days=i)).isoformat()
-            r = day_map.get(day)
-            result.append({
-                "day":          day,
-                "count":        r["count"] if r else 0,
-                "active_days":  1 if r else 0,
-                "dist_mi":      round((r["dist_mi"]  or 0) if r else 0, 1),
-                "climb_ft":     round((r["climb_ft"] or 0) if r else 0),
-                "active_h":     round(((r["moving_s"] or 0) if r else 0) / 3600, 2),
-                "max_climb_ft": round((r["max_climb_ft"] or 0) if r else 0),
-                "avg_power_w":  round((r["avg_power_w"]  or 0) if r else 0),
-                "avg_hr":       round((r["avg_hr"]       or 0) if r else 0),
-            })
-        return result
+        day_map = self._daily_totals_raw(user_id, d0.isoformat(), d_end.isoformat())
+        return [self._day_entry((d0 + timedelta(days=i)).isoformat(),
+                                day_map.get((d0 + timedelta(days=i)).isoformat()))
+                for i in range(days_in_month)]
 
     def get_activities_missing_points(self, user_id: int,
                                        year: Optional[int] = None,
