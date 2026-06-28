@@ -107,6 +107,9 @@ def _safe_title(name: str) -> str:
 
 
 def _get_info(activity_id: int) -> Optional[dict]:
+    # Ensure all lazy columns exist before reading so the full SELECT never fails.
+    _ensure_captions_column()
+    _ensure_locations_column()
     con = sqlite3.connect(_db_path())
     try:
         row = con.execute(
@@ -137,7 +140,7 @@ def _get_info(activity_id: int) -> Optional[dict]:
         if row[6] is not None:
             try: caption_map = json.loads(row[6])
             except Exception: caption_map = {}
-        location_map = {}
+        location_map = None  # None = never fetched; {} = fetched but no locations
         if row[7] is not None:
             try: location_map = json.loads(row[7])
             except Exception: location_map = {}
@@ -166,8 +169,8 @@ def _get_info(activity_id: int) -> Optional[dict]:
         if row[1]:
             try: filenames = json.loads(row[1])
             except Exception: pass
-        return {"strava_id": row[0], "filenames": filenames, "video_map": {}, "caption_map": {},
-                "user_id": None, "activity_name": "activity"}
+        return {"strava_id": row[0], "filenames": filenames, "video_map": {}, "caption_map": None,
+                "location_map": None, "user_id": None, "activity_name": "activity"}
     finally:
         con.close()
 
@@ -304,10 +307,13 @@ async def resolve_photos(activity_id: int, force: bool = False) -> dict:
     db_filenames     = info["filenames"]
     db_video_map     = info["video_map"]
     db_caption_map   = info.get("caption_map")   # None = never fetched
-    db_location_map  = info.get("location_map", {})
+    db_location_map  = info.get("location_map")  # None if key absent or column missing
     user_id          = info.get("user_id")
     dest_dir         = _photos_dir(strava_id)
     legacy_dirs      = _legacy_dirs()
+    log.warning(f"[PHOTO_DEBUG] activity={activity_id} strava={strava_id} user={user_id} "
+                f"filenames={len(db_filenames)} caption_map={type(db_caption_map).__name__!r} "
+                f"location_map={db_location_map!r}")
 
     if force:
         # Always re-download from Strava, discarding cached filenames
@@ -347,22 +353,32 @@ async def resolve_photos(activity_id: int, force: bool = False) -> dict:
             remaining.append(fname)
 
     # Step 3 & 4: download from Strava if files are missing, db has no filenames,
-    # or captions have never been fetched (db_caption_map is None)
+    # captions have never been fetched, or location data is absent/empty.
+    # db_location_map falsy covers: None (column missing/NULL) and {} (saved before GPS feature).
+    # After a successful fetch with no GPS we save {"_location_checked": True} so future loads
+    # skip this block rather than hitting Strava on every page view.
     new_filenames    = []
     new_video_map    = {}
     new_caption_map  = {}
-    new_location_map = {}
+    new_location_map = None  # None = Strava not called this request
     strava_failed    = False
-    if remaining or not db_filenames or db_caption_map is None:
+    trigger = bool(remaining or not db_filenames or db_caption_map is None or not db_location_map)
+    log.warning(f"[PHOTO_DEBUG] trigger={trigger} remaining={remaining} "
+                f"no_filenames={not db_filenames} cap_none={db_caption_map is None} "
+                f"loc_falsy={not db_location_map}")
+    if trigger:
         existing_names = {f.stem for f in dest_dir.iterdir() if f.is_file()}
         dl_filenames, dl_video_map, dl_caption_map, dl_location_map = await _download_from_strava(strava_id, dest_dir, existing_names, user_id)
+        log.warning(f"[PHOTO_DEBUG] strava result: dl_filenames={dl_filenames!r} dl_location={dl_location_map!r}")
         if dl_filenames is None:
             strava_failed = True
         else:
             new_filenames    = dl_filenames
             new_video_map    = dl_video_map
             new_caption_map  = dl_caption_map
-            new_location_map = dl_location_map
+            # If Strava returned no GPS data, store a sentinel so we don't re-fetch
+            # on every subsequent page load for photos that have no GPS.
+            new_location_map = dl_location_map if dl_location_map else {"_location_checked": True}
             for fname in new_filenames:
                 if fname not in resolved:
                     resolved.append(fname)
@@ -388,7 +404,7 @@ async def resolve_photos(activity_id: int, force: bool = False) -> dict:
 
     final_video_map    = new_video_map if new_video_map else db_video_map
     final_caption_map  = new_caption_map if new_caption_map else (db_caption_map or {})
-    final_location_map = new_location_map if new_location_map else db_location_map
+    final_location_map = new_location_map if new_location_map is not None else (db_location_map or {})
 
     if set(final) != set(db_filenames) or final != db_filenames or final_video_map != db_video_map or final_caption_map != (db_caption_map or {}) or final_location_map != db_location_map:
         _save_media(activity_id, final, final_video_map, final_caption_map, final_location_map)
