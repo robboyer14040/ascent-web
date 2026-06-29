@@ -158,7 +158,7 @@ body.mob-stage-view #mob-elev-hdr,body.mob-stage-view #mob-info-hdr{display:flex
 
 <nav>
   <div style="display:flex;align-items:center">
-    <a href="/"><img src="/static/favicon.svg" style="width:20px;height:20px;border-radius:4px;margin-right:6px;vertical-align:middle"><span class="nav-brand-name">Ascent</span></a>
+    <a href="/"><img src="/static/favicon.svg" style="width:20px;height:20px;border-radius:4px;margin-right:6px;vertical-align:middle"><span class="nav-brand-name">Ascent</span></a><span class="nav-version">{{ app_version }}</span>
   </div>
   <div class="spacer"></div>
   <span class="nav-sub">Progress shared by <strong style="color:var(--text)">{{ display_name }}</strong></span>
@@ -1033,6 +1033,7 @@ async function renderDetail(activeId) {
         </div>`;
         aHtml+=rpeHtml;
         if(act.notes) aHtml+=`<div class="act-notes">${esc(act.notes)}</div>`;
+        if(act.ai_summary) aHtml+=`<div class="ai-card" style="margin-top:8px;margin-bottom:8px"><div class="ai-card-label">AI Summary</div><div class="ai-card-body">${esc(act.ai_summary)}</div></div>`;
         aHtml+=`<div class="stats-grid">`;
         chips.forEach(([l,v,sub])=>{
           const span=l==='Equipment'?Math.min(6,Math.max(1,Math.ceil(v.length/14))):1;
@@ -1041,7 +1042,6 @@ async function renderDetail(activeId) {
         });
         aHtml+=`</div>`;
         aHtml+=`<div id="share-photos"></div>`;
-        aHtml+=_entireTourBtn;
         body.innerHTML=aHtml;
 
         // Async: weather + location
@@ -1053,6 +1053,8 @@ async function renderDetail(activeId) {
 
         // Async: photos (flex-wrap, no autoplay)
         loadSharePhotos(act.id);
+
+        el.insertAdjacentHTML('beforeend',_entireTourBtn);
 
         // Auto-sync if Strava description or photos not yet synced
         if(act.strava_activity_id && !act.notes) doShareSync();

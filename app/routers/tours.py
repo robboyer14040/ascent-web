@@ -1682,6 +1682,9 @@ async def tour_share_activity(token: str, activity_id: int):
             raise HTTPException(404, "Activity not found")
 
         act = build_activity(act_row)
+        ai_row = con.execute(
+            "SELECT summary FROM activity_ai_summaries WHERE activity_id=?", (activity_id,)
+        ).fetchone()
         return JSONResponse({
             "id":                    act["id"],
             "name":                  act.get("name") or "",
@@ -1705,6 +1708,7 @@ async def tour_share_activity(token: str, activity_id: int):
             "avg_power":             act.get("avg_power", 0),
             "max_power":             act.get("max_power", 0),
             "suffer_score":          act.get("suffer_score", 0),
+            "ai_summary":            ai_row[0] if ai_row else None,
         })
     finally:
         con.close()
