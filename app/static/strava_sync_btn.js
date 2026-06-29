@@ -93,10 +93,7 @@
   }
 
   function _injectButtons() {
-    const targets = [
-      ...document.querySelectorAll('.nav-version'),
-      document.getElementById('mob-header-version'),
-    ].filter(Boolean);
+    const targets = [...document.querySelectorAll('.nav-version')].filter(Boolean);
 
     targets.forEach(el => {
       const btn = _makeButton();

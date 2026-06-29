@@ -530,7 +530,14 @@ function clearMap() {
 }
 function placePhotoMarkers(media) {
   if (!leafMap) return;
-  MapUtils.placePhotoMarkers(leafMap, media, idx => { showPhoto(idx); photoClick(); });
+  MapUtils.placePhotoMarkers(leafMap, media, idx => {
+    showPhoto(idx);
+    if (typeof _isPhoneLayout === 'function' && _isPhoneLayout()) {
+      mobSwitchTab('photos');
+    } else {
+      photoClick();
+    }
+  });
 }
 
 function drawTrack(geojson) {
@@ -864,7 +871,8 @@ async function loadFilterOptions() {
   const d = await fetch(url).then(r=>r.json());
   const tEl=document.getElementById('typeFilter');
   tEl.innerHTML = '<option value="">All types</option>';
-  d.types.forEach(t=>{ const o=document.createElement('option');o.value=t;o.textContent=t;tEl.appendChild(o); });
+  const TYPE_LABELS={'EMountainBikeRide':'EMtn','EBikeRide':'EBike','GravelRide':'Gravel','VirtualRide':'Virtual','Ride':'Road'};
+  d.types.forEach(t=>{ const o=document.createElement('option');o.value=t;o.textContent=TYPE_LABELS[t]||t;tEl.appendChild(o); });
   const yEl=document.getElementById('yearFilter');
   yEl.innerHTML = '<option value="">All years</option>';
   d.years.forEach(y=>{ const o=document.createElement('option');o.value=y;o.textContent=y;yEl.appendChild(o); });

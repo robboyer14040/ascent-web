@@ -20,8 +20,11 @@ async def route_builder_page(request: Request):
     if stadia_key:
         tile_url = ("https://tiles.stadiamaps.com/tiles/osm_bright"
                     "/{z}/{x}/{y}.png?api_key=" + stadia_key)
+        wx_tile_url = ("https://tiles.stadiamaps.com/tiles/alidade_smooth_dark"
+                       "/{z}/{x}/{y}.png?api_key=" + stadia_key)
     else:
         tile_url = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+        wx_tile_url = tile_url
     try:
         ui_prefs = db_getter().get_ui_prefs(uid)
     except Exception:
@@ -31,6 +34,7 @@ async def route_builder_page(request: Request):
         "current_user": user,
         "has_stadia_key": bool(stadia_key),
         "tile_url": tile_url,
+        "wx_tile_url": wx_tile_url,
         "ui_prefs": ui_prefs,
     })
 

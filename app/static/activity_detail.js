@@ -104,6 +104,9 @@ function buildActivityDetailHTML(a, opts) {
   const saveRouteBtn = (saveRouteCb && (a.points_count > 0 || a.points_saved))
     ? `<button class="edit-btn" id="save-route-btn" onclick="${saveRouteCb}(${a.id},'${(a.name||'Route').replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')" title="Save GPS track as a route">+ Route</button>`
     : '';
+  const wxBtn = (a.points_count > 0 || a.points_saved)
+    ? `<button class="edit-btn" id="wx-act-btn" onclick="openWeatherForecast('activity',${a.id},this.dataset.name)" data-name="${esc(a.name||'Activity')}" title="Forecast weather for this route" style="padding:4px 7px;display:inline-flex;align-items:center"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 17.58A5 5 0 0 0 18 8h-1.26A8 8 0 1 0 4 16.25"/><line x1="8" y1="19" x2="8" y2="21"/><line x1="8" y1="13" x2="8" y2="15"/><line x1="16" y1="19" x2="16" y2="21"/><line x1="16" y1="13" x2="16" y2="15"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="12" y1="15" x2="12" y2="17"/></svg></button>`
+    : '';
 
   // ── Pace helper ──────────────────────────────────────────────────────────────
   function altPaceStr(mph, perMile) {
@@ -191,12 +194,12 @@ function buildActivityDetailHTML(a, opts) {
 
   // ── Assemble ──────────────────────────────────────────────────────────────────
   const titleBarHtml = suppressTitle
-    ? (editBtn||deleteBtn||resyncBtn||exportBtn||shareBtn||saveRouteBtn||stravaLink
-        ? `<div class="act-title-bar"><div class="act-title-links" style="margin-left:0">${editBtn}${deleteBtn}${resyncBtn}${exportBtn}${shareBtn}${saveRouteBtn}${stravaLink}</div></div>`
+    ? (editBtn||deleteBtn||resyncBtn||exportBtn||shareBtn||saveRouteBtn||wxBtn||stravaLink
+        ? `<div class="act-title-bar"><div class="act-title-links" style="margin-left:0">${editBtn}${deleteBtn}${resyncBtn}${exportBtn}${shareBtn}${saveRouteBtn}${wxBtn}${stravaLink}</div></div>`
         : '')
     : `<div class="act-title-bar">
       <div style="display:flex;align-items:flex-start;min-width:0;flex:1">${avatarHtml}<div class="act-title">${esc(a.name||'(unnamed)')}${isDirty?'<span style="color:#f97316;font-size:10px;margin-left:5px;font-weight:400;vertical-align:middle">edited</span>':''}</div></div>
-      <div class="act-title-links">${editBtn}${deleteBtn}${resyncBtn}${exportBtn}${shareBtn}${saveRouteBtn}${stravaLink}</div>
+      <div class="act-title-links">${editBtn}${deleteBtn}${resyncBtn}${exportBtn}${shareBtn}${saveRouteBtn}${wxBtn}${stravaLink}</div>
     </div>`;
   return `
     ${titleBarHtml}

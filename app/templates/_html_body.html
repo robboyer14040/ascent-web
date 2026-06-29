@@ -2,18 +2,18 @@
   <div id="top-row">
   <div id="sidebar">
     <div id="filter-bar">
-      <select id="typeFilter"><option value="">All types</option></select>
-      <select id="yearFilter"><option value="">All years</option></select>
-      <span id="viewing-user-badge" onclick="openUserPicker()" title="Switch user" style="display:none;font-size:11px;font-weight:500;color:var(--accent);cursor:pointer;padding:2px 7px;border:1px solid var(--accent);border-radius:10px;opacity:.85;user-select:none;flex-shrink:0"></span>
       <div class="tb-search">
         <span class="tb-icon">⌕</span>
         <input type="text" id="searchInput" placeholder="Search…">
       </div>
+      <select id="typeFilter"><option value="">All types</option></select>
+      <select id="yearFilter"><option value="">All years</option></select>
       <span class="tb-count" id="actCount"></span>
       <button class="tb-btn" id="bulk-gpx-btn" onclick="downloadSelectedGPX()" title="Download selected activities as GPX files" style="display:none">↓ GPX (<span id="bulk-gpx-count">0</span>)</button>
-      <button class="tb-btn" onclick="openImportModal()" title="Import GPX or FIT files">↑ Import</button>
+      <button class="tb-btn" id="import-btn" onclick="openImportModal()" title="Import GPX or FIT files">↑ Import</button>
       <button class="tb-btn" id="col-gear-btn" onclick="toggleColPicker(event)" title="Choose columns" style="padding:3px 7px;font-size:20px;line-height:1">⚙</button>
       <div id="col-picker"></div>
+      <div class="mob-filter-break"></div>
     </div>
 
     <!-- Selection mode bar (touch multi-select) -->
@@ -257,11 +257,28 @@
   <div id="mob-tab-info"     class="mob-tab-panel"></div>
   <div id="mob-tab-analysis" class="mob-tab-panel"></div>
   <div id="mob-tab-photos"   class="mob-tab-panel"></div>
+  <div id="mob-tab-forecast" class="mob-tab-panel"></div>
   <div id="mob-detail-tabbar">
-    <button class="mob-tab-btn active" data-tab="map"      onclick="mobSwitchTab('map')">      <span class="mob-tab-icon">🗺</span><span>Map</span></button>
-    <button class="mob-tab-btn"        data-tab="info"     onclick="mobSwitchTab('info')">     <span class="mob-tab-icon">ℹ️</span><span>Info</span></button>
-    <button class="mob-tab-btn"        data-tab="analysis" onclick="mobSwitchTab('analysis')"> <span class="mob-tab-icon">📊</span><span>Analysis</span></button>
-    <button class="mob-tab-btn"        data-tab="photos"   onclick="mobSwitchTab('photos')">   <span class="mob-tab-icon">📷</span><span>Photos</span></button>
+    <button class="mob-tab-btn active" data-tab="map"      onclick="mobSwitchTab('map')">
+      <span class="mob-tab-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg></span>
+      <span>Map</span>
+    </button>
+    <button class="mob-tab-btn" data-tab="info" onclick="mobSwitchTab('info')">
+      <span class="mob-tab-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="8"/><polyline points="11 11 12 11 12 16 13 16"/></svg></span>
+      <span>Info</span>
+    </button>
+    <button class="mob-tab-btn" data-tab="analysis" onclick="mobSwitchTab('analysis')">
+      <span class="mob-tab-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span>
+      <span>Analysis</span>
+    </button>
+    <button class="mob-tab-btn" data-tab="photos" onclick="mobSwitchTab('photos')">
+      <span class="mob-tab-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span>
+      <span>Photos</span>
+    </button>
+    <button class="mob-tab-btn" data-tab="forecast" id="mob-wx-btn" onclick="mobSwitchTab('forecast')" style="display:none">
+      <span class="mob-tab-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 17.58A5 5 0 0 0 18 8h-1.26A8 8 0 1 0 4 16.25"/><line x1="8" y1="19" x2="8" y2="21"/><line x1="8" y1="13" x2="8" y2="15"/><line x1="16" y1="19" x2="16" y2="21"/><line x1="16" y1="13" x2="16" y2="15"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="12" y1="15" x2="12" y2="17"/></svg></span>
+      <span>Forecast</span>
+    </button>
   </div>
 </div>
 </div>

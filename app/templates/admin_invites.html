@@ -4,9 +4,11 @@
 <meta charset="UTF-8">
 <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
 <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Admin — Ascent</title>
 <script>(function(){var t={{ ui_prefs.get('theme','') | tojson }};if(t)document.documentElement.dataset.theme=t;})();</script>
+<script>if(window.self!==window.top)document.documentElement.classList.add('mob-embedded')</script>
+<link rel="stylesheet" href="/static/mob_nav.css?v={{ app_version }}">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{--bg:#1c1c1e;--surface:#2c2c2e;--surface2:#3a3a3c;--border:#3a3a3c;--border2:#48484a;--text:#f2f2f7;--muted:#8e8e93;--muted2:#636366;--accent:#f97316;--nav-hover:rgba(255,255,255,.06)}
@@ -68,7 +70,7 @@ td{padding:.5rem;border-bottom:1px solid var(--border);vertical-align:middle;whi
 .result-err{background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);color:#ef4444}
 </style>
 </head>
-<body>
+<body class="has-mob-topbar">
 <nav>
   <a class="brand" href="/"><img src="/static/favicon.svg" style="width:20px;height:20px;border-radius:4px;margin-right:6px;vertical-align:middle">Ascent</a>
   <div class="spacer"></div>
@@ -325,5 +327,13 @@ async function switchDb() {
   btn.disabled = false;
 }
 </script>
+
+<div class="mob-topbar">
+  <img src="/static/favicon.svg" style="width:18px;height:18px;border-radius:3px;flex-shrink:0">
+  <span class="mob-topbar-brand">Ascent</span>
+  <span class="mob-topbar-version">{{ app_version }}</span>
+</div>
+{% set mob_active = 'settings' %}
+{% include '_mob_global_nav.html' %}
 </body>
 </html>

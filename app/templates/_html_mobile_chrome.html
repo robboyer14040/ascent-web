@@ -1,21 +1,59 @@
-<!-- ── MOBILE CHROME — hidden on desktop ─────────────────────────────────── -->
+<!-- ── MOBILE CHROME — phone only ─────────────────────────────────────────── -->
 <div id="mob-header">
   <button id="mob-back-btn" onclick="mobileGoBack()"><span>‹</span><span>Back</span></button>
   <div style="display:flex;align-items:center;gap:5px;flex-shrink:0">
-    <img src="/static/favicon.svg" style="width:18px;height:18px;border-radius:3px;flex-shrink:0"><span id="mob-header-title">Ascent</span><span id="mob-header-version" style="font-size:10px;font-weight:400;color:var(--muted);letter-spacing:.02em">{{ app_version }}</span>
+    <img src="/static/favicon.svg" style="width:18px;height:18px;border-radius:3px;flex-shrink:0">
+    <span id="mob-header-title">Ascent</span><span id="mob-header-version" class="nav-version" style="font-size:10px;font-weight:400;color:var(--muted);letter-spacing:.02em">{{ app_version }}</span>
   </div>
   <div style="flex:1"></div>
   <button id="mob-user-btn" onclick="openUserPicker()" title="Switch user" style="display:none;align-items:center;justify-content:center;min-height:36px;padding:0 10px;margin-left:8px;border-radius:8px;background:none;border:1px solid #f97316;color:#f97316;font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></button>
 </div>
 
-<div id="mob-global-nav">
-  <button class="mob-nav-btn active"><span>≡</span><span>Activities</span></button>
-  <button class="mob-nav-btn" onclick="openCoach()"><span></span><span>Coach</span></button>
-  <a href="/tour" class="mob-nav-btn"><span>⛰</span><span>Tours</span></a>
-  <a href="/" class="mob-nav-btn"><span></span><span>Summary</span></a>
-  <a href="/strava/sync" class="mob-nav-btn"><span></span><span>Sync</span></a>
-  <a href="/settings" class="mob-nav-btn"><span></span><span>Settings</span></a>
-</div>
+{% set mob_active = 'activities' %}
+{% include '_mob_global_nav.html' %}
+
+<script>
+/* On the activities page, override nav links to open/close the coach panel in-place */
+document.addEventListener('DOMContentLoaded', function() {
+  var actBtn = document.querySelector('#mob-global-nav .mob-nav-btn:first-child');
+  var coachBtn = document.getElementById('mob-coach-nav-btn');
+  if (actBtn) actBtn.addEventListener('click', function(e) { e.preventDefault(); if (window.closeCoach) closeCoach(); });
+  if (coachBtn) coachBtn.addEventListener('click', function(e) { e.preventDefault(); if (window.openCoach) openCoach(); });
+
+  function setCoachActive(active) {
+    if (actBtn) actBtn.classList.toggle('active', !active);
+    if (coachBtn) coachBtn.classList.toggle('active', active);
+    document.querySelectorAll('.strava-sync-btn').forEach(function(b) {
+      b.style.display = active ? 'none' : '';
+    });
+  }
+  var orig_open = window.openCoach, orig_close = window.closeCoach;
+  if (orig_open) window.openCoach = function() { orig_open.apply(this, arguments); setCoachActive(true); };
+  if (orig_close) window.closeCoach = function() { orig_close.apply(this, arguments); setCoachActive(false); };
+});
+
+/* When embedded in shell iframe: hide mobile chrome via JS (belt-and-suspenders over CSS) */
+(function() {
+  if (window.self === window.top) return;
+  function applyEmbedded() {
+    var h  = document.getElementById('mob-header');
+    var n  = document.getElementById('mob-global-nav');
+    var r  = document.getElementById('root');
+    var ds = document.getElementById('mob-detail-screen');
+    if (h)  h.style.setProperty('display', 'none', 'important');
+    if (n)  n.style.setProperty('display', 'none', 'important');
+    document.body.style.setProperty('padding-bottom', '0', 'important');
+    document.body.style.setProperty('margin-top', '0', 'important');
+    if (r)  { r.style.setProperty('top', '0', 'important'); r.style.setProperty('bottom', '0', 'important'); }
+    if (ds) ds.style.setProperty('top', '0', 'important');
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', applyEmbedded);
+  } else {
+    applyEmbedded();
+  }
+})();
+</script>
 
 <!-- User picker — at body level so position:fixed works inside transformed ancestors -->
 <div id="user-picker-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9998;align-items:center;justify-content:center" onclick="if(event.target===this)closeUserPicker()">
@@ -25,4 +63,3 @@
     <button onclick="closeUserPicker()" style="margin-top:8px;width:100%;padding:8px;background:#3a3a3c;border:none;border-radius:8px;color:#f5f5f7;cursor:pointer;font-size:13px">Cancel</button>
   </div>
 </div>
-

@@ -90,3 +90,75 @@ If you weren't expecting this, you can ignore this message.
             server.starttls(context=context)
             server.login(user, password)
             server.sendmail(from_addr, to_email, msg.as_string())
+
+
+def send_password_reset_email(to_email: str, reset_url: str) -> None:
+    """Send a password reset email. Raises on failure."""
+    host      = os.environ["SMTP_HOST"]
+    port      = int(os.environ.get("SMTP_PORT", "587"))
+    user      = os.environ["SMTP_USER"]
+    password  = os.environ["SMTP_PASSWORD"]
+    from_addr = os.environ.get("SMTP_FROM") or user
+
+    subject = "Reset your Ascent password"
+
+    text_body = f"""\
+You requested a password reset for your Ascent account.
+
+Click the link below to set a new password. This link expires in 1 hour and can only be used once:
+
+{reset_url}
+
+If you didn't request this, you can ignore this message — your password won't change.
+"""
+
+    html_body = f"""\
+<!DOCTYPE html>
+<html>
+<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+             background:#1c1c1e;color:#f2f2f7;margin:0;padding:2rem">
+  <div style="max-width:480px;margin:0 auto;background:#2c2c2e;
+              border:1px solid #3a3a3c;border-radius:16px;padding:2rem">
+    <div style="font-size:1.4rem;font-weight:700;color:#f97316;margin-bottom:.5rem">⛰ Ascent</div>
+    <p style="color:#8e8e93;font-size:13px;margin-bottom:1.5rem">Personal fitness activity tracker</p>
+    <p style="margin-bottom:1rem">
+      You requested a password reset for your Ascent account.
+    </p>
+    <p style="margin-bottom:1.5rem;color:#8e8e93;font-size:13px">
+      Click the button below to set a new password. This link expires in 1 hour and can only be used once.
+    </p>
+    <a href="{reset_url}"
+       style="display:inline-block;background:#f97316;color:#fff;text-decoration:none;
+              border-radius:8px;padding:.7rem 1.5rem;font-weight:600;font-size:14px">
+      Reset Password →
+    </a>
+    <p style="margin-top:1.5rem;font-size:11px;color:#636366">
+      Or copy this link:<br>
+      <span style="font-family:monospace;color:#f97316;word-break:break-all">{reset_url}</span>
+    </p>
+    <p style="margin-top:1.5rem;font-size:11px;color:#636366">
+      If you didn't request a password reset, you can ignore this message — your password won't change.
+    </p>
+  </div>
+</body>
+</html>
+"""
+
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject
+    msg["From"]    = from_addr
+    msg["To"]      = to_email
+    msg.attach(MIMEText(text_body, "plain"))
+    msg.attach(MIMEText(html_body, "html"))
+
+    context = ssl.create_default_context()
+    if port == 465:
+        with smtplib.SMTP_SSL(host, port, context=context) as server:
+            server.login(user, password)
+            server.sendmail(from_addr, to_email, msg.as_string())
+    else:
+        with smtplib.SMTP(host, port) as server:
+            server.ehlo()
+            server.starttls(context=context)
+            server.login(user, password)
+            server.sendmail(from_addr, to_email, msg.as_string())

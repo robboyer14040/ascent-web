@@ -4,9 +4,15 @@
 <meta charset="UTF-8">
 <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
 <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#1c1c1e">
+<link rel="manifest" href="/static/manifest.json">
 <title>Settings — Ascent</title>
+<link rel="stylesheet" href="/static/mob_nav.css?v={{ app_version }}">
 <script>(function(){var t={{ ui_prefs.get('theme','') | tojson }};if(t)document.documentElement.dataset.theme=t;})();</script>
+<script>(function(){if(window.self!==window.top)document.documentElement.classList.add('mob-embedded')})();</script>
 <style>
 :root{
   --bg:#1c1c1e;--surface:#2c2c2e;--surface2:#3a3a3c;
@@ -151,7 +157,7 @@ input[readonly]{color:var(--muted);cursor:default}
   border-radius:8px;padding:.7rem .9rem;font-size:.825rem;color:#ff9f0a;margin:.75rem 0}
 </style>
 </head>
-<body>
+<body class="has-mob-topbar">
 <nav>
   <div style="display:flex;align-items:center">
     <img src="/static/favicon.svg" style="width:20px;height:20px;border-radius:4px;margin-right:6px;vertical-align:middle"><span class="nav-brand-name">Ascent</span><span class="nav-version">{{ app_version }}</span>
@@ -853,6 +859,41 @@ async function saveCroppedAvatar() {
 }
 </script>
 {% include '_about.html' %}
+
+<!-- ── Mobile top bar (phone only) ── -->
+<div class="mob-topbar">
+  <img src="/static/favicon.svg" style="width:18px;height:18px;border-radius:3px;flex-shrink:0">
+  <span class="mob-topbar-brand">Ascent</span>
+  <span class="mob-topbar-version">{{ app_version }}</span>
+  <div class="mob-topbar-spacer"></div>
+  {% if current_user and current_user.is_admin %}
+  <button class="mob-topbar-btn" onclick="openMobModal('/admin/invites','Admin')">Admin…</button>
+  {% endif %}
+  <button class="mob-topbar-btn" onclick="openMobModal('/strava/sync','Sync')">Sync…</button>
+</div>
+
+<!-- ── Full-screen modal for Sync / Admin (phone only) ── -->
+<div id="mob-embed-modal" style="display:none;position:fixed;inset:0;z-index:700;background:var(--bg);flex-direction:column">
+  <div style="display:flex;align-items:center;height:52px;flex-shrink:0;background:var(--surface);border-bottom:1px solid var(--border);padding:0 12px;gap:10px">
+    <button onclick="closeMobModal()" style="background:none;border:none;color:var(--accent);font-size:15px;font-weight:600;cursor:pointer;padding:6px 0;flex-shrink:0">✕ Close</button>
+    <span id="mob-embed-title" style="font-size:14px;font-weight:600;color:var(--text)"></span>
+  </div>
+  <iframe id="mob-embed-frame" src="" style="flex:1;border:none;width:100%;background:var(--bg)" allowfullscreen></iframe>
+</div>
+<script>
+function openMobModal(url,title){
+  document.getElementById('mob-embed-title').textContent=title;
+  document.getElementById('mob-embed-frame').src=url;
+  document.getElementById('mob-embed-modal').style.display='flex';
+}
+function closeMobModal(){
+  document.getElementById('mob-embed-modal').style.display='none';
+  document.getElementById('mob-embed-frame').src='';
+}
+</script>
+
+{% set mob_active = 'settings' %}
+{% include '_mob_global_nav.html' %}
 </body>
 </html>
 

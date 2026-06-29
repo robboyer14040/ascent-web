@@ -28,10 +28,25 @@ function coachOverlayClick(e) {
   if (e.target === document.getElementById('coach-overlay')) closeCoach();
 }
 
-// Auto-open coach when navigated here from another page via Coach nav button
+// Auto-open coach via sessionStorage (direct page nav) or URL param (shell iframe nav)
 if (sessionStorage.getItem('openCoach') === '1') {
   sessionStorage.removeItem('openCoach');
   document.addEventListener('DOMContentLoaded', () => openCoach());
+} else if (new URLSearchParams(location.search).get('openCoach') === '1') {
+  document.addEventListener('DOMContentLoaded', () => openCoach());
+}
+
+// When embedded in the shell iframe, relay coach open/close to the shell nav
+if (window.self !== window.top) {
+  const _origOpen  = openCoach;
+  const _origClose = closeCoach;
+  window.openCoach  = function() { _origOpen();  window.parent.postMessage({action:'coachOpened'}, location.origin); };
+  window.closeCoach = function() { _origClose(); window.parent.postMessage({action:'coachClosed'}, location.origin); };
+  window.addEventListener('message', function(e) {
+    if (e.origin !== location.origin) return;
+    if (e.data.action === 'openCoach')  openCoach();
+    if (e.data.action === 'closeCoach') closeCoach();
+  });
 }
 
 async function coachLoadState() {

@@ -2,9 +2,11 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<link rel="icon" type="image/svg+xml" href="/static/favicon.svg"><link rel="apple-touch-icon" href="/static/apple-touch-icon.png"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg"><link rel="apple-touch-icon" href="/static/apple-touch-icon.png"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="theme-color" content="#1c1c1e"><link rel="manifest" href="/static/manifest.json">
 <title>Dashboard — Ascent</title>
+<link rel="stylesheet" href="/static/mob_nav.css?v={{ app_version }}">
 <script>(function(){var t={{ ui_prefs.get('theme','') | tojson }};if(t)document.documentElement.dataset.theme=t;})();</script>
+<script>(function(){if(window.self!==window.top)document.documentElement.classList.add('mob-embedded')})();</script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{--bg:#1c1c1e;--surface:#2c2c2e;--surface2:#3a3a3c;--border:#3a3a3c;--border2:#48484a;--text:#f2f2f7;--muted:#8e8e93;--accent:#f97316;--accent-blue:#3b82f6;--green:#30d158;--nav-hover:rgba(255,255,255,.06)}
@@ -65,7 +67,7 @@ select.filter-sel{background:var(--surface2);border:1px solid var(--border2);col
 .fetch-progress-sub{font-size:.72rem;color:var(--muted2);margin-top:.35rem}
 </style>
 </head>
-<body>
+<body class="has-mob-topbar">
 <nav>
   <div style="display:flex;align-items:center">
     <img src="/static/favicon.svg" style="width:20px;height:20px;border-radius:4px;margin-right:6px;vertical-align:middle"><span class="nav-brand-name">Ascent</span><span class="nav-version">{{ app_version }}</span>
@@ -882,5 +884,12 @@ function fmtHMS(s) {
 })();
 </script>
 {% include '_about.html' %}
+<div class="mob-topbar">
+  <img src="/static/favicon.svg" style="width:18px;height:18px;border-radius:3px;flex-shrink:0">
+  <span class="mob-topbar-brand">Ascent</span>
+  <span class="mob-topbar-version">{{ app_version }}</span>
+</div>
+{% set mob_active = 'summary' %}
+{% include '_mob_global_nav.html' %}
 </body>
 </html>

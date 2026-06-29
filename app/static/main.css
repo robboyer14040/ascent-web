@@ -79,6 +79,7 @@ input,select{font:inherit}
 #sidebar{width:640px;min-width:380px;max-width:55vw;display:flex;flex-direction:column;border-right:1px solid var(--border);flex-shrink:0;overflow:hidden;position:relative}
 #filter-bar{display:flex;gap:6px;padding:8px 10px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0;align-items:center;}
 #filter-bar select{background:var(--surface2);border:1px solid var(--border2);color:var(--text);border-radius:6px;padding:4px 8px;font-size:12px;}
+.mob-filter-break{display:none}
 
 /* column headers */
 #col-head{
@@ -94,7 +95,7 @@ input,select{font:inherit}
 .ch-sep::before{content:'';width:4px;height:calc(100% - 8px);background:var(--border2);border-radius:2px;pointer-events:none;transition:background .12s}
 .ch-sep:hover::before,.ch-sep.resizing::before{background:var(--accent)}
 .ch{position:relative;
-  padding:6px 4px;font-size:11px;font-weight:600;color:var(--muted);
+  padding:6px 4px;font-size:11px;font-weight:600;color:var(--text);
   text-transform:uppercase;letter-spacing:.04em;cursor:pointer;
   white-space:nowrap;overflow:visible;
   display:flex;align-items:center;gap:2px;user-select:none;
@@ -154,7 +155,7 @@ input,select{font:inherit}
 .dcb-delete{background:#dc2626;color:#fff;border-color:#dc2626}
 .dcb-delete:hover{background:#b91c1c;border-color:#b91c1c}
 .ac{padding:2px 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12px}
-.ac-date{color:var(--muted);font-size:11.5px}
+.ac-date{color:var(--text);font-size:11.5px}
 .ac-name{font-weight:500}
 .ac-num{color:var(--text);text-align:right;font-variant-numeric:tabular-nums}
 .ac-strava{color:#fc4c02;font-size:10px;margin-left:3px;text-decoration:none}
@@ -865,14 +866,21 @@ select.edit-act-input{appearance:none;-webkit-appearance:none;cursor:pointer;pad
   #mob-tab-analysis #info-left{overflow:visible!important;padding:12px 14px calc(20px + env(safe-area-inset-bottom)) 14px!important;flex:none}
   /* Hide Info tab button — info is now embedded in Analysis tab */
   #mob-detail-tabbar .mob-tab-btn[data-tab="info"]{display:none!important}
+  /* Hide analysis-section forecast button — replaced by tab bar button on mobile */
+  #wx-act-btn{display:none!important}
   .zones-btn{min-height:36px!important;padding:4px 12px!important;font-size:13px!important}
 
   /* Photos tab */
   #mob-tab-photos #info-right{width:100%!important;flex:1;background:#111;display:flex!important}
+  /* Forecast tab — override modal inline styles so the panel scrolls naturally */
+  #mob-tab-forecast{overflow-y:auto!important;-webkit-overflow-scrolling:touch}
+  #mob-tab-forecast .wx-box{border-radius:0!important;border:none!important;height:auto!important;max-height:none!important;overflow:visible!important;flex-shrink:0;min-height:100%;display:block!important}
+  #mob-tab-forecast .wx-scroll{overflow:visible!important;flex:none!important;height:auto!important}
   /* Detail tab bar */
-  #mob-detail-tabbar{flex-shrink:0;display:flex;align-items:stretch;background:var(--surface);border-top:1px solid var(--border);height:58px;padding-bottom:env(safe-area-inset-bottom)}
-  .mob-tab-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:4px;font-size:10px;font-weight:500;letter-spacing:.02em;text-transform:uppercase;color:var(--muted);background:none;border:none;cursor:pointer}
-  .mob-tab-icon{font-size:22px;line-height:1.2}
+  #mob-detail-tabbar{flex-shrink:0;display:flex;align-items:stretch;background:var(--surface);border-top:1px solid var(--border);height:calc(58px + env(safe-area-inset-bottom, 0px));padding-bottom:env(safe-area-inset-bottom, 0px)}
+  .mob-tab-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:4px;font-size:9px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);background:none;border:none;cursor:pointer}
+  .mob-tab-icon{display:flex;align-items:center;justify-content:center}
+  .mob-tab-icon svg{width:22px;height:22px}
   .mob-tab-btn.active{color:var(--accent)}
   /* Touch sizing */
   .drag-handle,#photo-drag-handle{display:none!important}
@@ -882,6 +890,15 @@ select.edit-act-input{appearance:none;-webkit-appearance:none;cursor:pointer;pad
   #coach-close-btn,#zones-close-btn,#compare-close-btn{min-width:44px;min-height:44px}
   #coach-input-bar{padding:10px 12px}
   #coach-send-btn{height:44px!important}
+}
+
+/* ── Embedded in shell iframe: no chrome, #root fills iframe ── */
+html.mob-embedded #mob-header,
+html.mob-embedded #mob-global-nav { display:none!important }
+html.mob-embedded body { padding-bottom:0!important }
+@media(max-width:767px){
+  html.mob-embedded #root { top:0!important;bottom:0!important }
+  html.mob-embedded #mob-detail-screen { top:0!important }
 }
 
 /* ── PORTRAIT PHONE ONLY (≤767px wide) ───────────────────────────────────── */
@@ -898,13 +915,14 @@ select.edit-act-input{appearance:none;-webkit-appearance:none;cursor:pointer;pad
   .mob-hdr-btn{display:flex;align-items:center;justify-content:center;min-width:44px;min-height:44px;font-size:22px;border-radius:8px;color:var(--text);background:none;border:none;text-decoration:none;cursor:pointer;flex-shrink:0}
   .mob-hdr-btn:hover{background:var(--surface2)}
   /* Global nav */
-  #mob-global-nav{display:flex;position:fixed;bottom:0;left:0;right:0;height:58px;z-index:300;background:var(--surface);border-top:1px solid var(--border);align-items:stretch;padding-bottom:env(safe-area-inset-bottom)}
+  #mob-global-nav{display:flex;position:fixed;bottom:0;left:0;right:0;height:calc(58px + env(safe-area-inset-bottom, 0px));z-index:300;background:var(--surface);border-top:1px solid var(--border);align-items:stretch;padding-bottom:env(safe-area-inset-bottom, 0px)}
   body.mob-detail-active #mob-global-nav{display:none}
   body.mob-detail-active #mob-header-version{display:none}
   body.mob-detail-active #mob-user-btn{display:none!important}
-  .mob-nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:4px;font-size:10px;font-weight:500;letter-spacing:.02em;text-transform:uppercase;color:var(--muted);background:none;border:none;cursor:pointer;text-decoration:none}
-  .mob-nav-btn>span:first-child{font-size:22px;line-height:1.2}
+  .mob-nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:4px;font-size:9px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);background:none;border:none;cursor:pointer;text-decoration:none}
+  .mob-nav-btn svg{width:22px;height:22px}
   .mob-nav-btn.active{color:var(--accent)}
+  body.mob-detail-active .strava-sync-btn{display:none!important}
   /* Detail screen: slides in from right */
   #mob-detail-screen{display:flex;flex-direction:column;position:fixed;top:52px;left:0;right:0;bottom:0;z-index:200;background:var(--bg);transform:translateX(100%);transition:transform .3s cubic-bezier(.4,0,.2,1);overflow:hidden}
   #mob-detail-screen.active{transform:translateX(0)}
@@ -912,8 +930,18 @@ select.edit-act-input{appearance:none;-webkit-appearance:none;cursor:pointer;pad
   .t-btn{width:44px!important;height:44px!important;font-size:18px!important}
   #anim-stats{display:none!important}
   /* List row touch sizing */
-  #filter-bar select,#filter-bar button{min-height:38px!important;font-size:14px!important}
-  .act-row{height:46px}
+  #filter-bar select,#filter-bar button{min-height:38px!important;height:38px;box-sizing:border-box;font-size:14px!important}
+  #filter-bar{flex-wrap:wrap;row-gap:6px}
+  #filter-bar #typeFilter{order:10}
+  #filter-bar #yearFilter{order:11}
+  #filter-bar #import-btn{order:12}
+  #filter-bar #col-gear-btn{order:13}
+  #filter-bar #col-picker{order:14}
+  #filter-bar #bulk-gpx-btn{order:15}
+  #filter-bar .mob-filter-break{display:block!important;flex-basis:100%;height:0;order:19}
+  #filter-bar .tb-search{order:20;flex:1 1 0;min-width:0;width:auto}
+  #filter-bar #actCount{order:21}
+  .act-row{height:37px}
   .ac{font-size:13px}.ac-date{font-size:12px}.ac-num{font-size:13px}
   #select-mode-bar{padding:8px 12px!important}
 }
@@ -939,8 +967,18 @@ select.edit-act-input{appearance:none;-webkit-appearance:none;cursor:pointer;pad
   #t-time{font-size:13px!important}
   #anim-stats{display:none!important}
   /* Compact list rows */
-  #filter-bar select,#filter-bar button{min-height:34px!important}
-  .act-row{height:38px!important}
+  #filter-bar select,#filter-bar button{min-height:34px!important;height:34px;box-sizing:border-box}
+  #filter-bar{flex-wrap:wrap;row-gap:4px}
+  #filter-bar #typeFilter{order:10}
+  #filter-bar #yearFilter{order:11}
+  #filter-bar #import-btn{order:12}
+  #filter-bar #col-gear-btn{order:13}
+  #filter-bar #col-picker{order:14}
+  #filter-bar #bulk-gpx-btn{order:15}
+  #filter-bar .mob-filter-break{display:block!important;flex-basis:100%;height:0;order:19}
+  #filter-bar .tb-search{order:20;flex:0 0 200px;width:200px}
+  #filter-bar #actCount{order:21}
+  .act-row{height:30px!important}
 }
 
 /* ── Compare panel on phones ─────────────────────────────────────────────── */

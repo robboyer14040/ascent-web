@@ -3,12 +3,21 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#1c1c1e">
+<link rel="manifest" href="/static/manifest.json">
 <title>Tours — Ascent</title>
 <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
 <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="/static/mob_nav.css?v={{ app_version }}">
 <script>(function(){var t={{ ui_prefs.get('theme','') | tojson }};if(t)document.documentElement.dataset.theme=t;})();</script>
+<script>(function(){if(window.self!==window.top)document.documentElement.classList.add('mob-embedded')})();</script>
 <style>
+/* When embedded in shell iframe: no bottom nav gap */
+html.mob-embedded #stage-list-wrap { bottom:0!important }
+html.mob-embedded body.mob-stage-view #stage-detail { padding-bottom:12px!important }
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
   --bg:#1c1c1e;--surface:#2c2c2e;--surface2:#3a3a3c;
@@ -117,9 +126,9 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
   #elev-resize-handle{height:18px}
 }
 #stage-detail{flex:1;overflow-y:auto;padding:16px 20px;min-height:0}
-#mob-portrait-stats{display:none;flex-shrink:0}
-#mob-portrait-stats.stats-collapsed{display:none}
-#stats-toggle{display:none;position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#fff;padding:6px;line-height:1;font-size:20px;font-weight:700;z-index:1;text-shadow:0 1px 4px rgba(0,0,0,.6)}
+#mob-portrait-stats{display:none;flex-shrink:0;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain}
+#mob-portrait-stats.stats-collapsed{display:none!important}
+#stats-toggle{display:none;position:absolute;right:0;top:0;bottom:0;width:52px;background:none;border:none;border-left:1px solid var(--border);cursor:pointer;color:var(--text);font-size:26px;font-weight:700;z-index:2;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 #main-empty{flex:1;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:13px;text-align:center;line-height:1.9;padding:32px}
 
 /* ── Detail content ── */
@@ -205,24 +214,12 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
 .mf-val{font-size:12px;color:var(--text);margin-top:1px}
 
 /* ── Mobile layout ─────────────────────────────────────────────────── */
-#mob-tour-header,#mob-tour-nav{display:none}
 /* max-width:767px catches phones in portrait + small phones in landscape.
    The second condition catches large iPhones (≥12) in landscape where the
    rotated width (≈844px) exceeds 767px but the height (≈390px) doesn't. */
 @media(max-width:767px), (max-height:500px) and (orientation:landscape) and (pointer:coarse){
   nav{display:none}
-  #mob-tour-header{
-    display:flex;align-items:center;gap:8px;
-    position:fixed;top:0;left:0;right:0;height:52px;
-    background:var(--surface);border-bottom:1px solid var(--border);
-    z-index:600;padding:0 14px;font-size:14px;font-weight:600;flex-shrink:0
-  }
-  #mob-tour-back{
-    font-size:16px;font-weight:500;color:var(--accent);
-    background:none;border:none;cursor:pointer;
-    padding:8px 4px;margin-right:2px;line-height:1
-  }
-  #sidebar-resize{display:none}
+#sidebar-resize{display:none}
   #resize-handle{
     height:28px;display:flex;align-items:center;justify-content:center;cursor:row-resize
   }
@@ -241,7 +238,7 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
   #view-all-btn{display:none!important}
   #page{
     display:flex;flex-direction:column;
-    height:calc(100vh - 52px - env(safe-area-inset-bottom, 0px));margin-top:52px;
+    height:calc(100vh - 52px - 58px - env(safe-area-inset-bottom, 0px));margin-top:52px;
     overflow:hidden;position:static
   }
   /* Flatten sidebar so #tour-controls and #stage-list-wrap become
@@ -255,7 +252,7 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
   }
   /* Stage list: position:fixed (like stage-detail in stage-view) so iOS scroll works.
      top/bottom set by JS via _syncStageListHeight(). */
-  #stage-list-wrap{position:fixed;left:0;right:0;bottom:0;overflow:hidden;display:flex;flex-direction:column;background:var(--bg);z-index:5}
+  #stage-list-wrap{position:fixed;left:0;right:0;bottom:calc(58px + env(safe-area-inset-bottom,0px));overflow:hidden;display:flex;flex-direction:column;background:var(--bg);z-index:5}
   #stage-h-scroll{-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain}
   /* Stage detail is hidden in overview mode; shown in stage-view state */
   #stage-detail{display:none;padding:12px}
@@ -264,7 +261,7 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
   body.mob-stage-view #stage-list-wrap{display:none}
   /* Stage detail uses position:fixed so iOS gives it an explicit pixel height to scroll */
   body.mob-stage-view #main{flex:1}
-  body.mob-stage-view #stage-detail{display:block;position:fixed;left:0;right:0;bottom:0;overflow-y:scroll;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;background:var(--bg);z-index:20;padding:12px 12px 60px}
+  body.mob-stage-view #stage-detail{display:block;position:fixed;left:0;right:0;bottom:0;overflow-y:scroll;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;background:var(--bg);z-index:20;padding:12px 12px calc(66px + env(safe-area-inset-bottom,0px))}
   /* top is set dynamically in JS (52 + mapH + 6) */
   /* "View Entire Tour" button — portrait stage view only */
   .mob-view-tour-wrap{display:none}
@@ -276,7 +273,7 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
   body.mob-stage-view .act-stats-row #ai-summary-chip{width:100%!important;max-height:none!important;order:-1}
   body.mob-stage-view .act-stats-row .stats-grid{width:100%;flex:none}
   /* Portrait tour overview: show compact stats between map and stage list */
-  #mob-portrait-stats{display:block;padding:8px;overflow-x:auto;border-bottom:1px solid var(--border)}
+  #mob-portrait-stats{display:block;padding:8px;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;max-height:220px;border-bottom:1px solid var(--border)}
   body.mob-stage-view #mob-portrait-stats{display:none}
   #stats-toggle{display:block}
 }
@@ -284,10 +281,9 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
 /* Use max-height (≤500px) not max-width: large iPhones are ~844px wide in landscape
    but only ~390px tall, so height-based matching catches all phones correctly. */
 @media(max-height:500px) and (orientation:landscape) and (pointer:coarse){
-  #mob-tour-nav{display:none}
   #page{
     display:flex;flex-direction:row;
-    height:calc(100vh - 52px - env(safe-area-inset-bottom,0px));
+    height:calc(100vh - 52px - 58px - env(safe-area-inset-bottom,0px));
     margin-top:52px;overflow:hidden
   }
   body.mob-landscape-stage #stage-detail{padding-bottom:calc(12px + env(safe-area-inset-bottom,0px))}
@@ -402,7 +398,7 @@ body.mob-stage-view #mob-elev-hdr,body.mob-stage-view #mob-info-hdr{display:flex
         </div>
         <button onclick="resetMapZoom()" title="Reset zoom to fit route" style="position:absolute;bottom:24px;left:8px;z-index:500;background:rgba(0,0,0,.6);color:#ccc;border:1px solid rgba(255,255,255,.15);border-radius:4px;padding:3px 6px;font-size:13px;line-height:1;cursor:pointer;backdrop-filter:blur(4px)"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1 5V1h4M9 1h4v4M13 9v4H9M5 13H1V9"/></svg></button>
       </div>
-      <div id="resize-handle" title="Drag to resize map"></div>
+      <div id="resize-handle" title="Drag to resize map"><button id="stats-toggle" onclick="toggleMobStats()" ontouchstart="event.stopPropagation()" onmousedown="event.stopPropagation()" title="Toggle tour info">▾</button></div>
       <div id="mob-portrait-stats"></div>
       <div id="stage-right-panel" style="flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden">
         <div id="mob-elev-hdr"><span>Elevation</span><button class="mob-disclose" id="mob-elev-disclose" onclick="toggleMobElev()" title="Collapse elevation chart"><span class="mob-arr">▾</span></button></div>
@@ -833,7 +829,6 @@ function mobTourTab(tab) {
 // (large iPhones go from 390px wide portrait to 844px wide landscape).
 const isMobTour  = () => Math.min(window.innerWidth, window.innerHeight) <= 767;
 const isPortrait = () => window.innerWidth < window.innerHeight;
-// Portrait has no bottom nav (52px header only); landscape also 52px (no tab bar)
 const tourChromeH = () => isMobTour() ? 52 : 44;
 // Returns the correct `top` for the portrait fixed stage-detail panel,
 // accounting for map + resize handle + elevation strip (if visible).
@@ -891,7 +886,7 @@ function _syncStageListHeight() {
   const controls = document.getElementById('tour-controls');
   const main     = document.getElementById('main');
   if (!wrap) return;
-  const top = 52
+  const top = tourChromeH()
     + (controls ? controls.offsetHeight : 0)
     + (main     ? main.offsetHeight     : 0);
   wrap.style.top = top + 'px';
@@ -916,7 +911,20 @@ function initMap() {
   const handle = document.getElementById('resize-handle');
   let drag=false, startY=0, startH=0;
   function startDrag(y) { drag=true; startY=y; startH=mapH; handle.classList.add('dragging'); document.body.style.cursor='row-resize'; }
-  function moveDrag(y)  { if(!drag) return; mapH=Math.max(80,Math.min(window.innerHeight-tourChromeH()-80,startH+(y-startY))); document.getElementById('map').style.height=mapH+'px'; tourMap&&tourMap.invalidateSize(); if(document.body.classList.contains('mob-stage-view')&&isPortrait()){document.getElementById('stage-detail').style.top=_stageDetailTop();}else{_syncStageListHeight();} }
+  function moveDrag(y)  {
+    if(!drag) return;
+    let maxH = window.innerHeight-tourChromeH()-80;
+    if(isMobTour()&&isPortrait()){
+      // Keep resize handle visible above the bottom nav so user can always drag back up.
+      // Reserve: topbar + controls (overview only) + resize handle (28) + bottom nav (58) + 10 buffer.
+      const ctrlH = document.body.classList.contains('mob-stage-view') ? 0 : (document.getElementById('tour-controls')?.offsetHeight||0);
+      maxH = Math.min(maxH, Math.max(80, window.innerHeight-tourChromeH()-ctrlH-28-58-10));
+    }
+    mapH=Math.max(80,Math.min(maxH,startH+(y-startY)));
+    document.getElementById('map').style.height=mapH+'px';
+    tourMap&&tourMap.invalidateSize();
+    if(document.body.classList.contains('mob-stage-view')&&isPortrait()){document.getElementById('stage-detail').style.top=_stageDetailTop();}else{_syncStageListHeight();}
+  }
   function endDrag()    { if(!drag) return; drag=false; handle.classList.remove('dragging'); document.body.style.cursor=''; tourMap&&tourMap.invalidateSize(); }
   handle.addEventListener('mousedown', e => { startDrag(e.clientY); e.preventDefault(); });
   document.addEventListener('mousemove', e => moveDrag(e.clientY));
@@ -1462,12 +1470,9 @@ async function selectStage(id) {
         document.body.classList.add('mob-stage-view');
         document.getElementById('stage-detail').style.top = _stageDetailTop();
         const s = tourStages.find(s => String(s.id) === String(selectedId));
-        document.getElementById('mob-tour-title').textContent =
-          s ? `Stage ${s.stage_num}: ${s.name}` : 'Stage';
       } else {
         document.body.classList.remove('mob-stage-view');
         document.getElementById('stage-detail').style.top = '';
-        document.getElementById('mob-tour-title').textContent = 'Tours';
       }
       setTimeout(() => tourMap && tourMap.invalidateSize(), 50);
     } else {
@@ -1489,7 +1494,6 @@ function mobPortraitBack() {
     document.body.classList.remove('mob-stage-view');
     document.getElementById('stage-detail').style.top = '';
     selectedId = null;
-    document.getElementById('mob-tour-title').textContent = 'Tours';
     renderStageList();
     drawRoutes(null);
     renderDetail(null);
@@ -2151,9 +2155,20 @@ async function renderDetail(activeId) {
       html += `<div style="font-size:12px"><span style="color:var(--muted);margin-right:6px">Last completed:</span><span id="ov-last-loc">Loading…</span></div>`;
     html += `</div>`;
     el.innerHTML = html;
-    // Portrait overview: populate compact stats strip between map and stage list
+    // Portrait overview: populate scrollable info panel between map and stage list
     const _mpsEl = document.getElementById('mob-portrait-stats');
-    if (_mpsEl) _mpsEl.innerHTML = `<div class="stats-grid">${_chips}</div>`;
+    if (_mpsEl) {
+      let _mobHtml = `<div class="stats-grid">${_chips}</div>`;
+      _mobHtml += `<div style="display:flex;flex-direction:column;gap:4px;margin-top:6px;padding-top:6px;border-top:1px solid var(--border)">`;
+      if(first?.start_lat != null)
+        _mobHtml += `<div style="font-size:12px"><span style="color:var(--muted);margin-right:6px">Start:</span><span id="mob-ov-start-loc">Loading…</span></div>`;
+      if(_lastPt)
+        _mobHtml += `<div style="font-size:12px"><span style="color:var(--muted);margin-right:6px">End:</span><span id="mob-ov-end-loc">Loading…</span></div>`;
+      if(lastDone && lastDone.start_lat != null)
+        _mobHtml += `<div style="font-size:12px"><span style="color:var(--muted);margin-right:6px">Last completed:</span><span id="mob-ov-last-loc">Loading…</span></div>`;
+      _mobHtml += `</div>`;
+      _mpsEl.innerHTML = _mobHtml;
+    }
 
     function _geocacheFill(lat, lon, elId, cacheKey) {
       const _ls = s => { try { return localStorage.getItem(s); } catch(e) { return null; } };
@@ -2171,41 +2186,58 @@ async function renderDetail(activeId) {
       _geocacheFill(_lastPt[0], _lastPt[1], 'ov-end-loc', `tour-ov-endpt-${tourInfo.id}`);
     if(lastDone?.start_lat != null)
       _geocacheFill(lastDone.start_lat, lastDone.start_lon, 'ov-last-loc', `tour-ov-last-${lastDone.id}`);
+    // Same for mobile portrait panel
+    if(first?.start_lat != null)
+      _geocacheFill(first.start_lat, first.start_lon, 'mob-ov-start-loc', `tour-ov-start-${tourInfo.id}`);
+    if(_lastPt)
+      _geocacheFill(_lastPt[0], _lastPt[1], 'mob-ov-end-loc', `tour-ov-endpt-${tourInfo.id}`);
+    if(lastDone?.start_lat != null)
+      _geocacheFill(lastDone.start_lat, lastDone.start_lon, 'mob-ov-last-loc', `tour-ov-last-${lastDone.id}`);
 
     // AI Tour Summary card — show when tour is not fully completed OR end date has passed
     const today = new Date().toISOString().slice(0,10);
     const tourEnded    = tourInfo.end_date < today;
     const allCompleted = tourStages.length > 0 && done.length === tourStages.length;
     if(!allCompleted || tourEnded) {
-      el.insertAdjacentHTML('beforeend', `<div class="ai-card" id="tour-ai-summary-card">
+      const _aiCardHtml = (idSuffix) => `<div class="ai-card" id="tour-ai-summary-card${idSuffix}">
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
           <div class="ai-card-label" style="margin-bottom:0">AI Tour Summary</div>
-          <button id="tour-ai-summary-refresh" title="Regenerate summary" onclick="refreshTourAiSummary()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:13px;padding:0;line-height:1;flex-shrink:0">↺</button>
+          <button id="tour-ai-summary-refresh${idSuffix}" title="Regenerate summary" onclick="refreshTourAiSummary()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:13px;padding:0;line-height:1;flex-shrink:0">↺</button>
         </div>
-        <div class="ai-card-body ai-card-loading" id="tour-ai-summary-text">Generating summary…</div>
-      </div>`);
+        <div class="ai-card-body ai-card-loading" id="tour-ai-summary-text${idSuffix}">Generating summary…</div>
+      </div>`;
+      el.insertAdjacentHTML('beforeend', _aiCardHtml(''));
+      const _mpsAi = document.getElementById('mob-portrait-stats');
+      if(_mpsAi) _mpsAi.insertAdjacentHTML('beforeend', _aiCardHtml('-mob'));
       function _loadTourAiSummary(force) {
-        const txt = document.getElementById('tour-ai-summary-text');
-        const btn = document.getElementById('tour-ai-summary-refresh');
-        if(txt) { txt.textContent = 'Generating summary…'; txt.classList.add('ai-card-loading'); }
-        if(btn) btn.style.opacity = '0.4';
+        const ids = ['', '-mob'];
+        ids.forEach(sfx => {
+          const txt = document.getElementById(`tour-ai-summary-text${sfx}`);
+          const btn = document.getElementById(`tour-ai-summary-refresh${sfx}`);
+          if(txt) { txt.textContent = 'Generating summary…'; txt.classList.add('ai-card-loading'); }
+          if(btn) btn.style.opacity = '0.4';
+        });
         const forceParam = force ? '&force=1' : '';
         fetch(`/tours/${tourInfo.id}/ai-summary?model=${encodeURIComponent(tourCoachModel)}${forceParam}`)
           .then(r => r.ok ? r.json() : null)
           .then(d => {
-            const el2 = document.getElementById('tour-ai-summary-text');
-            const b   = document.getElementById('tour-ai-summary-refresh');
-            if(el2) {
-              if(d?.summary) { el2.textContent = d.summary; el2.classList.remove('ai-card-loading'); }
-              else { el2.textContent = 'Summary unavailable.'; el2.classList.remove('ai-card-loading'); }
-            }
-            if(b) b.style.opacity = '';
+            ids.forEach(sfx => {
+              const el2 = document.getElementById(`tour-ai-summary-text${sfx}`);
+              const b   = document.getElementById(`tour-ai-summary-refresh${sfx}`);
+              if(el2) {
+                if(d?.summary) { el2.textContent = d.summary; el2.classList.remove('ai-card-loading'); }
+                else { el2.textContent = 'Summary unavailable.'; el2.classList.remove('ai-card-loading'); }
+              }
+              if(b) b.style.opacity = '';
+            });
           })
           .catch(() => {
-            const el2 = document.getElementById('tour-ai-summary-text');
-            const b   = document.getElementById('tour-ai-summary-refresh');
-            if(el2) { el2.textContent = 'Summary unavailable.'; el2.classList.remove('ai-card-loading'); }
-            if(b) b.style.opacity = '';
+            ids.forEach(sfx => {
+              const el2 = document.getElementById(`tour-ai-summary-text${sfx}`);
+              const b   = document.getElementById(`tour-ai-summary-refresh${sfx}`);
+              if(el2) { el2.textContent = 'Summary unavailable.'; el2.classList.remove('ai-card-loading'); }
+              if(b) b.style.opacity = '';
+            });
           });
       }
       window.refreshTourAiSummary = () => _loadTourAiSummary(true);
@@ -3114,26 +3146,12 @@ function copyShareUrl() {
 </script>
 {% include '_about.html' %}
 
-<!-- ── Mobile header (phones only) ── -->
-<div id="mob-tour-header">
-  <button id="mob-tour-back" onclick="mobPortraitBack()">‹</button>
-  <span id="mob-tour-title">Tours</span>
+<div class="mob-topbar">
+  <img src="/static/favicon.svg" style="width:18px;height:18px;border-radius:3px;flex-shrink:0">
+  <span class="mob-topbar-brand">Ascent</span>
+  <span class="mob-topbar-version">{{ app_version }}</span>
 </div>
-
-<!-- ── Mobile bottom nav (landscape only, hidden in portrait by CSS) ── -->
-<div id="mob-tour-nav">
-  <a href="/activities" class="mob-tour-tab">
-    <span>≡</span>
-    <span>Activities</span>
-  </a>
-  <button class="mob-tour-tab active" id="mob-btn-stages" onclick="mobTourTab('stages')">
-    <span>☰</span>
-    <span>Stages</span>
-  </button>
-  <button class="mob-tour-tab" id="mob-btn-map" onclick="mobTourTab('map')">
-    <span>🗺</span>
-    <span>Map</span>
-  </button>
-</div>
+{% set mob_active = 'tours' %}
+{% include '_mob_global_nav.html' %}
 </body>
 </html>

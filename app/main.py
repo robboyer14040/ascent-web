@@ -33,6 +33,7 @@ from app.routers import auth as auth_router
 from app.routers import fitgpx
 from app.routers import tours
 from app.routers import route_builder
+from app.routers import forecast
 from app.auth import get_session_user_id
 
 load_dotenv()
@@ -128,7 +129,7 @@ def type_badge(t):
 
 templates.env.filters["fmt_date"]   = fmt_date
 templates.env.filters["type_badge"] = type_badge
-templates.env.globals["app_version"] = "v0.7.175"
+templates.env.globals["app_version"] = "v0.7.230"
 
 # ── wire routers ──────────────────────────────────────────────────────────────
 activities.db_getter = get_db
@@ -167,6 +168,29 @@ app.include_router(tours.router)
 route_builder.db_getter = get_db
 route_builder.templates = templates
 app.include_router(route_builder.router)
+
+forecast.db_getter = get_db
+app.include_router(forecast.router, prefix="/api")
+
+@app.get("/shell", response_class=HTMLResponse)
+async def shell(request: Request):
+    uid = get_session_user_id(request)
+    if uid is None:
+        return RedirectResponse("/login?next=/shell", status_code=303)
+    db = get_db()
+    user = db.get_user(uid)
+    try:
+        ui_prefs = db.get_ui_prefs(uid)
+        profile  = db.get_user_profile(uid)
+        ui_prefs["use_metric"] = profile.get("use_metric", False)
+    except Exception:
+        ui_prefs = {}
+    return templates.TemplateResponse("shell.html", {
+        "request":      request,
+        "current_user": user,
+        "ui_prefs":     ui_prefs,
+    })
+
 
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon():

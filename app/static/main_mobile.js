@@ -125,6 +125,21 @@ function _mobRefitMap() {
 
 function mobilePushDetail(actTitle) {
   if (!_isPhoneLayout()) return;
+  // Show forecast tab button only when activity has GPS
+  const wxBtn = document.getElementById('mob-wx-btn');
+  if (wxBtn) {
+    const hasPts = typeof currentAct !== 'undefined' && currentAct &&
+                   (currentAct.points_count > 0 || currentAct.points_saved);
+    wxBtn.style.display = hasPts ? '' : 'none';
+  }
+  // Always reset to MAP tab when opening an activity
+  mobSwitchTab('map');
+  // Clear forecast tab — use resetWeatherForecast so the wx-box is safely returned first
+  if (typeof resetWeatherForecast === 'function') resetWeatherForecast();
+  else {
+    const fPanel = document.getElementById('mob-tab-forecast');
+    if (fPanel) { fPanel.innerHTML = ''; delete fPanel.dataset.forecastLoaded; }
+  }
   if (_isMobile()) {
     // Portrait: slide detail screen in, then refit after animation finishes
     const ds = document.getElementById('mob-detail-screen');
@@ -135,11 +150,26 @@ function mobilePushDetail(actTitle) {
     if (backBtn) backBtn.style.display = 'flex';
     ds.classList.add('active');
     document.body.classList.add('mob-detail-active');
+    if (window.self !== window.top) {
+      try { window.parent.postMessage({action:'enterDetail'}, location.origin); } catch(e) {}
+    }
     setTimeout(_mobRefitMap, 320); // after 300ms slide animation
   } else {
     // Landscape: detail screen always visible — just refit after layout settles
     requestAnimationFrame(() => requestAnimationFrame(_mobRefitMap));
   }
+}
+
+function mobOpenForecast() {
+  if (typeof currentAct === 'undefined' || !currentAct) return;
+  if (typeof openWeatherForecast === 'function') {
+    openWeatherForecast('activity', currentAct.id, currentAct.name || currentAct.title || 'Activity');
+  }
+}
+
+function _mobForecastLoaded() {
+  const p = document.getElementById('mob-tab-forecast');
+  return !!(p && p.dataset.forecastLoaded);
 }
 
 function mobileGoBack() {
@@ -152,6 +182,9 @@ function mobileGoBack() {
   const backBtn = document.getElementById('mob-back-btn');
   if (titleEl) titleEl.textContent = 'Ascent';
   if (backBtn) backBtn.style.display = 'none';
+  if (window.self !== window.top) {
+    try { window.parent.postMessage({action:'exitDetail'}, location.origin); } catch(e) {}
+  }
   if (typeof animStop === 'function') animStop();
   if (typeof _panelDetach === 'function') _panelDetach();
 }
@@ -172,6 +205,9 @@ function mobSwitchTab(tab) {
       if (typeof elevChart !== 'undefined' && elevChart) elevChart.resize();
       if (typeof redrawElevWithOverlays === 'function') redrawElevWithOverlays();
     });
+  }
+  if (tab === 'forecast' && !_mobForecastLoaded()) {
+    mobOpenForecast();
   }
 }
 

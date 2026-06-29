@@ -117,6 +117,87 @@ async def register_submit(
     set_session_cookie(response, user_id)
     return response
 
+# ── Forgot / reset password ──────────────────────────────────────────────────
+
+RESET_TOKEN_MAX_AGE = 3600  # 1 hour in seconds
+
+@router.get("/forgot-password", response_class=HTMLResponse)
+async def forgot_password_page(request: Request, sent: str = Query(None)):
+    return templates.TemplateResponse("forgot_password.html", {
+        "request": request,
+        "sent": sent,
+    })
+
+@router.post("/forgot-password")
+async def forgot_password_submit(request: Request, email: str = Form(...)):
+    import secrets
+    from app.mailer import smtp_configured, send_password_reset_email
+
+    db   = db_getter()
+    user = db.get_user_by_email(email.strip().lower())
+
+    # Always redirect to the same "check your email" page to avoid user enumeration.
+    if user:
+        token     = secrets.token_urlsafe(32)
+        db.create_password_reset_token(user["id"], token)
+        base      = str(request.base_url).rstrip("/")
+        reset_url = f"{base}/reset-password?token={token}"
+        import logging
+        logging.getLogger("uvicorn").info(f"[DEBUG] Password reset URL for {user['email']}: {reset_url}")
+        if smtp_configured():
+            try:
+                send_password_reset_email(user["email"], reset_url)
+            except Exception:
+                pass  # silently swallow — user still sees the confirmation page
+
+    return RedirectResponse("/forgot-password?sent=1", status_code=303)
+
+@router.get("/reset-password", response_class=HTMLResponse)
+async def reset_password_page(request: Request, token: str = Query(...), error: str = Query(None)):
+    import time
+    db  = db_getter()
+    rec = db.get_password_reset_token(token)
+    if not rec or rec.get("used_at") or (time.time() - rec["created_at"]) > RESET_TOKEN_MAX_AGE:
+        return templates.TemplateResponse("error.html", {
+            "request": request,
+            "message": "This password reset link is invalid or has expired. Please request a new one.",
+        })
+    return templates.TemplateResponse("reset_password.html", {
+        "request": request,
+        "token":   token,
+        "error":   error,
+    })
+
+@router.post("/reset-password")
+async def reset_password_submit(
+    request:   Request,
+    token:     str = Form(...),
+    password:  str = Form(...),
+    password2: str = Form(...),
+):
+    import time
+    from app.auth import hash_password, set_session_cookie
+
+    if password != password2:
+        return RedirectResponse(f"/reset-password?token={token}&error=Passwords+do+not+match", status_code=303)
+    if len(password) < 8:
+        return RedirectResponse(f"/reset-password?token={token}&error=Password+must+be+at+least+8+characters", status_code=303)
+
+    db  = db_getter()
+    rec = db.get_password_reset_token(token)
+    if not rec or rec.get("used_at") or (time.time() - rec["created_at"]) > RESET_TOKEN_MAX_AGE:
+        return templates.TemplateResponse("error.html", {
+            "request": request,
+            "message": "This password reset link is invalid or has expired. Please request a new one.",
+        })
+
+    db.update_user_password(rec["user_id"], hash_password(password))
+    db.mark_reset_token_used(token)
+
+    response = RedirectResponse("/", status_code=303)
+    set_session_cookie(response, rec["user_id"])
+    return response
+
 # ── Strava OAuth login ────────────────────────────────────────────────────────
 # When Strava callback completes, if a user with that athlete_id exists → log them in.
 # If not, show a "connect to existing account" or "no invite" message.

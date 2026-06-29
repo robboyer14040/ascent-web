@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#1c1c1e">
+<link rel="manifest" href="/static/manifest.json">
+<title>Ascent</title>
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+<link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+<link rel="stylesheet" href="/static/mob_nav.css?v={{ app_version }}">
+<script>(function(){var t={{ ui_prefs.get('theme','') | tojson }};if(t)document.documentElement.dataset.theme=t;})();</script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden;background:var(--bg)}
+:root{
+  --bg:#1c1c1e;--surface:#2c2c2e;--surface2:#3a3a3c;
+  --border:#3a3a3c;--border2:#48484a;--text:#f5f5f7;--muted:#8e8e93;
+  --muted2:#636366;--accent:#f97316;--accent-blue:#0a84ff;--color-scheme:dark
+}
+[data-theme=light]{
+  --bg:#f5f5f7;--surface:#ffffff;--surface2:#f0f0f5;
+  --border:#e5e5ea;--border2:#d1d1d6;--text:#1c1c1e;--muted:#6c6c70;
+  --muted2:#8e8e93;--accent:#f97316;--accent-blue:#007aff;--color-scheme:light
+}
+@media(prefers-color-scheme:light){
+  :root:not([data-theme]){
+    --bg:#f5f5f7;--surface:#ffffff;--surface2:#f0f0f5;
+    --border:#e5e5ea;--border2:#d1d1d6;--text:#1c1c1e;--muted:#6c6c70;
+    --muted2:#8e8e93;--accent:#f97316;--accent-blue:#007aff;--color-scheme:light
+  }
+}
+/* Use max() so topbar never overlaps Dynamic Island even if env() returns 0 */
+.mob-topbar {
+  height:calc(52px + max(env(safe-area-inset-top,0px),44px))!important;
+  padding-top:max(env(safe-area-inset-top,0px),44px)!important;
+  padding-left:12px;padding-right:12px;padding-bottom:0
+}
+/* Content iframe fills space between topbar and bottom nav */
+#shell-frame{
+  display:block;position:fixed;
+  top:calc(52px + max(env(safe-area-inset-top,0px),44px));
+  bottom:calc(58px + env(safe-area-inset-bottom,0px));
+  left:0;right:0;width:100%;border:none;background:var(--bg)
+}
+/* Overlay modal for Sync / Admin */
+#shell-modal{
+  display:none;position:fixed;inset:0;z-index:700;background:var(--bg);
+  flex-direction:column
+}
+#shell-modal-bar{
+  display:flex;align-items:center;flex-shrink:0;
+  height:calc(52px + max(env(safe-area-inset-top,0px),44px));
+  padding-top:max(env(safe-area-inset-top,0px),44px);
+  padding-left:12px;padding-right:12px;padding-bottom:0;
+  background:var(--surface);border-bottom:1px solid var(--border);gap:10px
+}
+#shell-back-btn{
+  display:none;background:none;border:none;color:var(--accent);
+  font-size:15px;font-weight:600;cursor:pointer;padding:4px 10px 4px 0;
+  flex-shrink:0;white-space:nowrap
+}
+#shell-modal-frame{flex:1;border:none;width:100%;background:var(--bg)}
+</style>
+</head>
+<body>
+
+<div class="mob-topbar">
+  <button id="shell-back-btn" onclick="shellGoBack()">‹ Back</button>
+  <img id="shell-brand-img" src="/static/favicon.svg" style="width:18px;height:18px;border-radius:3px;flex-shrink:0">
+  <span id="shell-brand-name" class="mob-topbar-brand">Ascent</span>
+  <span id="shell-brand-ver" class="mob-topbar-version">{{ app_version }}</span>
+  <div class="mob-topbar-spacer"></div>
+  {% if current_user and current_user.is_admin %}
+  <button class="mob-topbar-btn" onclick="shellModal('/admin/invites','Admin')">Admin…</button>
+  {% endif %}
+  <button class="mob-topbar-btn" onclick="shellModal('/strava/sync','Sync')">Sync…</button>
+</div>
+
+<iframe id="shell-frame" src="/activities"
+  allow="camera;microphone;geolocation" allowfullscreen></iframe>
+
+{% set mob_active = 'activities' %}
+{% include '_mob_global_nav.html' %}
+
+<div id="shell-modal">
+  <div id="shell-modal-bar">
+    <button onclick="closeShellModal()" style="background:none;border:none;color:var(--accent);font-size:15px;font-weight:600;cursor:pointer;padding:6px 0;flex-shrink:0">✕ Close</button>
+    <span id="shell-modal-title" style="font-size:14px;font-weight:600;color:var(--text)"></span>
+  </div>
+  <iframe id="shell-modal-frame" src="" allowfullscreen></iframe>
+</div>
+
+<script>
+(function(){
+  var frame    = document.getElementById('shell-frame');
+  var section  = 'activities';   // currently active section
+  var onActs   = true;           // whether iframe is showing activities/coach
+  var inDetail = false;          // whether activities iframe is showing a detail view
+
+  // Map href → section key
+  var hrefMap = {'/activities':'activities','/':'summary','/routes':'routes','/tour':'tours','/settings':'settings'};
+
+  // Tag each nav button with its section; the coach btn is special
+  document.querySelectorAll('#mob-global-nav .mob-nav-btn').forEach(function(btn) {
+    var s = btn.id === 'mob-coach-nav-btn' ? 'coach' : (hrefMap[btn.getAttribute('href')] || '');
+    btn._shellSection = s;
+    btn.addEventListener('click', function(e) {
+      e.preventDefault();
+      if (s) shellNav(s);
+    });
+  });
+
+  function setActive(s) {
+    section = s;
+    document.querySelectorAll('#mob-global-nav .mob-nav-btn').forEach(function(b) {
+      b.classList.toggle('active', b._shellSection === s);
+    });
+  }
+
+  function clearDetail() {
+    if (!inDetail) return;
+    inDetail = false;
+    document.getElementById('shell-back-btn').style.display = 'none';
+    document.getElementById('shell-brand-img').style.display = '';
+    document.getElementById('shell-brand-name').style.display = '';
+    document.getElementById('shell-brand-ver').style.display = '';
+  }
+
+  function shellNav(s) {
+    // If leaving activities while in detail view, close detail first
+    if (inDetail && s !== 'activities' && s !== 'coach') {
+      try { frame.contentWindow.mobileGoBack(); } catch(e) {}
+    }
+    clearDetail();
+    if (s === 'coach') {
+      if (onActs) {
+        try { frame.contentWindow.postMessage({action:'openCoach'}, location.origin); } catch(e){}
+      } else {
+        frame.src = '/activities?openCoach=1';
+        onActs = true;
+      }
+      setActive('coach');
+      return;
+    }
+    if (s === 'activities') {
+      if (onActs) {
+        try { frame.contentWindow.postMessage({action:'closeCoach'}, location.origin); } catch(e){}
+      } else {
+        frame.src = '/activities';
+        onActs = true;
+      }
+      setActive('activities');
+      return;
+    }
+    var urls = {summary:'/',routes:'/routes',tours:'/tour',settings:'/settings'};
+    if (urls[s]) { frame.src = urls[s]; onActs = false; }
+    setActive(s);
+  }
+
+  window.shellGoBack = function() {
+    try { frame.contentWindow.mobileGoBack(); } catch(e) {}
+  };
+
+  // Messages from activities iframe
+  window.addEventListener('message', function(e) {
+    if (e.origin !== location.origin) return;
+    if (e.data.action === 'coachOpened') setActive('coach');
+    if (e.data.action === 'coachClosed')  setActive('activities');
+    if (e.data.action === 'enterDetail') {
+      inDetail = true;
+      document.getElementById('shell-back-btn').style.display = '';
+      document.getElementById('shell-brand-img').style.display = 'none';
+      document.getElementById('shell-brand-name').style.display = 'none';
+      document.getElementById('shell-brand-ver').style.display = 'none';
+    }
+    if (e.data.action === 'exitDetail') {
+      clearDetail();
+    }
+  });
+
+  // Redirect whole shell to login if session expires inside iframe
+  frame.addEventListener('load', function() {
+    try {
+      if (frame.contentWindow.location.pathname === '/login') window.location.href = '/login';
+    } catch(e) {}
+  });
+
+  // Android/hardware back button: keep shell in history, navigate within iframe first
+  history.replaceState({shell:true}, '');
+  window.addEventListener('popstate', function() {
+    history.pushState({shell:true}, '');
+    if (onActs && inDetail) {
+      shellGoBack();           // close activity detail → back to list
+    } else if (!onActs) {
+      shellNav('activities');  // close non-activities page → back to activities
+    }
+  });
+
+  // Modal overlay for Admin / Sync
+  window.shellModal = function(url, title) {
+    document.getElementById('shell-modal-title').textContent = title;
+    document.getElementById('shell-modal-frame').src = url;
+    document.getElementById('shell-modal').style.display = 'flex';
+  };
+  window.closeShellModal = function() {
+    document.getElementById('shell-modal').style.display = 'none';
+    document.getElementById('shell-modal-frame').src = '';
+  };
+})();
+</script>
+</body>
+</html>

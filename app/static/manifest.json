@@ -1,0 +1,17 @@
+{
+  "name": "Ascent",
+  "short_name": "Ascent",
+  "description": "Fitness activity tracker with maps, elevation, and Strava sync",
+  "start_url": "/shell",
+  "display": "standalone",
+  "background_color": "#1c1c1e",
+  "theme_color": "#1c1c1e",
+  "icons": [
+    {
+      "src": "/static/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

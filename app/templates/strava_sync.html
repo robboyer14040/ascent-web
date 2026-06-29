@@ -1,8 +1,9 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="theme-color" content="#1c1c1e"><link rel="manifest" href="/static/manifest.json">
 <title>Strava Sync — Ascent</title>
+<link rel="stylesheet" href="/static/mob_nav.css?v={{ app_version }}">
 <script>(function(){var t={{ ui_prefs.get('theme','') | tojson }};if(t)document.documentElement.dataset.theme=t;})();</script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -102,8 +103,9 @@ p:last-child{margin-bottom:0}
 #log::-webkit-scrollbar-thumb{background:var(--surface2);border-radius:3px}
 .log-ok{color:#30d158}.log-err{color:#ef4444}.log-info{color:var(--muted)}.log-done{color:var(--accent);font-weight:600}
 </style>
+<script>if(window.self!==window.top)document.documentElement.classList.add('mob-embedded')</script>
 </head>
-<body>
+<body class="has-mob-topbar">
 <nav>
   <div style="display:flex;align-items:center">
     <img src="/static/favicon.svg" style="width:20px;height:20px;border-radius:4px;margin-right:6px;vertical-align:middle"><span class="nav-brand-name">Ascent</span><span class="nav-version">{{ app_version }}</span>
@@ -367,5 +369,12 @@ function updateCounts(i, s) {
 }
 </script>
 {% include '_about.html' %}
+<div class="mob-topbar">
+  <img src="/static/favicon.svg" style="width:18px;height:18px;border-radius:3px;flex-shrink:0">
+  <span class="mob-topbar-brand">Ascent</span>
+  <span class="mob-topbar-version">{{ app_version }}</span>
+</div>
+{% set mob_active = '' %}
+{% include '_mob_global_nav.html' %}
 </body>
 </html>

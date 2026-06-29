@@ -1869,6 +1869,14 @@ class AscentDB:
                 used_at             INTEGER,
                 used_by_user_id     INTEGER
             );
+
+            CREATE TABLE IF NOT EXISTS password_reset_tokens (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                token       TEXT UNIQUE NOT NULL,
+                user_id     INTEGER NOT NULL,
+                created_at  INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+                used_at     INTEGER
+            );
         """)
         # Add per-user key columns if missing (migration)
         for col in ("anthropic_api_key TEXT", "strava_client_id TEXT", "strava_client_secret TEXT",
@@ -2003,6 +2011,37 @@ class AscentDB:
 
     def delete_invite(self, token: str):
         self._con.execute("DELETE FROM invites WHERE token=?", (token,))
+        self._con.commit()
+
+    def create_password_reset_token(self, user_id: int, token: str):
+        import time
+        self._ensure_users_tables()
+        self._con.execute(
+            "INSERT INTO password_reset_tokens (token, user_id, created_at) VALUES (?,?,?)",
+            (token, user_id, int(time.time())),
+        )
+        self._con.commit()
+
+    def get_password_reset_token(self, token: str) -> Optional[dict]:
+        self._ensure_users_tables()
+        row = self._con.execute(
+            "SELECT * FROM password_reset_tokens WHERE token=?", (token,)
+        ).fetchone()
+        return dict(row) if row else None
+
+    def mark_reset_token_used(self, token: str):
+        import time
+        self._con.execute(
+            "UPDATE password_reset_tokens SET used_at=? WHERE token=?",
+            (int(time.time()), token),
+        )
+        self._con.commit()
+
+    def update_user_password(self, user_id: int, password_hash: str):
+        self._ensure_users_tables()
+        self._con.execute(
+            "UPDATE users SET password_hash=? WHERE id=?", (password_hash, user_id)
+        )
         self._con.commit()
 
     def list_invites(self) -> list:

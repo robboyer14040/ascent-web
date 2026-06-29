@@ -3,12 +3,17 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#1c1c1e">
+<link rel="manifest" href="/static/manifest.json">
 <title>Ascent</title>
 <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
 <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <link rel="stylesheet" href="/static/main.css?v={{ app_version }}">
 <script>(function(){var t={{ ui_prefs.get('theme','') | tojson }};if(t)document.documentElement.dataset.theme=t;})();</script>
+<script>(function(){if(window.self!==window.top)document.documentElement.classList.add('mob-embedded')})();</script>
 </head>
 <body>
 <div id="autosync-toast"></div>
@@ -25,7 +30,7 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.15/dist/hls.min.js"></script>
 
 <!-- Pass server-rendered data to static JS -->
-<script>window._UI_PREFS_INITIAL = {{ ui_prefs | tojson | safe }};</script>
+<script>window._UI_PREFS_INITIAL = {{ ui_prefs | tojson | safe }};window._WX_TILE_URL = {{ tile_url | tojson | safe }};</script>
 <script src="/static/activity_detail.js?v={{ app_version }}" defer></script>
 <script src="/static/main_mobile.js?v={{ app_version }}" defer></script>
 <script src="/static/map_utils.js?v={{ app_version }}" defer></script>
@@ -38,6 +43,7 @@
 <script src="/static/coach.js?v={{ app_version }}" defer></script>
 <script src="/static/activity_edit.js?v={{ app_version }}" defer></script>
 <script src="/static/strava_sync_btn.js?v={{ app_version }}" defer></script>
+<script src="/static/weather_forecast.js?v={{ app_version }}" defer></script>
 
 {% include '_html_overlays.html' %}
 {% include 'segment.html' %}

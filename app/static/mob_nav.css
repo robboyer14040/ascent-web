@@ -1,0 +1,53 @@
+/* ── Shared mobile chrome — phone only ──────────────────────────────────── */
+#mob-global-nav, .mob-topbar { display:none }
+
+@media(max-width:767px),(max-height:500px) and (orientation:landscape) and (pointer:coarse){
+
+  /* ── Hide desktop nav ── */
+  nav { display:none!important }
+
+  /* ── Top bar ── */
+  .mob-topbar {
+    display:flex;align-items:center;position:fixed;top:0;left:0;right:0;
+    height:calc(52px + env(safe-area-inset-top, 0px));z-index:600;
+    background:var(--surface);border-bottom:1px solid var(--border);
+    padding:env(safe-area-inset-top, 0px) 12px 0;gap:6px;flex-shrink:0
+  }
+  .mob-topbar-brand { font-size:15px;font-weight:700;color:var(--accent);white-space:nowrap }
+  .mob-topbar-version { font-size:10px;font-weight:400;color:var(--muted);letter-spacing:.02em }
+  .mob-topbar-spacer { flex:1 }
+  .mob-topbar-btn {
+    font-size:12px;font-weight:600;color:var(--text);
+    background:var(--surface2);border:1px solid var(--border2);
+    border-radius:6px;padding:5px 10px;cursor:pointer;white-space:nowrap;
+    text-decoration:none;flex-shrink:0
+  }
+
+  /* ── Body offset for pages with a fixed top bar ── */
+  body.has-mob-topbar { margin-top:calc(52px + env(safe-area-inset-top, 0px));padding-bottom:calc(58px + env(safe-area-inset-bottom,0px)) }
+
+  /* ── Bottom nav ── */
+  body { padding-bottom:calc(58px + env(safe-area-inset-bottom,0px)) }
+  #mob-global-nav {
+    display:flex;position:fixed;bottom:0;left:0;right:0;
+    height:calc(58px + env(safe-area-inset-bottom, 0px));z-index:600;
+    background:var(--surface);border-top:1px solid var(--border);
+    align-items:stretch;padding-bottom:env(safe-area-inset-bottom, 0px)
+  }
+  .mob-nav-btn {
+    flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:2px;padding:4px;font-size:9px;font-weight:600;letter-spacing:.04em;
+    text-transform:uppercase;color:var(--muted);background:none;border:none;
+    cursor:pointer;text-decoration:none
+  }
+  .mob-nav-btn svg { width:22px;height:22px }
+  .mob-nav-btn.active { color:var(--accent) }
+
+  /* ── Embedded in iframe: hide all mobile chrome ── */
+  .mob-embedded .mob-topbar,
+  html.mob-embedded .mob-topbar,
+  .mob-embedded #mob-global-nav,
+  html.mob-embedded #mob-global-nav { display:none!important }
+  .mob-embedded body,
+  html.mob-embedded body { padding-bottom:0!important;margin-top:0!important }
+}

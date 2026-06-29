@@ -56,7 +56,12 @@
       "Bash(git -C /Users/rob/projects/ascent-web diff HEAD app/static/activity_detail.js)",
       "Skill(run)",
       "Bash(ASCENT_DB_PATH=/data/Ascent.ascentdb uvicorn app.main:app --port 8001)",
-      "Skill(claude-api)"
+      "Skill(claude-api)",
+      "Bash(kill %1)",
+      "Bash(venv_arm64/bin/python *)",
+      "Bash(python3.9 *)",
+      "Bash(venv_arm64/bin/python3 *)",
+      "Bash(identify /Users/rob/projects/ascent-web/app/static/apple-touch-icon.png)"
     ]
   }
 }

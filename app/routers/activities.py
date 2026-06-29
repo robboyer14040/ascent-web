@@ -1,5 +1,6 @@
 """routers/activities.py"""
 
+import os
 import sqlite3
 import secrets as _secrets
 
@@ -27,7 +28,12 @@ async def activities_spa(request: Request):
         ui_prefs = db.get_ui_prefs(uid)
     except Exception:
         ui_prefs = {}
-    resp = templates.TemplateResponse("main.html", {"request": request, "ui_prefs": ui_prefs})
+    stadia_key = os.environ.get("STADIA_API_KEY", "")
+    tile_url = (
+        f"https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{{z}}/{{x}}/{{y}}.png?api_key={stadia_key}"
+        if stadia_key else "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+    )
+    resp = templates.TemplateResponse("main.html", {"request": request, "ui_prefs": ui_prefs, "tile_url": tile_url})
     resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
     resp.headers["Pragma"] = "no-cache"
     return resp
