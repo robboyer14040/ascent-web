@@ -2,6 +2,34 @@
 // Used by altitude_chart.js (Activities/Analysis) and stage_elev_chart.js
 // (Tour / Tour_share). Neither file should contain its own copy of these.
 
+// Find the top N altitude peaks in a [{x, y}] points array.
+// Minimum separation: 0.25 display-distance-units between peaks.
+function findPeaks(points, n) {
+  n = n || 3;
+  if (points.length < 10) return [];
+  const minSepX = 0.25;
+  const w = Math.max(5, Math.floor(points.length * 0.02));
+  const candidates = [];
+  for (let i = 1; i < points.length - 1; i++) {
+    const y = points[i].y;
+    let isPeak = true;
+    const lo = Math.max(0, i - w), hi = Math.min(points.length - 1, i + w);
+    for (let j = lo; j <= hi; j++) {
+      if (j !== i && points[j].y > y) { isPeak = false; break; }
+    }
+    if (isPeak) candidates.push({ idx: i, x: points[i].x, y });
+  }
+  candidates.sort((a, b) => b.y - a.y);
+  const peaks = [];
+  for (const cand of candidates) {
+    if (peaks.every(p => Math.abs(p.x - cand.x) >= minSepX)) {
+      peaks.push(cand);
+      if (peaks.length >= n) break;
+    }
+  }
+  return peaks;
+}
+
 // Render rows into a HUD panel and center it on cursor position `px` within
 // the container (clamped so it doesn't overflow the edges).
 // rows: [{label, val, color}]

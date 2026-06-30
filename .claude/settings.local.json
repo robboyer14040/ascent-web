@@ -61,7 +61,8 @@
       "Bash(venv_arm64/bin/python *)",
       "Bash(python3.9 *)",
       "Bash(venv_arm64/bin/python3 *)",
-      "Bash(identify /Users/rob/projects/ascent-web/app/static/apple-touch-icon.png)"
+      "Bash(identify /Users/rob/projects/ascent-web/app/static/apple-touch-icon.png)",
+      "Bash(claude doctor *)"
     ]
   }
 }

@@ -99,11 +99,12 @@ function computeStageGradFromRawPts(pts, step, distConv) {
 }
 
 // Build (or rebuild) the Chart.js elevation strip.
-// opts: { gradeOn: bool, colorCode: bool }
+// opts: { gradeOn: bool, colorCode: bool, showPeaks: bool }
 // Returns the new Chart instance.
 function buildStageElevChart(canvas, chartPts, opts) {
   const gradeOn   = !!(opts && opts.gradeOn);
   const colorCode = !!(opts && opts.colorCode);
+  const showPeaks = !!(opts && opts.showPeaks);
   const light     = _elevIsLight();
   const metric    = typeof U !== 'undefined' && U.metric;
   const xUnit     = metric ? 'km' : 'mi';
@@ -114,6 +115,38 @@ function buildStageElevChart(canvas, chartPts, opts) {
   const totalX = chartPts[chartPts.length - 1].x;
   const minY   = Math.min(...chartPts.map(p => p.y));
   const yFloor = Math.floor(minY / 100) * 100;
+
+  const peakList = showPeaks ? findPeaks(chartPts, 3) : [];
+
+  const peakPlugin = {
+    id: 'peakMarkers',
+    afterDatasetsDraw(chart) {
+      if (!peakList.length) return;
+      const { ctx: cx, scales } = chart;
+      const xSc = scales.x, ySc = scales.y;
+      if (!xSc || !ySc) return;
+      const lm = _elevIsLight();
+      cx.save();
+      peakList.forEach(pk => {
+        const px = xSc.getPixelForValue(pk.x);
+        const py = ySc.getPixelForValue(pk.y);
+        const label = pk.y + ' ' + yUnit;
+        cx.beginPath(); cx.moveTo(px, py); cx.lineTo(px, py - 20);
+        cx.strokeStyle = lm ? 'rgba(0,0,0,.35)' : 'rgba(255,255,255,.5)';
+        cx.lineWidth = 1; cx.stroke();
+        cx.beginPath(); cx.arc(px, py, 3, 0, Math.PI * 2);
+        cx.fillStyle = lm ? '#555' : '#fff'; cx.fill();
+        cx.font = 'bold 9px -apple-system,sans-serif';
+        const tw = cx.measureText(label).width;
+        const bx = px - tw / 2 - 5, by = py - 38, bw = tw + 10, bh = 16;
+        cx.fillStyle = 'rgba(0,0,0,.75)';
+        cx.beginPath(); cx.roundRect(bx, by, bw, bh, 4); cx.fill();
+        cx.fillStyle = '#f2f2f7'; cx.textAlign = 'center'; cx.textBaseline = 'middle';
+        cx.fillText(label, px, by + bh / 2);
+      });
+      cx.restore();
+    },
+  };
 
   const datasets = [{
     data: chartPts, fill: true,
@@ -172,9 +205,10 @@ function buildStageElevChart(canvas, chartPts, opts) {
   return new Chart(canvas, {
     type: 'line',
     data: { datasets },
+    plugins: [peakPlugin],
     options: {
       responsive: true, maintainAspectRatio: false, animation: false,
-      layout: { padding: { top: 4, right: gradeOn ? 2 : 10, bottom: 0, left: 0 } },
+      layout: { padding: { top: peakList.length ? 42 : 4, right: gradeOn ? 2 : 10, bottom: 0, left: 0 } },
       plugins: { legend: { display: false }, tooltip: { enabled: false } },
       scales,
     },
@@ -459,11 +493,16 @@ function stageElevInteraction(opts) {
     const fCd = v => v!=null ? Math.round(v)+' rpm' : '—';
 
     const hasT = startSec != null && durSec != null;
+    const selDistM = distM1 - distM0;
+    const selDistStr = U.metric ? (selDistM/1000).toFixed(2)+' km' : (selDistM/1609.344).toFixed(2)+' mi';
     let hdr = '';
     if (hasT) {
       hdr = `<div class="es-header"><span><span class="es-lbl">Start </span><span class="es-val">${_fmtElap(Math.round(startSec))}</span></span>` +
-            `<span class="es-maxat" style="visibility:hidden"><span class="es-lbl">max@ </span><span class="es-val es-maxat-val"></span></span>` +
-            `<span><span class="es-lbl">Duration </span><span class="es-val">${_fmtElap(Math.round(durSec))}</span></span></div>`;
+            `<span class="es-hdr-dur"><span class="es-lbl">Duration </span><span class="es-val">${_fmtElap(Math.round(durSec))}</span></span>` +
+            `<span class="es-maxat" style="display:none"><span class="es-lbl">max@ </span><span class="es-val es-maxat-val"></span></span>` +
+            `<span class="es-hdr-dist"><span class="es-val">${selDistStr}</span></span></div>`;
+    } else {
+      hdr = `<div class="es-header"><span><span class="es-val">${selDistStr}</span></span></div>`;
     }
     const rows = [
       [{ label:'Min Altitude',  val:fA(minAltDisplay) },
@@ -515,7 +554,7 @@ function stageElevInteraction(opts) {
             const maxAtEl = b.querySelector('.es-maxat');
             const maxAtVal = b.querySelector('.es-maxat-val');
             if (maxAtVal) maxAtVal.textContent = _fmtElap(t2);
-            if (maxAtEl) maxAtEl.style.visibility = 'visible';
+            if (maxAtEl) maxAtEl.style.display = '';
           }
         }
       });

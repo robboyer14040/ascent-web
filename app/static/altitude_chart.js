@@ -224,36 +224,6 @@ function redrawElevWithOverlays() {
   if (elevChartData) drawElevation(elevChartData);
 }
 
-function findPeaks(points, n=3) {
-  if (points.length < 10) return [];
-  // Minimum separation: 0.25 miles between peaks
-  const minSepX = 0.25;
-
-  // Find all local maxima (smoother window = 2% of points each side, clamped at edges)
-  const w = Math.max(5, Math.floor(points.length * 0.02));
-  const candidates = [];
-  for (let i = 1; i < points.length - 1; i++) {
-    const y = points[i].y;
-    let isPeak = true;
-    const lo = Math.max(0, i - w), hi = Math.min(points.length - 1, i + w);
-    for (let j = lo; j <= hi; j++) {
-      if (j !== i && points[j].y > y) { isPeak = false; break; }
-    }
-    if (isPeak) candidates.push({idx: i, x: points[i].x, y});
-  }
-
-  // Sort by height descending, greedily pick top N with min separation
-  candidates.sort((a, b) => b.y - a.y);
-  const peaks = [];
-  for (const cand of candidates) {
-    if (peaks.every(p => Math.abs(p.x - cand.x) >= minSepX)) {
-      peaks.push(cand);
-      if (peaks.length >= n) break;
-    }
-  }
-  return peaks;
-}
-
 let elevChart=null;
 
 // Register annotation plugin if available
@@ -1029,10 +999,13 @@ async function drawElevation(data, version) {
           ? `${h}:${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}`
           : `${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
       };
+      const selDistM = (data.dist_m[safeHi] || 0) - (data.dist_m[safeLo] || 0);
+      const selDistStr = U.metric ? (selDistM/1000).toFixed(2)+' km' : (selDistM/1609.344).toFixed(2)+' mi';
       headerHtml = `<div class="es-header">` +
         `<span><span class="es-lbl">Start </span><span class="es-val">${fmtElapsed(Math.round(startSec))}</span></span>` +
-        `<span class="es-maxat" style="visibility:hidden"><span class="es-lbl">max@ </span><span class="es-val es-maxat-val"></span></span>` +
-        `<span><span class="es-lbl">Duration </span><span class="es-val">${fmtElapsed(durSec)}</span></span>` +
+        `<span class="es-hdr-dur"><span class="es-lbl">Duration </span><span class="es-val">${fmtElapsed(durSec)}</span></span>` +
+        `<span class="es-maxat" style="display:none"><span class="es-lbl">max@ </span><span class="es-val es-maxat-val"></span></span>` +
+        `<span class="es-hdr-dist"><span class="es-val">${selDistStr}</span></span>` +
         `</div>`;
     }
 
@@ -1078,7 +1051,7 @@ async function drawElevation(data, version) {
           const maxAtEl = b.querySelector('.es-maxat');
           const maxAtVal = b.querySelector('.es-maxat-val');
           if (maxAtVal) maxAtVal.textContent = `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-          if (maxAtEl)  maxAtEl.style.visibility = 'visible';
+          if (maxAtEl)  maxAtEl.style.display = '';
         }
       },
       clearElevSelection);

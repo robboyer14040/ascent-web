@@ -777,16 +777,19 @@ select.edit-act-input{appearance:none;-webkit-appearance:none;cursor:pointer;pad
 @media(prefers-color-scheme:light){
   :root:not([data-theme]) #elev-sel-stats{background:rgba(12,12,20,.38);border-color:rgba(74,222,128,.38)}
 }
-#elev-sel-stats .es-header{display:flex;justify-content:space-between;gap:24px;
+#elev-sel-stats .es-header{display:flex;align-items:center;
   font-size:11px;line-height:1.7;font-family:-apple-system,"SF Pro Text",sans-serif;
   border-bottom:1px solid rgba(255,255,255,.12);margin-bottom:3px;padding-bottom:2px}
+#elev-sel-stats .es-hdr-dur{margin-left:16px}
+#elev-sel-stats .es-maxat{margin-left:8px}
+#elev-sel-stats .es-hdr-dist{margin-left:auto}
 #elev-sel-stats .es-grid{display:grid;grid-template-columns:1fr 1fr;column-gap:18px;row-gap:0}
 #elev-sel-stats .es-row{display:flex;justify-content:space-between;gap:14px;
   font-size:11px;line-height:1.7;font-family:-apple-system,"SF Pro Text",sans-serif}
 #elev-sel-stats .es-lbl{color:rgba(255,255,255,.42);letter-spacing:.01em}
 #elev-sel-stats .es-val{font-weight:600;font-variant-numeric:tabular-nums;color:rgba(255,255,255,.88)}
 #elev-sel-stats .es-max-lbl{text-decoration:underline;cursor:pointer;pointer-events:auto}
-#elev-sel-stats .es-maxat{flex:1;text-align:center}
+#elev-sel-stats .es-maxat{text-align:center}
 #elev-crosshair{position:absolute;top:0;bottom:0;width:1px;
   background:rgba(255,255,255,.25);pointer-events:none;display:none;z-index:14}
 #elev-anim-dot{position:absolute;width:10px;height:10px;border-radius:50%;
