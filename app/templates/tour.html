@@ -238,7 +238,7 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
   #view-all-btn{display:none!important}
   #page{
     display:flex;flex-direction:column;
-    height:calc(100vh - 52px - 58px - env(safe-area-inset-bottom, 0px));margin-top:52px;
+    height:calc(100vh - 52px - env(safe-area-inset-top,0px) - 58px - env(safe-area-inset-bottom,0px));margin-top:calc(52px + env(safe-area-inset-top,0px));
     overflow:hidden;position:static
   }
   /* Flatten sidebar so #tour-controls and #stage-list-wrap become
@@ -261,7 +261,7 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
   body.mob-stage-view #stage-list-wrap{display:none}
   /* Stage detail uses position:fixed so iOS gives it an explicit pixel height to scroll */
   body.mob-stage-view #main{flex:1}
-  body.mob-stage-view #stage-detail{display:block;position:fixed;left:0;right:0;bottom:0;overflow-y:scroll;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;background:var(--bg);z-index:20;padding:12px 12px calc(66px + env(safe-area-inset-bottom,0px))}
+  body.mob-stage-view #stage-detail{display:block;position:fixed;left:0;right:0;bottom:0;overflow-y:scroll;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;background:var(--bg);z-index:20;padding:12px 12px 66px}
   /* top is set dynamically in JS (52 + mapH + 6) */
   /* "View Entire Tour" button — portrait stage view only */
   .mob-view-tour-wrap{display:none}
@@ -283,10 +283,10 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
 @media(max-height:500px) and (orientation:landscape) and (pointer:coarse){
   #page{
     display:flex;flex-direction:row;
-    height:calc(100vh - 52px - 58px - env(safe-area-inset-bottom,0px));
-    margin-top:52px;overflow:hidden
+    height:100vh!important;
+    margin-top:0!important;overflow:hidden
   }
-  body.mob-landscape-stage #stage-detail{padding-bottom:calc(12px + env(safe-area-inset-bottom,0px))}
+  body.mob-landscape-stage #stage-detail{padding-bottom:12px}
   #sidebar{
     width:200px;flex-shrink:0;
     display:flex;flex-direction:column;
@@ -412,7 +412,7 @@ body.mob-stage-view #elev-resize-handle::after{display:none}
           <canvas id="stage-elev-canvas"></canvas>
           <div id="stage-elev-xhair" style="display:none;position:absolute;pointer-events:none"></div>
           <button id="stage-elev-hud-btn" onclick="_stageElevHudToggle()" title="Toggle hover HUD" onmousedown="event.stopPropagation()" ontouchstart="event.stopPropagation()">HUD</button>
-          <button id="stage-settings-btn" onclick="toggleStageSettings(event)" title="Chart settings" onmousedown="event.stopPropagation()" ontouchstart="event.stopPropagation()" style="position:absolute;top:4px;right:6px;z-index:15;font-size:18px;padding:2px 5px;line-height:1;background:rgba(0,0,0,.4);border:none;color:#ccc;border-radius:5px;cursor:pointer;user-select:none;-webkit-user-select:none">⚙</button>
+          <button id="stage-settings-btn" onclick="toggleStageSettings(event)" title="Chart settings" onmousedown="event.stopPropagation()" ontouchstart="event.stopPropagation()" style="position:absolute;top:4px;right:6px;z-index:15;font-size:26px;padding:2px 5px;line-height:1;background:rgba(0,0,0,.4);border:none;color:#ccc;border-radius:5px;cursor:pointer;user-select:none;-webkit-user-select:none">⚙</button>
           <div id="stage-elev-help">Drag over a region to see stats for that region. Activate the HUD using the button at the top left to enable a heads-up display as you move the mouse over the profile.</div>
         </div>
         <div id="elev-resize-handle" style="display:none" title="Drag to resize elevation chart"><span class="rh-section-lbl">Stage Info</span><button class="mob-disclose" id="mob-info-disclose" onclick="toggleMobInfo()" title="Collapse stage info" ontouchstart="event.stopPropagation()" onmousedown="event.stopPropagation()"><span class="mob-arr">▾</span></button></div>
@@ -422,10 +422,7 @@ body.mob-stage-view #elev-resize-handle::after{display:none}
             <input type="checkbox" id="stage-peaks-cb" onchange="onStagePeaksCbChange(this)" checked style="accent-color:#f97316"> Peaks
           </label>
           <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text);cursor:pointer;margin-bottom:4px">
-            <input type="checkbox" id="stage-grade-cb" onchange="onStageGradeCbChange(this)" style="accent-color:#f97316"> Gradient
-          </label>
-          <label id="stage-colorcode-label" style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);cursor:default;margin-left:18px;opacity:0.4">
-            <input type="checkbox" id="stage-grade-colorcode" onchange="toggleStageColorCode()" style="accent-color:#f97316" disabled> Color-code
+            <input type="checkbox" id="stage-grade-cb" onchange="onStageGradeCbChange(this)" checked style="accent-color:#22c55e"> Gradient
           </label>
         </div>
         <div id="stage-detail"></div>
@@ -596,6 +593,7 @@ body.mob-stage-view #elev-resize-handle::after{display:none}
 <script src="/static/activity_detail.js?v={{ app_version }}"></script>
 <script src="/static/map_utils.js?v={{ app_version }}"></script>
 <script src="/static/elev_panel.js?v={{ app_version }}"></script>
+<script src="/static/elev_gradient.js?v={{ app_version }}"></script>
 <script src="/static/stage_elev_chart.js?v={{ app_version }}"></script>
 <script src="/static/strava_sync_btn.js?v={{ app_version }}" defer></script>
 <script>
@@ -755,26 +753,20 @@ let _stageElevChart  = null; // Chart.js instance for the elevation strip
 let _stageElevRawPts = null; // [[lat,lon,alt_ft], ...] parallel to chartPts for hover lookup
 let _stageChartPts   = null; // downsampled [{x,y}] for redraw on grade toggle
 let _stageGradPts    = null; // pre-computed gradient [{x,y}] from full-res raw pts
-let _stageGradeOn    = false;
-let _stageColorCode  = false;
+let _stageGradeOn    = true;
 let _stagePeaksOn    = true;
 let _stageHoverDot   = null; // Leaflet marker for yellow hover dot on map
 let _stageActData    = null; // per-point chart data for completed stage ({dist_m,hr,speed,power,cadence,time})
 
 function _saveStageChartPrefs() {
-  try { localStorage.setItem('ascent-stage-chart-prefs', JSON.stringify({ gradeOn: _stageGradeOn, colorCode: _stageColorCode, peaksOn: _stagePeaksOn })); } catch(e) {}
+  try { localStorage.setItem('ascent-stage-chart-prefs', JSON.stringify({ gradeOn: _stageGradeOn, peaksOn: _stagePeaksOn })); } catch(e) {}
 }
 function _loadStageChartPrefs() {
   try {
     const p = JSON.parse(localStorage.getItem('ascent-stage-chart-prefs') || 'null');
     if (!p) return;
-    if (p.gradeOn   !== undefined) { _stageGradeOn  = !!p.gradeOn;   const cb = document.getElementById('stage-grade-cb');       if (cb) cb.checked = _stageGradeOn; }
-    if (p.colorCode !== undefined) { _stageColorCode = !!p.colorCode; const cb = document.getElementById('stage-grade-colorcode'); if (cb) cb.checked = _stageColorCode; }
-    if (p.peaksOn   !== undefined) { _stagePeaksOn   = !!p.peaksOn;   const cb = document.getElementById('stage-peaks-cb');       if (cb) cb.checked = _stagePeaksOn; }
-    const ccLabel = document.getElementById('stage-colorcode-label');
-    const ccCb    = document.getElementById('stage-grade-colorcode');
-    if (ccLabel) { ccLabel.style.opacity = _stageGradeOn ? '' : '0.4'; ccLabel.style.cursor = _stageGradeOn ? 'pointer' : 'default'; }
-    if (ccCb)    ccCb.disabled = !_stageGradeOn;
+    if (p.gradeOn !== undefined) { _stageGradeOn = !!p.gradeOn; const cb = document.getElementById('stage-grade-cb'); if (cb) cb.checked = _stageGradeOn; }
+    if (p.peaksOn !== undefined) { _stagePeaksOn = !!p.peaksOn; const cb = document.getElementById('stage-peaks-cb'); if (cb) cb.checked = _stagePeaksOn; }
   } catch(e) {}
 }
 function onStagePeaksCbChange(cb) {
@@ -784,17 +776,8 @@ function onStagePeaksCbChange(cb) {
 }
 function onStageGradeCbChange(cb) {
   _stageGradeOn = cb.checked;
-  const ccLabel = document.getElementById('stage-colorcode-label');
-  const ccCb    = document.getElementById('stage-grade-colorcode');
-  if (ccLabel) { ccLabel.style.opacity = cb.checked ? '' : '0.4'; ccLabel.style.cursor = cb.checked ? 'pointer' : 'default'; }
-  if (ccCb)    ccCb.disabled = !cb.checked;
   _saveStageChartPrefs();
   if (_stageChartPts) _rebuildStageElevChart();
-}
-function toggleStageColorCode() {
-  _stageColorCode = document.getElementById('stage-grade-colorcode')?.checked ?? false;
-  _saveStageChartPrefs();
-  if (_stageChartPts && _stageGradeOn) _rebuildStageElevChart();
 }
 let _stageSettingsOpen = false;
 function toggleStageSettings(e) {
@@ -824,7 +807,7 @@ function _rebuildStageElevChart() {
   const canvas = document.getElementById('stage-elev-canvas');
   if (!canvas || !_stageChartPts) return;
   if (_stageElevChart) { _stageElevChart.destroy(); _stageElevChart = null; }
-  _stageElevChart = buildStageElevChart(canvas, _stageChartPts, { gradeOn: _stageGradeOn, colorCode: _stageColorCode, gradPts: _stageGradPts, showPeaks: _stagePeaksOn });
+  _stageElevChart = buildStageElevChart(canvas, _stageChartPts, { gradeOn: _stageGradeOn, gradPts: _stageGradPts, showPeaks: _stagePeaksOn });
   _stageElevChart._elevChartPts = _stageChartPts;
   window._stageElevReapplySel?.();
 }
@@ -864,7 +847,11 @@ function mobTourTab(tab) {
 // (large iPhones go from 390px wide portrait to 844px wide landscape).
 const isMobTour  = () => Math.min(window.innerWidth, window.innerHeight) <= 767;
 const isPortrait = () => window.innerWidth < window.innerHeight;
-const tourChromeH = () => isMobTour() ? 52 : 44;
+const tourChromeH = () => {
+  if (!isMobTour()) return 44;
+  const tb = document.querySelector('.mob-topbar');
+  return tb ? tb.offsetHeight : 52;
+};
 // Returns the correct `top` for the portrait fixed stage-detail panel,
 // accounting for map + resize handle + elevation strip (if visible).
 function _stageDetailTop() {

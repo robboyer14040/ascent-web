@@ -45,8 +45,8 @@ function setElevSelection(startIdx, endIdx) {
   const hasRegion = startIdx !== null && endIdx !== null;
   const compareBtn = document.getElementById('compare-btn');
   const segDefineBtn = document.getElementById('seg-define-btn');
-  if (compareBtn)   compareBtn.disabled   = !hasRegion;
-  if (segDefineBtn) segDefineBtn.disabled = !hasRegion;
+  if (compareBtn)   compareBtn.classList.toggle('sel-active', hasRegion);
+  if (segDefineBtn) segDefineBtn.classList.toggle('sel-active', hasRegion);
 }
 
 async function cmpOpenManualWithSegment() {
@@ -334,15 +334,12 @@ async function openCompare() {
   const friendsCb = document.getElementById('cmp-include-friends');
   if (friendsCb) friendsCb.checked = _uiPrefsGet('ascent-cmp-friends') === '1';
 
-  // If no segment selected, single activity: load saved segments so
-  // the user can pick one from the dropdown to run compare immediately.
+  // No region drawn — nothing to compare.
   if (cmp.selStartIdx === null || cmp.selEndIdx === null) {
     titleEl.textContent = 'Segment Compare';
     loading.style.display = 'none';
-    cmp.matches      = [];
-    cmp.currentT     = 0;
-    cmp.savedSegId   = null;
-    cmp.savedSegName = null;
+    cmp.matches = []; cmp.currentT = 0;
+    cmp.savedSegId = null; cmp.savedSegName = null;
     cmpUpdateSaveBtn();
     await cmpLoadSavedSegments();
     return;

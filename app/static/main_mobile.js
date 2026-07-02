@@ -125,6 +125,12 @@ function _mobRefitMap() {
 
 function mobilePushDetail(actTitle) {
   if (!_isPhoneLayout()) return;
+  // Dismiss keyboard if search or any input was focused — ensures viewport has restored
+  // before we slide in the detail screen and refit the map.
+  if (document.activeElement && typeof document.activeElement.blur === 'function' &&
+      (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA')) {
+    document.activeElement.blur();
+  }
   // Show forecast tab button only when activity has GPS
   const wxBtn = document.getElementById('mob-wx-btn');
   if (wxBtn) {
@@ -154,6 +160,7 @@ function mobilePushDetail(actTitle) {
       try { window.parent.postMessage({action:'enterDetail'}, location.origin); } catch(e) {}
     }
     setTimeout(_mobRefitMap, 320); // after 300ms slide animation
+    setTimeout(_mobRefitMap, 600); // second pass in case keyboard was still animating away
   } else {
     // Landscape: detail screen always visible — just refit after layout settles
     requestAnimationFrame(() => requestAnimationFrame(_mobRefitMap));
@@ -432,4 +439,5 @@ document.addEventListener('touchend', () => {
   buildColHead();
   renderVirtualList();
 });
+
 

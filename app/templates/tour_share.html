@@ -207,7 +207,7 @@ body.mob-stage-view #elev-resize-handle::after{display:none}
       <canvas id="stage-elev-canvas"></canvas>
       <div id="stage-elev-xhair"></div>
       <button id="stage-elev-hud-btn" onclick="_stageElevHudToggle()" title="Toggle hover HUD" onmousedown="event.stopPropagation()" ontouchstart="event.stopPropagation()">HUD</button>
-      <button id="stage-settings-btn" onclick="toggleStageSettings(event)" title="Chart settings" onmousedown="event.stopPropagation()" ontouchstart="event.stopPropagation()" style="position:absolute;top:4px;right:6px;z-index:15;font-size:18px;padding:2px 5px;line-height:1;background:rgba(0,0,0,.4);border:none;color:#ccc;border-radius:5px;cursor:pointer;user-select:none;-webkit-user-select:none">⚙</button>
+      <button id="stage-settings-btn" onclick="toggleStageSettings(event)" title="Chart settings" onmousedown="event.stopPropagation()" ontouchstart="event.stopPropagation()" style="position:absolute;top:4px;right:6px;z-index:15;font-size:26px;padding:2px 5px;line-height:1;background:rgba(0,0,0,.4);border:none;color:#ccc;border-radius:5px;cursor:pointer;user-select:none;-webkit-user-select:none">⚙</button>
       <div id="stage-elev-help">Drag over a region to see stats for that region. Activate the HUD using the button at the top left to enable a heads-up display as you move the mouse over the profile.</div>
     </div>
     <div id="elev-resize-handle" style="display:none" title="Drag to resize elevation chart"><span class="rh-section-lbl">Stage Info</span><button class="mob-disclose" id="mob-info-disclose" onclick="toggleMobInfo()" title="Collapse stage info" ontouchstart="event.stopPropagation()" onmousedown="event.stopPropagation()"><span class="mob-arr">▾</span></button></div>
@@ -217,10 +217,7 @@ body.mob-stage-view #elev-resize-handle::after{display:none}
         <input type="checkbox" id="stage-peaks-cb" onchange="onStagePeaksCbChange(this)" checked style="accent-color:#f97316"> Peaks
       </label>
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text);cursor:pointer;margin-bottom:4px">
-        <input type="checkbox" id="stage-grade-cb" onchange="onStageGradeCbChange(this)" style="accent-color:#f97316"> Gradient
-      </label>
-      <label id="stage-colorcode-label" style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);cursor:default;margin-left:18px;opacity:0.4">
-        <input type="checkbox" id="stage-grade-colorcode" onchange="toggleStageColorCode()" style="accent-color:#f97316" disabled> Color-code
+        <input type="checkbox" id="stage-grade-cb" onchange="onStageGradeCbChange(this)" checked style="accent-color:#22c55e"> Gradient
       </label>
     </div>
     <div id="stage-detail"><div style="color:var(--muted);font-size:12px">Loading tour…</div></div>
@@ -246,6 +243,7 @@ body.mob-stage-view #elev-resize-handle::after{display:none}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="/static/map_utils.js"></script>
 <script src="/static/elev_panel.js?v={{ app_version }}"></script>
+<script src="/static/elev_gradient.js?v={{ app_version }}"></script>
 <script src="/static/stage_elev_chart.js?v={{ app_version }}"></script>
 <script>
 const TOKEN = {{ token | tojson }};
@@ -416,25 +414,20 @@ function toggleMobStats() {
 
 // ── Elevation strip ───────────────────────────────────────────────────────────
 let _elevChart = null, _elevRawPts = null, _elevHoverDot = null;
-let _elevChartPts = null, _elevGradeOn = false, _elevColorCode = false, _elevPeaksOn = true;
+let _elevChartPts = null, _elevGradeOn = true, _elevPeaksOn = true;
 let _elevGradPts = null; // pre-computed gradient [{x,y}] from full-res raw pts
 let _shareActData = null; // per-point chart data for completed stages (always null on share page)
 let _elevSettingsOpen = false;
 
 function _saveElevChartPrefs() {
-  try { localStorage.setItem('ascent-stage-chart-prefs', JSON.stringify({ gradeOn: _elevGradeOn, colorCode: _elevColorCode, peaksOn: _elevPeaksOn })); } catch(e) {}
+  try { localStorage.setItem('ascent-stage-chart-prefs', JSON.stringify({ gradeOn: _elevGradeOn, peaksOn: _elevPeaksOn })); } catch(e) {}
 }
 function _loadElevChartPrefs() {
   try {
     const p = JSON.parse(localStorage.getItem('ascent-stage-chart-prefs') || 'null');
     if (!p) return;
-    if (p.gradeOn   !== undefined) { _elevGradeOn  = !!p.gradeOn;   const cb = document.getElementById('stage-grade-cb');       if (cb) cb.checked = _elevGradeOn; }
-    if (p.colorCode !== undefined) { _elevColorCode = !!p.colorCode; const cb = document.getElementById('stage-grade-colorcode'); if (cb) cb.checked = _elevColorCode; }
-    if (p.peaksOn   !== undefined) { _elevPeaksOn   = !!p.peaksOn;   const cb = document.getElementById('stage-peaks-cb');       if (cb) cb.checked = _elevPeaksOn; }
-    const ccLabel = document.getElementById('stage-colorcode-label');
-    const ccCb    = document.getElementById('stage-grade-colorcode');
-    if (ccLabel) { ccLabel.style.opacity = _elevGradeOn ? '' : '0.4'; ccLabel.style.cursor = _elevGradeOn ? 'pointer' : 'default'; }
-    if (ccCb)    ccCb.disabled = !_elevGradeOn;
+    if (p.gradeOn !== undefined) { _elevGradeOn = !!p.gradeOn; const cb = document.getElementById('stage-grade-cb'); if (cb) cb.checked = _elevGradeOn; }
+    if (p.peaksOn !== undefined) { _elevPeaksOn = !!p.peaksOn; const cb = document.getElementById('stage-peaks-cb'); if (cb) cb.checked = _elevPeaksOn; }
   } catch(e) {}
 }
 function onStagePeaksCbChange(cb) {
@@ -444,17 +437,8 @@ function onStagePeaksCbChange(cb) {
 }
 function onStageGradeCbChange(cb) {
   _elevGradeOn = cb.checked;
-  const ccLabel = document.getElementById('stage-colorcode-label');
-  const ccCb    = document.getElementById('stage-grade-colorcode');
-  if (ccLabel) { ccLabel.style.opacity = cb.checked ? '' : '0.4'; ccLabel.style.cursor = cb.checked ? 'pointer' : 'default'; }
-  if (ccCb)    ccCb.disabled = !cb.checked;
   _saveElevChartPrefs();
   if (_elevChartPts) _rebuildElevChart();
-}
-function toggleStageColorCode() {
-  _elevColorCode = document.getElementById('stage-grade-colorcode')?.checked ?? false;
-  _saveElevChartPrefs();
-  if (_elevChartPts && _elevGradeOn) _rebuildElevChart();
 }
 function toggleStageSettings(e) {
   e.stopPropagation();
@@ -485,7 +469,7 @@ function _rebuildElevChart() {
   const canvas = document.getElementById('stage-elev-canvas');
   if (!canvas || !_elevChartPts) return;
   if (_elevChart) { _elevChart.destroy(); _elevChart = null; }
-  _elevChart = buildStageElevChart(canvas, _elevChartPts, { gradeOn: _elevGradeOn, colorCode: _elevColorCode, gradPts: _elevGradPts, showPeaks: _elevPeaksOn });
+  _elevChart = buildStageElevChart(canvas, _elevChartPts, { gradeOn: _elevGradeOn, gradPts: _elevGradPts, showPeaks: _elevPeaksOn });
   _elevChart._chartPts = _elevChartPts;
   window._stageElevReapplySel?.();
 }

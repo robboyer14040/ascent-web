@@ -38,7 +38,8 @@
     --lb-text:#1c1c1e;--lb-muted:#6c6c70;--lb-hint:#8e8e93;
   }
 }
-html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif;font-size:13px;background:var(--bg);color:var(--text)}
+html{height:100%;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif;font-size:13px;background:var(--bg);color:var(--text)}
+body{height:100%;overflow:hidden;font-family:inherit;font-size:inherit;background:inherit;color:inherit}
 a{color:var(--accent);text-decoration:none}
 button{cursor:pointer;border:none;background:none;color:inherit;font:inherit}
 input,select{font:inherit}
@@ -64,7 +65,8 @@ input,select{font:inherit}
 .tb-count{font-size:11px;color:var(--muted);padding:0 6px;white-space:nowrap}
 /* unified nav */
 .nav-brand-name{font-size:14px;font-weight:700;color:var(--accent)}
-.nav-version{font-size:10px;font-weight:400;color:var(--muted);margin-left:4px;letter-spacing:.02em}
+.nav-version{font-size:10px;font-weight:400;color:var(--muted);letter-spacing:.02em}
+#toolbar .nav-version{margin-left:4px}
 .nav-pages{display:flex;align-items:center;gap:2px}
 .nav-btn{padding:5px 10px;border-radius:6px;font-size:12px;font-weight:500;color:var(--muted);background:none;border:none;cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:4px;text-decoration:none}
 .nav-btn:hover{color:var(--text);background:var(--nav-hover)}
@@ -211,7 +213,7 @@ input,select{font:inherit}
 #chart-wrap{flex:none;height:200px;background:var(--bg);position:relative;overflow:hidden;min-height:28px;display:flex;flex-direction:column;transition:height .2s ease}
 #chart-toolbar{flex:none;display:none;align-items:center;justify-content:flex-start;gap:6px;padding:2px 112px 0 8px;background:var(--bg)}
 #chart-toolbar.visible{display:flex}
-#elev-canvas-area{flex:1;position:relative;min-height:0;overflow:hidden}
+#elev-canvas-area{flex:1;position:relative;min-height:0;overflow:hidden;cursor:crosshair}
 #elev-zoom-bar{
   flex-shrink:0;display:none;align-items:center;gap:6px;
   padding:2px 8px 3px;background:var(--surface2);border-top:1px solid var(--border);
@@ -264,6 +266,7 @@ input,select{font:inherit}
 .zones-btn:hover{color:#f97316;border-color:#f97316}
 .zones-btn:disabled{color:var(--muted);border-color:var(--border2);cursor:default;opacity:0.45}
 .zones-btn:disabled:hover{color:var(--muted);border-color:var(--border2)}
+.zones-btn.sel-active{color:#f97316;border-color:#f97316}
 .edit-btn{font-size:11px;font-weight:600;color:var(--text);border:1px solid var(--border2);border-radius:4px;padding:3.5px 8px;background:none;cursor:pointer;line-height:1.4;transition:color .15s,border-color .15s}
 .edit-btn:hover{color:#f97316;border-color:#f97316}
 .delete-act-btn:hover{color:#ef4444;border-color:#ef4444}
@@ -763,19 +766,19 @@ select.edit-act-input{appearance:none;-webkit-appearance:none;cursor:pointer;pad
 #elev-hud-btn.active{background:#f97316;border-color:#f97316;color:#fff}
 #elev-hud-btn.active:hover{background:#ea6c0a;border-color:#ea6c0a;color:#fff}
 #elev-sel-rect{
-  position:absolute;top:0;bottom:0;background:rgba(74,222,128,.15);
-  border-left:1px solid rgba(74,222,128,.5);border-right:1px solid rgba(74,222,128,.5);
+  position:absolute;top:0;bottom:0;background:rgba(160,160,160,.15);
+  border-left:1px solid rgba(130,130,130,.5);border-right:1px solid rgba(130,130,130,.5);
   pointer-events:none;display:none;z-index:4;
 }
 #elev-sel-stats{
   position:absolute;background:rgba(0,0,0,.22);
   backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
-  border:1px solid rgba(74,222,128,.28);border-radius:10px;
+  border:1px solid rgba(140,140,140,.28);border-radius:10px;
   padding:7px 13px;pointer-events:auto;display:none;z-index:16;white-space:nowrap;
 }
-[data-theme="light"] #elev-sel-stats{background:rgba(12,12,20,.38);border-color:rgba(74,222,128,.38)}
+[data-theme="light"] #elev-sel-stats{background:rgba(12,12,20,.38);border-color:rgba(140,140,140,.38)}
 @media(prefers-color-scheme:light){
-  :root:not([data-theme]) #elev-sel-stats{background:rgba(12,12,20,.38);border-color:rgba(74,222,128,.38)}
+  :root:not([data-theme]) #elev-sel-stats{background:rgba(12,12,20,.38);border-color:rgba(140,140,140,.38)}
 }
 #elev-sel-stats .es-header{display:flex;align-items:center;
   font-size:11px;line-height:1.7;font-family:-apple-system,"SF Pro Text",sans-serif;
@@ -802,6 +805,9 @@ select.edit-act-input{appearance:none;-webkit-appearance:none;cursor:pointer;pad
   /* Make transport bar buttons taller on touch */
   .t-btn{ width:38px; height:38px; font-size:16px; }
   #transport-bar{ padding:8px 12px calc(8px + env(safe-area-inset-bottom)) 12px; }
+  /* Fix chart toolbar on tablet: remove the 200px gap that overflows on smaller screens */
+  #chart-toolbar{ flex-wrap:wrap!important; padding-right:10px!important; }
+  #zones-main-btn{ margin-left:0!important; margin-right:0!important; }
 }
 .sp-tb-btn{background:none;border:none;color:var(--text);cursor:pointer;
   padding:2px 5px;border-radius:4px;font-size:13px;line-height:1}
@@ -880,7 +886,7 @@ select.edit-act-input{appearance:none;-webkit-appearance:none;cursor:pointer;pad
   #mob-tab-forecast .wx-box{border-radius:0!important;border:none!important;height:auto!important;max-height:none!important;overflow:visible!important;flex-shrink:0;min-height:100%;display:block!important}
   #mob-tab-forecast .wx-scroll{overflow:visible!important;flex:none!important;height:auto!important}
   /* Detail tab bar */
-  #mob-detail-tabbar{flex-shrink:0;display:flex;align-items:stretch;background:var(--surface);border-top:1px solid var(--border);height:calc(58px + env(safe-area-inset-bottom, 0px));padding-bottom:env(safe-area-inset-bottom, 0px)}
+  #mob-detail-tabbar{flex-shrink:0;display:flex;align-items:stretch;background:var(--surface);border-top:1px solid var(--border);height:58px;padding-bottom:0}
   .mob-tab-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:4px;font-size:9px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);background:none;border:none;cursor:pointer}
   .mob-tab-icon{display:flex;align-items:center;justify-content:center}
   .mob-tab-icon svg{width:22px;height:22px}
@@ -906,19 +912,24 @@ html.mob-embedded body { padding-bottom:0!important }
 
 /* ── PORTRAIT PHONE ONLY (≤767px wide) ───────────────────────────────────── */
 @media(max-width:767px){
-  #root{position:fixed!important;top:52px!important;left:0;right:0;bottom:58px!important;height:auto!important;overflow:hidden}
+  /* Force document scrollable so WKWebView uses visual viewport for position:fixed.
+     body{overflow:hidden} (desktop rule) blocks scroll and defeats the min-height trick.
+     Setting overflow-y:auto on html makes html the scroll root, bypassing body's overflow. */
+  html{min-height:calc(100% + env(safe-area-inset-bottom,0px) + 1px);overflow-y:auto!important}
+  #root{position:fixed!important;top:calc(52px + env(safe-area-inset-top,0px))!important;left:0;right:0;bottom:calc(58px + env(safe-area-inset-bottom,0px))!important;height:auto!important;overflow:hidden}
   #top-row{display:block!important;width:100%;height:100%}
   #sidebar{width:100%!important;max-width:none!important;min-width:0!important;height:100%;border-right:none}
   #resize-handle{display:none!important}
   /* Mobile header */
-  #mob-header{display:flex;position:fixed;top:0;left:0;right:0;height:52px;z-index:300;background:var(--surface);border-bottom:1px solid var(--border);align-items:center;padding:0 8px 0 4px;gap:4px}
+  #mob-header{display:flex;position:fixed;top:0;left:0;right:0;height:calc(52px + env(safe-area-inset-top,0px));z-index:300;background:var(--surface);border-bottom:1px solid var(--border);align-items:center;padding:env(safe-area-inset-top,0px) 8px 0 12px;gap:6px}
   #mob-back-btn{display:none;align-items:center;gap:2px;padding:4px 6px;border-radius:8px;color:var(--accent);background:none;border:none;font-size:13px;font-weight:600;min-width:60px;min-height:44px;cursor:pointer;flex-shrink:0}
   #mob-back-btn span:first-child{font-size:26px;line-height:1;margin-top:-2px}
-  #mob-header-title{font-size:16px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;padding:0 4px}
+  #mob-header-title{font-size:15px;font-weight:700;color:var(--accent);white-space:nowrap;flex-shrink:0}
+  body.mob-detail-active #mob-header-title{flex:1;overflow:hidden;text-overflow:ellipsis}
   .mob-hdr-btn{display:flex;align-items:center;justify-content:center;min-width:44px;min-height:44px;font-size:22px;border-radius:8px;color:var(--text);background:none;border:none;text-decoration:none;cursor:pointer;flex-shrink:0}
   .mob-hdr-btn:hover{background:var(--surface2)}
   /* Global nav */
-  #mob-global-nav{display:flex;position:fixed;bottom:0;left:0;right:0;height:calc(58px + env(safe-area-inset-bottom, 0px));z-index:300;background:var(--surface);border-top:1px solid var(--border);align-items:stretch;padding-bottom:env(safe-area-inset-bottom, 0px)}
+  #mob-global-nav{display:flex;position:fixed;bottom:0;left:0;right:0;height:calc(58px + env(safe-area-inset-bottom,0px));z-index:300;background:var(--surface);border-top:1px solid var(--border);align-items:stretch;padding-bottom:env(safe-area-inset-bottom,0px)}
   body.mob-detail-active #mob-global-nav{display:none}
   body.mob-detail-active #mob-header-version{display:none}
   body.mob-detail-active #mob-user-btn{display:none!important}
@@ -927,7 +938,9 @@ html.mob-embedded body { padding-bottom:0!important }
   .mob-nav-btn.active{color:var(--accent)}
   body.mob-detail-active .strava-sync-btn{display:none!important}
   /* Detail screen: slides in from right */
-  #mob-detail-screen{display:flex;flex-direction:column;position:fixed;top:52px;left:0;right:0;bottom:0;z-index:200;background:var(--bg);transform:translateX(100%);transition:transform .3s cubic-bezier(.4,0,.2,1);overflow:hidden}
+  #mob-detail-screen{display:flex;flex-direction:column;position:fixed;top:calc(52px + env(safe-area-inset-top,0px));left:0;right:0;bottom:0;z-index:200;background:var(--bg);transform:translateX(100%);transition:transform .3s cubic-bezier(.4,0,.2,1);overflow:hidden}
+  /* Coach panel: fill between mobile header and bottom nav */
+  #coach-overlay.page-mode{inset:calc(52px + env(safe-area-inset-top,0px)) 0 calc(58px + env(safe-area-inset-bottom,0px)) 0!important}
   #mob-detail-screen.active{transform:translateX(0)}
   /* Transport bar larger buttons */
   .t-btn{width:44px!important;height:44px!important;font-size:18px!important}
@@ -951,15 +964,17 @@ html.mob-embedded body { padding-bottom:0!important }
 
 /* ── LANDSCAPE PHONE (height ≤500px) ─────────────────────────────────────── */
 @media(max-height:500px) and (orientation:landscape){
-  #root{position:fixed!important;inset:0!important;height:100%!important;display:flex!important;flex-direction:row!important;overflow:hidden}
+  #root{position:fixed!important;top:0!important;right:0!important;bottom:0!important;left:60px!important;height:100%!important;display:flex!important;flex-direction:row!important;overflow:hidden}
   /* Left: sidebar + resize handle */
   #top-row{display:flex!important;flex-direction:row!important;flex:none!important;height:100%;overflow:hidden}
   #sidebar{width:260px;min-width:160px;max-width:55vw;height:100%;border-right:1px solid var(--border)}
   #resize-handle{display:flex!important}
   /* Right: detail screen as flex sibling — column so tabs stack vertically */
   #mob-detail-screen{position:static!important;transform:none!important;transition:none!important;flex:1!important;display:flex!important;flex-direction:column!important;min-width:0;height:100%}
-  /* Hide portrait-only chrome */
-  #mob-header,#mob-global-nav{display:none!important}
+  /* Portrait header hidden; global nav becomes vertical side strip */
+  #mob-header{display:none!important}
+  #mob-global-nav{display:flex!important;flex-direction:column!important;position:fixed!important;left:0!important;top:0!important;bottom:0!important;right:auto!important;width:60px!important;height:100%!important;border-right:1px solid var(--border);border-top:none!important;padding-bottom:env(safe-area-inset-bottom,0px)!important;z-index:300!important}
+  #mob-global-nav .mob-nav-btn span{display:none}
   /* Compact tab bar for landscape */
   #mob-detail-tabbar{height:40px!important;padding-bottom:env(safe-area-inset-bottom)}
   .mob-tab-btn{flex-direction:row!important;gap:5px!important;font-size:11px!important}

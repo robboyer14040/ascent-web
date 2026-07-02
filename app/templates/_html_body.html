@@ -2,6 +2,7 @@
   <div id="top-row">
   <div id="sidebar">
     <div id="filter-bar">
+      <span id="viewing-user-badge" onclick="openUserPicker()" title="Switch user" style="display:none;font-size:11px;font-weight:500;color:var(--accent);cursor:pointer;padding:2px 7px;border:1px solid var(--accent);border-radius:10px;opacity:.85;user-select:none;flex-shrink:0"></span>
       <div class="tb-search">
         <span class="tb-icon">⌕</span>
         <input type="text" id="searchInput" placeholder="Search…">
@@ -119,9 +120,9 @@
             <option value="">Entire activity</option>
           </select>
         </div>
-        <button class="zones-btn" id="compare-btn" onclick="openCompare()" style="margin-top:2px" disabled>Compare…</button>
+        <button class="zones-btn" id="compare-btn" onclick="openCompare()" style="margin-top:2px">Compare…</button>
         <button class="zones-btn" id="seg-best-efforts-btn" onclick="openBestEfforts()" style="margin-top:2px" disabled>Attempts…</button>
-        <button class="zones-btn" id="seg-define-btn" onclick="openDefineSegment()" style="margin-top:2px" disabled>Define…</button>
+        <button class="zones-btn" id="seg-define-btn" onclick="openDefineSegment()" style="margin-top:2px">Define…</button>
       </div>
       <div id="chart-settings" style="display:none;position:absolute;top:28px;right:4px;z-index:20;background:var(--surface);border:1px solid var(--border2);border-radius:8px;padding:8px 10px;box-shadow:0 4px 16px rgba(0,0,0,.5)">
         <div style="display:flex;gap:14px;align-items:flex-start">
@@ -130,7 +131,6 @@
             <div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:4px">Overlay</div>
             <select id="overlay1-sel" style="width:100%;background:var(--surface2);border:1px solid var(--border2);color:var(--text);border-radius:5px;padding:3px 6px;font-size:12px;margin-bottom:4px" onchange="redrawElevWithOverlays()">
               <option value="">None</option>
-              <option value="gradient">Gradient</option>
               <option value="hr">Heart Rate</option>
               <option value="speed">Speed</option>
               <option value="power">Power</option>
@@ -139,6 +139,9 @@
             </select>
             <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text);cursor:pointer">
               <input type="checkbox" id="overlay1-zones" onchange="redrawElevWithOverlays()" style="accent-color:#f97316"> Color-code Zones
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text);cursor:pointer;margin-top:4px">
+              <input type="checkbox" id="show-gradients" onchange="redrawElevWithOverlays()" checked style="accent-color:#22c55e"> Show Gradients
             </label>
           </div>
           <!-- Splits column -->

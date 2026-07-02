@@ -820,7 +820,11 @@ async def segment_compare(req: SegmentRequest, request: Request):
     start_lon    = ref_start["lon"]
     end_lat      = ref_end["lat"]
     end_lon      = ref_end["lon"]
-    ref_elapsed  = ref_pts[ei]["t"] - ref_pts[si]["t"]
+    _t_start = ref_pts[si].get("t")
+    _t_end   = ref_pts[ei].get("t")
+    if _t_start is None or _t_end is None:
+        raise HTTPException(400, "Activity has no timestamp data — cannot compare segments")
+    ref_elapsed = _t_end - _t_start
 
     if ref_elapsed <= 0:
         raise HTTPException(400, "Invalid segment: zero elapsed time")
@@ -943,7 +947,7 @@ async def segment_compare(req: SegmentRequest, request: Request):
         out  = seg[::step]
         if seg and seg[-1] not in out:
             out = out + [seg[-1]]
-        t0 = pts[si2]["t"]
+        t0 = pts[si2].get("t") or 0
         # Build cumulative distance in metres
         cum = 0.0
         dist_list = [0.0]
@@ -951,13 +955,17 @@ async def segment_compare(req: SegmentRequest, request: Request):
             p1, p2 = out[k-1], out[k]
             cum += haversine_km(p1["lat"], p1["lon"], p2["lat"], p2["lon"]) * 1000
             dist_list.append(cum)
-        return [{"t": out[k]["t"] - t0, "lat": out[k]["lat"], "lon": out[k]["lon"],
+        return [{"t": (out[k].get("t") or 0) - t0, "lat": out[k]["lat"], "lon": out[k]["lon"],
                  "alt_ft": out[k]["alt_ft"], "hr": out[k]["hr"],
                  "speed_mph": out[k]["speed_mph"], "dist_m": dist_list[k]}
                 for k in range(len(out))]
 
     def build_match(act_id, name, start_time, pts, si2, ei2, user_id=None):
-        elapsed = pts[ei2]["t"] - pts[si2]["t"]
+        _te = pts[ei2].get("t")
+        _ts = pts[si2].get("t")
+        if _te is None or _ts is None:
+            return None
+        elapsed = _te - _ts
         if elapsed <= 0:
             return None
         return {
@@ -1095,6 +1103,7 @@ async def segment_compare(req: SegmentRequest, request: Request):
                     AND map_min_lon <= ? AND map_max_lon >= ?)
               )
             ORDER BY ts DESC
+            LIMIT 150
         """, [req.activity_id] + user_params + lookback_params +
              [seg_max_lat, seg_min_lat, seg_max_lon, seg_min_lon,
               seg_max_lat, seg_min_lat, seg_max_lon, seg_min_lon]

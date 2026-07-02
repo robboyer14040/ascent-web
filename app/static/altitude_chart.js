@@ -24,50 +24,6 @@ async function drawElevationFromSummary(act, version) {
     vals.push(U.alt(Math.round(base + (peak - base) * shape)));
   }
 
-  // Custom peak marker plugin
-  const peakPlugin = {
-    id: 'peakMarkers',
-    afterDatasetsDraw(chart) {
-      if (!peakList.length) return;
-      const {ctx: cx, scales} = chart;
-      const xSc = scales.x;
-      const ySc = scales.yElev || scales.y;
-      if (!xSc || !ySc) return;
-      cx.save();
-      peakList.forEach(pk => {
-        const px = xSc.getPixelForValue(pk.x);
-        const py = ySc.getPixelForValue(pk.y);
-        const label = U.alt(pk.y) + ' ' + U.altUnit();
-        const _lm = _chartIsLight();
-        // Stem line
-        cx.beginPath();
-        cx.moveTo(px, py);
-        cx.lineTo(px, py - 20);
-        cx.strokeStyle = _lm ? 'rgba(0,0,0,.35)' : 'rgba(255,255,255,.5)';
-        cx.lineWidth = 1;
-        cx.stroke();
-        // Dot at peak
-        cx.beginPath();
-        cx.arc(px, py, 3, 0, Math.PI*2);
-        cx.fillStyle = _lm ? '#555' : '#fff';
-        cx.fill();
-        // Label bubble
-        cx.font = 'bold 9px -apple-system,sans-serif';
-        const tw = cx.measureText(label).width;
-        const bx = px - tw/2 - 5, by = py - 38, bw = tw + 10, bh = 16;
-        cx.fillStyle = 'rgba(0,0,0,.75)';
-        cx.beginPath();
-        cx.roundRect(bx, by, bw, bh, 4);
-        cx.fill();
-        cx.fillStyle = '#f2f2f7';
-        cx.textAlign = 'center';
-        cx.textBaseline = 'middle';
-        cx.fillText(label, px, by + bh/2);
-      });
-      cx.restore();
-    }
-  };
-
   const light = _chartIsLight();
   if (elevChart){elevChart.destroy();elevChart=null;}
   elevChart = new Chart(ctx, {
@@ -112,6 +68,8 @@ function toggleElevHudMode() {
     const _c = document.getElementById('elev-crosshair');
     if (_p) _p.style.display = 'none';
     if (_c) _c.style.display = 'none';
+  } else if (elevChartData) {
+    _hudMoveToIdx(Math.floor(elevChartData.dist_m.length / 2));
   }
   window._clearElevSelection?.();
 }
@@ -165,8 +123,10 @@ function loadChartPrefs() {
       const sl = document.getElementById('split-len-sel');
       const sa = document.getElementById('split-agg-sel');
       const sz = document.getElementById('split-zones');
-      if (o1 && p.o1 !== undefined) o1.value = p.o1;
+      if (o1 && p.o1 !== undefined) o1.value = (p.o1 === 'gradient') ? '' : p.o1;
       if (o1z && p.o1Zones !== undefined) o1z.checked = p.o1Zones;
+      const sg = document.getElementById('show-gradients');
+      if (sg) sg.checked = p.showGradients !== undefined ? p.showGradients : true;
       if (pk && p.peaks !== undefined) pk.checked = p.peaks;
       if (sm && p.splitMetric !== undefined) sm.value = p.splitMetric;
       if (sl && p.splitLen !== undefined) sl.value = p.splitLen;
@@ -201,14 +161,15 @@ function loadChartPrefs() {
 }
 function saveChartPrefs() {
   _uiPrefsSet('ascent-chart-overlays', JSON.stringify({
-    o1:          document.getElementById('overlay1-sel')?.value || '',
-    o1Zones:     document.getElementById('overlay1-zones')?.checked ?? false,
-    peaks:       document.getElementById('show-peaks')?.checked ?? true,
-    splitMetric: document.getElementById('split-metric-sel')?.value || '',
-    splitLen:    document.getElementById('split-len-sel')?.value || '1',
-    splitAgg:    document.getElementById('split-agg-sel')?.value || 'avg',
-    splitZones:  document.getElementById('split-zones')?.checked ?? false,
-    xAxisTime:   document.getElementById('xaxis-time')?.checked ?? false,
+    o1:            document.getElementById('overlay1-sel')?.value || '',
+    o1Zones:       document.getElementById('overlay1-zones')?.checked ?? false,
+    showGradients: document.getElementById('show-gradients')?.checked ?? false,
+    peaks:         document.getElementById('show-peaks')?.checked ?? true,
+    splitMetric:   document.getElementById('split-metric-sel')?.value || '',
+    splitLen:      document.getElementById('split-len-sel')?.value || '1',
+    splitAgg:      document.getElementById('split-agg-sel')?.value || 'avg',
+    splitZones:    document.getElementById('split-zones')?.checked ?? false,
+    xAxisTime:     document.getElementById('xaxis-time')?.checked ?? false,
   }));
 }
 
@@ -246,22 +207,6 @@ function _heatColor(frac, light=false) {
   return light ? 'rgb(127,29,29)' : 'rgb(239,68,68)';
 }
 
-// Gradient % → color: blue (downhill) → green (flat) → yellow → orange → red (steep)
-function _gradientColor(pct, alpha=1, light=false) {
-  const stops = light
-    ? [[-20,29,78,216],[-5,96,165,250],[0,21,128,61],[5,161,98,7],[10,194,65,12],[20,185,28,28]]
-    : [[-20,37,99,235],[-5,96,165,250],[0,34,197,94],[5,234,179,8],[10,249,115,22],[20,239,68,68]];
-  const clamped = Math.max(stops[0][0], Math.min(stops[stops.length-1][0], pct));
-  for (let i = 0; i < stops.length - 1; i++) {
-    const [t0,r0,g0,b0] = stops[i], [t1,r1,g1,b1] = stops[i+1];
-    if (clamped <= t1) {
-      const t = (clamped - t0) / (t1 - t0);
-      const r = Math.round(r0+(r1-r0)*t), g = Math.round(g0+(g1-g0)*t), b = Math.round(b0+(b1-b0)*t);
-      return alpha < 1 ? `rgba(${r},${g},${b},${alpha})` : `rgb(${r},${g},${b})`;
-    }
-  }
-  return light ? `rgba(185,28,28,${alpha})` : `rgba(239,68,68,${alpha})`;
-}
 
 // Compute per-point gradient % using a smoothing window (~1% of track length each side)
 // Distance-based window: 25m each side — practical GPS-noise floor (~3–5% noise on flat) while
@@ -316,6 +261,7 @@ async function drawElevation(data, version) {
   if (version !== undefined && version !== elevRenderVersion) return; // stale
 
   elevChartData = data;
+  window._elevDataLen = data.dist_m ? data.dist_m.length : 0;
   const { dist_m, alt_ft, hr, speed, power, cadence, temp_f, time: timeArr } = data;
   if (!alt_ft || alt_ft.every(v => v === 0)) return;
   const light = _chartIsLight();
@@ -346,9 +292,10 @@ async function drawElevation(data, version) {
   const totalX = ptX(total - 1);
 
   // Overlay settings
-  const o1key      = document.getElementById('overlay1-sel')?.value || '';
-  const o1Zones    = document.getElementById('overlay1-zones')?.checked ?? false;
-  const showPeaks  = document.getElementById('show-peaks')?.checked ?? true;
+  const o1key        = document.getElementById('overlay1-sel')?.value || '';
+  const o1Zones      = document.getElementById('overlay1-zones')?.checked ?? false;
+  const showGradients = document.getElementById('show-gradients')?.checked ?? false;
+  const showPeaks    = document.getElementById('show-peaks')?.checked ?? true;
   const splitMetric  = document.getElementById('split-metric-sel')?.value || '';
   const splitLenRaw  = document.getElementById('split-len-sel')?.value || '1';
   const splitIsTime  = splitLenRaw.startsWith('t:');
@@ -368,6 +315,7 @@ async function drawElevation(data, version) {
 
   const temp_disp = temp_f ? temp_f.map(v => v ? +(U.metric ? ((v - 32) * 5 / 9).toFixed(1) : v) : 0) : null;
   gradArr = (dist_m && alt_ft) ? computeGradientArray(dist_m, alt_ft) : null;
+  const sampledGrads = gradArr ? points.map((_, k) => gradArr[k * step] || 0) : null;
   const overlayArrs   = { hr, speed, power, cadence, temp: temp_disp, gradient: gradArr };
   const overlayUnits  = { hr: 'bpm', speed: U.speedUnit(), power: 'W', cadence: 'rpm', temp: U.tempUnit(), gradient: '%' };
   const overlayLabels = { hr: 'Heart Rate', speed: 'Speed', power: 'Power', cadence: 'Cadence', temp: 'Temperature', gradient: 'Gradient' };
@@ -412,7 +360,7 @@ async function drawElevation(data, version) {
     if (key === 'gradient') {
       return (ctx) => {
         const pt = pts[ctx.p0DataIndex];
-        return pt ? _gradientColor(pt.y, 1, light) : '#f97316';
+        return pt ? gradientColor(pt.y, 1, light) : '#f97316';
       };
     }
     if (key !== 'hr' && key !== 'power') return null;
@@ -429,8 +377,9 @@ async function drawElevation(data, version) {
 
   const datasets = [
     {
-      data: points, fill: true,
-      borderColor: '#3b82f6', backgroundColor: 'rgba(30,80,180,.55)',
+      data: points, fill: !showGradients,
+      borderColor: showGradients ? 'rgba(255,255,255,0.35)' : '#3b82f6',
+      backgroundColor: showGradients ? 'transparent' : 'rgba(30,80,180,.55)',
       borderWidth: 1.5, pointRadius: 0, tension: 0.3, order: 3,
       yAxisID: 'yElev',
     }
@@ -609,58 +558,29 @@ async function drawElevation(data, version) {
   // Peak annotations — drawn via custom plugin
   const peakList = showPeaks ? findPeaks(fullPoints, 3) : [];
 
-  // Custom peak marker plugin
-  const peakPlugin = {
-    id: 'peakMarkers',
-    afterDatasetsDraw(chart) {
-      if (!peakList.length) return;
-      const {ctx: cx, scales} = chart;
-      const xSc = scales.x;
-      const ySc = scales.yElev || scales.y;
-      if (!xSc || !ySc) return;
-      cx.save();
-      peakList.forEach(pk => {
-        const px = xSc.getPixelForValue(xAxisTime ? ptX(pk.idx) : pk.x);
-        const py = ySc.getPixelForValue(pk.y);
-        const label = U.alt(pk.y) + ' ' + U.altUnit();
-        const _lm = _chartIsLight();
-        // Stem line
-        cx.beginPath();
-        cx.moveTo(px, py);
-        cx.lineTo(px, py - 20);
-        cx.strokeStyle = _lm ? 'rgba(0,0,0,.35)' : 'rgba(255,255,255,.5)';
-        cx.lineWidth = 1;
-        cx.stroke();
-        // Dot at peak
-        cx.beginPath();
-        cx.arc(px, py, 3, 0, Math.PI*2);
-        cx.fillStyle = _lm ? '#555' : '#fff';
-        cx.fill();
-        // Label bubble
-        cx.font = 'bold 9px -apple-system,sans-serif';
-        const tw = cx.measureText(label).width;
-        const bx = px - tw/2 - 5, by = py - 38, bw = tw + 10, bh = 16;
-        cx.fillStyle = 'rgba(0,0,0,.75)';
-        cx.beginPath();
-        cx.roundRect(bx, by, bw, bh, 4);
-        cx.fill();
-        cx.fillStyle = '#f2f2f7';
-        cx.textAlign = 'center';
-        cx.textBaseline = 'middle';
-        cx.fillText(label, px, by + bh/2);
-      });
-      cx.restore();
-    }
-  };
+  const peakPlugin = makePeakPlugin(peakList, {
+    xVal: pk => xAxisTime ? ptX(pk.idx) : pk.x,
+    yScKey: 'yElev',
+    labelFn: pk => U.alt(pk.y) + ' ' + U.altUnit(),
+    isLightFn: _chartIsLight,
+  });
+
+  const gradFillPlugin = (showGradients && sampledGrads)
+    ? makeElevFillPlugin(points, sampledGrads, 'yElev', light)
+    : null;
 
   if (elevChart) { elevChart.destroy(); elevChart = null; }
   elevChart = new Chart(ctx, {
     type: 'line',
     data: { datasets },
-    plugins: [peakPlugin, ...(splitsPlugin ? [splitsPlugin] : [])],
+    plugins: [
+      ...(gradFillPlugin ? [gradFillPlugin] : []),
+      peakPlugin,
+      ...(splitsPlugin ? [splitsPlugin] : []),
+    ],
     options: {
       responsive: true, maintainAspectRatio: false, animation: false,
-      layout: { padding: { top: peakList.length ? 42 : 2, bottom: 2, right: 2 } },
+      layout: { padding: { top: peakList.length ? 27 : 2, bottom: 2, right: 2 } },
       plugins: {
         legend: { display: false },
         tooltip: {
@@ -710,6 +630,59 @@ async function drawElevation(data, version) {
     const dDist = (data.dist_m[hi] - data.dist_m[lo]);
     if (dDist < 1) return 0;
     return (dAlt / dDist) * 100;
+  }
+
+  // Move chart dot + map dot to the x-position without showing the HUD panel or crosshair.
+  function _moveDots(clientX) {
+    const wrap = document.getElementById('elev-canvas-area') || document.getElementById('chart-wrap');
+    if (!wrap || !elevChart || !elevChartData) return;
+    const rect = wrap.getBoundingClientRect();
+    const px   = clientX - rect.left;
+    const ca   = elevChart.chartArea;
+    if (!ca || px < ca.left || px > ca.right) return;
+
+    const xVal = elevChart.scales.x.getValueForPixel(px);
+    const data = elevChartData;
+    const n    = data.dist_m.length;
+    const useTimeAxis = (document.getElementById('xaxis-time')?.checked ?? false)
+                        && data.time && data.time.length === n;
+    let lo = 0, hi = n - 1, idx;
+    if (useTimeAxis) {
+      while (lo < hi - 1) { const mid = Math.floor((lo+hi)/2); if (data.time[mid] < xVal) lo = mid; else hi = mid; }
+      idx = lo + (xVal - data.time[lo]) / Math.max(1, data.time[hi] - data.time[lo]);
+    } else {
+      const xM = U.metric ? xVal * 1000 : xVal * 1609.344;
+      while (lo < hi - 1) { const mid = Math.floor((lo+hi)/2); if (data.dist_m[mid] < xM) lo = mid; else hi = mid; }
+      idx = lo + (xM - data.dist_m[lo]) / Math.max(1, data.dist_m[hi] - data.dist_m[lo]);
+    }
+    hudDataIdx = Math.round(idx);
+
+    const yScale   = elevChart.scales.yElev || elevChart.scales.y;
+    const altHover = lerp(data.alt_ft, idx);
+    const dot      = document.getElementById('elev-anim-dot');
+    if (dot && yScale && altHover != null) {
+      const dotPy = yScale.getPixelForValue(U.metric ? Math.round(altHover * 0.3048) : Math.round(altHover));
+      dot.style.display = 'block';
+      dot.style.left    = px + 'px';
+      dot.style.top     = dotPy + 'px';
+    }
+
+    if (anim.latLon && anim.latLon.length > 0) {
+      const mapIdx = Math.max(0, Math.min(anim.latLon.length - 1, Math.round(idx * anim.latLon.length / data.dist_m.length)));
+      const ll = anim.latLon[mapIdx];
+      if (ll && leafMap) {
+        if (!anim.mapDot) {
+          anim.mapDot = L.marker(ll, {
+            icon: L.divIcon({
+              html: `<div style="width:10px;height:10px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#ffe066,#f59e0b 55%,#b45309);box-shadow:0 1px 3px rgba(0,0,0,.6)"></div>`,
+              iconSize:[10,10], iconAnchor:[5,5], className:''
+            }), zIndexOffset: 1000
+          }).addTo(leafMap);
+        } else {
+          anim.mapDot.setLatLng(ll);
+        }
+      }
+    }
   }
 
   function showHudAt(clientX) {
@@ -829,7 +802,12 @@ async function drawElevation(data, version) {
     if (!wrap || !panel || !cross) return;
 
     wrap.addEventListener('mousemove', e => {
-      if (!hudModeActive) { panel.style.display='none'; cross.style.display='none'; return; }
+      if (!hudModeActive) {
+        _moveDots(e.clientX);
+        panel.style.display = 'none';
+        cross.style.display = 'none';
+        return;
+      }
       showHudAt(e.clientX);
     });
 
@@ -849,6 +827,7 @@ async function drawElevation(data, version) {
   let dragging   = false;
   let startPx    = 0;
   let startIdx   = 0;
+  let _outsideTapSetup = false;
 
   // Convert pixel x within chart-wrap → data index
   function pxToIdx(px) {
@@ -880,7 +859,7 @@ async function drawElevation(data, version) {
       }));
       elevChart.data.datasets.push({
         _elevSel: true, data: slice,
-        borderColor: 'rgba(74,222,128,0)', backgroundColor: 'rgba(74,222,128,0.35)',
+        borderColor: 'rgba(160,160,160,0)', backgroundColor: 'rgba(160,160,160,0.25)',
         fill: true, pointRadius: 0, tension: 0, order: 0, yAxisID: 'yElev',
       });
     }
@@ -1061,6 +1040,8 @@ async function drawElevation(data, version) {
     setElevSelection(null, null);
     const box = document.getElementById('elev-sel-stats');
     if (box) box.style.display = 'none';
+    const rect = document.getElementById('elev-sel-rect');
+    if (rect) rect.style.display = 'none';
     if (elevChart) {
       elevChart.data.datasets = elevChart.data.datasets.filter(d => !d._elevSel);
       elevChart.update('none');
@@ -1130,12 +1111,11 @@ async function drawElevation(data, version) {
     }
 
     function endDrag(clientX) {
-      rect.style.display = 'none';
       const wRect = wrap.getBoundingClientRect();
       const curPx  = clientX - wRect.left;
       const moved  = Math.abs(curPx - startPx) > 4;
       if (moved) applyElevSelection(startIdx, pxToIdx(curPx));
-      else clearElevSelection();
+      else { rect.style.display = 'none'; clearElevSelection(); }
       dragging = false;
     }
 
@@ -1151,21 +1131,20 @@ async function drawElevation(data, version) {
       document.addEventListener('mouseup', onUp);
     });
 
-    // Touch (iPad)
+    // Touch (phone/iPad)
     wrap.addEventListener('touchstart', e => {
       const t = e.touches[0];
       if (!t) return;
       if (hudModeActive) {
-        // HUD mode: drag shows hover panel instead of region selection
+        // HUD mode: drag moves the HUD panel; panel stays visible after lift
         if (_showElevHudAt) _showElevHudAt(t.clientX);
-        function onHudMove(ev) { const t2 = ev.touches[0]; if (t2 && _showElevHudAt) _showElevHudAt(t2.clientX); }
+        function onHudMove(ev) {
+          const t2 = ev.touches[0];
+          if (t2 && _showElevHudAt) _showElevHudAt(t2.clientX);
+        }
         function onHudEnd() {
           document.removeEventListener('touchmove', onHudMove);
           document.removeEventListener('touchend', onHudEnd);
-          const _p = document.getElementById('elev-hover-panel');
-          const _c = document.getElementById('elev-crosshair');
-          if (_p) _p.style.display = 'none';
-          if (_c) _c.style.display = 'none';
         }
         document.addEventListener('touchmove', onHudMove, {passive: true});
         document.addEventListener('touchend', onHudEnd, {passive: true});
@@ -1181,6 +1160,30 @@ async function drawElevation(data, version) {
       document.addEventListener('touchmove', onMove, {passive: true});
       document.addEventListener('touchend',  onEnd,  {passive: true});
     }, {passive: true});
+
+    // Dismiss region stats popup when tapping outside it (phone/tablet).
+    // Only set up once even though setup() may be called twice.
+    if (!_outsideTapSetup) {
+      _outsideTapSetup = true;
+      let _tapX = 0, _tapY = 0;
+      document.addEventListener('touchstart', ev => {
+        const t = ev.touches[0];
+        if (t) { _tapX = t.clientX; _tapY = t.clientY; }
+      }, {passive: true});
+      document.addEventListener('touchend', ev => {
+        const box = document.getElementById('elev-sel-stats');
+        if (!box || box.style.display === 'none') return;
+        const t = ev.changedTouches[0];
+        if (!t) return;
+        // Ignore if the finger moved significantly (scroll or region-drag, not a tap)
+        if (Math.abs(t.clientX - _tapX) > 12 || Math.abs(t.clientY - _tapY) > 12) return;
+        // Dismiss if tap landed outside the popup — but NOT on toolbar buttons
+        // (Compare, Define, etc. need the selection to still be set when onclick fires)
+        const el = document.elementFromPoint(t.clientX, t.clientY);
+        const toolbar = document.getElementById('chart-toolbar');
+        if (!box.contains(el) && !(toolbar && toolbar.contains(el))) clearElevSelection();
+      }, {passive: true});
+    }
   }
 
   document.addEventListener('DOMContentLoaded', setup);

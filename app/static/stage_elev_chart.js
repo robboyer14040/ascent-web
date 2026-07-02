@@ -9,24 +9,6 @@ function _elevIsLight() {
   return window.matchMedia('(prefers-color-scheme: light)').matches;
 }
 
-// Gradient % → color: blue (downhill) → green → yellow → orange → red (steep)
-function _stageGradColor(pct, alpha, light) {
-  alpha = (alpha == null) ? 1 : alpha;
-  light = !!light;
-  const stops = light
-    ? [[-20,29,78,216],[-5,96,165,250],[0,21,128,61],[5,161,98,7],[10,194,65,12],[20,185,28,28]]
-    : [[-20,37,99,235],[-5,96,165,250],[0,34,197,94],[5,234,179,8],[10,249,115,22],[20,239,68,68]];
-  const clamped = Math.max(stops[0][0], Math.min(stops[stops.length-1][0], pct));
-  for (let i = 0; i < stops.length - 1; i++) {
-    const [t0,r0,g0,b0] = stops[i], [t1,r1,g1,b1] = stops[i+1];
-    if (clamped <= t1) {
-      const t = (clamped - t0) / (t1 - t0);
-      const r = Math.round(r0+(r1-r0)*t), g = Math.round(g0+(g1-g0)*t), b = Math.round(b0+(b1-b0)*t);
-      return alpha < 1 ? `rgba(${r},${g},${b},${alpha})` : `rgb(${r},${g},${b})`;
-    }
-  }
-  return light ? `rgba(185,28,28,${alpha})` : `rgba(239,68,68,${alpha})`;
-}
 
 // Compute smoothed gradient % at each chartPt using a distance-based window (~200m each side).
 // chartPts: [{x: cumDist (in mi or km), y: alt (in ft or m)}, ...]
@@ -98,12 +80,12 @@ function computeStageGradFromRawPts(pts, step, distConv) {
   return gradPts;
 }
 
+
 // Build (or rebuild) the Chart.js elevation strip.
-// opts: { gradeOn: bool, colorCode: bool, showPeaks: bool }
+// opts: { gradeOn: bool, showPeaks: bool, gradPts: [{x,y}] }
 // Returns the new Chart instance.
 function buildStageElevChart(canvas, chartPts, opts) {
   const gradeOn   = !!(opts && opts.gradeOn);
-  const colorCode = !!(opts && opts.colorCode);
   const showPeaks = !!(opts && opts.showPeaks);
   const light     = _elevIsLight();
   const metric    = typeof U !== 'undefined' && U.metric;
@@ -118,39 +100,24 @@ function buildStageElevChart(canvas, chartPts, opts) {
 
   const peakList = showPeaks ? findPeaks(chartPts, 3) : [];
 
-  const peakPlugin = {
-    id: 'peakMarkers',
-    afterDatasetsDraw(chart) {
-      if (!peakList.length) return;
-      const { ctx: cx, scales } = chart;
-      const xSc = scales.x, ySc = scales.y;
-      if (!xSc || !ySc) return;
-      const lm = _elevIsLight();
-      cx.save();
-      peakList.forEach(pk => {
-        const px = xSc.getPixelForValue(pk.x);
-        const py = ySc.getPixelForValue(pk.y);
-        const label = pk.y + ' ' + yUnit;
-        cx.beginPath(); cx.moveTo(px, py); cx.lineTo(px, py - 20);
-        cx.strokeStyle = lm ? 'rgba(0,0,0,.35)' : 'rgba(255,255,255,.5)';
-        cx.lineWidth = 1; cx.stroke();
-        cx.beginPath(); cx.arc(px, py, 3, 0, Math.PI * 2);
-        cx.fillStyle = lm ? '#555' : '#fff'; cx.fill();
-        cx.font = 'bold 9px -apple-system,sans-serif';
-        const tw = cx.measureText(label).width;
-        const bx = px - tw / 2 - 5, by = py - 38, bw = tw + 10, bh = 16;
-        cx.fillStyle = 'rgba(0,0,0,.75)';
-        cx.beginPath(); cx.roundRect(bx, by, bw, bh, 4); cx.fill();
-        cx.fillStyle = '#f2f2f7'; cx.textAlign = 'center'; cx.textBaseline = 'middle';
-        cx.fillText(label, px, by + bh / 2);
-      });
-      cx.restore();
-    },
-  };
+  const peakPlugin = makePeakPlugin(peakList, {
+    labelFn: pk => pk.y + ' ' + yUnit,
+    isLightFn: _elevIsLight,
+  });
+
+  const gradPts = gradeOn
+    ? ((opts && opts.gradPts && opts.gradPts.length) ? opts.gradPts : computeStageGradPts(chartPts))
+    : null;
+
+  const gradFillPlugin = (gradeOn && gradPts)
+    ? makeElevFillPlugin(chartPts, gradPts.map(p => p.y), 'y', light)
+    : null;
 
   const datasets = [{
-    data: chartPts, fill: true,
-    borderColor: '#3b82f6', backgroundColor: 'rgba(30,80,180,.55)',
+    data: chartPts,
+    fill: !gradeOn,
+    borderColor: gradeOn ? 'rgba(255,255,255,0.35)' : '#3b82f6',
+    backgroundColor: gradeOn ? 'transparent' : 'rgba(30,80,180,.55)',
     borderWidth: 1.5, pointRadius: 0, tension: 0.3,
   }];
 
@@ -170,45 +137,13 @@ function buildStageElevChart(canvas, chartPts, opts) {
     },
   };
 
-  if (gradeOn) {
-    const gradPts = (opts && opts.gradPts && opts.gradPts.length) ? opts.gradPts : computeStageGradPts(chartPts);
-    const gradVals = gradPts.map(p => p.y).filter(v => isFinite(v));
-    const gradMin = Math.min(0, ...gradVals);
-    const gradMax = Math.max(0, ...gradVals);
-    const pad = Math.max(1, (gradMax - gradMin) * 0.08);
-    const segExtra = colorCode ? {
-      segment: {
-        borderColor: ctx => {
-          const pt = gradPts[ctx.p0DataIndex];
-          return pt ? _stageGradColor(pt.y, 1, light) : '#f97316';
-        },
-      },
-    } : {};
-    datasets.push({
-      data: gradPts, fill: false,
-      borderColor: '#f97316', backgroundColor: 'transparent',
-      borderWidth: 1.5, pointRadius: 0, tension: 0.3,
-      yAxisID: 'yGrad',
-      ...segExtra,
-    });
-    scales.yGrad = {
-      position: 'right',
-      min: Math.floor(gradMin - pad),
-      max: Math.ceil(gradMax + pad),
-      ticks: { color: '#f97316', font: { size: 9 }, maxTicksLimit: 5,
-               callback: v => `${v.toFixed(0)}%` },
-      grid: { display: false },
-      title: { display: true, text: '%', color: '#f97316', font: { size: 9 } },
-    };
-  }
-
   return new Chart(canvas, {
     type: 'line',
     data: { datasets },
-    plugins: [peakPlugin],
+    plugins: [...(gradFillPlugin ? [gradFillPlugin] : []), peakPlugin],
     options: {
       responsive: true, maintainAspectRatio: false, animation: false,
-      layout: { padding: { top: peakList.length ? 42 : 4, right: gradeOn ? 2 : 10, bottom: 0, left: 0 } },
+      layout: { padding: { top: peakList.length ? 27 : 4, right: 10, bottom: 0, left: 0 } },
       plugins: { legend: { display: false }, tooltip: { enabled: false } },
       scales,
     },
@@ -251,6 +186,17 @@ function stageElevInteraction(opts) {
   const hudPanel = _getOrMake('se-hover-panel');
   const selBox   = _getOrMake('se-sel-stats');
   const dragRect = _getOrMake('se-sel-rect');
+  const chartDot = _getOrMake('se-elev-dot');
+  chartDot.style.position     = 'absolute';
+  chartDot.style.pointerEvents = 'none';
+  chartDot.style.width        = '10px';
+  chartDot.style.height       = '10px';
+  chartDot.style.borderRadius = '50%';
+  chartDot.style.background   = 'radial-gradient(circle at 35% 35%,#ffe066,#f59e0b 55%,#b45309)';
+  chartDot.style.boxShadow    = '0 1px 3px rgba(0,0,0,.6)';
+  chartDot.style.transform    = 'translate(-50%,-50%)';
+  chartDot.style.zIndex       = '6';
+  if (!chartDot.style.display) chartDot.style.display = 'none';
   // Hide legacy elements if still in DOM
   const _oldHud = document.getElementById('stage-elev-hud');
   const _oldSel = document.getElementById('stage-elev-sel');
@@ -260,6 +206,7 @@ function stageElevInteraction(opts) {
   // ── state — read HUD state from button so it survives stage changes ────────
   let hudOn = !!(document.getElementById('stage-elev-hud-btn')?.classList.contains('active'));
   let selLo = -1, selHi = -1;
+  const _zoom = { level: 1, offset: 0, maxLevel: 16 };
 
   // ── helpers ───────────────────────────────────────────────────────────────
   function _bsearch(arr, v) {
@@ -325,6 +272,15 @@ function stageElevInteraction(opts) {
     const cad  = afi >= 0 && ad?.cadence?.length ? _lerp(ad.cadence, afi) : null;
     const spd  = afi >= 0 && ad?.speed?.length   ? _lerp(ad.speed,   afi) : null;
 
+    // chart dot
+    const ys = chart.scales.y;
+    if (altD != null && ys) {
+      const dotY = ys.getPixelForValue(altD);
+      chartDot.style.display = 'block';
+      chartDot.style.left    = px + 'px';
+      chartDot.style.top     = dotY + 'px';
+    }
+
     // map dot
     const rpts = opts.getRawPts?.(), theMap = opts.getMap?.();
     if (rpts?.length && theMap) {
@@ -371,7 +327,7 @@ function stageElevInteraction(opts) {
       chart.data.datasets.push({
         _stageSel: true,
         data: cpts.slice(lo, hi + 1),
-        fill: true, borderColor: 'rgba(74,222,128,0)', backgroundColor: 'rgba(74,222,128,0.35)',
+        fill: true, borderColor: 'rgba(160,160,160,0)', backgroundColor: 'rgba(160,160,160,0.25)',
         pointRadius: 0, tension: 0, order: 0,
       });
     }
@@ -571,6 +527,7 @@ function stageElevInteraction(opts) {
     const chart = opts.getChart?.();
     if (chart) { chart.data.datasets = chart.data.datasets.filter(d => !d._stageSel); chart.update('none'); }
     selBox.style.display = 'none';
+    dragRect.style.display = 'none';
     opts.onClear?.();
   }
 
@@ -579,12 +536,69 @@ function stageElevInteraction(opts) {
     hudOn = !hudOn;
     const btn = document.getElementById('stage-elev-hud-btn');
     if (btn) btn.classList.toggle('active', hudOn);
-    if (!hudOn) _hideHud();
+    if (!hudOn) {
+      _hideHud();
+    } else {
+      const chart = opts.getChart?.();
+      if (chart?.chartArea) {
+        const midPx = (chart.chartArea.left + chart.chartArea.right) / 2;
+        _showHud(strip.getBoundingClientRect().left + midPx);
+      }
+    }
     _clearSel();
   };
   window._stageElevGetSel    = () => (selLo >= 0 && selHi > selLo) ? { lo: selLo, hi: selHi } : null;
   window._stageElevClearSel  = _clearSel;
   window._stageElevReapplySel = () => { if (selLo >= 0 && selHi > selLo) _applyDataset(selLo, selHi); };
+
+  // ── wheel zoom ───────────────────────────────────────────────────────────
+  function _zoomApply() {
+    const chart = opts.getChart?.(), cpts = opts.getChartPts?.();
+    if (!chart || !cpts?.length) return;
+    const total = cpts[cpts.length - 1].x;
+    _zoom.level = Math.max(1, Math.min(_zoom.maxLevel, _zoom.level));
+    if (_zoom.level <= 1) {
+      chart.options.scales.x.min = 0;
+      chart.options.scales.x.max = total;
+    } else {
+      const winSize = total / _zoom.level;
+      const maxOff  = total - winSize;
+      const start   = Math.max(0, Math.min(_zoom.offset * maxOff, maxOff));
+      chart.options.scales.x.min = start;
+      chart.options.scales.x.max = start + winSize;
+    }
+    chart.update('none');
+  }
+
+  function _zoomAtPixel(px, factor) {
+    const chart = opts.getChart?.(), cpts = opts.getChartPts?.();
+    if (!chart || !cpts?.length) return;
+    const total    = cpts[cpts.length - 1].x;
+    const ca       = chart.chartArea;
+    if (!ca) return;
+    const curX     = chart.scales.x.getValueForPixel(Math.max(ca.left, Math.min(ca.right, px)));
+    const curXFrac = curX / total;
+    _zoom.level    = Math.max(1, Math.min(_zoom.maxLevel, _zoom.level * factor));
+    if (_zoom.level <= 1) {
+      _zoom.offset = 0;
+    } else {
+      const winFrac = 1 / _zoom.level;
+      const maxOff  = 1 - winFrac;
+      _zoom.offset  = maxOff > 0
+        ? Math.max(0, Math.min(maxOff, curXFrac - winFrac / 2)) / maxOff
+        : 0;
+    }
+    _zoomApply();
+  }
+
+  function _onWheel(e) {
+    if (!opts.getChart?.()) return;
+    e.preventDefault();
+    const rect   = strip.getBoundingClientRect();
+    const px     = e.clientX - rect.left;
+    const factor = e.deltaY < 0 ? 1.4 : 1 / 1.4;
+    _zoomAtPixel(px, factor);
+  }
 
   // ── event wiring (replaces old listeners) ─────────────────────────────────
   const prev = strip._seiH;
@@ -593,10 +607,54 @@ function stageElevInteraction(opts) {
     strip.removeEventListener('mouseleave', prev.ml);
     strip.removeEventListener('mousedown',  prev.md);
     strip.removeEventListener('touchstart', prev.ts);
+    if (prev.wh) strip.removeEventListener('wheel', prev.wh);
   }
 
-  function _onMM(e) { if (hudOn && !strip._seiDrag) _showHud(e.clientX); else if (!strip._seiDrag) _hideHud(); }
-  function _onML() { if (!strip._seiDrag) _hideHud(); }
+  function _trackPosOnly(clientX) {
+    const chart = opts.getChart?.(), cpts = opts.getChartPts?.();
+    if (!chart || !cpts?.length) return;
+    const ca = chart.chartArea, rect = strip.getBoundingClientRect();
+    const px = clientX - rect.left;
+    if (!ca || px < ca.left || px > ca.right) { chartDot.style.display = 'none'; return; }
+
+    const fi   = _clientXToFi(clientX);
+    const altD = _lerp(cpts.map(p => p.y), fi);
+    const ys   = chart.scales.y;
+    if (altD != null && ys) {
+      const dotY = ys.getPixelForValue(altD);
+      chartDot.style.display = 'block';
+      chartDot.style.left    = px + 'px';
+      chartDot.style.top     = dotY + 'px';
+    }
+
+    const rpts = opts.getRawPts?.(), theMap = opts.getMap?.();
+    if (rpts?.length && theMap) {
+      const ri = Math.max(0, Math.min(rpts.length - 1, Math.round(fi)));
+      const rp = rpts[ri];
+      if (rp) {
+        const ll  = [rp[0], rp[1]];
+        const dh  = `<div style="width:10px;height:10px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#ffe066,#f59e0b 55%,#b45309);border:1.5px solid #fff;box-shadow:0 0 3px rgba(0,0,0,.5)"></div>`;
+        let dot = opts.getMapDot?.();
+        if (!dot) {
+          dot = L.marker(ll, { icon: L.divIcon({ html: dh, className: '', iconSize: [10,10], iconAnchor: [5,5] }),
+            zIndexOffset: 1000, interactive: false }).addTo(theMap);
+          opts.setMapDot?.(dot);
+        } else { dot.setLatLng(ll); }
+      }
+    }
+  }
+
+  function _onMM(e) {
+    if (strip._seiDrag) return;
+    if (hudOn) _showHud(e.clientX);
+    else _trackPosOnly(e.clientX);
+  }
+  function _onML() {
+    if (!strip._seiDrag) {
+      _hideHud();
+      chartDot.style.display = 'none';
+    }
+  }
 
   function _onMD(e) {
     const chart = opts.getChart?.(); if (!chart) return;
@@ -606,7 +664,7 @@ function stageElevInteraction(opts) {
     e.preventDefault(); _hideHud();
     strip._seiDrag = true;
     const startPx = px, startIdx = Math.round(_clientXToFi(e.clientX));
-    dragRect.style.cssText = `display:block;position:absolute;top:0;bottom:0;background:rgba(74,222,128,.12);border-left:1px solid rgba(74,222,128,.5);border-right:1px solid rgba(74,222,128,.5);pointer-events:none;z-index:4;left:${px}px;width:0`;
+    dragRect.style.cssText = `display:block;position:absolute;top:0;bottom:0;background:rgba(160,160,160,.18);border-left:1px solid rgba(130,130,130,.5);border-right:1px solid rgba(130,130,130,.5);pointer-events:none;z-index:4;left:${px}px;width:0`;
 
     function _docMM(ev) {
       const r2 = strip.getBoundingClientRect(), cur = ev.clientX - r2.left;
@@ -618,13 +676,12 @@ function stageElevInteraction(opts) {
     function _docMU(ev) {
       document.removeEventListener('mousemove', _docMM);
       document.removeEventListener('mouseup',   _docMU);
-      dragRect.style.display = 'none';
       strip._seiDrag = false;
       const curPx = ev.clientX - strip.getBoundingClientRect().left;
       if (Math.abs(curPx - startPx) > 4) {
         const curIdx = Math.round(_clientXToFi(ev.clientX));
         _applySel(Math.min(startIdx, curIdx), Math.max(startIdx, curIdx));
-      } else { _clearSel(); }
+      } else { dragRect.style.display = 'none'; _clearSel(); }
     }
     document.addEventListener('mousemove', _docMM);
     document.addEventListener('mouseup',   _docMU);
@@ -634,8 +691,9 @@ function stageElevInteraction(opts) {
     const t = e.touches[0]; if (!t) return;
     const chart = opts.getChart?.(); if (!chart) return;
     if (hudOn) {
+      _showHud(t.clientX);
       function _tM(ev) { const t2=ev.touches[0]; if (t2) _showHud(t2.clientX); }
-      function _tE()   { document.removeEventListener('touchmove',_tM); document.removeEventListener('touchend',_tE); _hideHud(); }
+      function _tE()   { document.removeEventListener('touchmove',_tM); document.removeEventListener('touchend',_tE); }
       document.addEventListener('touchmove', _tM, { passive:true });
       document.addEventListener('touchend',  _tE, { passive:true });
       return;
@@ -644,7 +702,7 @@ function stageElevInteraction(opts) {
     const px = t.clientX - rect.left;
     if (!ca || px < ca.left || px > ca.right) return;
     const startPx = px, startIdx = Math.round(_clientXToFi(t.clientX));
-    dragRect.style.cssText = `display:block;position:absolute;top:0;bottom:0;background:rgba(74,222,128,.12);border-left:1px solid rgba(74,222,128,.5);border-right:1px solid rgba(74,222,128,.5);pointer-events:none;z-index:4;left:${px}px;width:0`;
+    dragRect.style.cssText = `display:block;position:absolute;top:0;bottom:0;background:rgba(160,160,160,.18);border-left:1px solid rgba(130,130,130,.5);border-right:1px solid rgba(130,130,130,.5);pointer-events:none;z-index:4;left:${px}px;width:0`;
 
     function _tM(ev) {
       const t2=ev.touches[0]; if (!t2) return;
@@ -657,14 +715,13 @@ function stageElevInteraction(opts) {
     function _tE(ev) {
       document.removeEventListener('touchmove', _tM);
       document.removeEventListener('touchend',  _tE);
-      dragRect.style.display = 'none';
       const t2 = ev.changedTouches[0];
       if (t2) {
         const curPx = t2.clientX - strip.getBoundingClientRect().left;
         if (Math.abs(curPx - startPx) > 4) {
           const curIdx = Math.round(_clientXToFi(t2.clientX));
           _applySel(Math.min(startIdx,curIdx), Math.max(startIdx,curIdx));
-        } else { _clearSel(); }
+        } else { dragRect.style.display = 'none'; _clearSel(); }
       }
     }
     document.addEventListener('touchmove', _tM, { passive:true });
@@ -675,5 +732,6 @@ function stageElevInteraction(opts) {
   strip.addEventListener('mouseleave', _onML);
   strip.addEventListener('mousedown',  _onMD);
   strip.addEventListener('touchstart', _onTS, { passive:true });
-  strip._seiH = { mm:_onMM, ml:_onML, md:_onMD, ts:_onTS };
+  strip.addEventListener('wheel',      _onWheel, { passive: false });
+  strip._seiH = { mm:_onMM, ml:_onML, md:_onMD, ts:_onTS, wh:_onWheel };
 }

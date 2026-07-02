@@ -30,6 +30,64 @@ function findPeaks(points, n) {
   return peaks;
 }
 
+// Build a Chart.js plugin that draws peak markers (dot + stem + label bubble).
+// opts.xVal(pk)    → x value for getPixelForValue (default: pk.x)
+// opts.yScKey      → y scale name to try first (default: 'y')
+// opts.labelFn(pk) → bubble text
+// opts.isLightFn() → true when chart background is light
+function makePeakPlugin(peakList, opts) {
+  const xVal      = (opts && opts.xVal)      || (pk => pk.x);
+  const yScKey    = (opts && opts.yScKey)    || 'y';
+  const labelFn   = (opts && opts.labelFn)   || (pk => String(pk.y));
+  const isLightFn = (opts && opts.isLightFn) || (() => false);
+  return {
+    id: 'peakMarkers',
+    afterDatasetsDraw(chart) {
+      if (!peakList.length) return;
+      const { ctx: cx, scales } = chart;
+      const xSc = scales.x;
+      const ySc = scales[yScKey] || scales.y;
+      if (!xSc || !ySc) return;
+      const lm = isLightFn();
+      const dotR = 3;
+      const gap = 4;           // visible px between dot top and oval bottom
+      const stemH = dotR + gap; // full stem; dot covers bottom dotR px
+      const bh = 16;
+      cx.save();
+      peakList.forEach(pk => {
+        const px = xSc.getPixelForValue(xVal(pk));
+        const py = ySc.getPixelForValue(pk.y);
+        const label = labelFn(pk);
+        // Stem drawn first so dot renders on top, leaving `gap` px visible
+        cx.beginPath();
+        cx.moveTo(px, py);
+        cx.lineTo(px, py - stemH);
+        cx.strokeStyle = lm ? 'rgba(0,0,0,.35)' : 'rgba(255,255,255,.5)';
+        cx.lineWidth = 1;
+        cx.stroke();
+        cx.beginPath();
+        cx.arc(px, py, dotR, 0, Math.PI * 2);
+        cx.fillStyle = lm ? '#555' : '#fff';
+        cx.fill();
+        cx.font = 'bold 9px -apple-system,sans-serif';
+        const tw = cx.measureText(label).width;
+        const bw = tw + 10;
+        const bx = px - bw / 2;
+        const by = py - stemH - bh;
+        cx.fillStyle = lm ? 'rgba(0,0,0,.75)' : 'rgba(70,70,70,.95)';
+        cx.beginPath();
+        cx.roundRect(bx, by, bw, bh, 4);
+        cx.fill();
+        cx.fillStyle = '#f2f2f7';
+        cx.textAlign = 'center';
+        cx.textBaseline = 'middle';
+        cx.fillText(label, px, by + bh / 2);
+      });
+      cx.restore();
+    },
+  };
+}
+
 // Render rows into a HUD panel and center it on cursor position `px` within
 // the container (clamped so it doesn't overflow the edges).
 // rows: [{label, val, color}]

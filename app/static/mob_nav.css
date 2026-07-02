@@ -3,6 +3,11 @@
 
 @media(max-width:767px),(max-height:500px) and (orientation:landscape) and (pointer:coarse){
 
+  /* Force document scrollable so WKWebView uses visual viewport for position:fixed.
+     overflow-y:auto on html is required: pages with html,body{overflow:hidden} (Routes, Tours)
+     block all scrolling and defeat the min-height trick without this override. */
+  html { min-height:calc(100% + env(safe-area-inset-bottom,0px) + 1px);overflow-y:auto!important }
+
   /* ── Hide desktop nav ── */
   nav { display:none!important }
 
@@ -24,10 +29,12 @@
   }
 
   /* ── Body offset for pages with a fixed top bar ── */
-  body.has-mob-topbar { margin-top:calc(52px + env(safe-area-inset-top, 0px));padding-bottom:calc(58px + env(safe-area-inset-bottom,0px)) }
+  /* padding-top instead of margin-top: prevents margin collapsing with <html>, which would
+     otherwise displace the layout viewport and break position:fixed bottom:0 on WKWebView */
+  body.has-mob-topbar { padding-top:calc(52px + env(safe-area-inset-top, 0px));padding-bottom:calc(58px + env(safe-area-inset-bottom, 0px)) }
 
   /* ── Bottom nav ── */
-  body { padding-bottom:calc(58px + env(safe-area-inset-bottom,0px)) }
+  body { padding-bottom:calc(58px + env(safe-area-inset-bottom, 0px)) }
   #mob-global-nav {
     display:flex;position:fixed;bottom:0;left:0;right:0;
     height:calc(58px + env(safe-area-inset-bottom, 0px));z-index:600;
@@ -49,5 +56,28 @@
   .mob-embedded #mob-global-nav,
   html.mob-embedded #mob-global-nav { display:none!important }
   .mob-embedded body,
-  html.mob-embedded body { padding-bottom:0!important;margin-top:0!important }
+  html.mob-embedded body { padding-top:0!important;padding-bottom:0!important;margin-top:0!important }
+}
+
+/* ── Landscape phone: vertical side nav ───────────────────────────────────── */
+@media(max-height:500px) and (orientation:landscape) and (pointer:coarse){
+  /* Hide topbar — no room in landscape */
+  .mob-topbar { display:none!important }
+  /* Reset body insets; side nav provides 60px left gutter */
+  body,body.has-mob-topbar {
+    margin-top:0!important;
+    padding-top:0!important;
+    padding-bottom:0!important;
+    padding-left:60px!important
+  }
+  /* Switch bottom nav to left vertical strip */
+  #mob-global-nav {
+    flex-direction:column!important;
+    width:60px!important;height:100vh!important;
+    top:0!important;bottom:0!important;left:0!important;right:auto!important;
+    border-top:none!important;border-right:1px solid var(--border);
+    padding-bottom:env(safe-area-inset-bottom,0px)!important
+  }
+  /* Icons only — no room for labels */
+  .mob-nav-btn span { display:none }
 }

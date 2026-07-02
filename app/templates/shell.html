@@ -58,7 +58,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg)}
   background:var(--surface);border-bottom:1px solid var(--border);gap:10px
 }
 #shell-back-btn{
-  display:none;background:none;border:none;color:var(--accent);
+  visibility:hidden;background:none;border:none;color:var(--accent);
   font-size:15px;font-weight:600;cursor:pointer;padding:4px 10px 4px 0;
   flex-shrink:0;white-space:nowrap
 }
@@ -123,10 +123,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg)}
   function clearDetail() {
     if (!inDetail) return;
     inDetail = false;
-    document.getElementById('shell-back-btn').style.display = 'none';
-    document.getElementById('shell-brand-img').style.display = '';
-    document.getElementById('shell-brand-name').style.display = '';
-    document.getElementById('shell-brand-ver').style.display = '';
+    document.getElementById('shell-back-btn').style.visibility = 'hidden';
+    document.getElementById('shell-brand-img').style.visibility = '';
+    document.getElementById('shell-brand-name').style.visibility = '';
+    document.getElementById('shell-brand-ver').style.visibility = '';
   }
 
   function shellNav(s) {
@@ -171,10 +171,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg)}
     if (e.data.action === 'coachClosed')  setActive('activities');
     if (e.data.action === 'enterDetail') {
       inDetail = true;
-      document.getElementById('shell-back-btn').style.display = '';
-      document.getElementById('shell-brand-img').style.display = 'none';
-      document.getElementById('shell-brand-name').style.display = 'none';
-      document.getElementById('shell-brand-ver').style.display = 'none';
+      document.getElementById('shell-back-btn').style.visibility = 'visible';
+      document.getElementById('shell-brand-img').style.visibility = 'hidden';
+      document.getElementById('shell-brand-name').style.visibility = 'hidden';
+      document.getElementById('shell-brand-ver').style.visibility = 'hidden';
     }
     if (e.data.action === 'exitDetail') {
       clearDetail();
