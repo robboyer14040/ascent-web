@@ -845,6 +845,7 @@ function buildDetailHTML(a) {
     deleteCallback:   'deleteSelected',
     resyncCallback:   'resyncActivity',
     saveRouteCb:      'openSaveRouteDialog',
+    uploadCb:         'openUploadModal',
     resyncBtnId:      'resync-btn',
     kudosBtnId:       'kudos-btn',
     kudosToggleCb:    'toggleKudosList',

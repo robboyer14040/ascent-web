@@ -11,13 +11,13 @@ Priority for each photo:
   3. Not found locally → download from Strava API → save → update DB → serve
 """
 
-import os, json, shutil, sqlite3, time
+import os, json, shutil, sqlite3, time, uuid
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
 
 import httpx
 import logging
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request, UploadFile, File
 log = logging.getLogger('photos')
 from fastapi.responses import FileResponse, StreamingResponse
 
@@ -95,6 +95,52 @@ def _ensure_locations_column():
         con.commit()
     except sqlite3.OperationalError:
         pass  # already exists
+    finally:
+        con.close()
+
+_VIDEO_EXTS = {'.mp4', '.mov', '.avi', '.mkv', '.m4v', '.webm'}
+UPLOAD_MAX_BYTES  = 100 * 1024 * 1024   # 100 MB per file
+DISK_FREE_MIN     = 200 * 1024 * 1024   # refuse uploads if < 200 MB free
+
+def _user_uploads_dir(activity_id: int) -> Path:
+    d = Path(_db_path()).parent / "support" / "user_uploads" / str(activity_id)
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+def _ensure_user_media_table():
+    con = sqlite3.connect(_db_path())
+    try:
+        con.execute("""
+            CREATE TABLE IF NOT EXISTS user_media (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                activity_id INTEGER NOT NULL,
+                filename TEXT NOT NULL,
+                original_name TEXT,
+                caption TEXT,
+                created_at TEXT DEFAULT (datetime('now'))
+            )
+        """)
+        con.commit()
+    finally:
+        con.close()
+
+def _get_user_media(activity_id: int) -> list:
+    _ensure_user_media_table()
+    con = sqlite3.connect(_db_path())
+    try:
+        rows = con.execute(
+            "SELECT id, filename, original_name, caption FROM user_media WHERE activity_id=? ORDER BY created_at",
+            (activity_id,)).fetchall()
+        return [{"id": r[0], "filename": r[1], "original_name": r[2], "caption": r[3]} for r in rows]
+    finally:
+        con.close()
+
+def _get_activity_owner(activity_id: int) -> Optional[int]:
+    con = sqlite3.connect(_db_path())
+    try:
+        row = con.execute("SELECT user_id FROM activities WHERE id=?", (activity_id,)).fetchone()
+        return row[0] if row else None
     finally:
         con.close()
 
@@ -446,6 +492,17 @@ async def get_photos(activity_id: int):
             item["location"] = location
         media.append(item)
 
+    # Merge user-uploaded media (not tied to Strava)
+    for um in _get_user_media(activity_id):
+        fn  = um["filename"]
+        ext = Path(fn).suffix.lower()
+        item: dict = {"url": f"/user-uploads/{activity_id}/{fn}",
+                      "type": "video" if ext in _VIDEO_EXTS else "image",
+                      "user_upload": True}
+        if um.get("caption"):
+            item["caption"] = um["caption"]
+        media.append(item)
+
     return {
         "photos":     filenames,   # backward compat
         "base_url":   base_url,
@@ -560,3 +617,169 @@ async def serve_photo(activity_id: int, filename: str):
     else:                      media_type = "image/jpeg"
 
     return FileResponse(file_path, media_type=media_type)
+
+
+# ── User upload endpoints ──────────────────────────────────────────────────────
+
+def _media_type_for(filename: str) -> str:
+    fn = filename.lower()
+    if fn.endswith(".mp4"):  return "video/mp4"
+    if fn.endswith(".mov"):  return "video/quicktime"
+    if fn.endswith(".avi"):  return "video/x-msvideo"
+    if fn.endswith(".mkv"):  return "video/x-matroska"
+    if fn.endswith(".webm"): return "video/webm"
+    if fn.endswith(".png"):  return "image/png"
+    if fn.endswith(".webp"): return "image/webp"
+    if fn.endswith(".heic"): return "image/heic"
+    return "image/jpeg"
+
+
+@router.post("/activities/{activity_id}/upload-media")
+async def upload_media(request: Request, activity_id: int,
+                       files: List[UploadFile] = File(...)):
+    from app.auth import get_session_user_id
+    uid = get_session_user_id(request)
+    if not uid:
+        raise HTTPException(401, "Not authenticated")
+
+    owner_id = _get_activity_owner(activity_id)
+    if owner_id is None:
+        raise HTTPException(404, "Activity not found")
+    if owner_id != uid:
+        raise HTTPException(403, "Not your activity")
+
+    # Check available disk space
+    try:
+        import shutil as _shutil
+        free = _shutil.disk_usage(Path(_db_path()).parent).free
+        if free < DISK_FREE_MIN:
+            raise HTTPException(507, "Insufficient storage — please contact the administrator")
+    except HTTPException:
+        raise
+    except Exception:
+        pass  # can't check, allow the upload
+
+    dest_dir = _user_uploads_dir(activity_id)
+    _ensure_user_media_table()
+    saved = []
+
+    for file in files:
+        content = await file.read(UPLOAD_MAX_BYTES + 1)
+        if len(content) > UPLOAD_MAX_BYTES:
+            raise HTTPException(413, f"{file.filename!r} exceeds the 100 MB size limit")
+
+        orig = file.filename or "upload"
+        ext  = Path(orig).suffix.lower() or ".jpg"
+        filename = f"user_{uuid.uuid4().hex[:16]}{ext}"
+
+        (dest_dir / filename).write_bytes(content)
+
+        con = sqlite3.connect(_db_path())
+        try:
+            cur = con.execute(
+                "INSERT INTO user_media (user_id, activity_id, filename, original_name) VALUES (?,?,?,?)",
+                (uid, activity_id, filename, orig))
+            media_id = cur.lastrowid
+            con.commit()
+        finally:
+            con.close()
+
+        saved.append({"id": media_id, "filename": filename,
+                      "url": f"/user-uploads/{activity_id}/{filename}"})
+
+    return {"saved": saved}
+
+
+@router.get("/user-uploads/{activity_id}/{filename}/download")
+async def download_user_upload(activity_id: int, filename: str):
+    dest_dir  = _user_uploads_dir(activity_id)
+    file_path = dest_dir / filename
+    try:
+        file_path.resolve().relative_to(dest_dir.resolve())
+    except ValueError:
+        raise HTTPException(403, "Forbidden")
+    if not file_path.exists():
+        raise HTTPException(404, f"File not found: {filename}")
+    info    = _get_info(activity_id)
+    name    = info["activity_name"] if info else "activity"
+    ext     = ('.' + filename.rsplit('.', 1)[1]) if '.' in filename else ''
+    dl_name = f"{_safe_title(name)}{ext}"
+    return FileResponse(file_path, media_type=_media_type_for(filename),
+                        headers={"Content-Disposition": f'attachment; filename="{dl_name}"'})
+
+
+@router.post("/activities/{activity_id}/set-media-caption")
+async def set_media_caption(request: Request, activity_id: int):
+    from app.auth import get_session_user_id
+    uid = get_session_user_id(request)
+    if not uid:
+        raise HTTPException(401, "Not authenticated")
+
+    body        = await request.json()
+    filename    = (body.get("filename") or "").strip()
+    caption     = (body.get("caption") or "").strip()
+    user_upload = bool(body.get("user_upload", False))
+
+    if not filename:
+        raise HTTPException(400, "filename required")
+
+    if user_upload:
+        _ensure_user_media_table()
+        con = sqlite3.connect(_db_path())
+        try:
+            row = con.execute(
+                "SELECT user_id FROM user_media WHERE activity_id=? AND filename=?",
+                (activity_id, filename)).fetchone()
+            if not row:
+                raise HTTPException(404, "Media not found")
+            if row[0] != uid:
+                raise HTTPException(403, "Not your media")
+            con.execute(
+                "UPDATE user_media SET caption=? WHERE activity_id=? AND filename=?",
+                (caption or None, activity_id, filename))
+            con.commit()
+        finally:
+            con.close()
+    else:
+        owner_id = _get_activity_owner(activity_id)
+        if owner_id is None:
+            raise HTTPException(404, "Activity not found")
+        if owner_id != uid:
+            raise HTTPException(403, "Not your activity")
+        _ensure_captions_column()
+        con = sqlite3.connect(_db_path())
+        try:
+            row = con.execute(
+                "SELECT local_media_captions_json FROM activities WHERE id=?",
+                (activity_id,)).fetchone()
+            caption_map: dict = {}
+            if row and row[0]:
+                try:
+                    caption_map = json.loads(row[0])
+                except Exception:
+                    pass
+            if caption:
+                caption_map[filename] = caption
+            else:
+                caption_map.pop(filename, None)
+            con.execute(
+                "UPDATE activities SET local_media_captions_json=? WHERE id=?",
+                (json.dumps(caption_map), activity_id))
+            con.commit()
+        finally:
+            con.close()
+
+    return {"ok": True}
+
+
+@router.get("/user-uploads/{activity_id}/{filename}")
+async def serve_user_upload(activity_id: int, filename: str):
+    dest_dir  = _user_uploads_dir(activity_id)
+    file_path = dest_dir / filename
+    try:
+        file_path.resolve().relative_to(dest_dir.resolve())
+    except ValueError:
+        raise HTTPException(403, "Forbidden")
+    if not file_path.exists():
+        raise HTTPException(404, f"File not found: {filename}")
+    return FileResponse(file_path, media_type=_media_type_for(filename))

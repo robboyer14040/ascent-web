@@ -64,7 +64,19 @@
       "Bash(identify /Users/rob/projects/ascent-web/app/static/apple-touch-icon.png)",
       "Bash(claude doctor *)",
       "Bash(git -C /Users/rob/projects/ascent-web log --oneline --all)",
-      "Bash(git *)"
+      "Bash(git *)",
+      "Skill(keybindings-help)",
+      "WebFetch(domain:ridewithgps.com)",
+      "WebFetch(domain:www.kylezweng.com)",
+      "Bash(pandoc --version)",
+      "Bash(osascript -e 'version of application \"Safari\"')",
+      "Bash(/tmp/pdfenv/bin/pip install *)",
+      "Bash(/tmp/pdfenv/bin/python3 *)",
+      "WebFetch(domain:developer.garmin.com)",
+      "WebFetch(domain:www.hammerhead.io)",
+      "WebFetch(domain:developers.wahooligan.com)",
+      "WebFetch(domain:shop.sram.com)",
+      "Bash(fly volumes *)"
     ]
   }
 }

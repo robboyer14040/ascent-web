@@ -1,5 +1,5 @@
 // ── PHOTOS ───────────────────────────────────────────────────────────────────
-// photoState.media: [{url, type:'image'|'video', hls_url?}]
+// photoState.media: [{url, type:'image'|'video', hls_url?, caption?, user_upload?}]
 const photoState = { media: [], idx: 0, activityId: null };
 
 async function loadPhotos(activityId) {
@@ -27,29 +27,8 @@ async function loadPhotos(activityId) {
   } catch(e) {}
 }
 
-function _attachHls(videoEl, hlsUrl, autoplay = true) {
-  if (videoEl._hls) { videoEl._hls.destroy(); videoEl._hls = null; }
-  if (typeof Hls !== 'undefined' && Hls.isSupported()) {
-    const hls = new Hls();
-    videoEl._hls = hls;
-    hls.loadSource(hlsUrl);
-    hls.attachMedia(videoEl);
-    if (autoplay) hls.on(Hls.Events.MANIFEST_PARSED, () => videoEl.play().catch(() => {}));
-  } else if (videoEl.canPlayType('application/vnd.apple.mpegurl')) {
-    // Safari native HLS
-    videoEl.src = hlsUrl;
-    if (autoplay) videoEl.play().catch(() => {});
-  }
-}
-
 function _panelDetach() {
   const v = document.getElementById('photo-vid');
-  if (v._hls) { v._hls.destroy(); v._hls = null; }
-  v.pause(); v.removeAttribute('src'); v.style.display = 'none';
-}
-
-function _lbDetach() {
-  const v = document.getElementById('lb-vid');
   if (v._hls) { v._hls.destroy(); v._hls = null; }
   v.pause(); v.removeAttribute('src'); v.style.display = 'none';
 }
@@ -82,8 +61,14 @@ async function showPhoto(idx) {
     vid.style.display = 'block';
     const profile  = await ensureProfile();
     const autoplay = profile.autoplay_videos !== false;
-    if (autoplay) _attachHls(vid, item.hls_url);
-    else { vid.poster = item.url; }  // show thumbnail without loading/playing
+    if (autoplay) Lightbox.attachHls(vid, item.hls_url);
+    else { vid.poster = item.url; }
+  } else if (item.type === 'video') {
+    img.style.display = 'none';
+    vid.style.display = 'block';
+    vid.src           = item.url;
+    vid.controls      = true;
+    vid.play().catch(() => {});
   } else {
     _panelDetach();
     img.src = item.url;
@@ -106,8 +91,6 @@ async function showPhoto(idx) {
 function downloadCurrentMedia() {
   const item = photoState.media[photoState.idx];
   if (!item) return;
-  // Use server-side /download endpoint — fetches video segments from CDN for videos,
-  // serves the file directly with attachment header for images.
   const a = document.createElement('a');
   a.href = item.url + '/download';
   document.body.appendChild(a);
@@ -115,50 +98,28 @@ function downloadCurrentMedia() {
   document.body.removeChild(a);
 }
 
-async function _lbShow(item) {
-  const lbImg = document.getElementById('lb-img');
-  const lbVid = document.getElementById('lb-vid');
-  const lbCap = document.getElementById('lb-caption');
-  if (item.type === 'video' && item.hls_url) {
-    lbImg.style.display = 'none';
-    lbVid.style.display = 'block';
-    const profile  = await ensureProfile();
-    const autoplay = profile.autoplay_videos !== false;
-    _attachHls(lbVid, item.hls_url, autoplay);
-  } else {
-    _lbDetach();
-    lbImg.src = item.url;
-    lbImg.style.display = 'block';
-  }
-  if (lbCap) {
-    if (item.caption) { lbCap.textContent = item.caption; lbCap.style.display = ''; }
-    else { lbCap.textContent = ''; lbCap.style.display = 'none'; }
-  }
-}
-
-function photoNav(delta, lightbox = false) {
+function photoNav(delta) {
   if (!photoState.media.length) return;
-  const n = photoState.media.length;
+  const n    = photoState.media.length;
   const next = (photoState.idx + delta + n) % n;
   showPhoto(next);
-  if (lightbox) {
-    _lbShow(photoState.media[next]);
-    document.getElementById('lb-count').textContent = `${next + 1} / ${n}`;
-  }
 }
 
 function photoClick() {
   if (!photoState.media.length) return;
-  const lbCount = document.getElementById('lb-count');
-  _lbShow(photoState.media[photoState.idx]);
-  lbCount.textContent = photoState.media.length > 1
-    ? `${photoState.idx + 1} / ${photoState.media.length}` : '';
-  document.getElementById('lightbox').style.display = 'flex';
-}
-
-function closeLightbox() {
-  _lbDetach();
-  document.getElementById('lightbox').style.display = 'none';
+  Lightbox.open(photoState.media, photoState.idx, {
+    download:    true,
+    captionEdit: true,
+    onNav: idx => { showPhoto(idx); },
+    onCaptionSave: async (item, caption) => {
+      await _saveCaption(item.url, caption, !!item.user_upload);
+      const panelCap = document.getElementById('photo-caption');
+      if (panelCap) {
+        if (caption) { panelCap.textContent = caption; panelCap.style.display = ''; }
+        else          { panelCap.textContent = ''; panelCap.style.display = 'none'; }
+      }
+    },
+  });
 }
 
 // Touch swipe helper — calls onLeft/onRight when horizontal drag > threshold
@@ -171,7 +132,7 @@ function _addSwipe(el, onLeft, onRight) {
   el.addEventListener('touchend', e => {
     const dx = e.changedTouches[0].clientX - sx;
     const dy = e.changedTouches[0].clientY - sy;
-    if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy) * 1.5) return; // not a horizontal swipe
+    if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
     if (dx < 0) onLeft(); else onRight();
   }, {passive: true});
 }
@@ -182,22 +143,11 @@ document.addEventListener('DOMContentLoaded', () => {
     () => photoNav(1),
     () => photoNav(-1)
   );
-  const lb = document.getElementById('lightbox');
-  if (lb) _addSwipe(lb,
-    () => photoNav(1, true),
-    () => photoNav(-1, true)
-  );
 });
 
-// Keyboard: Esc closes lightbox, ←→ navigate photos
+// Panel arrow keys [ ] (not in lightbox, not typing in a field)
 document.addEventListener('keydown', e => {
-  const lb = document.getElementById('lightbox');
-  if (lb.style.display === 'flex') {
-    if (e.key === 'Escape')     { closeLightbox(); return; }
-    if (e.key === 'ArrowLeft')  { photoNav(-1, true); return; }
-    if (e.key === 'ArrowRight') { photoNav(1, true);  return; }
-  }
-  // Panel arrow keys (when not in lightbox, not typing)
+  if (Lightbox.isOpen()) return;
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
   if (document.getElementById('coach-overlay')?.classList.contains('open')) return;
   if (photoState.media.length > 1) {
@@ -206,11 +156,10 @@ document.addEventListener('keydown', e => {
   }
 });
 
-// Set active button on load
+// Set active map style button on load
 document.addEventListener('DOMContentLoaded', () => {
   const saved = _uiPrefsGet('ascent-map-style') || 'osm';
   document.querySelectorAll('.map-style-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.style === saved);
   });
 });
-
