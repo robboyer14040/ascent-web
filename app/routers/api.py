@@ -235,25 +235,71 @@ async def suggest_activity_title(activity_id: int, request: Request):
 
 
     import secrets
-    _SEED_WORDS = [
-        "accordion", "badger", "Ptolemy", "stapler", "fjord", "mayonnaise",
-        "trebuchet", "hamster", "Wellington", "kumquat", "dirigible", "platypus",
-        "Rasputin", "cauliflower", "monocle", "catapult", "brisket", "Vesuvius",
-        "yodeling", "wombat", "saxophone", "turnip", "Machiavelli", "marmalade",
-        "penguin", "obelisk", "fondue", "Charlemagne", "kazoo", "spatula",
-        "narwhal", "crouton", "bureaucracy", "corgi", "Copernicus", "jalapeño",
-        "quokka", "periscope", "semaphore", "baguette", "Fibonacci", "tambourine",
-        "walrus", "archipelago", "tiramisu", "zeppelin", "mongoose", "croissant",
+    _MOODS = [
+        "a pithy philosophical one-liner",
+        "a dry, understated observation about everyday life",
+        "gruff libertarian woodsman wisdom (Ron Swanson energy)",
+        "a resigned but oddly wise piece of advice",
+        "absurdist folk wisdom passed down for no reason",
+        "an action-movie one-liner delivered about something mundane",
+        "a joke that turns on its own wording (self-contradiction, pun, or logic loop)",
+        "a food-related aphorism that somehow sounds profound",
+        "a line from a forgotten country song about regret",
+        "an observation about human nature that is funny because it's true",
+        "a motivational quote that is accidentally demotivating",
+        "something overheard in a diner at 2am",
+        "a philosophical musing that raises more questions than it answers",
+        "a deadpan non-sequitur that somehow makes perfect sense",
+        "advice from an eccentric uncle who has lived several lives",
+        "an unhinged declaration of triumph over something trivial",
+        "a grand cosmic metaphor applied to something small and dumb",
+        "the last thing someone says before doing something ill-advised",
     ]
-    word_a = secrets.choice(_SEED_WORDS)
-    word_b = secrets.choice([w for w in _SEED_WORDS if w != word_a])
+    _EXAMPLES = [
+        '"Waffles are just awesome bread."',
+        '"Whole Damn Planet Wanted A Piece Of Me"',
+        '"Anybody interested in grabbing a couple of burgers and hittin\' the cemetery?"',
+        '"Never Half-Ass Two Things. Whole-Ass One Thing."',
+        '"I don\'t know how much longer I can hold this!"',
+        '"You get hurt, hurt \'em back. You get killed... walk it off."',
+        '"Let me know if \'real power\' wants a magazine or anything."',
+        '"Mischievous and Deceitful, Chicanerous and Deplorable"',
+        '"Destiny is the one doing the folding and we\'re the origami swans."',
+        '"Bad decisions make good stories."',
+        '"I used to think I\'m indecisive but now I\'m not sure."',
+        '"Abandon the search for Truth; settle for a good fantasy."',
+        '"Look, I got a few good years left. If I want a Chip Ahoy, I\'m having it."',
+    ]
+    mood = secrets.choice(_MOODS)
+    # Rotate a small sample of anchors so repeated presses don't converge
+    # on the same comedic register
+    anchors = [_EXAMPLES[i] for i in sorted(secrets.SystemRandom().sample(range(len(_EXAMPLES)), 4))]
 
-    prompt  = (
-        f"Write a short (2–6 words), absurd, funny activity title. "
-        f"It MUST reference both: {word_a} and {word_b}. "
-        "Nothing to do with exercise, cycling, running, or fitness. "
-        "Be weird and unexpected. Reply with ONLY the title, no quotes, no explanation."
+    prompt = (
+        "You write funny titles in the tradition of great sitcom quotes, "
+        "bar-napkin wisdom, and misremembered song lyrics.\n\n"
+        f"Tone anchors (match the energy, never copy or lightly rephrase them):\n"
+        + "\n".join(f"- {a}" for a in anchors)
+        + "\n\n"
+        f"Write 5 candidate titles in the style of {mood}. "
+        "Rules:\n"
+        "- 3 to 12 words each\n"
+        "- Specificity is funny: name a concrete thing (a snack, an appliance, "
+        "a minor historical figure) rather than staying abstract\n"
+        "- No mention of exercise, running, cycling, workouts, or fitness\n"
+        "- No hashtags, no emoji, no explanations\n"
+        "- Each candidate on its own line, no numbering, no quotes"
     )
+
+    def _pick_title(text: str) -> str:
+        lines = [
+            ln.strip().strip('"').strip("'").lstrip("-•*0123456789. ").strip()
+            for ln in text.splitlines()
+        ]
+        lines = [ln for ln in lines if 2 <= len(ln.split()) <= 14]
+        if not lines:
+            return text.strip().strip('"').strip("'")
+        return secrets.choice(lines)
 
     async with httpx.AsyncClient(timeout=30) as client:
         resp = await client.post(
@@ -265,7 +311,7 @@ async def suggest_activity_title(activity_id: int, request: Request):
             },
             json={
                 "model":       "claude-haiku-4-5-20251001",
-                "max_tokens":  60,
+                "max_tokens":  300,
                 "temperature": 1,
                 "messages":    [{"role": "user", "content": prompt}],
             },
@@ -274,7 +320,7 @@ async def suggest_activity_title(activity_id: int, request: Request):
     if resp.status_code != 200:
         raise HTTPException(502, f"Claude API error: {resp.status_code}")
 
-    title = resp.json()["content"][0]["text"].strip().strip('"').strip("'")
+    title = _pick_title(resp.json()["content"][0]["text"])
     return {"title": title}
 
 

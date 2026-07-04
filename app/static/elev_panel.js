@@ -21,10 +21,14 @@ function findPeaks(points, n) {
   }
   candidates.sort((a, b) => b.y - a.y);
   const peaks = [];
+  // Gather a pool larger than `n` (still ≥minSepX apart, highest first) so the
+  // label plugin can skip pixel-colliding summits and drop to the next-highest
+  // peak, keeping `n` labels on screen.
+  const poolMax = n * 4;
   for (const cand of candidates) {
     if (peaks.every(p => Math.abs(p.x - cand.x) >= minSepX)) {
       peaks.push(cand);
-      if (peaks.length >= n) break;
+      if (peaks.length >= poolMax) break;
     }
   }
   return peaks;
@@ -40,6 +44,7 @@ function makePeakPlugin(peakList, opts) {
   const yScKey    = (opts && opts.yScKey)    || 'y';
   const labelFn   = (opts && opts.labelFn)   || (pk => String(pk.y));
   const isLightFn = (opts && opts.isLightFn) || (() => false);
+  const count     = (opts && opts.count)     || 3;
   return {
     id: 'peakMarkers',
     afterDatasetsDraw(chart) {
@@ -54,10 +59,21 @@ function makePeakPlugin(peakList, opts) {
       const stemH = dotR + gap; // full stem; dot covers bottom dotR px
       const bh = 16;
       cx.save();
-      peakList.forEach(pk => {
+      cx.font = 'bold 9px -apple-system,sans-serif';
+      // Track drawn label x-ranges. peakList is sorted highest-first, so the
+      // tallest peak wins when two summits sit at nearly the same pixel; a
+      // colliding label is skipped and the next-highest peak in the pool takes
+      // its place, keeping `count` labels visible (avoids the phantom digit).
+      const drawnRanges = [];
+      for (const pk of peakList) {
+        if (drawnRanges.length >= count) break;
         const px = xSc.getPixelForValue(xVal(pk));
         const py = ySc.getPixelForValue(pk.y);
         const label = labelFn(pk);
+        const bw0 = cx.measureText(label).width + 10;
+        const lo = px - bw0 / 2, hi = px + bw0 / 2;
+        if (drawnRanges.some(r => lo < r.hi && hi > r.lo)) continue;
+        drawnRanges.push({ lo, hi });
         // Stem drawn first so dot renders on top, leaving `gap` px visible
         cx.beginPath();
         cx.moveTo(px, py);
@@ -69,9 +85,7 @@ function makePeakPlugin(peakList, opts) {
         cx.arc(px, py, dotR, 0, Math.PI * 2);
         cx.fillStyle = lm ? '#555' : '#fff';
         cx.fill();
-        cx.font = 'bold 9px -apple-system,sans-serif';
-        const tw = cx.measureText(label).width;
-        const bw = tw + 10;
+        const bw = bw0;
         const bx = px - bw / 2;
         const by = py - stemH - bh;
         cx.fillStyle = lm ? 'rgba(0,0,0,.75)' : 'rgba(70,70,70,.95)';
@@ -82,7 +96,7 @@ function makePeakPlugin(peakList, opts) {
         cx.textAlign = 'center';
         cx.textBaseline = 'middle';
         cx.fillText(label, px, by + bh / 2);
-      });
+      }
       cx.restore();
     },
   };
