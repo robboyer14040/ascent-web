@@ -1,0 +1,28 @@
+/* tour_stage.css — shared by the tour pages (tour.html, tour_share.html):
+   stage-elevation HUD / drag-selection overlay + mobile disclosure toggle styles. */
+
+/* ── Stage elevation HUD / selection overlay ── */
+.se-hover-panel{position:absolute;top:8px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.18);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:7px 14px;pointer-events:none;display:none;z-index:15;min-width:150px;white-space:nowrap}
+[data-theme="light"] .se-hover-panel{background:rgba(15,15,25,.72);border-color:rgba(0,0,0,.18)}
+@media(prefers-color-scheme:light){:root:not([data-theme]) .se-hover-panel{background:rgba(15,15,25,.72);border-color:rgba(0,0,0,.18)}}
+.se-hover-panel .eh-row{display:flex;justify-content:space-between;gap:18px;font-size:11px;line-height:1.75;font-family:-apple-system,sans-serif}
+.se-hover-panel .eh-label{color:rgba(255,255,255,.45);letter-spacing:.01em}
+.se-hover-panel .eh-val{font-weight:600;font-variant-numeric:tabular-nums;text-shadow:0 0 8px currentColor}
+.se-sel-stats{position:absolute;background:rgba(0,0,0,.22);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid rgba(74,222,128,.28);border-radius:10px;padding:7px 13px;pointer-events:auto;display:none;z-index:16;white-space:nowrap}
+.se-sel-stats .es-header{display:flex;justify-content:space-between;gap:24px;font-size:11px;line-height:1.7;border-bottom:1px solid rgba(255,255,255,.12);margin-bottom:3px;padding-bottom:2px}
+.se-sel-stats .es-grid{display:grid;grid-template-columns:1fr 1fr;column-gap:18px;row-gap:0}
+.se-sel-stats .es-row{display:flex;justify-content:space-between;gap:14px;font-size:11px;line-height:1.7}
+.se-sel-stats .es-lbl{color:rgba(255,255,255,.42);letter-spacing:.01em}
+.se-sel-stats .es-val{font-weight:600;font-variant-numeric:tabular-nums;color:rgba(255,255,255,.88)}
+.se-sel-stats .es-max-lbl{text-decoration:underline;cursor:pointer;pointer-events:auto}
+.se-sel-stats .es-maxat{flex:1;text-align:center}
+#stage-elev-hud-btn{position:absolute;top:4px;left:6px;z-index:15;font-size:10px;padding:2px 5px;line-height:1.4;background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.2);color:#ccc;border-radius:5px;cursor:pointer;user-select:none;-webkit-user-select:none}
+#stage-elev-hud-btn.active{background:#f97316;border-color:#f97316;color:#fff}
+#stage-elev-help{position:absolute;left:50px;top:50%;transform:translateY(-50%);z-index:14;background:rgba(0,0,0,.55);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,.15);border-radius:8px;padding:6px 10px;max-width:300px;font-size:11px;line-height:1.5;color:rgba(255,255,255,.72);pointer-events:none;transition:opacity .25s}
+#stage-elev-help.hidden{opacity:0}
+
+/* ── Mobile disclosure (resize-handle collapse toggles) ── */
+.mob-disclose{display:none;background:none;border:none;color:var(--text);font-size:14px;cursor:pointer;padding:0 8px;line-height:1;align-items:center;height:28px;flex-shrink:0}
+.mob-arr{display:inline-block;transform:scale(2.25);transform-origin:center;transition:transform .2s}
+.mob-arr.collapsed{transform:scale(2.25) rotate(-90deg)}
+.rh-section-lbl{display:none;flex:1;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}

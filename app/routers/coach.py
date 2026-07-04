@@ -107,6 +107,7 @@ def _build_activity_summary(db, user_id: Optional[int] = None) -> str:
                 src_moving_time_s,
                 src_elapsed_time_s,
                 src_avg_heartrate,
+                src_avg_power,
                 json_extract(attributes_json, '$.activity')   AS act_type,
                 json_extract(attributes_json, '$.name')       AS name,
                 json_extract(attributes_json, '$.totalClimb') AS climb_attr
@@ -134,8 +135,10 @@ def _build_activity_summary(db, user_id: Optional[int] = None) -> str:
         hrs     = round(moving / 3600, 1)
         hr      = round(r["src_avg_heartrate"] or 0)
         hr_str  = f", avg HR {hr}bpm" if hr else ""
+        pw      = round(r["src_avg_power"] or 0)
+        pw_str  = f", avg {pw}W" if pw else ""
         lines.append(
-            f"  {date}: {atype} — {dist}mi, {climb}ft climb, {hrs}h moving{hr_str}"
+            f"  {date}: {atype} — {dist}mi, {climb}ft climb, {hrs}h moving{hr_str}{pw_str}"
         )
 
     # Weekly rollups (last 12 weeks)
@@ -234,30 +237,44 @@ def _build_tour_summary(db, user_id: Optional[int] = None) -> str:
         return ""
 
 
-def _build_system_prompt(goal_text: str, activity_summary: str, tour_summary: str = "", target_date: Optional[str] = None) -> str:
+def _build_system_prompt(goal_text: str, activity_summary: str, tour_summary: str = "",
+                         target_date: Optional[str] = None, profile_block: str = "",
+                         analysis_block: str = "") -> str:
     today = datetime.now().strftime("%B %d, %Y")
     target_line = f"\nTarget date: {target_date}" if target_date else ""
-    tour_section = f"\n{tour_summary}\n" if tour_summary else ""
+    tour_section    = f"\n{tour_summary}\n"    if tour_summary    else ""
+    profile_section = f"\n{profile_block}\n"   if profile_block   else ""
+    analysis_section = f"\n{analysis_block}\n" if analysis_block  else ""
     return f"""You are an expert endurance sports coach embedded in Ascent, a training log app. \
-You have access to the athlete's real training data and a specific goal they're working toward.
+You have access to the athlete's real training data, physiology, and a specific goal they're working toward.
 
 Today's date: {today}
 
 ATHLETE'S GOAL:
 {goal_text}{target_line}
-
+{profile_section}{analysis_section}
 {activity_summary}
 {tour_section}
 YOUR ROLE:
-- Analyse the athlete's actual training data in relation to their goal
-- Give specific, data-driven coaching advice (reference their actual mileage, climbing, trends)
-- Be proactive: notice patterns, gaps, or risks the athlete may not have spotted themselves
-- Balance honest analysis with motivational coaching — be encouraging but honest
-- When referencing activities, use dates and numbers from the data above
-- Keep responses focused and actionable — avoid vague generalities
-- If the goal has a timeline, reason explicitly about how much time is available
+- Ground every recommendation in the numbers above. Cite specific dates, mileage, climbing,
+  heart rate, power, and the trend/load figures — never speak in generalities.
+- Establish the athlete's current baseline from the recent 4-week averages, then state whether
+  each key metric is trending up, flat, or down, and by how much.
+- Read heart rate and power TOGETHER: rising HR at similar power/pace signals fatigue, heat, or
+  dehydration; rising power (or efficiency factor) at similar HR signals improving aerobic fitness.
+  Call out what the trend actually implies for this athlete.
+- Use the acute:chronic load ratio to judge freshness vs overreaching. If load is spiking or the
+  athlete looks fatigued, prescribe SPECIFIC recovery — e.g. "take 2 easy days then reassess" —
+  and scale the number of rest days to their age (older athletes recover slower).
+- When you prescribe rest or a change in load, say exactly how much and why, tied to the data.
+- Be proactive: surface patterns, gaps, or risks the athlete may not have noticed.
+- If the goal has a timeline, reason explicitly about how much time remains and whether the
+  current trajectory gets them there.
+- Do NOT offer generic platitudes ("stay hydrated", "listen to your body", "take it easy")
+  unless directly tied to a specific observation in this athlete's data.
 
-Respond conversationally. You're a knowledgeable coach who genuinely cares about this athlete's success."""
+Respond conversationally and encouragingly, but stay honest and quantitative. You're a knowledgeable \
+coach who genuinely cares about this athlete's success."""
 
 
 # ── Model config (must be defined before Pydantic models) ────────────────────
@@ -498,6 +515,8 @@ async def coach_today(request: Request, model: str = DEFAULT_MODEL):
     Generate 'what should I do today?' advice based on recent activities and goal.
     Returns advice text + up to 3 candidate activity IDs with simplified track coords.
     """
+    from app.auth import require_user
+    from app.coach_analysis import build_athlete_profile_block, build_training_analysis
     uid = require_user(request)
 
     db  = db_getter()
@@ -527,7 +546,7 @@ async def coach_today(request: Request, model: str = DEFAULT_MODEL):
                 id,
                 COALESCE(creation_time_override_s, creation_time_s) AS ts,
                 distance_mi, src_total_climb, src_moving_time_s,
-                src_avg_heartrate,
+                src_avg_heartrate, src_avg_power,
                 json_extract(attributes_json, '$.activity')   AS act_type,
                 json_extract(attributes_json, '$.name')       AS name,
                 json_extract(attributes_json, '$.totalClimb') AS climb_attr
@@ -558,19 +577,29 @@ async def coach_today(request: Request, model: str = DEFAULT_MODEL):
         hrs   = round(moving / 3600, 1)
         hr    = round(r["src_avg_heartrate"] or 0)
         hr_str = f", avg HR {hr}bpm" if hr else ""
+        pw    = round(r["src_avg_power"] or 0)
+        pw_str = f", avg {pw}W" if pw else ""
         act_lines.append(
-            f"  id={r['id']}: {date} {atype} \"{name}\" — {dist}mi, {climb}ft climb, {hrs}h{hr_str}"
+            f"  id={r['id']}: {date} {atype} \"{name}\" — {dist}mi, {climb}ft climb, {hrs}h{hr_str}{pw_str}"
         )
 
+    profile_block  = build_athlete_profile_block(db, uid)
+    analysis_block = build_training_analysis(db, uid)
+    profile_section  = f"\n{profile_block}\n"  if profile_block  else ""
+    analysis_section = f"\n{analysis_block}\n" if analysis_block else ""
+
     prompt = (
-        f"Today is {today_str}.{goal_section}\n"
+        f"Today is {today_str}.{goal_section}{profile_section}{analysis_section}\n"
         f"RECENT ACTIVITIES (last 60 days, most recent first):\n"
         + "\n".join(act_lines) +
-        "\n\nBased on this athlete's recent training load and goal, recommend what they should do TODAY. "
+        "\n\nBased on this athlete's baseline, recent HR/power trends, training-load balance, age, "
+        "and goal, recommend what they should do TODAY. Reference specific numbers from the data. "
+        "If their load is spiking or they're on a long active streak, recommend appropriate recovery "
+        "(scaled to their age) rather than more volume. "
         "Also, from the list above, identify up to 3 activity IDs that are the best examples or templates "
         "for what you're recommending — routes or workouts they've done before that fit well.\n\n"
         "Respond ONLY with valid JSON:\n"
-        '{"advice": "2-3 sentence recommendation referencing their recent training", "activity_ids": [id1, id2]}\n'
+        '{"advice": "2-4 sentence recommendation citing their recent training numbers and trend", "activity_ids": [id1, id2]}\n'
         "activity_ids must be integer IDs from the list. Include fewer than 3 if fewer match."
     )
 
@@ -584,7 +613,7 @@ async def coach_today(request: Request, model: str = DEFAULT_MODEL):
             },
             json={
                 "model":    safe_model,
-                "max_tokens": 300,
+                "max_tokens": 500,
                 "messages": [{"role": "user", "content": prompt}],
             },
         )
@@ -826,9 +855,15 @@ async def _call_claude(
     if not api_key:
         raise HTTPException(500, "No Anthropic API key set. Add your key in Settings.")
 
+    from app.coach_analysis import build_athlete_profile_block, build_training_analysis
     activity_summary = _build_activity_summary(db, user_id=user_id)
     tour_summary     = _build_tour_summary(db, user_id=user_id)
-    system_prompt    = _build_system_prompt(goal_text, activity_summary, tour_summary=tour_summary, target_date=target_date)
+    profile_block    = build_athlete_profile_block(db, user_id)
+    analysis_block   = build_training_analysis(db, user_id)
+    system_prompt    = _build_system_prompt(
+        goal_text, activity_summary, tour_summary=tour_summary, target_date=target_date,
+        profile_block=profile_block, analysis_block=analysis_block,
+    )
 
     # Build messages array for the API (skip system-role rows)
     messages = []

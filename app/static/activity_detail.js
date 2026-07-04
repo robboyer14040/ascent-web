@@ -112,45 +112,6 @@ function buildActivityDetailHTML(a, opts) {
     ? `<button class="edit-btn" id="wx-act-btn" onclick="openWeatherForecast('activity',${a.id},this.dataset.name)" data-name="${esc(a.name||'Activity')}" title="Forecast weather for this route" style="padding:4px 7px;display:inline-flex;align-items:center"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 17.58A5 5 0 0 0 18 8h-1.26A8 8 0 1 0 4 16.25"/><line x1="8" y1="19" x2="8" y2="21"/><line x1="8" y1="13" x2="8" y2="15"/><line x1="16" y1="19" x2="16" y2="21"/><line x1="16" y1="13" x2="16" y2="15"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="12" y1="15" x2="12" y2="17"/></svg></button>`
     : '';
 
-  // ── Pace helper ──────────────────────────────────────────────────────────────
-  function altPaceStr(mph, perMile) {
-    if (!mph || mph <= 0) return null;
-    const mins = perMile ? 60 / mph : 60 / (mph * 1.60934);
-    const m = Math.floor(mins);
-    const s = Math.round((mins - m) * 60);
-    return `${m}:${String(s).padStart(2,'0')}/${perMile ? 'mi' : 'km'}`;
-  }
-
-  // ── Stats chips ───────────────────────────────────────────────────────────────
-  const chips = [
-    ['Distance',  a.distance_mi       ? U.distS(a.distance_mi)                                         : null,
-                  a.distance_mi       ? (U.metric ? (+a.distance_mi.toFixed(2))+' mi'
-                                                  : (+(a.distance_mi*1.60934).toFixed(2))+' km') : null],
-    ['Mov Time',  a.active_time       ? fmtHMS(a.active_time)                                          : null, null],
-    ['Duration',  a.duration          ? fmtHMS(a.duration)                                             : null, null],
-    ['Ascent',    a.total_climb_ft    ? U.climbS(a.total_climb_ft)                                     : null,
-                  a.total_climb_ft    ? (U.metric ? Math.round(a.total_climb_ft)+' ft'
-                                                  : Math.round(a.total_climb_ft*0.3048)+' m') : null],
-    ['Descent',   a.total_descent_ft  ? U.climbS(a.total_descent_ft)                                   : null,
-                  a.total_descent_ft  ? (U.metric ? Math.round(a.total_descent_ft)+' ft'
-                                                  : Math.round(a.total_descent_ft*0.3048)+' m') : null],
-    ['Mov Spd',   a.avg_speed_mph     ? U.speedS(a.avg_speed_mph)                                      : null,
-                  a.avg_speed_mph     ? (U.metric ? (+a.avg_speed_mph.toFixed(1))+' mph'
-                                                  : (+(a.avg_speed_mph*1.60934).toFixed(1))+' km/h') : null],
-    ['Avg Spd',   (a.duration&&a.distance_mi) ? U.speedS(+(a.distance_mi/(a.duration/3600)).toFixed(1)) : null,
-                  (a.duration&&a.distance_mi) ? (()=>{ const mph=+(a.distance_mi/(a.duration/3600)).toFixed(1);
-                                                        return U.metric ? mph+' mph' : (+(mph*1.60934).toFixed(1))+' km/h'; })() : null],
-    ['Avg Pace',  a.avg_speed_mph     ? altPaceStr(a.avg_speed_mph, !U.metric)                         : null,
-                  a.avg_speed_mph     ? altPaceStr(a.avg_speed_mph,  U.metric)                         : null],
-    ['Avg HR',    a.avg_heartrate     ? Math.round(a.avg_heartrate)+' bpm'                             : null, null],
-    ['Max HR',    a.max_heartrate     ? Math.round(a.max_heartrate)+' bpm'                             : null, null],
-    ['Cadence',   a.avg_cadence       ? Math.round(a.avg_cadence)+' rpm'                               : null, null],
-    ['Avg Pwr',   a.avg_power         ? Math.round(a.avg_power)+' W'                                   : null, null],
-    ['Suffer',    a.suffer_score      ? Math.round(a.suffer_score)+''                                  : null, null],
-    ['Type',      a.activity_type     ? esc(a.activity_type)                                           : null, null],
-    ['Equipment', a.equipment         ? esc(a.equipment)                                               : null, null],
-  ].filter(([,v])=>v);
-
   // ── Meta (Effort / Keywords) ──────────────────────────────────────────────────
   const meta = [
     ['Effort',    a.effort],
@@ -216,7 +177,7 @@ function buildActivityDetailHTML(a, opts) {
     </div>
     ${a.notes?`<div class="act-notes" style="margin-bottom:8px">${esc(a.notes)}</div>`:''}
     <div class="act-stats-row" style="display:flex;gap:10px;align-items:flex-start;margin-bottom:8px;max-width:100%;overflow:hidden">
-      <div class="stats-grid">${chips.map(([l,v,sub])=>{const span=l==='Equipment'?Math.min(6,Math.max(1,Math.ceil(v.length/14))):1;const s=span>1?` style="grid-column:span ${span}"`:'';;return`<div class="stat-chip"${s}><div class="sc-label">${l}</div><div class="sc-val">${v}</div><div class="sc-sub">${sub||''}</div></div>`}).join('')}</div>
+      <div class="stats-grid">${buildActivityStatChips(a, U, esc, fmtHMS)}</div>
       ${aiChipHtml}
     </div>
     ${meta.length?`<div class="meta-row" style="margin-top:4px">${meta.map(([l,v])=>`<div class="meta-field"><div class="mf-label">${l}</div><div class="mf-val">${esc(String(v))}</div></div>`).join('')}</div>`:''}

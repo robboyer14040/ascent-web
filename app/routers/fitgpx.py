@@ -381,27 +381,33 @@ async def import_gpx(request: Request, file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(400, f"Invalid XML: {e}")
 
-    # Find <trk>
+    # Find <trk>; fall back to <rte> (route) — some exporters (e.g. gpx.py route
+    # exports) emit <rte>/<rtept> instead of <trk>/<trkseg>/<trkpt>.
     trk = _child(root, "trk")
-    if trk is None:
-        raise HTTPException(400, "No <trk> element found")
+    if trk is not None:
+        name_el = _child(trk, "name")
+        type_el = _child(trk, "type")
+        # Collect all trkpt elements across all trkseg
+        trkpts = []
+        for child in trk:
+            if _tag(child) == "trkseg":
+                for pt in child:
+                    if _tag(pt) == "trkpt":
+                        trkpts.append(pt)
+    else:
+        rte = _child(root, "rte")
+        if rte is None:
+            raise HTTPException(400, "No <trk> or <rte> element found")
+        name_el = _child(rte, "name")
+        type_el = _child(rte, "type")
+        trkpts  = [pt for pt in rte if _tag(pt) == "rtept"]
 
-    name_el = _child(trk, "name")
     name    = (name_el.text or "").strip() if name_el is not None else ""
     name    = name or (file.filename or "Imported Activity")
 
-    type_el       = _child(trk, "type")
     activity_type = (type_el.text or "").strip() if type_el is not None else "Workout"
     if not activity_type:
         activity_type = "Workout"
-
-    # Collect all trkpt elements across all trkseg
-    trkpts = []
-    for child in trk:
-        if _tag(child) == "trkseg":
-            for pt in child:
-                if _tag(pt) == "trkpt":
-                    trkpts.append(pt)
 
     if not trkpts:
         raise HTTPException(400, "No track points found")

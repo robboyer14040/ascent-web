@@ -14,7 +14,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from app.auth import get_session_user_id, require_user
 from app.routers.fitgpx import _haversine_m
-from app.db import build_activity
+from app.db import build_activity, parse_attrs
 
 router    = APIRouter()
 db_getter: Callable = None
@@ -141,34 +141,50 @@ def _parse_gpx_route(data: bytes, filename: str) -> dict:
                 return c
         return None
 
-    trk = _child(root, "trk")
-    if trk is None:
-        raise ValueError("No <trk> element found")
+    def _pt_coords(pt):
+        """Return (lat, lon, alt_m) for a trkpt/rtept, or None if invalid."""
+        try:
+            lat = float(pt.get("lat", 0) or 0)
+            lon = float(pt.get("lon", 0) or 0)
+        except (TypeError, ValueError):
+            return None
+        if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+            return None
+        if lat == 0.0 and lon == 0.0:
+            return None
+        ele_el = _child(pt, "ele")
+        alt_m = float(ele_el.text) if ele_el is not None and ele_el.text else 0.0
+        return (lat, lon, alt_m)
 
-    name_el = _child(trk, "name")
+    raw: list[tuple[float, float, float]] = []
+
+    # Prefer <trk> (track); fall back to <rte> (route). Some exporters (e.g.
+    # gpx.py route exports) emit <rte>/<rtept> instead of <trk>/<trkseg>/<trkpt>.
+    trk = _child(root, "trk")
+    if trk is not None:
+        name_el = _child(trk, "name")
+        for child in trk:
+            if _tag(child) == "trkseg":
+                for pt in child:
+                    if _tag(pt) == "trkpt":
+                        c = _pt_coords(pt)
+                        if c is not None:
+                            raw.append(c)
+    else:
+        rte = _child(root, "rte")
+        if rte is None:
+            raise ValueError("No <trk> or <rte> element found")
+        name_el = _child(rte, "name")
+        for pt in rte:
+            if _tag(pt) == "rtept":
+                c = _pt_coords(pt)
+                if c is not None:
+                    raw.append(c)
+
     name = (name_el.text or "").strip() if name_el is not None else ""
     if not name:
         base = filename.rsplit(".", 1)[0] if "." in filename else filename
         name = base.replace("_", " ").replace("-", " ").strip() or "Stage"
-
-    raw: list[tuple[float, float, float]] = []
-    for child in trk:
-        if _tag(child) == "trkseg":
-            for pt in child:
-                if _tag(pt) != "trkpt":
-                    continue
-                try:
-                    lat = float(pt.get("lat", 0) or 0)
-                    lon = float(pt.get("lon", 0) or 0)
-                except (TypeError, ValueError):
-                    continue
-                if not (-90 <= lat <= 90 and -180 <= lon <= 180):
-                    continue
-                if lat == 0.0 and lon == 0.0:
-                    continue
-                ele_el = _child(pt, "ele")
-                alt_m = float(ele_el.text) if ele_el is not None and ele_el.text else 0.0
-                raw.append((lat, lon, alt_m))
 
     if not raw:
         raise ValueError("No valid track points found")
@@ -209,20 +225,6 @@ def _parse_gpx_route(data: bytes, filename: str) -> dict:
 
 # ── Stage-to-activity matching ────────────────────────────────────────────────
 
-def _parse_activity_attrs(attrs_json: Optional[str]) -> dict:
-    """Parse Ascent's flat NSArray attributes_json into a dict."""
-    attrs: dict = {}
-    if attrs_json:
-        try:
-            flat = json.loads(attrs_json)
-            if isinstance(flat, list):
-                for i in range(0, len(flat) - 1, 2):
-                    attrs[str(flat[i])] = flat[i + 1]
-        except Exception:
-            pass
-    return attrs
-
-
 def _fa(attrs: dict, key: str) -> Optional[float]:
     v = attrs.get(key)
     if v is None:
@@ -236,7 +238,7 @@ def _fa(attrs: dict, key: str) -> Optional[float]:
 def _build_completion(act_row: tuple) -> dict:
     """Build a completion dict from a DB activity row (id, ts, dist, lat, lon, attrs_json)."""
     act_id, ts, dist_mi, _lat, _lon, attrs_json = act_row
-    attrs = _parse_activity_attrs(attrs_json)
+    attrs = parse_attrs(attrs_json)
     date_str = datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%d")
     return {
         "activity_id":          act_id,
@@ -396,6 +398,95 @@ def _global_stage_matching(con, uid: int, start_date: str, end_date: str, stages
         stage["id"]: (_build_completion(rows[assignments[stage["id"]]]) if stage["id"] in assignments else None)
         for stage in stages
     }
+
+
+def _stage_segment_groups(con, stages: list) -> list:
+    """Group stages that share BOTH their start and end location — i.e. alternate
+    routes of the same segment. The first stage (in list order) with a given
+    [start, end] anchors the group; any later stage matching it is an alternate,
+    regardless of length. Returns a list of groups (each a list of stage dicts);
+    most groups hold a single stage.
+
+    Mirrors the frontend `_stageSegmentGroups`. Alternate routes often diverge
+    for a short stretch at the start or finish (a different exit out of town)
+    before rejoining the shared path, so rather than compare only each route's
+    single first/last point we match a terminal point against a small WINDOW of
+    the other route's early/late points — the tracks converge, so this matches
+    even when the recorded start points are a couple hundred metres apart.
+    `stages` is a list of dicts (in stage order) each with id, distance_mi,
+    start_lat, start_lon.
+    """
+    _WIN = 15   # points at each end to scan for convergence
+    _fcache: dict = {}
+    _lcache: dict = {}
+
+    def _first_pts(sid):
+        if sid not in _fcache:
+            rows = con.execute(
+                "SELECT lat, lon FROM tour_stage_points WHERE stage_id=? ORDER BY seq ASC LIMIT ?",
+                (sid, _WIN),
+            ).fetchall()
+            _fcache[sid] = [(r[0], r[1]) for r in rows]
+        return _fcache[sid]
+
+    def _last_pts(sid):
+        if sid not in _lcache:
+            rows = con.execute(
+                "SELECT lat, lon FROM tour_stage_points WHERE stage_id=? ORDER BY seq DESC LIMIT ?",
+                (sid, _WIN),
+            ).fetchall()
+            _lcache[sid] = [(r[0], r[1]) for r in rows]
+        return _lcache[sid]
+
+    def _start_pt(s):
+        if s.get("start_lat") is not None and s.get("start_lon") is not None:
+            return (s["start_lat"], s["start_lon"])
+        fp = _first_pts(s["id"])
+        return fp[0] if fp else None
+
+    def _end_pt(sid):
+        lp = _last_pts(sid)          # ordered DESC → first element is the true last point
+        return lp[0] if lp else None
+
+    def _near(a, b):
+        if not a or not b:
+            return False
+        d_lat = (a[0] - b[0]) * 111000
+        d_lon = (a[1] - b[1]) * 111000 * math.cos(math.radians(a[0]))
+        return math.hypot(d_lat, d_lon) < 150   # metres
+
+    def _near_any(pt, arr):
+        return pt is not None and any(_near(pt, q) for q in arr)
+
+    def _same_seg(a, b):
+        starts = _near_any(_start_pt(a), _first_pts(b["id"])) or _near_any(_start_pt(b), _first_pts(a["id"]))
+        ends   = _near_any(_end_pt(a["id"]), _last_pts(b["id"])) or _near_any(_end_pt(b["id"]), _last_pts(a["id"]))
+        return starts and ends
+
+    # Anchor each group on the first occurrence of its [start, end]; a later
+    # stage matching that anchor is an alternate route.
+    groups: list = []
+    for s in stages:
+        grp = next((g for g in groups if _same_seg(s, g[0])), None)
+        if grp is not None:
+            grp.append(s)
+        else:
+            groups.append([s])
+    return groups
+
+
+def _collapse_alternate_stages(con, stages: list, prefer_id: Optional[int] = None) -> list:
+    """Collapse each same-segment group of stages down to a single representative,
+    so alternate routes count once. The representative is the first (original)
+    stage of the group, unless `prefer_id` matches a stage in the group (then that
+    one is kept — used so a stage never disappears from its own summary/advice).
+    Returns the kept stages, in order.
+    """
+    reps: list = []
+    for g in _stage_segment_groups(con, stages):
+        rep = next((s for s in g if s["id"] == prefer_id), None) or g[0]
+        reps.append(rep)
+    return reps
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -971,29 +1062,38 @@ async def get_tour_ai_summary(tour_id: int, request: Request, model: Optional[st
         if cached_summary and not force:
             return JSONResponse({"summary": cached_summary})
         stage_rows = con.execute(
-            "SELECT stage_num, name, distance_mi, climb_ft FROM tour_stages WHERE tour_id=? ORDER BY stage_num",
+            "SELECT id, stage_num, name, distance_mi, climb_ft, start_lat, start_lon "
+            "FROM tour_stages WHERE tour_id=? ORDER BY stage_num",
             (tour_id,),
         ).fetchall()
+        stages = [{
+            "id": r[0], "stage_num": r[1], "name": r[2],
+            "distance_mi": r[3], "climb_ft": r[4],
+            "start_lat": r[5], "start_lon": r[6],
+        } for r in stage_rows]
+        # Exclude alternative routes (adjacent stages sharing both endpoints) so
+        # the summary counts one route per segment, matching the tour pages.
+        stages = _collapse_alternate_stages(con, stages)
     finally:
         con.close()
 
-    if not stage_rows:
+    if not stages:
         raise HTTPException(404, "No stages found")
 
-    total_dist  = sum(r[2] for r in stage_rows)
-    total_climb = sum(r[3] for r in stage_rows)
-    avg_dist    = total_dist  / len(stage_rows)
-    avg_climb   = total_climb / len(stage_rows)
+    total_dist  = sum(s["distance_mi"] for s in stages)
+    total_climb = sum(s["climb_ft"] for s in stages)
+    avg_dist    = total_dist  / len(stages)
+    avg_climb   = total_climb / len(stages)
 
     stage_lines = [
-        f"  Stage {r[0]}: {r[1]} — {r[2]:.1f}mi, {r[3]:.0f}ft climb"
-        for r in stage_rows
+        f"  Stage {s['stage_num']}: {s['name']} — {s['distance_mi']:.1f}mi, {s['climb_ft']:.0f}ft climb"
+        for s in stages
     ]
 
     prompt = (
         f"Tour: {tour_title}\n"
         f"Dates: {start_date} to {end_date}\n"
-        f"Number of stages: {len(stage_rows)}\n"
+        f"Number of stages: {len(stages)}\n"
         f"Total: {total_dist:.1f}mi, {total_climb:.0f}ft climb\n"
         f"Average per stage: {avg_dist:.1f}mi, {avg_climb:.0f}ft climb\n\n"
         "Stages:\n" + "\n".join(stage_lines) + "\n\n"
@@ -1122,13 +1222,16 @@ async def get_stage_ai_advice(
     con2 = sqlite3.connect(db.path, timeout=15)
     try:
         completions = _global_stage_matching(con2, actual_uid, start_date, end_date, stages)
+        # Count one route per segment (exclude alternates); keep THIS stage even
+        # if it is itself an alternate. Matching still runs over the full list.
+        stat_stages = _collapse_alternate_stages(con2, stages, prefer_id=target["id"])
     finally:
         con2.close()
 
-    n_done = sum(1 for s in stages if completions.get(s["id"]))
+    n_done = sum(1 for s in stat_stages if completions.get(s["id"]))
 
     stage_lines = []
-    for s in stages:
+    for s in stat_stages:
         comp = completions.get(s["id"])
         marker = " ← UPCOMING" if s["id"] == target["id"] else ""
         done_str = ""
@@ -1140,16 +1243,43 @@ async def get_stage_ai_advice(
             f"  Stage {s['stage_num']}: {s['name']} — {s['distance_mi']:.1f}mi, {s['climb_ft']:.0f}ft climb{done_str}{marker}"
         )
 
+    # Stages after the target — advice must account for what's still to come.
+    upcoming = [s for s in stat_stages if s["stage_num"] > target["stage_num"]][:3]
+    if upcoming:
+        upcoming_block = (
+            "\n\nStages that come AFTER this one (plan energy and recovery accordingly):\n"
+            + "\n".join(
+                f"  Stage {s['stage_num']}: {s['name']} — {s['distance_mi']:.1f}mi, {s['climb_ft']:.0f}ft climb"
+                for s in upcoming
+            )
+        )
+    else:
+        upcoming_block = "\n\n(This is the final stage — the athlete can empty the tank.)"
+
+    # Athlete physiology + recent training trends (age, HR/power, load, recovery).
+    from app.coach_analysis import build_athlete_profile_block, build_training_analysis
+    profile_block    = build_athlete_profile_block(db, actual_uid)
+    analysis_block   = build_training_analysis(db, actual_uid)
+    profile_section  = f"\n{profile_block}\n"  if profile_block  else ""
+    analysis_section = f"\n{analysis_block}\n" if analysis_block else ""
+
     prompt = (
         f"Tour: {tour_title} ({start_date} to {end_date})\n"
-        f"Progress: {n_done} of {len(stages)} stages completed\n\n"
+        f"Progress: {n_done} of {len(stat_stages)} stages completed"
+        f"{profile_section}{analysis_section}\n"
         "All stages:\n" + "\n".join(stage_lines) + "\n\n"
         f"The athlete is preparing for Stage {target['stage_num']}: {target['name']} "
-        f"({target['distance_mi']:.1f}mi, {target['climb_ft']:.0f}ft climb).\n\n"
-        "Provide 2-4 sentences of specific coach advice for this upcoming stage. "
-        "Consider: the stage difficulty relative to completed stages, cumulative fatigue from prior stages, "
-        "and tactical tips (pacing, nutrition, effort management). "
-        "Do not mention training goals or recent training outside the tour. Be specific and actionable."
+        f"({target['distance_mi']:.1f}mi, {target['climb_ft']:.0f}ft climb)."
+        + upcoming_block + "\n\n"
+        "Provide 3-6 sentences of specific, actionable coach advice for this UPCOMING stage.\n"
+        "- Use the athlete's profile and recent training trends to judge whether their current fitness and "
+        "training-load balance leave them fresh or fatigued for this stage.\n"
+        "- Factor their age into pacing and how much recovery they need.\n"
+        "- Weigh the stage's difficulty against completed stages and cumulative fatigue, AND against the "
+        "stages that come afterward, so they don't over-spend today.\n"
+        "- Give concrete pacing, nutrition, and effort-management guidance. If they should take an easy or "
+        "rest day before or after, say so and how many.\n"
+        "Reference specific numbers from the data. Avoid generic platitudes."
     )
 
     async with httpx.AsyncClient(timeout=30) as client:
@@ -1162,7 +1292,7 @@ async def get_stage_ai_advice(
             },
             json={
                 "model":      model if model in MODELS else DEFAULT_MODEL,
-                "max_tokens": 300,
+                "max_tokens": 500,
                 "messages":   [{"role": "user", "content": prompt}],
             },
         )
@@ -1230,24 +1360,32 @@ async def get_stage_ai_summary(
             return JSONResponse({"summary": cache_row[0]})
 
         all_stage_rows = con.execute(
-            "SELECT id, stage_num, name, distance_mi, climb_ft "
+            "SELECT id, stage_num, name, distance_mi, climb_ft, start_lat, start_lon "
             "FROM tour_stages WHERE tour_id=? ORDER BY stage_num",
             (tour_id,),
         ).fetchall()
+        all_stages = [{
+            "id": r[0], "stage_num": r[1], "name": r[2],
+            "distance_mi": r[3], "climb_ft": r[4],
+            "start_lat": r[5], "start_lon": r[6],
+        } for r in all_stage_rows]
+        # Exclude alternative routes so counts/totals reflect one route per
+        # segment; keep THIS stage even if it is itself an alternate.
+        stages = _collapse_alternate_stages(con, all_stages, prefer_id=stage_id)
     finally:
         con.close()
 
     stage_num, stage_name, dist_mi, climb_ft = target_row
-    total_stages = len(all_stage_rows)
-    total_dist   = sum(r[3] for r in all_stage_rows)
-    total_climb  = sum(r[4] for r in all_stage_rows)
+    total_stages = len(stages)
+    total_dist   = sum(s["distance_mi"] for s in stages)
+    total_climb  = sum(s["climb_ft"] for s in stages)
     avg_dist     = total_dist  / total_stages if total_stages else 0
     avg_climb    = total_climb / total_stages if total_stages else 0
 
     stage_lines = [
-        f"  Stage {r[1]}: {r[2]} — {r[3]:.1f}mi, {r[4]:.0f}ft climb"
-        + (" ← THIS STAGE" if r[0] == stage_id else "")
-        for r in all_stage_rows
+        f"  Stage {s['stage_num']}: {s['name']} — {s['distance_mi']:.1f}mi, {s['climb_ft']:.0f}ft climb"
+        + (" ← THIS STAGE" if s["id"] == stage_id else "")
+        for s in stages
     ]
 
     prompt = (

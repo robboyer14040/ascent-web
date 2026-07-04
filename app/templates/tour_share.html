@@ -7,18 +7,10 @@
 <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
 <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="/static/common.css?v={{ app_version }}">
+<link rel="stylesheet" href="/static/tour_stage.css?v={{ app_version }}">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-:root{
-  --bg:#1c1c1e;--surface:#2c2c2e;--surface2:#3a3a3c;
-  --border:#3a3a3c;--border2:#48484a;
-  --text:#f2f2f7;--muted:#8e8e93;--muted2:#636366;
-  --accent:#f97316;--nav-hover:rgba(255,255,255,.06);
-  --lb-bg:rgba(0,0,0,.92);--lb-btn:rgba(255,255,255,.15);
-  --lb-text:#fff;--lb-muted:#aaa;--lb-hint:#666;
-}
-[data-theme="light"]{--bg:#f2f2f7;--surface:#ffffff;--surface2:#e5e5ea;--border:#d1d1d6;--border2:#c7c7cc;--text:#1c1c1e;--muted:#6c6c70;--muted2:#8e8e93;--accent:#f97316;--nav-hover:rgba(0,0,0,.05);--lb-bg:rgba(215,215,225,.95);--lb-btn:rgba(0,0,0,.12);--lb-text:#1c1c1e;--lb-muted:#6c6c70;--lb-hint:#8e8e93}
-@media(prefers-color-scheme:light){:root:not([data-theme]){--bg:#f2f2f7;--surface:#ffffff;--surface2:#e5e5ea;--border:#d1d1d6;--border2:#c7c7cc;--text:#1c1c1e;--muted:#6c6c70;--muted2:#8e8e93;--accent:#f97316;--nav-hover:rgba(0,0,0,.05);--lb-bg:rgba(215,215,225,.95);--lb-btn:rgba(0,0,0,.12);--lb-text:#1c1c1e;--lb-muted:#6c6c70;--lb-hint:#8e8e93}}
 html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif;font-size:13px;background:var(--bg);color:var(--text)}
 button{cursor:pointer;border:none;background:none;color:inherit;font:inherit}
 input,select{font:inherit}
@@ -35,22 +27,19 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
 #tour-header-sub{font-size:11px;color:var(--muted)}
 #stage-list-wrap{flex:1;overflow-y:auto}
 #stage-list{padding:4px 0}
-.stage-item{display:flex;align-items:center;gap:7px;padding:7px 10px;cursor:pointer;border-left:3px solid transparent}
+.stage-item{display:flex;align-items:center;gap:7px;padding:3px 10px;line-height:1.15;cursor:pointer;border-left:3px solid transparent}
 .stage-item:hover{background:rgba(255,255,255,.04)}
 .stage-item.active{background:rgba(249,115,22,.1);border-left-color:var(--accent)}
 .stage-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
 .stage-item-body{flex:1;min-width:0}
 .stage-item-name{font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.stage-item-sub{font-size:10px;color:var(--muted);margin-top:1px}
+.stage-item-sub{font-size:10px;color:var(--muted);margin-top:0}
 .stage-status{text-align:right;flex-shrink:0;min-width:52px}
 .stage-status-done{font-size:12px;font-weight:600;color:#22c55e;line-height:1.2}
 .stage-status-date{font-size:10px;color:var(--muted)}
 .stage-status-none{font-size:14px;color:var(--muted2);line-height:1}
 #main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
 #map{width:100%;background:#1a2030;flex-shrink:0;position:relative}
-.map-style-btn{background:rgba(0,0,0,.6);color:#ccc;border:1px solid rgba(255,255,255,.15);border-radius:4px;padding:2px 7px;font-size:11px;cursor:pointer;backdrop-filter:blur(4px);transition:all .15s}
-.map-style-btn:hover{background:rgba(0,0,0,.8);color:#fff}
-.map-style-btn.active{background:#f97316;color:#fff;border-color:#f97316}
 #resize-handle{height:6px;background:var(--surface2);cursor:row-resize;flex-shrink:0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);transition:background .1s;position:relative}
 #resize-handle:hover,#resize-handle.dragging{background:var(--accent);opacity:.5}
 #elev-resize-handle{height:6px;background:var(--surface2);cursor:row-resize;flex-shrink:0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);transition:background .1s;position:relative}
@@ -64,24 +53,6 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
 #stage-elev-strip{height:100px;flex-shrink:0;background:var(--bg);border-bottom:1px solid var(--border);position:relative;display:none;cursor:crosshair}
 #stage-elev-canvas{width:100%;height:100%;display:block}
 #stage-elev-xhair{display:none;position:absolute;pointer-events:none}
-.se-hover-panel{position:absolute;top:8px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.18);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:7px 14px;pointer-events:none;display:none;z-index:15;min-width:150px;white-space:nowrap}
-[data-theme="light"] .se-hover-panel{background:rgba(15,15,25,.72);border-color:rgba(0,0,0,.18)}
-@media(prefers-color-scheme:light){:root:not([data-theme]) .se-hover-panel{background:rgba(15,15,25,.72);border-color:rgba(0,0,0,.18)}}
-.se-hover-panel .eh-row{display:flex;justify-content:space-between;gap:18px;font-size:11px;line-height:1.75;font-family:-apple-system,sans-serif}
-.se-hover-panel .eh-label{color:rgba(255,255,255,.45);letter-spacing:.01em}
-.se-hover-panel .eh-val{font-weight:600;font-variant-numeric:tabular-nums;text-shadow:0 0 8px currentColor}
-.se-sel-stats{position:absolute;background:rgba(0,0,0,.22);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid rgba(74,222,128,.28);border-radius:10px;padding:7px 13px;pointer-events:auto;display:none;z-index:16;white-space:nowrap}
-.se-sel-stats .es-header{display:flex;justify-content:space-between;gap:24px;font-size:11px;line-height:1.7;border-bottom:1px solid rgba(255,255,255,.12);margin-bottom:3px;padding-bottom:2px}
-.se-sel-stats .es-grid{display:grid;grid-template-columns:1fr 1fr;column-gap:18px;row-gap:0}
-.se-sel-stats .es-row{display:flex;justify-content:space-between;gap:14px;font-size:11px;line-height:1.7}
-.se-sel-stats .es-lbl{color:rgba(255,255,255,.42);letter-spacing:.01em}
-.se-sel-stats .es-val{font-weight:600;font-variant-numeric:tabular-nums;color:rgba(255,255,255,.88)}
-.se-sel-stats .es-max-lbl{text-decoration:underline;cursor:pointer;pointer-events:auto}
-.se-sel-stats .es-maxat{flex:1;text-align:center}
-#stage-elev-hud-btn{position:absolute;top:4px;left:6px;z-index:15;font-size:10px;padding:2px 5px;line-height:1.4;background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.2);color:#ccc;border-radius:5px;cursor:pointer;user-select:none;-webkit-user-select:none}
-#stage-elev-hud-btn.active{background:#f97316;border-color:#f97316;color:#fff}
-#stage-elev-help{position:absolute;left:50px;top:50%;transform:translateY(-50%);z-index:14;background:rgba(0,0,0,.55);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,.15);border-radius:8px;padding:6px 10px;max-width:300px;font-size:11px;line-height:1.5;color:rgba(255,255,255,.72);pointer-events:none;transition:opacity .25s}
-#stage-elev-help.hidden{opacity:0}
 #stage-detail{flex:1;overflow-y:auto;padding:16px 20px;min-height:0}
 .section-label{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:7px}
 .stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:6px;align-content:start;margin-bottom:8px;flex:1;min-width:0}
@@ -148,10 +119,6 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
   #tour-header{padding:6px}
   #main{flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden}
 }
-.mob-disclose{display:none;background:none;border:none;color:var(--text);font-size:14px;cursor:pointer;padding:0 8px;line-height:1;align-items:center;height:28px;flex-shrink:0}
-.mob-arr{display:inline-block;transform:scale(2.25);transform-origin:center;transition:transform .2s}
-.mob-arr.collapsed{transform:scale(2.25) rotate(-90deg)}
-.rh-section-lbl{display:none;flex:1;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
 body.mob-stage-view #resize-handle{padding:0 4px 0 12px;justify-content:flex-start}
 body.mob-stage-view #resize-handle::after{display:none}
 body.mob-stage-view .rh-section-lbl{display:block}
@@ -226,11 +193,16 @@ body.mob-stage-view #elev-resize-handle::after{display:none}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="/static/common.js?v={{ app_version }}"></script>
+<script src="/static/share_common.js?v={{ app_version }}"></script>
+<script src="/static/tour_stage.js?v={{ app_version }}"></script>
+<script src="/static/activity_chips.js?v={{ app_version }}"></script>
 <script src="/static/map_utils.js"></script>
 <script src="/static/lightbox.js?v={{ app_version }}"></script>
 <script src="/static/elev_panel.js?v={{ app_version }}"></script>
 <script src="/static/elev_gradient.js?v={{ app_version }}"></script>
 <script src="/static/stage_elev_chart.js?v={{ app_version }}"></script>
+<script src="/static/tour_elev.js?v={{ app_version }}"></script>
 <script>
 const TOKEN = {{ token | tojson }};
 
@@ -245,17 +217,10 @@ const U = {
   precipS:mm  => U.metric ? mm+' mm' : (mm/25.4).toFixed(2)+'"',
 };
 
-function fmtHMS(s) {
-  if(!s) return '—';
-  s = Math.round(s);
-  const h=Math.floor(s/3600), m=Math.floor((s%3600)/60), sec=s%60;
-  return h ? `${h}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}` : `${m}:${String(sec).padStart(2,'0')}`;
-}
 function fmtDate(ts) {
   if(!ts) return '';
   try { return new Date(parseInt(ts)*1000).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}); } catch(e) { return ''; }
 }
-function esc(s) { const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
 function mkStatChip(l,v,sub) {
   return `<div class="stat-chip"><div class="sc-label">${l}</div><div class="sc-val">${v}</div><div class="sc-sub">${sub||''}</div></div>`;
 }
@@ -263,38 +228,12 @@ function chip4(l,v,altSub,bot) {
   return `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">${l}</div><div class="sc-val">${v}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${altSub}</div><div class="sc-sub">${bot}</div></div>`;
 }
 function stageColor(s) { return s.completion ? '#ef4444' : '#1e40af'; }
+const SEL_COLOR = '#ef4444';   // selected route → bold red
 
-// ── Flag icons ────────────────────────────────────────────────────────────────
-const _startIcon = L.divIcon({
-  html: `<svg width="17" height="22" viewBox="0 0 20 26" xmlns="http://www.w3.org/2000/svg" style="filter:drop-shadow(0 1px 3px rgba(0,0,0,.9))">
-    <line x1="2" y1="0" x2="2" y2="26" stroke="white" stroke-width="2"/>
-    <polygon points="2,2 19,7 2,12" fill="#22c55e" stroke="#15803d" stroke-width="1"/>
-  </svg>`,
-  className: '', iconSize: [17,22], iconAnchor: [2,22],
-});
-const _endIcon = L.divIcon({
-  html: `<svg width="17" height="20" viewBox="0 0 22 26" xmlns="http://www.w3.org/2000/svg" style="filter:drop-shadow(0 1px 3px rgba(0,0,0,.9))">
-    <line x1="2" y1="0" x2="2" y2="26" stroke="white" stroke-width="2"/>
-    <rect x="2" y="2" width="20" height="12" fill="white" stroke="#333" stroke-width="0.5"/>
-    <rect x="2"  y="2"  width="5" height="4" fill="black"/>
-    <rect x="12" y="2"  width="5" height="4" fill="black"/>
-    <rect x="7"  y="6"  width="5" height="4" fill="black"/>
-    <rect x="17" y="6"  width="5" height="4" fill="black"/>
-    <rect x="2"  y="10" width="5" height="4" fill="black"/>
-    <rect x="12" y="10" width="5" height="4" fill="black"/>
-  </svg>`,
-  className: '', iconSize: [17,20], iconAnchor: [2,20],
-});
 
 // ── Map ───────────────────────────────────────────────────────────────────────
 let shareMap = null, tileLayer = null, routeGroup = null, _lastBounds = null;
-const TILE_LAYERS = {
-  'osm':         ['https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', '© OpenStreetMap contributors'],
-  'topo':        ['https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',   '© OpenTopoMap'],
-  'carto-dark':  ['https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', '© CARTO'],
-  'carto-light': ['https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png','© CARTO'],
-  'esri-sat':    ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}','© Esri'],
-};
+function getStageMap() { return shareMap; }
 function initMap() {
   const mapFrac = (isMobTour() && isPortrait()) ? 0.38 : 0.55;
   mapH = Math.round((window.innerHeight - tourChromeH()) * mapFrac);
@@ -306,15 +245,6 @@ function initMap() {
   MapUtils.addScale(shareMap, U.metric);
   new ResizeObserver(() => { shareMap && shareMap.invalidateSize({animate:false}); })
     .observe(document.getElementById('map'));
-}
-function setMapStyle(key, init=false) {
-  document.querySelectorAll('.map-style-btn').forEach(b => b.classList.toggle('active', b.dataset.style===key));
-  const [url, attr] = TILE_LAYERS[key] || TILE_LAYERS['osm'];
-  if(tileLayer) shareMap.removeLayer(tileLayer);
-  tileLayer = L.tileLayer(url, {attribution:attr, maxZoom:19}).addTo(shareMap);
-}
-function resetZoom() {
-  if(_lastBounds) shareMap.fitBounds(_lastBounds, {padding:[24,24]});
 }
 
 // ── Resize handle ─────────────────────────────────────────────────────────────
@@ -340,258 +270,12 @@ function resetZoom() {
   handle.addEventListener('touchend',   endDrag);
 })();
 
-// ── Elevation strip vertical resize ──────────────────────────────────────────
-const _ELEV_H_KEY = 'ascent-stage-elev-h';
-const _ELEV_H_MIN = 60, _ELEV_H_MAX = 400, _ELEV_H_DEF = 100;
-function _elevHSaved() {
-  try { const v = parseInt(localStorage.getItem(_ELEV_H_KEY)); return (v >= _ELEV_H_MIN && v <= _ELEV_H_MAX) ? v : _ELEV_H_DEF; } catch(e) { return _ELEV_H_DEF; }
-}
-function _elevHSave(h) { try { localStorage.setItem(_ELEV_H_KEY, h); } catch(e) {} }
 
-(function() {
-  const handle = document.getElementById('elev-resize-handle');
-  if (!handle) return;
-  let drag = false, startY = 0, startH = 0;
-  function startDrag(y) {
-    const strip = document.getElementById('stage-elev-strip');
-    if (!strip) return;
-    drag = true; startY = y; startH = strip.offsetHeight;
-    handle.classList.add('dragging');
-    document.body.style.cursor = 'row-resize';
-    document.body.style.userSelect = 'none';
-  }
-  function moveDrag(y) {
-    if (!drag) return;
-    const strip = document.getElementById('stage-elev-strip');
-    if (!strip) return;
-    const newH = Math.max(_ELEV_H_MIN, Math.min(_ELEV_H_MAX, startH + (y - startY)));
-    strip.style.height = newH + 'px';
-    _elevChart?.resize?.();
-    if (document.body.classList.contains('mob-stage-view') && isPortrait()) {
-      document.getElementById('stage-detail').style.top = _stageDetailTop();
-    }
-  }
-  function endDrag() {
-    if (!drag) return;
-    drag = false;
-    handle.classList.remove('dragging');
-    document.body.style.cursor = '';
-    document.body.style.userSelect = '';
-    const strip = document.getElementById('stage-elev-strip');
-    if (strip) _elevHSave(strip.offsetHeight);
-    _elevChart?.resize?.();
-  }
-  handle.addEventListener('mousedown',  e => { startDrag(e.clientY); e.preventDefault(); });
-  document.addEventListener('mousemove', e => moveDrag(e.clientY));
-  document.addEventListener('mouseup',   endDrag);
-  handle.addEventListener('touchstart', e => { startDrag(e.touches[0].clientY); e.preventDefault(); }, {passive:false});
-  handle.addEventListener('touchmove',  e => { moveDrag(e.touches[0].clientY); e.preventDefault(); }, {passive:false});
-  handle.addEventListener('touchend',   endDrag);
-})();
 
-function toggleMobStats() {
-  const mps = document.getElementById('mob-portrait-stats');
-  const btn = document.getElementById('stats-toggle');
-  if (!mps || !btn) return;
-  const collapsed = mps.classList.toggle('stats-collapsed');
-  btn.textContent = collapsed ? '▸' : '▾';
-  _syncStageListHeight();
-}
 
-// ── Elevation strip ───────────────────────────────────────────────────────────
-let _elevChart = null, _elevRawPts = null, _elevHoverDot = null;
-let _elevChartPts = null, _elevGradeOn = true, _elevPeaksOn = true;
-let _elevGradPts = null; // pre-computed gradient [{x,y}] from full-res raw pts
-let _shareActData = null; // per-point chart data for completed stages (always null on share page)
-let _elevSettingsOpen = false;
-
-function _saveElevChartPrefs() {
-  try { localStorage.setItem('ascent-stage-chart-prefs', JSON.stringify({ gradeOn: _elevGradeOn, peaksOn: _elevPeaksOn })); } catch(e) {}
-}
-function _loadElevChartPrefs() {
-  try {
-    const p = JSON.parse(localStorage.getItem('ascent-stage-chart-prefs') || 'null');
-    if (!p) return;
-    if (p.gradeOn !== undefined) { _elevGradeOn = !!p.gradeOn; const cb = document.getElementById('stage-grade-cb'); if (cb) cb.checked = _elevGradeOn; }
-    if (p.peaksOn !== undefined) { _elevPeaksOn = !!p.peaksOn; const cb = document.getElementById('stage-peaks-cb'); if (cb) cb.checked = _elevPeaksOn; }
-  } catch(e) {}
-}
-function onStagePeaksCbChange(cb) {
-  _elevPeaksOn = cb.checked;
-  _saveElevChartPrefs();
-  if (_elevChartPts) _rebuildElevChart();
-}
-function onStageGradeCbChange(cb) {
-  _elevGradeOn = cb.checked;
-  _saveElevChartPrefs();
-  if (_elevChartPts) _rebuildElevChart();
-}
-function toggleStageSettings(e) {
-  e.stopPropagation();
-  const pop = document.getElementById('stage-chart-settings');
-  if (!pop) return;
-  _elevSettingsOpen = !_elevSettingsOpen;
-  if (_elevSettingsOpen) {
-    const btn = document.getElementById('stage-settings-btn');
-    const r = btn.getBoundingClientRect();
-    pop.style.top   = (r.bottom + 4) + 'px';
-    pop.style.right = (window.innerWidth - r.right) + 'px';
-    pop.style.left  = 'auto';
-    pop.style.display = 'block';
-  } else {
-    pop.style.display = 'none';
-  }
-}
-document.addEventListener('click', function(e) {
-  if (!_elevSettingsOpen) return;
-  const pop = document.getElementById('stage-chart-settings');
-  const btn = document.getElementById('stage-settings-btn');
-  if (pop && !pop.contains(e.target) && e.target !== btn) {
-    pop.style.display = 'none';
-    _elevSettingsOpen = false;
-  }
-});
-function _rebuildElevChart() {
-  const canvas = document.getElementById('stage-elev-canvas');
-  if (!canvas || !_elevChartPts) return;
-  if (_elevChart) { _elevChart.destroy(); _elevChart = null; }
-  _elevChart = buildStageElevChart(canvas, _elevChartPts, { gradeOn: _elevGradeOn, gradPts: _elevGradPts, showPeaks: _elevPeaksOn });
-  _elevChart._chartPts = _elevChartPts;
-  window._stageElevReapplySel?.();
-}
-
-function _haversineMi(lat1, lon1, lat2, lon2) {
-  const R=3958.8, dLat=(lat2-lat1)*Math.PI/180, dLon=(lon2-lon1)*Math.PI/180;
-  const a=Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
-  return R*2*Math.asin(Math.sqrt(a));
-}
-function drawStageElevation(pts) {
-  const strip=document.getElementById('stage-elev-strip'), canvas=document.getElementById('stage-elev-canvas');
-  if(!strip||!canvas) return;
-  _shareActData=null;
-  window._stageElevClearSel?.();
-  if(_elevChart){_elevChart.destroy();_elevChart=null;}
-  if(_elevHoverDot){_elevHoverDot.remove();_elevHoverDot=null;}
-  _elevRawPts=null; _elevChartPts=null; _elevGradPts=null;
-  // Reset mobile collapse state for new stage
-  _mobElevCollapsed = false;
-  _mobInfoCollapsed = false;
-  const _mehBtn=document.getElementById('mob-elev-disclose');
-  if(_mehBtn){const _a=_mehBtn.querySelector('.mob-arr');if(_a)_a.classList.remove('collapsed');}
-  const _mihBtn=document.getElementById('mob-info-disclose');
-  if(_mihBtn){const _a=_mihBtn.querySelector('.mob-arr');if(_a)_a.classList.remove('collapsed');}
-  const _detailEl=document.getElementById('stage-detail');
-  if(_detailEl) _detailEl.style.display='';
-  if(!pts?.length||pts[0].length<3||!pts.some(p=>p[2]&&p[2]!==0)){strip.style.display='none';return;}
-  const step=Math.max(1,Math.floor(pts.length/600));
-  const distConv=U.metric?mi=>+(mi*1.60934).toFixed(3):mi=>+mi.toFixed(3);
-  const altConv=U.metric?ft=>Math.round(ft*0.3048):ft=>Math.round(ft);
-  let cum=0; const chartPts=[], rawPts=[];
-  for(let i=0;i<pts.length;i++){
-    if(i>0) cum+=_haversineMi(pts[i-1][0],pts[i-1][1],pts[i][0],pts[i][1]);
-    if(i%step===0||i===pts.length-1){chartPts.push({x:distConv(cum),y:altConv(pts[i][2]||0)});rawPts.push(pts[i]);}
-  }
-  if(!chartPts.length){strip.style.display='none';return;}
-  _elevRawPts=rawPts; _elevChartPts=chartPts;
-  _elevGradPts=computeStageGradFromRawPts(pts, step, distConv);
-  strip.style.height=_elevHSaved()+'px';
-  strip.style.display='block';
-  const _elevHandle=document.getElementById('elev-resize-handle');
-  if(_elevHandle) _elevHandle.style.display='';
-  _rebuildElevChart();
-  stageElevInteraction({
-    getChart:    () => _elevChart,
-    getChartPts: () => _elevChartPts,
-    getGradPts:  () => _elevGradPts,
-    getRawPts:   () => _elevRawPts,
-    getActData:  () => _shareActData,
-    getMap:      () => shareMap,
-    getMapDot:   () => _elevHoverDot,
-    setMapDot:   m  => { _elevHoverDot = m; },
-  });
-}
-function hideStageElevation() {
-  const strip=document.getElementById('stage-elev-strip');
-  if(strip) strip.style.display='none';
-  const _elevHandle=document.getElementById('elev-resize-handle');
-  if(_elevHandle) _elevHandle.style.display='none';
-  window._stageElevClearSel?.();
-  if(_elevChart){_elevChart.destroy();_elevChart=null;}
-  if(_elevHoverDot){_elevHoverDot.remove();_elevHoverDot=null;}
-  _elevRawPts=null; _elevChartPts=null; _elevGradPts=null; _shareActData=null;
-  // Reset mobile collapse state
-  _mobElevCollapsed=false; _mobInfoCollapsed=false;
-  const _mehBtn2=document.getElementById('mob-elev-disclose');
-  if(_mehBtn2){const _a=_mehBtn2.querySelector('.mob-arr');if(_a)_a.classList.remove('collapsed');}
-  const _mihBtn2=document.getElementById('mob-info-disclose');
-  if(_mihBtn2){const _a=_mihBtn2.querySelector('.mob-arr');if(_a)_a.classList.remove('collapsed');}
-  const _detailEl2=document.getElementById('stage-detail');
-  if(_detailEl2) _detailEl2.style.display='';
-}
-
-// ── Biggest climb ─────────────────────────────────────────────────────────────
-function biggestClimbInfo(pts) {
-  if(!pts?.length||pts[0].length<3) return {gainFt:0,startKm:0};
-  const raw=pts.map(p=>p[2]||0), half=2;
-  const alts=raw.map((_,i)=>{let s=0,c=0;for(let j=Math.max(0,i-half);j<=Math.min(raw.length-1,i+half);j++){s+=raw[j];c++;}return s/c;});
-  const cumKm=[0];
-  for(let i=1;i<pts.length;i++) cumKm.push(cumKm[i-1]+_haversineMi(pts[i-1][0],pts[i-1][1],pts[i][0],pts[i][1])*1.60934);
-  let best=0,bestKm=0,inClimb=false,startKm=0,startAlt=0,maxAlt=0,flatFt=0;
-  for(let i=1;i<pts.length;i++){
-    const dAlt=alts[i]-alts[i-1], dFt=(cumKm[i]-cumKm[i-1])*3280.84, grad=dFt>0?(dAlt/dFt)*100:0;
-    if(!inClimb){if(grad>3){inClimb=true;startKm=cumKm[i-1];startAlt=alts[i-1];maxAlt=Math.max(alts[i-1],alts[i]);flatFt=0;}}
-    else{if(grad>0){flatFt=0;maxAlt=Math.max(maxAlt,alts[i]);}else{flatFt+=dFt;if(flatFt>250){const g=maxAlt-startAlt;if(g>best){best=g;bestKm=startKm;}inClimb=false;flatFt=0;}}}
-  }
-  if(inClimb){const g=maxAlt-startAlt;if(g>best){best=g;bestKm=startKm;}}
-  return {gainFt:best,startKm:bestKm};
-}
-
-// ── Reverse geocode ───────────────────────────────────────────────────────────
-async function reverseGeocode(lat, lon) {
-  try {
-    const r=await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`);
-    const d=await r.json();
-    return [d.city||d.locality||d.principalSubdivision, d.countryName].filter(Boolean).slice(0,2).join(', ') || null;
-  } catch(e) { return null; }
-}
 
 // ── Mobile helpers ─────────────────────────────────────────────────────────────
-const isMobTour  = () => Math.min(window.innerWidth, window.innerHeight) <= 767;
-const isPortrait = () => window.innerWidth < window.innerHeight;
 const tourChromeH = () => isMobTour() ? 52 : 44;
-function _stageDetailTop() {
-  const strip = document.getElementById('stage-elev-strip');
-  const rh    = document.getElementById('resize-handle');
-  const erh   = document.getElementById('elev-resize-handle');
-  const rhH   = rh  ? rh.offsetHeight  : 6;
-  const elevH = (strip && strip.style.display !== 'none') ? strip.offsetHeight : 0;
-  const erhH  = erh ? erh.offsetHeight : 0;
-  return (tourChromeH() + mapH + rhH + elevH + erhH) + 'px';
-}
-function toggleMobElev() {
-  if (!isMobTour()) return;
-  const strip = document.getElementById('stage-elev-strip');
-  const btn   = document.getElementById('mob-elev-disclose');
-  const arr   = btn && btn.querySelector('.mob-arr');
-  if (!strip || (strip.style.display === 'none' && !_mobElevCollapsed)) return;
-  _mobElevCollapsed = !_mobElevCollapsed;
-  strip.style.display = _mobElevCollapsed ? 'none' : '';
-  if (arr) arr.classList.toggle('collapsed', _mobElevCollapsed);
-  if (document.body.classList.contains('mob-stage-view') && isPortrait()) {
-    const sd = document.getElementById('stage-detail');
-    if (sd) sd.style.top = _stageDetailTop();
-  }
-}
-function toggleMobInfo() {
-  if (!isMobTour()) return;
-  const detail = document.getElementById('stage-detail');
-  const btn    = document.getElementById('mob-info-disclose');
-  const arr    = btn && btn.querySelector('.mob-arr');
-  if (!detail) return;
-  _mobInfoCollapsed = !_mobInfoCollapsed;
-  detail.style.display = _mobInfoCollapsed ? 'none' : '';
-  if (arr) arr.classList.toggle('collapsed', _mobInfoCollapsed);
-}
 function _syncStageListHeight() {
   const wrap = document.getElementById('stage-list-wrap');
   if (!isMobTour() || !isPortrait()) { if (wrap) wrap.style.top = ''; return; }
@@ -605,8 +289,6 @@ function _syncStageListHeight() {
 // ── State ─────────────────────────────────────────────────────────────────────
 let tourInfo = null, pointsCache = {}, selectedId = null;
 let mapH = 0;
-let _mobElevCollapsed = false;
-let _mobInfoCollapsed = false;
 let _shareLbMedia = [];
 
 // ── Lightbox ──────────────────────────────────────────────────────────────────
@@ -626,9 +308,7 @@ function openShareLightbox(idx) {
     return;
   }
 
-  const stages=tourInfo.stages||[], done=stages.filter(s=>s.completion).length;
-  document.getElementById('tour-header-sub').textContent =
-    `${tourInfo.start_date} – ${tourInfo.end_date}  ·  ${done}/${stages.length} stages complete`;
+  const stages=tourInfo.stages||[];
 
   try {
     const [_planned, _actual] = await Promise.all([
@@ -638,6 +318,12 @@ function openShareLightbox(idx) {
     pointsCache = {..._planned};
     Object.entries(_actual).forEach(([sid, pts]) => { if(pts?.length) pointsCache[sid] = pts; });
   } catch(e) {}
+
+  // Stage count excludes alternative routes — dedupe needs the loaded points.
+  const _statStages=_dedupeStatStages(stages, pointsCache), _done=_statStages.filter(s=>s.completion).length;
+  document.getElementById('tour-header-sub').textContent =
+    `${tourInfo.start_date} – ${tourInfo.end_date}  ·  ${_done}/${_statStages.length} stages complete`;
+
   drawRoutes(null);
   renderStageList();
   renderDetail(null);
@@ -651,18 +337,32 @@ function drawRoutes(selId) {
   routeGroup.clearLayers();
   MapUtils.clearPhotoMarkers(shareMap);
   const stages=tourInfo?.stages||[], allPts=[], hasSel=selId!=null;
+  const altIds=_altStageIds(stages, pointsCache);
+  // Selected stage + its alternate siblings (same [start,end] group).
+  const groupIds = hasSel ? _stageGroupIds(selId) : new Set();
+  let activeLine=null;
   stages.forEach(s => {
     const pts=pointsCache[String(s.id)]; if(!pts?.length) return;
-    const lpts=pts.map(p=>[p[0],p[1]]), isSelected=hasSel&&String(s.id)===String(selId);
-    L.polyline(lpts,{color:stageColor(s),weight:isSelected?5:3,opacity:hasSel?(isSelected?1:0.18):0.85}).addTo(routeGroup);
+    const lpts=pts.map(p=>[p[0],p[1]]), sid=String(s.id);
+    const isSelected=hasSel&&sid===String(selId);
+    const isSibling=hasSel&&!isSelected&&groupIds.has(sid);
+    let opts;
+    if(isSelected)      opts={color:SEL_COLOR,weight:5,opacity:1};                     // selected → bold red solid
+    else if(isSibling)  opts={color:SEL_COLOR,weight:3,opacity:0.9,dashArray:'6,8'};   // its alternate(s) → dashed
+    else { opts={color:stageColor(s),weight:3,opacity:hasSel?0.18:0.85}; if(altIds.has(sid)) opts.dashArray='6,8'; }
+    const line=L.polyline(lpts,opts).addTo(routeGroup);
+    if(isSelected) activeLine=line;
     allPts.push(...lpts);
   });
+  if(activeLine) activeLine.bringToFront();   // keep the selected route above its alternates
   if(!hasSel) {
     const first=stages[0];
     if(first?.start_lat!=null) L.marker([first.start_lat,first.start_lon],{icon:_startIcon,zIndexOffset:50,interactive:false}).addTo(routeGroup);
-    stages.forEach(s => {
+    // One numbered circle per segment group, renumbered sequentially so
+    // alternate routes are excluded from the numbering.
+    _dedupeStatStages(stages, pointsCache).forEach((s, i) => {
       if(s.start_lat==null||s.start_lon==null) return;
-      const icon=L.divIcon({className:'',html:`<div style="width:16px;height:16px;border-radius:50%;background:#fff;border:1.5px solid #000;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:#000;font-family:-apple-system,sans-serif;line-height:1;box-sizing:border-box">${s.stage_num}</div>`,iconSize:[16,16],iconAnchor:[8,8]});
+      const icon=L.divIcon({className:'',html:`<div style="width:16px;height:16px;border-radius:50%;background:#fff;border:1.5px solid #000;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:#000;font-family:-apple-system,sans-serif;line-height:1;box-sizing:border-box">${i + 1}</div>`,iconSize:[16,16],iconAnchor:[8,8]});
       L.marker([s.start_lat,s.start_lon],{icon,zIndexOffset:150,interactive:false}).addTo(routeGroup);
     });
     const last=stages[stages.length-1], lastPts=last?pointsCache[String(last.id)]:null;
@@ -677,13 +377,16 @@ function drawRoutes(selId) {
 // ── Stage list ────────────────────────────────────────────────────────────────
 function renderStageList() {
   const list=document.getElementById('stage-list'), stages=tourInfo?.stages||[];
+  const altIds=_altStageIds(stages, pointsCache);
   list.innerHTML = stages.map(s => {
     const statusHtml = s.completion
       ? `<div class="stage-status"><div class="stage-status-done">✓</div><div class="stage-status-date">${s.completion.date}</div></div>`
       : `<div class="stage-status"><div class="stage-status-none">—</div></div>`;
+    // Alternate routes render italicised and parenthesised.
+    const nameHtml = altIds.has(String(s.id)) ? `<em>(${esc(s.name)})</em>` : esc(s.name);
     return `<div class="stage-item${String(s.id)===String(selectedId)?' active':''}" onclick="selectStage('${s.id}')">
       <span class="stage-dot" style="background:${stageColor(s)}"></span>
-      <div class="stage-item-body"><div class="stage-item-name">${esc(s.name)}</div><div class="stage-item-sub">${U.distS(s.distance_mi)} · ${U.climbS(s.climb_ft)} climb</div></div>${statusHtml}</div>`;
+      <div class="stage-item-body"><div class="stage-item-name">${nameHtml}</div><div class="stage-item-sub">${U.distS(s.distance_mi)} · ${U.climbS(s.climb_ft)} climb</div></div>${statusHtml}</div>`;
   }).join('');
 }
 
@@ -717,8 +420,9 @@ function selectStage(id) {
   selectedId = (String(id)===String(selectedId)) ? null : id;
   renderStageList(); drawRoutes(selectedId); renderDetail(selectedId);
   if(selectedId) {
-    const pts=pointsCache[String(selectedId)];
-    if(pts?.length) shareMap.fitBounds(L.latLngBounds(pts.map(p=>[p[0],p[1]])),{padding:[24,24]});
+    // Fit to the selected route plus any of its alternates so both are visible.
+    const gp=[]; _stageGroupIds(selectedId).forEach(id=>{const p=pointsCache[id]; if(p?.length) gp.push(...p.map(q=>[q[0],q[1]]));});
+    if(gp.length) shareMap.fitBounds(L.latLngBounds(gp),{padding:[24,24]});
   } else { resetZoom(); }
   if (isMobTour()) {
     if (isPortrait()) {
@@ -800,6 +504,15 @@ function mobShareBack() {
   });
 })();
 
+
+// IDs (as strings) of the segment group containing `id` — the selected route plus
+// any of its alternates. Falls back to just `id` when it has no alternates.
+function _stageGroupIds(id) {
+  const stages=tourInfo?.stages||[];
+  const g=_stageSegmentGroups(stages, pointsCache).find(g=>g.some(s=>String(s.id)===String(id)));
+  return new Set((g||[{id}]).map(s=>String(s.id)));
+}
+
 // ── Detail pane ───────────────────────────────────────────────────────────────
 async function renderDetail(activeId) {
   const el=document.getElementById('stage-detail'), stages=tourInfo?.stages||[];
@@ -807,14 +520,15 @@ async function renderDetail(activeId) {
   if(!activeId) {
     // ── Overview ──────────────────────────────────────────────────────────────
     hideStageElevation();
-    const done=stages.filter(s=>s.completion);
-    const totalDist=stages.reduce((a,x)=>a+(x.distance_mi||0),0);
-    const totalClimb=stages.reduce((a,x)=>a+(x.climb_ft||0),0);
+    const statStages=_dedupeStatStages(stages, pointsCache);
+    const done=statStages.filter(s=>s.completion);
+    const totalDist=statStages.reduce((a,x)=>a+(x.distance_mi||0),0);
+    const totalClimb=statStages.reduce((a,x)=>a+(x.climb_ft||0),0);
     const doneDist=done.reduce((a,x)=>a+(x.completion?.distance_mi??x.distance_mi??0),0);
     const doneClimb=done.reduce((a,x)=>a+(x.completion?.climb_ft??x.climb_ft??0),0);
     const pctD=totalDist>0?Math.round(doneDist/totalDist*100):0;
     const pctC=totalClimb>0?Math.round(doneClimb/totalClimb*100):0;
-    const n=stages.length||1, avgDist=totalDist/n, avgClimb=totalClimb/n;
+    const n=statStages.length||1, avgDist=totalDist/n, avgClimb=totalClimb/n;
     const maxDistIdx=stages.reduce((mi,x,i)=>(x.distance_mi||0)>(stages[mi].distance_mi||0)?i:mi,0);
     const maxClimbIdx=stages.reduce((mi,x,i)=>(x.climb_ft||0)>(stages[mi].climb_ft||0)?i:mi,0);
     const maxDist=stages[maxDistIdx]?.distance_mi||0, maxClimb=stages[maxClimbIdx]?.climb_ft||0;
@@ -825,7 +539,7 @@ async function renderDetail(activeId) {
     const amd=U.metric?maxDist.toFixed(1)+' mi':(maxDist*1.60934).toFixed(1)+' km';
     const amc=U.metric?Math.round(maxClimb)+' ft':Math.round(maxClimb*0.3048)+' m';
     let html=`<div class="stats-grid" style="grid-template-columns:repeat(7,1fr);margin-bottom:14px">`;
-    html+=`<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Stages</div><div class="sc-val">${done.length} / ${stages.length}</div><div class="sc-sub">completed</div></div>`;
+    html+=`<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Stages</div><div class="sc-val">${done.length} / ${statStages.length}</div><div class="sc-sub">completed</div></div>`;
     html+=`<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Total Dist</div><div class="sc-val">${U.distS(totalDist)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${ad}</div><div class="sc-sub">${U.distS(doneDist)} done (${pctD}%)</div></div>`;
     html+=`<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Total Ascent</div><div class="sc-val">${U.climbS(totalClimb)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${ac}</div><div class="sc-sub">${U.climbS(doneClimb)} done (${pctC}%)</div></div>`;
     html+=`<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Avg Dist</div><div class="sc-val">${U.distS(avgDist)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${aad}</div><div class="sc-sub">per stage</div></div>`;
@@ -842,7 +556,7 @@ async function renderDetail(activeId) {
     el.innerHTML=html;
     const _mpsEl=document.getElementById('mob-portrait-stats');
     if(_mpsEl) _mpsEl.innerHTML=`<div class="stats-grid">${
-      `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Stages</div><div class="sc-val">${done.length} / ${stages.length}</div><div class="sc-sub">completed</div></div>`+
+      `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Stages</div><div class="sc-val">${done.length} / ${statStages.length}</div><div class="sc-sub">completed</div></div>`+
       `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Total Dist</div><div class="sc-val">${U.distS(totalDist)}</div><div class="sc-sub">${U.distS(doneDist)} done</div></div>`+
       `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Total Ascent</div><div class="sc-val">${U.climbS(totalClimb)}</div><div class="sc-sub">${U.climbS(doneClimb)} done</div></div>`
     }</div>`;
@@ -945,28 +659,6 @@ async function renderDetail(activeId) {
         // Register for sync
         _syncActId=act.id; _syncStageId=activeId;
 
-        function altPaceStr(mph,perMile){
-          if(!mph||mph<=0) return null;
-          const mins=perMile?60/mph:60/(mph*1.60934), m=Math.floor(mins), s=Math.round((mins-m)*60);
-          return `${m}:${String(s).padStart(2,'0')}/${perMile?'mi':'km'}`;
-        }
-        const chips=[
-          ['Distance',  act.distance_mi?U.distS(act.distance_mi):null, act.distance_mi?(U.metric?(+act.distance_mi.toFixed(2))+' mi':(+(act.distance_mi*1.60934).toFixed(2))+' km'):null],
-          ['Mov Time',  act.active_time?fmtHMS(act.active_time):null, null],
-          ['Duration',  act.duration?fmtHMS(act.duration):null, null],
-          ['Ascent',    act.total_climb_ft?U.climbS(act.total_climb_ft):null, act.total_climb_ft?(U.metric?Math.round(act.total_climb_ft)+' ft':Math.round(act.total_climb_ft*0.3048)+' m'):null],
-          ['Descent',   act.total_descent_ft?U.climbS(act.total_descent_ft):null, act.total_descent_ft?(U.metric?Math.round(act.total_descent_ft)+' ft':Math.round(act.total_descent_ft*0.3048)+' m'):null],
-          ['Mov Spd',   act.avg_speed_mph?U.speedS(act.avg_speed_mph):null, act.avg_speed_mph?(U.metric?act.avg_speed_mph.toFixed(1)+' mph':(act.avg_speed_mph*1.60934).toFixed(1)+' km/h'):null],
-          ['Avg Spd',   (act.duration&&act.distance_mi)?U.speedS(+(act.distance_mi/(act.duration/3600)).toFixed(1)):null,(act.duration&&act.distance_mi)?(()=>{const mph=+(act.distance_mi/(act.duration/3600)).toFixed(1);return U.metric?mph+' mph':(+(mph*1.60934).toFixed(1))+' km/h';})():null],
-          ['Avg Pace',  act.avg_speed_mph?altPaceStr(act.avg_speed_mph,!U.metric):null, act.avg_speed_mph?altPaceStr(act.avg_speed_mph,U.metric):null],
-          ['Avg HR',    act.avg_heartrate?Math.round(act.avg_heartrate)+' bpm':null, null],
-          ['Max HR',    act.max_heartrate?Math.round(act.max_heartrate)+' bpm':null, null],
-          ['Cadence',   act.avg_cadence?Math.round(act.avg_cadence)+' rpm':null, null],
-          ['Avg Pwr',   act.avg_power?Math.round(act.avg_power)+' W':null, act.max_power?'max '+Math.round(act.max_power)+' W':null],
-          ['Suffer',    act.suffer_score?Math.round(act.suffer_score)+'':null, null],
-          ['Type',      act.activity_type?esc(act.activity_type):null, null],
-          ['Equipment', act.equipment?esc(act.equipment):null, null],
-        ].filter(([,v])=>v);
 
         const _rpeLabels=['','Easy','Easy+','Moderate','Moderate+','Medium','Hard','Hard+','Very Hard','Max-','Max'];
         let rpeHtml='';
@@ -997,13 +689,7 @@ async function renderDetail(activeId) {
         aHtml+=rpeHtml;
         if(act.notes) aHtml+=`<div class="act-notes">${esc(act.notes)}</div>`;
         if(act.ai_summary) aHtml+=`<div class="ai-card" style="margin-top:8px;margin-bottom:8px"><div class="ai-card-label">AI Summary</div><div class="ai-card-body">${esc(act.ai_summary)}</div></div>`;
-        aHtml+=`<div class="stats-grid">`;
-        chips.forEach(([l,v,sub])=>{
-          const span=l==='Equipment'?Math.min(6,Math.max(1,Math.ceil(v.length/14))):1;
-          const s=span>1?` style="grid-column:span ${span}"`:'';;
-          aHtml+=`<div class="stat-chip"${s}><div class="sc-label">${l}</div><div class="sc-val">${v}</div><div class="sc-sub">${sub||''}</div></div>`;
-        });
-        aHtml+=`</div>`;
+        aHtml+=`<div class="stats-grid">${buildActivityStatChips(act, U, esc, fmtHMS)}</div>`;
         aHtml+=`<div id="share-photos"></div>`;
         body.innerHTML=aHtml;
 
@@ -1071,18 +757,6 @@ function _renderActFallback(c) {
   fb+=`</div>`;
   body.innerHTML=fb;
 }
-(function(){
-  const strip = document.getElementById('stage-elev-strip');
-  const help  = document.getElementById('stage-elev-help');
-  if (!strip || !help) return;
-  function dismiss() {
-    help.classList.add('hidden');
-    strip.removeEventListener('mousedown',  dismiss);
-    strip.removeEventListener('touchstart', dismiss);
-  }
-  strip.addEventListener('mousedown',  dismiss);
-  strip.addEventListener('touchstart', dismiss, {passive:true});
-})();
 </script>
 </body>
 </html>

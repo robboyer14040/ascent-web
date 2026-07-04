@@ -31,6 +31,7 @@
 
 <!-- Pass server-rendered data to static JS -->
 <script>window._UI_PREFS_INITIAL = {{ ui_prefs | tojson | safe }};window._WX_TILE_URL = {{ tile_url | tojson | safe }};</script>
+<script src="/static/activity_chips.js?v={{ app_version }}" defer></script>
 <script src="/static/activity_detail.js?v={{ app_version }}" defer></script>
 <script src="/static/main_mobile.js?v={{ app_version }}" defer></script>
 <script src="/static/map_utils.js?v={{ app_version }}" defer></script>

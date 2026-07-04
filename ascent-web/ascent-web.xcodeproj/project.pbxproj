@@ -38,26 +38,6 @@
 		D48FB5152F8C69D1009570CD /* favicon.svg */ = {isa = PBXFileReference; lastKnownFileType = text; path = favicon.svg; sourceTree = "<group>"; };
 		D48FB5162F8C69D1009570CD /* main.css */ = {isa = PBXFileReference; lastKnownFileType = text.css; path = main.css; sourceTree = "<group>"; };
 		D48FB5172F8C69D1009570CD /* main.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = main.js; sourceTree = "<group>"; };
-		D48FB5192F8C69D1009570CD /* _about.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = _about.html; sourceTree = "<group>"; };
-		D48FB51A2F8C69D1009570CD /* _html_body.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = _html_body.html; sourceTree = "<group>"; };
-		D48FB51B2F8C69D1009570CD /* _html_import.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = _html_import.html; sourceTree = "<group>"; };
-		D48FB51C2F8C69D1009570CD /* _html_mobile_chrome.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = _html_mobile_chrome.html; sourceTree = "<group>"; };
-		D48FB51D2F8C69D1009570CD /* _html_modals.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = _html_modals.html; sourceTree = "<group>"; };
-		D48FB51E2F8C69D1009570CD /* _html_overlays.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = _html_overlays.html; sourceTree = "<group>"; };
-		D48FB51F2F8C69D1009570CD /* _html_toolbar.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = _html_toolbar.html; sourceTree = "<group>"; };
-		D48FB5202F8C69D1009570CD /* _strava_and_error.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = _strava_and_error.html; sourceTree = "<group>"; };
-		D48FB5212F8C69D1009570CD /* admin_invites.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = admin_invites.html; sourceTree = "<group>"; };
-		D48FB5222F8C69D1009570CD /* dashboard.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = dashboard.html; sourceTree = "<group>"; };
-		D48FB5232F8C69D1009570CD /* error.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = error.html; sourceTree = "<group>"; };
-		D48FB5242F8C69D1009570CD /* login.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = login.html; sourceTree = "<group>"; };
-		D48FB5252F8C69D1009570CD /* main.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = main.html; sourceTree = "<group>"; };
-		D48FB5262F8C69D1009570CD /* register.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = register.html; sourceTree = "<group>"; };
-		D48FB5272F8C69D1009570CD /* route_builder.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = route_builder.html; sourceTree = "<group>"; };
-		D48FB5282F8C69D1009570CD /* settings.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = settings.html; sourceTree = "<group>"; };
-		D48FB5292F8C69D1009570CD /* strava_connected.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = strava_connected.html; sourceTree = "<group>"; };
-		D48FB52A2F8C69D1009570CD /* strava_sync.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = strava_sync.html; sourceTree = "<group>"; };
-		D48FB52B2F8C69D1009570CD /* tour.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = tour.html; sourceTree = "<group>"; };
-		D48FB52C2F8C69D1009570CD /* tour_share.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = tour_share.html; sourceTree = "<group>"; };
 		D48FB52E2F8C69D1009570CD /* __init__.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = __init__.py; sourceTree = "<group>"; };
 		D48FB52F2F8C69D1009570CD /* auth.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = auth.py; sourceTree = "<group>"; };
 		D48FB5302F8C69D1009570CD /* create_db.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = create_db.py; sourceTree = "<group>"; };
@@ -75,7 +55,53 @@
 		D48FB53D2F8D7423009570CD /* strava_sync_btn.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = strava_sync_btn.js; sourceTree = "<group>"; };
 		D48FB53E2F8D7490009570CD /* map_utils.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = map_utils.js; sourceTree = "<group>"; };
 		D48FB53F2F8FBEE1009570CD /* segment.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = segment.js; sourceTree = "<group>"; };
-		D48FB5402F8FBEED009570CD /* segment.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = segment.html; sourceTree = "<group>"; };
+		D4A081612FF964FC00635CEF /* training_fingerprint.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = training_fingerprint.js; sourceTree = "<group>"; };
+		D4A081622FF964FC00635CEF /* upload_media.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = upload_media.js; sourceTree = "<group>"; };
+		D4A081632FF964FC00635CEF /* weather_forecast.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = weather_forecast.js; sourceTree = "<group>"; };
+		D4A081642FF9650900635CEF /* stage_elev_chart.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = stage_elev_chart.js; sourceTree = "<group>"; };
+		D4A081652FF9651500635CEF /* share_common.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = share_common.js; sourceTree = "<group>"; };
+		D4A081662FF9652400635CEF /* mob_nav.css */ = {isa = PBXFileReference; lastKnownFileType = text.css; path = mob_nav.css; sourceTree = "<group>"; };
+		D4A081672FF9652F00635CEF /* main.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = main.js; sourceTree = "<group>"; };
+		D4A081682FF9653600635CEF /* lightbox.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = lightbox.js; sourceTree = "<group>"; };
+		D4A081692FF9653B00635CEF /* hre_chart.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = hre_chart.js; sourceTree = "<group>"; };
+		D4A0816A2FF9654500635CEF /* favicon.svg */ = {isa = PBXFileReference; lastKnownFileType = text; path = favicon.svg; sourceTree = "<group>"; };
+		D4A0816B2FF9654A00635CEF /* elev_panel.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = elev_panel.js; sourceTree = "<group>"; };
+		D4A0816C2FF9654F00635CEF /* elev_gradient.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = elev_gradient.js; sourceTree = "<group>"; };
+		D4A0816D2FF9655500635CEF /* common.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = common.js; sourceTree = "<group>"; };
+		D4A0816E2FF9655A00635CEF /* common.css */ = {isa = PBXFileReference; lastKnownFileType = text.css; path = common.css; sourceTree = "<group>"; };
+		D4A0816F2FF9656500635CEF /* auth.css */ = {isa = PBXFileReference; lastKnownFileType = text.css; path = auth.css; sourceTree = "<group>"; };
+		D4A081702FF9658800635CEF /* _about.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = _about.html; sourceTree = "<group>"; };
+		D4A081712FF9658800635CEF /* _hre_chart.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = _hre_chart.html; sourceTree = "<group>"; };
+		D4A081722FF9658800635CEF /* _html_body.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = _html_body.html; sourceTree = "<group>"; };
+		D4A081732FF9658800635CEF /* _html_import.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = _html_import.html; sourceTree = "<group>"; };
+		D4A081742FF9658800635CEF /* _html_mobile_chrome.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = _html_mobile_chrome.html; sourceTree = "<group>"; };
+		D4A081752FF9658800635CEF /* _html_modals.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = _html_modals.html; sourceTree = "<group>"; };
+		D4A081762FF9658800635CEF /* _html_overlays.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = _html_overlays.html; sourceTree = "<group>"; };
+		D4A081772FF9658800635CEF /* _html_toolbar.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = _html_toolbar.html; sourceTree = "<group>"; };
+		D4A081782FF9658800635CEF /* _mob_global_nav.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = _mob_global_nav.html; sourceTree = "<group>"; };
+		D4A081792FF9658800635CEF /* _strava_and_error.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = _strava_and_error.html; sourceTree = "<group>"; };
+		D4A0817A2FF9658800635CEF /* _training_fingerprint.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = _training_fingerprint.html; sourceTree = "<group>"; };
+		D4A0817B2FF9658800635CEF /* activity_share.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = activity_share.html; sourceTree = "<group>"; };
+		D4A0817C2FF9658800635CEF /* admin_invites.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = admin_invites.html; sourceTree = "<group>"; };
+		D4A0817D2FF9658800635CEF /* dashboard.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = dashboard.html; sourceTree = "<group>"; };
+		D4A0817E2FF9658800635CEF /* error.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = error.html; sourceTree = "<group>"; };
+		D4A0817F2FF9658800635CEF /* forgot_password.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = forgot_password.html; sourceTree = "<group>"; };
+		D4A081802FF9658800635CEF /* login.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = login.html; sourceTree = "<group>"; };
+		D4A081812FF9658800635CEF /* main.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = main.html; sourceTree = "<group>"; };
+		D4A081822FF9658800635CEF /* register.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = register.html; sourceTree = "<group>"; };
+		D4A081832FF9658800635CEF /* reset_password.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = reset_password.html; sourceTree = "<group>"; };
+		D4A081842FF9658800635CEF /* route_builder.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = route_builder.html; sourceTree = "<group>"; };
+		D4A081852FF9658800635CEF /* segment.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = segment.html; sourceTree = "<group>"; };
+		D4A081862FF9658800635CEF /* settings.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = settings.html; sourceTree = "<group>"; };
+		D4A081872FF9658800635CEF /* shell.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = shell.html; sourceTree = "<group>"; };
+		D4A081882FF9658800635CEF /* strava_connected.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = strava_connected.html; sourceTree = "<group>"; };
+		D4A081892FF9658800635CEF /* strava_sync.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = strava_sync.html; sourceTree = "<group>"; };
+		D4A0818A2FF9658800635CEF /* tour.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = tour.html; sourceTree = "<group>"; };
+		D4A0818B2FF9658800635CEF /* tour_share.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = tour_share.html; sourceTree = "<group>"; };
+		D4A0818C2FF965B500635CEF /* forecast.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = forecast.py; sourceTree = "<group>"; };
+		D4A0818D2FF9687A00635CEF /* tour_stage.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = tour_stage.js; sourceTree = "<group>"; };
+		D4A0818E2FF9688300635CEF /* tour_stage.css */ = {isa = PBXFileReference; lastKnownFileType = text.css; path = tour_stage.css; sourceTree = "<group>"; };
+		D4A0818F2FF9729C00635CEF /* activity_chips.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = activity_chips.js; path = ../routers/activity_chips.js; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -125,6 +151,7 @@
 				D48FB50A2F8C69D1009570CD /* auth.py */,
 				D48FB50B2F8C69D1009570CD /* coach.py */,
 				D48FB50C2F8C69D1009570CD /* fitgpx.py */,
+				D4A0818C2FF965B500635CEF /* forecast.py */,
 				D48FB50D2F8C69D1009570CD /* photos.py */,
 				D48FB50E2F8C69D1009570CD /* route_builder.py */,
 				D48FB50F2F8C69D1009570CD /* settings.py */,
@@ -139,19 +166,37 @@
 			isa = PBXGroup;
 			children = (
 				D48FB5392F8C8E9C009570CD /* altitude_chart.js */,
+				D4A0818F2FF9729C00635CEF /* activity_chips.js */,
 				D48FB53C2F8D38BB009570CD /* activity_detail.js */,
 				D48FB53A2F8C8EA1009570CD /* activity_edit.js */,
 				D48FB5142F8C69D1009570CD /* apple-touch-icon.png */,
+				D4A0816F2FF9656500635CEF /* auth.css */,
 				D48FB5152F8C69D1009570CD /* favicon.svg */,
 				D48FB5162F8C69D1009570CD /* main.css */,
 				D48FB5172F8C69D1009570CD /* main.js */,
 				D48FB5372F8C8E87009570CD /* main_mobile.js */,
 				D48FB53E2F8D7490009570CD /* map_utils.js */,
 				D48FB5382F8C8E90009570CD /* coach.js */,
+				D4A0816E2FF9655A00635CEF /* common.css */,
+				D4A0816D2FF9655500635CEF /* common.js */,
 				D48FB5362F8C70AA009570CD /* compare.js */,
+				D4A0816C2FF9654F00635CEF /* elev_gradient.js */,
+				D4A0816B2FF9654A00635CEF /* elev_panel.js */,
+				D4A0816A2FF9654500635CEF /* favicon.svg */,
+				D4A081692FF9653B00635CEF /* hre_chart.js */,
+				D4A081682FF9653600635CEF /* lightbox.js */,
+				D4A081672FF9652F00635CEF /* main.js */,
+				D4A081662FF9652400635CEF /* mob_nav.css */,
 				D48FB53B2F8C8EAE009570CD /* photos.js */,
 				D48FB53F2F8FBEE1009570CD /* segment.js */,
+				D4A081652FF9651500635CEF /* share_common.js */,
+				D4A081642FF9650900635CEF /* stage_elev_chart.js */,
 				D48FB53D2F8D7423009570CD /* strava_sync_btn.js */,
+				D4A0818E2FF9688300635CEF /* tour_stage.css */,
+				D4A0818D2FF9687A00635CEF /* tour_stage.js */,
+				D4A081612FF964FC00635CEF /* training_fingerprint.js */,
+				D4A081622FF964FC00635CEF /* upload_media.js */,
+				D4A081632FF964FC00635CEF /* weather_forecast.js */,
 			);
 			path = static;
 			sourceTree = "<group>";
@@ -159,27 +204,34 @@
 		D48FB52D2F8C69D1009570CD /* templates */ = {
 			isa = PBXGroup;
 			children = (
-				D48FB5192F8C69D1009570CD /* _about.html */,
-				D48FB51A2F8C69D1009570CD /* _html_body.html */,
-				D48FB51B2F8C69D1009570CD /* _html_import.html */,
-				D48FB51C2F8C69D1009570CD /* _html_mobile_chrome.html */,
-				D48FB51D2F8C69D1009570CD /* _html_modals.html */,
-				D48FB51E2F8C69D1009570CD /* _html_overlays.html */,
-				D48FB51F2F8C69D1009570CD /* _html_toolbar.html */,
-				D48FB5202F8C69D1009570CD /* _strava_and_error.html */,
-				D48FB5212F8C69D1009570CD /* admin_invites.html */,
-				D48FB5222F8C69D1009570CD /* dashboard.html */,
-				D48FB5232F8C69D1009570CD /* error.html */,
-				D48FB5242F8C69D1009570CD /* login.html */,
-				D48FB5252F8C69D1009570CD /* main.html */,
-				D48FB5262F8C69D1009570CD /* register.html */,
-				D48FB5272F8C69D1009570CD /* route_builder.html */,
-				D48FB5402F8FBEED009570CD /* segment.html */,
-				D48FB5282F8C69D1009570CD /* settings.html */,
-				D48FB5292F8C69D1009570CD /* strava_connected.html */,
-				D48FB52A2F8C69D1009570CD /* strava_sync.html */,
-				D48FB52B2F8C69D1009570CD /* tour.html */,
-				D48FB52C2F8C69D1009570CD /* tour_share.html */,
+				D4A081702FF9658800635CEF /* _about.html */,
+				D4A081712FF9658800635CEF /* _hre_chart.html */,
+				D4A081722FF9658800635CEF /* _html_body.html */,
+				D4A081732FF9658800635CEF /* _html_import.html */,
+				D4A081742FF9658800635CEF /* _html_mobile_chrome.html */,
+				D4A081752FF9658800635CEF /* _html_modals.html */,
+				D4A081762FF9658800635CEF /* _html_overlays.html */,
+				D4A081772FF9658800635CEF /* _html_toolbar.html */,
+				D4A081782FF9658800635CEF /* _mob_global_nav.html */,
+				D4A081792FF9658800635CEF /* _strava_and_error.html */,
+				D4A0817A2FF9658800635CEF /* _training_fingerprint.html */,
+				D4A0817B2FF9658800635CEF /* activity_share.html */,
+				D4A0817C2FF9658800635CEF /* admin_invites.html */,
+				D4A0817D2FF9658800635CEF /* dashboard.html */,
+				D4A0817E2FF9658800635CEF /* error.html */,
+				D4A0817F2FF9658800635CEF /* forgot_password.html */,
+				D4A081802FF9658800635CEF /* login.html */,
+				D4A081812FF9658800635CEF /* main.html */,
+				D4A081822FF9658800635CEF /* register.html */,
+				D4A081832FF9658800635CEF /* reset_password.html */,
+				D4A081842FF9658800635CEF /* route_builder.html */,
+				D4A081852FF9658800635CEF /* segment.html */,
+				D4A081862FF9658800635CEF /* settings.html */,
+				D4A081872FF9658800635CEF /* shell.html */,
+				D4A081882FF9658800635CEF /* strava_connected.html */,
+				D4A081892FF9658800635CEF /* strava_sync.html */,
+				D4A0818A2FF9658800635CEF /* tour.html */,
+				D4A0818B2FF9658800635CEF /* tour_share.html */,
 			);
 			path = templates;
 			sourceTree = "<group>";

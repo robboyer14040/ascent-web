@@ -1,0 +1,20 @@
+/* common.css — shared theme variables + primitives used across the tour and
+   share pages (tour.html, tour_share.html, activity_share.html).
+   NOTE: main.css and dashboard.html intentionally keep their own :root blocks —
+   they define an extended variable set (accent-blue/green, row-*, photo-bg …). */
+
+:root{
+  --bg:#1c1c1e;--surface:#2c2c2e;--surface2:#3a3a3c;
+  --border:#3a3a3c;--border2:#48484a;
+  --text:#f2f2f7;--muted:#8e8e93;--muted2:#636366;
+  --accent:#f97316;--nav-hover:rgba(255,255,255,.06);
+  --lb-bg:rgba(0,0,0,.92);--lb-btn:rgba(255,255,255,.15);
+  --lb-text:#fff;--lb-muted:#aaa;--lb-hint:#666;
+}
+[data-theme="light"]{--bg:#f2f2f7;--surface:#ffffff;--surface2:#e5e5ea;--border:#d1d1d6;--border2:#c7c7cc;--text:#1c1c1e;--muted:#6c6c70;--muted2:#8e8e93;--accent:#f97316;--nav-hover:rgba(0,0,0,.05);--lb-bg:rgba(215,215,225,.95);--lb-btn:rgba(0,0,0,.12);--lb-text:#1c1c1e;--lb-muted:#6c6c70;--lb-hint:#8e8e93}
+@media(prefers-color-scheme:light){:root:not([data-theme]){--bg:#f2f2f7;--surface:#ffffff;--surface2:#e5e5ea;--border:#d1d1d6;--border2:#c7c7cc;--text:#1c1c1e;--muted:#6c6c70;--muted2:#8e8e93;--accent:#f97316;--nav-hover:rgba(0,0,0,.05);--lb-bg:rgba(215,215,225,.95);--lb-btn:rgba(0,0,0,.12);--lb-text:#1c1c1e;--lb-muted:#6c6c70;--lb-hint:#8e8e93}}
+
+/* Map style switcher buttons */
+.map-style-btn{background:rgba(0,0,0,.6);color:#ccc;border:1px solid rgba(255,255,255,.15);border-radius:4px;padding:2px 7px;font-size:11px;cursor:pointer;backdrop-filter:blur(4px);transition:all .15s}
+.map-style-btn:hover{background:rgba(0,0,0,.8);color:#fff}
+.map-style-btn.active{background:#f97316;color:#fff;border-color:#f97316}

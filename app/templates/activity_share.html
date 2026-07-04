@@ -7,18 +7,9 @@
 <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
 <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="/static/common.css?v={{ app_version }}">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-:root{
-  --bg:#1c1c1e;--surface:#2c2c2e;--surface2:#3a3a3c;
-  --border:#3a3a3c;--border2:#48484a;
-  --text:#f2f2f7;--muted:#8e8e93;--muted2:#636366;
-  --accent:#f97316;--nav-hover:rgba(255,255,255,.06);
-  --lb-bg:rgba(0,0,0,.92);--lb-btn:rgba(255,255,255,.15);
-  --lb-text:#fff;--lb-muted:#aaa;--lb-hint:#666;
-}
-[data-theme="light"]{--bg:#f2f2f7;--surface:#ffffff;--surface2:#e5e5ea;--border:#d1d1d6;--border2:#c7c7cc;--text:#1c1c1e;--muted:#6c6c70;--muted2:#8e8e93;--accent:#f97316;--nav-hover:rgba(0,0,0,.05);--lb-bg:rgba(215,215,225,.95);--lb-btn:rgba(0,0,0,.12);--lb-text:#1c1c1e;--lb-muted:#6c6c70;--lb-hint:#8e8e93}
-@media(prefers-color-scheme:light){:root:not([data-theme]){--bg:#f2f2f7;--surface:#ffffff;--surface2:#e5e5ea;--border:#d1d1d6;--border2:#c7c7cc;--text:#1c1c1e;--muted:#6c6c70;--muted2:#8e8e93;--accent:#f97316;--nav-hover:rgba(0,0,0,.05);--lb-bg:rgba(215,215,225,.95);--lb-btn:rgba(0,0,0,.12);--lb-text:#1c1c1e;--lb-muted:#6c6c70;--lb-hint:#8e8e93}}
 html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif;font-size:13px;background:var(--bg);color:var(--text)}
 button{cursor:pointer;border:none;background:none;color:inherit;font:inherit}
 input,select{font:inherit}
@@ -33,9 +24,6 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
 /* ── Map area (right on desktop) ─────────────────────────────────────────── */
 #map-area{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
 #map{width:100%;background:#1a2030;flex-shrink:0;position:relative}
-.map-style-btn{background:rgba(0,0,0,.6);color:#ccc;border:1px solid rgba(255,255,255,.15);border-radius:4px;padding:2px 7px;font-size:11px;cursor:pointer;backdrop-filter:blur(4px);transition:all .15s}
-.map-style-btn:hover{background:rgba(0,0,0,.8);color:#fff}
-.map-style-btn.active{background:#f97316;color:#fff;border-color:#f97316}
 #resize-handle{height:6px;background:var(--surface2);cursor:row-resize;flex-shrink:0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);transition:background .1s}
 #resize-handle:hover,#resize-handle.dragging{background:var(--accent);opacity:.5}
 @media(pointer:coarse){ #resize-handle{height:20px} }
@@ -142,6 +130,9 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="/static/common.js?v={{ app_version }}"></script>
+<script src="/static/share_common.js?v={{ app_version }}"></script>
+<script src="/static/activity_chips.js?v={{ app_version }}"></script>
 <script src="/static/map_utils.js"></script>
 <script src="/static/lightbox.js?v={{ app_version }}"></script>
 <script>
@@ -155,20 +146,12 @@ const U = {
   speedS: mph => U.metric ? (+(mph*1.60934).toFixed(1))+' km/h' : (+mph.toFixed(1))+' mph',
 };
 
-function fmtHMS(s) {
-  if(!s) return '—';
-  s = Math.round(s);
-  const h=Math.floor(s/3600), m=Math.floor((s%3600)/60), sec=s%60;
-  return h ? `${h}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}` : `${m}:${String(sec).padStart(2,'0')}`;
-}
 function fmtDate(ts) {
   if(!ts) return '';
   try {
     return new Date(parseInt(ts)*1000).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'});
   } catch(e) { return ''; }
 }
-function esc(s) { const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
-
 // ── Theme ─────────────────────────────────────────────────────────────────────
 function toggleTheme() {
   const cur = document.documentElement.getAttribute('data-theme');
@@ -189,14 +172,6 @@ let mapH = 0;
 const isMob = () => window.innerWidth <= 767;
 const isPort = () => window.innerWidth < window.innerHeight;
 const chromeH = () => isMob() ? 52 : 44;
-const TILE_LAYERS = {
-  'osm':         ['https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', '© OpenStreetMap contributors'],
-  'topo':        ['https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',   '© OpenTopoMap'],
-  'carto-dark':  ['https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', '© CARTO'],
-  'carto-light': ['https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png','© CARTO'],
-  'esri-sat':    ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}','© Esri'],
-};
-
 function initMap() {
   const frac = (isMob() && isPort()) ? 0.40 : 0.55;
   mapH = Math.round((window.innerHeight - chromeH()) * frac);
@@ -210,16 +185,6 @@ function initMap() {
     .observe(document.getElementById('map'));
 }
 
-function setMapStyle(key, init=false) {
-  document.querySelectorAll('.map-style-btn').forEach(b => b.classList.toggle('active', b.dataset.style===key));
-  const [url, attr] = TILE_LAYERS[key] || TILE_LAYERS['osm'];
-  if(tileLayer) shareMap.removeLayer(tileLayer);
-  tileLayer = L.tileLayer(url, {attribution:attr, maxZoom:19}).addTo(shareMap);
-}
-
-function resetZoom() {
-  if(_lastBounds) shareMap.fitBounds(_lastBounds, {padding:[24,24]});
-}
 
 // ── Resize handle ─────────────────────────────────────────────────────────────
 (function() {
@@ -244,11 +209,6 @@ function resetZoom() {
 // ── Elevation strip ───────────────────────────────────────────────────────────
 let _elevChart=null, _elevRawPts=null, _elevHoverDot=null;
 
-function _haversineMi(lat1,lon1,lat2,lon2) {
-  const R=3958.8, dLat=(lat2-lat1)*Math.PI/180, dLon=(lon2-lon1)*Math.PI/180;
-  const a=Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
-  return R*2*Math.asin(Math.sqrt(a));
-}
 function _removeHoverDot(){ if(_elevHoverDot){_elevHoverDot.remove();_elevHoverDot=null;} }
 function onElevLeave(){
   const x=document.getElementById('elev-xhair'), h=document.getElementById('elev-hud');
@@ -313,14 +273,6 @@ function drawElevation(pts) {
 }
 
 // ── Map route ─────────────────────────────────────────────────────────────────
-const _startIcon = L.divIcon({
-  html:`<svg width="17" height="22" viewBox="0 0 20 26" xmlns="http://www.w3.org/2000/svg" style="filter:drop-shadow(0 1px 3px rgba(0,0,0,.9))"><line x1="2" y1="0" x2="2" y2="26" stroke="white" stroke-width="2"/><polygon points="2,2 19,7 2,12" fill="#22c55e" stroke="#15803d" stroke-width="1"/></svg>`,
-  className:'', iconSize:[17,22], iconAnchor:[2,22],
-});
-const _endIcon = L.divIcon({
-  html:`<svg width="17" height="20" viewBox="0 0 22 26" xmlns="http://www.w3.org/2000/svg" style="filter:drop-shadow(0 1px 3px rgba(0,0,0,.9))"><line x1="2" y1="0" x2="2" y2="26" stroke="white" stroke-width="2"/><rect x="2" y="2" width="20" height="12" fill="white" stroke="#333" stroke-width="0.5"/><rect x="2" y="2" width="5" height="4" fill="black"/><rect x="12" y="2" width="5" height="4" fill="black"/><rect x="7" y="6" width="5" height="4" fill="black"/><rect x="17" y="6" width="5" height="4" fill="black"/><rect x="2" y="10" width="5" height="4" fill="black"/><rect x="12" y="10" width="5" height="4" fill="black"/></svg>`,
-  className:'', iconSize:[17,20], iconAnchor:[2,20],
-});
 
 function drawRoute(coords) {
   // coords: [[lon, lat, alt_m], ...]  GeoJSON format
@@ -344,20 +296,7 @@ function _rpeColor(v){
 
 function renderActivityDetail(a) {
   const el = document.getElementById('act-detail');
-  const chips = [
-    a.distance_mi   ? `<div class="stat-chip"><div class="sc-label">Distance</div><div class="sc-val">${U.distS(a.distance_mi)}</div><div class="sc-sub"></div></div>` : null,
-    a.active_time   ? `<div class="stat-chip"><div class="sc-label">Mov Time</div><div class="sc-val">${fmtHMS(a.active_time)}</div><div class="sc-sub"></div></div>` : null,
-    a.duration      ? `<div class="stat-chip"><div class="sc-label">Duration</div><div class="sc-val">${fmtHMS(a.duration)}</div><div class="sc-sub"></div></div>` : null,
-    a.total_climb_ft? `<div class="stat-chip"><div class="sc-label">Ascent</div><div class="sc-val">${U.climbS(a.total_climb_ft)}</div><div class="sc-sub"></div></div>` : null,
-    a.total_descent_ft?`<div class="stat-chip"><div class="sc-label">Descent</div><div class="sc-val">${U.climbS(a.total_descent_ft)}</div><div class="sc-sub"></div></div>` : null,
-    a.avg_speed_mph ? `<div class="stat-chip"><div class="sc-label">Mov Spd</div><div class="sc-val">${U.speedS(a.avg_speed_mph)}</div><div class="sc-sub"></div></div>` : null,
-    a.avg_heartrate ? `<div class="stat-chip"><div class="sc-label">Avg HR</div><div class="sc-val">${Math.round(a.avg_heartrate)} bpm</div><div class="sc-sub"></div></div>` : null,
-    a.max_heartrate ? `<div class="stat-chip"><div class="sc-label">Max HR</div><div class="sc-val">${Math.round(a.max_heartrate)} bpm</div><div class="sc-sub"></div></div>` : null,
-    a.avg_cadence   ? `<div class="stat-chip"><div class="sc-label">Cadence</div><div class="sc-val">${Math.round(a.avg_cadence)} rpm</div><div class="sc-sub"></div></div>` : null,
-    a.avg_power     ? `<div class="stat-chip"><div class="sc-label">Avg Pwr</div><div class="sc-val">${Math.round(a.avg_power)} W</div><div class="sc-sub"></div></div>` : null,
-    a.suffer_score  ? `<div class="stat-chip"><div class="sc-label">Suffer</div><div class="sc-val">${Math.round(a.suffer_score)}</div><div class="sc-sub"></div></div>` : null,
-    a.equipment     ? `<div class="stat-chip" style="grid-column:span 2"><div class="sc-label">Equipment</div><div class="sc-val" style="font-size:12px">${esc(a.equipment)}</div><div class="sc-sub"></div></div>` : null,
-  ].filter(Boolean);
+  const chipsHtml = buildActivityStatChips(a, U, esc, fmtHMS);
 
   const rpeHtml = a.perceived_exertion
     ? `<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
@@ -376,7 +315,7 @@ function renderActivityDetail(a) {
     ${a.activity_type ? `<div class="act-type">${esc(a.activity_type)}</div>` : ''}
     ${rpeHtml}
     ${a.notes ? `<div class="act-notes">${esc(a.notes)}</div>` : ''}
-    ${chips.length ? `<div class="stats-grid">${chips.join('')}</div>` : ''}
+    ${chipsHtml ? `<div class="stats-grid">${chipsHtml}</div>` : ''}
     ${stravaHtml}
   `;
 }

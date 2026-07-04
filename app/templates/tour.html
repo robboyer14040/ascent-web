@@ -12,6 +12,8 @@
 <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <link rel="stylesheet" href="/static/mob_nav.css?v={{ app_version }}">
+<link rel="stylesheet" href="/static/common.css?v={{ app_version }}">
+<link rel="stylesheet" href="/static/tour_stage.css?v={{ app_version }}">
 <script>(function(){var t={{ ui_prefs.get('theme','') | tojson }};if(t)document.documentElement.dataset.theme=t;})();</script>
 <script>(function(){if(window.self!==window.top)document.documentElement.classList.add('mob-embedded')})();</script>
 <style>
@@ -19,16 +21,6 @@
 html.mob-embedded #stage-list-wrap { bottom:0!important }
 html.mob-embedded body.mob-stage-view #stage-detail { padding-bottom:12px!important }
 *{box-sizing:border-box;margin:0;padding:0}
-:root{
-  --bg:#1c1c1e;--surface:#2c2c2e;--surface2:#3a3a3c;
-  --border:#3a3a3c;--border2:#48484a;
-  --text:#f2f2f7;--muted:#8e8e93;--muted2:#636366;
-  --accent:#f97316;--nav-hover:rgba(255,255,255,.06);
-  --lb-bg:rgba(0,0,0,.92);--lb-btn:rgba(255,255,255,.15);
-  --lb-text:#fff;--lb-muted:#aaa;--lb-hint:#666;
-}
-[data-theme="light"]{--bg:#f2f2f7;--surface:#ffffff;--surface2:#e5e5ea;--border:#d1d1d6;--border2:#c7c7cc;--text:#1c1c1e;--muted:#6c6c70;--muted2:#8e8e93;--accent:#f97316;--nav-hover:rgba(0,0,0,.05);--lb-bg:rgba(215,215,225,.95);--lb-btn:rgba(0,0,0,.12);--lb-text:#1c1c1e;--lb-muted:#6c6c70;--lb-hint:#8e8e93}
-@media(prefers-color-scheme:light){:root:not([data-theme]){--bg:#f2f2f7;--surface:#ffffff;--surface2:#e5e5ea;--border:#d1d1d6;--border2:#c7c7cc;--text:#1c1c1e;--muted:#6c6c70;--muted2:#8e8e93;--accent:#f97316;--nav-hover:rgba(0,0,0,.05);--lb-bg:rgba(215,215,225,.95);--lb-btn:rgba(0,0,0,.12);--lb-text:#1c1c1e;--lb-muted:#6c6c70;--lb-hint:#8e8e93}}
 html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif;font-size:13px;background:var(--bg);color:var(--text)}
 button{cursor:pointer;border:none;background:none;color:inherit;font:inherit}
 input,select{font:inherit}
@@ -92,7 +84,7 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
 .stch-sep::before{content:'';width:4px;height:calc(100% - 10px);background:var(--border2);border-radius:2px;pointer-events:none;transition:background .12s}
 .stch-sep:hover::before,.stch-sep.resizing::before{background:var(--accent)}
 .sort-arr{color:var(--accent);font-size:10px}
-.stage-row{display:grid;grid-template-columns:var(--stage-cols);border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer;align-items:center;height:34px;min-width:var(--stage-min-w,0)}
+.stage-row{display:grid;grid-template-columns:var(--stage-cols);border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer;align-items:center;height:26px;min-width:var(--stage-min-w,0)}
 .stage-row:hover{background:rgba(255,255,255,.04)}
 .stage-row.active{background:rgba(249,115,22,.1);border-left:3px solid var(--accent)}
 .st-cell{padding:0 4px;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--muted)}
@@ -105,9 +97,6 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
 /* ── Main area ── */
 #main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
 #map{width:100%;background:#1a2030;flex-shrink:0;position:relative}
-.map-style-btn{background:rgba(0,0,0,.6);color:#ccc;border:1px solid rgba(255,255,255,.15);border-radius:4px;padding:2px 7px;font-size:11px;cursor:pointer;backdrop-filter:blur(4px);transition:all .15s}
-.map-style-btn:hover{background:rgba(0,0,0,.8);color:#fff}
-.map-style-btn.active{background:#f97316;color:#fff;border-color:#f97316}
 #resize-handle{height:12px;background:var(--surface2);cursor:row-resize;flex-shrink:0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);transition:background .1s;position:relative}
 #resize-handle::after{content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:36px;height:3px;border-radius:2px;background:var(--muted2);pointer-events:none;transition:background .1s}
 #resize-handle:hover,#resize-handle.dragging{background:var(--border2)}
@@ -303,29 +292,6 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
     overflow:hidden
   }
 }
-/* ── Stage elevation HUD / selection overlay ── */
-.se-hover-panel{position:absolute;top:8px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.18);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:7px 14px;pointer-events:none;display:none;z-index:15;min-width:150px;white-space:nowrap}
-[data-theme="light"] .se-hover-panel{background:rgba(15,15,25,.72);border-color:rgba(0,0,0,.18)}
-@media(prefers-color-scheme:light){:root:not([data-theme]) .se-hover-panel{background:rgba(15,15,25,.72);border-color:rgba(0,0,0,.18)}}
-.se-hover-panel .eh-row{display:flex;justify-content:space-between;gap:18px;font-size:11px;line-height:1.75;font-family:-apple-system,sans-serif}
-.se-hover-panel .eh-label{color:rgba(255,255,255,.45);letter-spacing:.01em}
-.se-hover-panel .eh-val{font-weight:600;font-variant-numeric:tabular-nums;text-shadow:0 0 8px currentColor}
-.se-sel-stats{position:absolute;background:rgba(0,0,0,.22);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid rgba(74,222,128,.28);border-radius:10px;padding:7px 13px;pointer-events:auto;display:none;z-index:16;white-space:nowrap}
-.se-sel-stats .es-header{display:flex;justify-content:space-between;gap:24px;font-size:11px;line-height:1.7;border-bottom:1px solid rgba(255,255,255,.12);margin-bottom:3px;padding-bottom:2px}
-.se-sel-stats .es-grid{display:grid;grid-template-columns:1fr 1fr;column-gap:18px;row-gap:0}
-.se-sel-stats .es-row{display:flex;justify-content:space-between;gap:14px;font-size:11px;line-height:1.7}
-.se-sel-stats .es-lbl{color:rgba(255,255,255,.42);letter-spacing:.01em}
-.se-sel-stats .es-val{font-weight:600;font-variant-numeric:tabular-nums;color:rgba(255,255,255,.88)}
-.se-sel-stats .es-max-lbl{text-decoration:underline;cursor:pointer;pointer-events:auto}
-.se-sel-stats .es-maxat{flex:1;text-align:center}
-#stage-elev-hud-btn{position:absolute;top:4px;left:6px;z-index:15;font-size:10px;padding:2px 5px;line-height:1.4;background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.2);color:#ccc;border-radius:5px;cursor:pointer;user-select:none;-webkit-user-select:none}
-#stage-elev-hud-btn.active{background:#f97316;border-color:#f97316;color:#fff}
-#stage-elev-help{position:absolute;left:50px;top:50%;transform:translateY(-50%);z-index:14;background:rgba(0,0,0,.55);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,.15);border-radius:8px;padding:6px 10px;max-width:300px;font-size:11px;line-height:1.5;color:rgba(255,255,255,.72);pointer-events:none;transition:opacity .25s}
-#stage-elev-help.hidden{opacity:0}
-.mob-disclose{display:none;background:none;border:none;color:var(--text);font-size:14px;cursor:pointer;padding:0 8px;line-height:1;align-items:center;height:28px;flex-shrink:0}
-.mob-arr{display:inline-block;transform:scale(2.25);transform-origin:center;transition:transform .2s}
-.mob-arr.collapsed{transform:scale(2.25) rotate(-90deg)}
-.rh-section-lbl{display:none;flex:1;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
 body.mob-stage-view #resize-handle{padding:0 4px 0 12px;justify-content:flex-start}
 body.mob-stage-view #resize-handle::after{display:none}
 body.mob-stage-view #stats-toggle{display:none!important}
@@ -609,13 +575,17 @@ body.mob-stage-view #elev-resize-handle::after{display:none}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="/static/common.js?v={{ app_version }}"></script>
+<script src="/static/tour_stage.js?v={{ app_version }}"></script>
 <script src="/static/lightbox.js?v={{ app_version }}"></script>
+<script src="/static/activity_chips.js?v={{ app_version }}"></script>
 <script src="/static/activity_detail.js?v={{ app_version }}"></script>
 <script src="/static/upload_media.js?v={{ app_version }}"></script>
 <script src="/static/map_utils.js?v={{ app_version }}"></script>
 <script src="/static/elev_panel.js?v={{ app_version }}"></script>
 <script src="/static/elev_gradient.js?v={{ app_version }}"></script>
 <script src="/static/stage_elev_chart.js?v={{ app_version }}"></script>
+<script src="/static/tour_elev.js?v={{ app_version }}"></script>
 <script src="/static/strava_sync_btn.js?v={{ app_version }}" defer></script>
 <script>
 'use strict';
@@ -649,8 +619,6 @@ function fmtDur(s) {
   const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),ss=Math.floor(s%60);
   return h>0?`${h}h ${m}m`:`${m}m ${ss}s`;
 }
-function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-
 // ── User avatar helper (used by activity_detail.js) ───────────────────────────
 const USER_AVATAR_COLORS = ['#3b82f6','#ef4444','#22c55e','#a855f7','#ec4899','#14b8a6','#f59e0b','#8b5cf6'];
 function userInitialAvatar(userId, username, size, radius, extraStyle) {
@@ -668,36 +636,19 @@ const C = {
 };
 function stageColor(stage) { return stage.completion ? C.done : C.todo; }
 
-// ── Start / finish flag icons (same as Activities page) ───────────────────────
-const _startIcon = L.divIcon({
-  html: `<svg width="17" height="22" viewBox="0 0 20 26" xmlns="http://www.w3.org/2000/svg" style="filter:drop-shadow(0 1px 3px rgba(0,0,0,.9))">
-    <line x1="2" y1="0" x2="2" y2="26" stroke="white" stroke-width="2"/>
-    <polygon points="2,2 19,7 2,12" fill="#22c55e" stroke="#15803d" stroke-width="1"/>
-  </svg>`,
-  className: '', iconSize: [17,22], iconAnchor: [2,22],
-});
-const _endIcon = L.divIcon({
-  html: `<svg width="17" height="20" viewBox="0 0 22 26" xmlns="http://www.w3.org/2000/svg" style="filter:drop-shadow(0 1px 3px rgba(0,0,0,.9))">
-    <line x1="2" y1="0" x2="2" y2="26" stroke="white" stroke-width="2"/>
-    <rect x="2" y="2" width="20" height="12" fill="white" stroke="#333" stroke-width="0.5"/>
-    <rect x="2"  y="2"  width="5" height="4" fill="black"/>
-    <rect x="12" y="2"  width="5" height="4" fill="black"/>
-    <rect x="7"  y="6"  width="5" height="4" fill="black"/>
-    <rect x="17" y="6"  width="5" height="4" fill="black"/>
-    <rect x="2"  y="10" width="5" height="4" fill="black"/>
-    <rect x="12" y="10" width="5" height="4" fill="black"/>
-  </svg>`,
-  className: '', iconSize: [17,20], iconAnchor: [2,20],
-});
-
 // ── Stage table columns ───────────────────────────────────────────────────────
+// Alternate-route stage IDs for the current tour, refreshed by renderStageList().
+// Their names render italicised and parenthesised in the stage list.
+let _stageAltIds = new Set();
+const _fmtStageName = s => {
+  const nm = esc(s.name);
+  return _stageAltIds.has(String(s.id)) ? `<em>(${nm})</em>` : nm;
+};
 const STAGE_ALL_COLS = [
-  {id:'num',      label:'#',       sort:'stage_num', w:'28px', align:'right',
-    render: s => s.stage_num},
   {id:'name',     label:'Stage',   sort:'name',     w:'minmax(60px,1fr)', align:'left',  titleCell:true,
     render: s => s.completion
-      ? `<span style="color:#22c55e;font-size:11px;line-height:1;flex-shrink:0;font-weight:700">✓</span><span class="st-name-text">${esc(s.name)}</span>`
-      : `<span class="stage-dot" style="background:${C.todo}"></span><span class="st-name-text">${esc(s.name)}</span>`},
+      ? `<span style="color:#22c55e;font-size:11px;line-height:1;flex-shrink:0;font-weight:700">✓</span><span class="st-name-text">${_fmtStageName(s)}</span>`
+      : `<span class="stage-dot" style="background:${C.todo}"></span><span class="st-name-text">${_fmtStageName(s)}</span>`},
   {id:'dist',     label:'Dist',    sort:'dist',     w:'54px', align:'right',
     unitLabel: () => U.metric ? 'km' : 'mi',
     render: s => s.distance_mi ? (U.metric ? (s.distance_mi*1.60934).toFixed(1) : s.distance_mi.toFixed(1)) : '—'},
@@ -716,7 +667,7 @@ const STAGE_ALL_COLS = [
   {id:'calories', label:'Cal',     sort:'calories', w:'48px', align:'right',
     render: s => s.completion?.calories ? Math.round(s.completion.calories) : '—'},
 ];
-const STAGE_DEFAULT_COL_IDS = ['num','name','dist','climb','date','duration'];
+const STAGE_DEFAULT_COL_IDS = ['name','dist','climb','date','duration'];
 const STAGE_SORT_KEY = {
   name:     s => (s.name||'').toLowerCase(),
   dist:     s => s.distance_mi || 0,
@@ -733,9 +684,9 @@ function loadStageColPrefs() {
   try {
     const saved = JSON.parse(localStorage.getItem('ascent-stage-cols') || 'null');
     if(saved && Array.isArray(saved) && saved.length >= 1) {
-      // Always keep 'num' first and 'name' second
+      // Always keep 'name' first; drop the retired 'num' column if present in old prefs
       const rest = saved.filter(id => id !== 'num' && id !== 'name');
-      return ['num', 'name', ...rest];
+      return ['name', ...rest];
     }
   } catch(e) {}
   return STAGE_DEFAULT_COL_IDS.slice();
@@ -754,7 +705,7 @@ let _suppressStageColClick = false;
 let _stageTouchDragPending = null;  // { colId, div, startX, startY }
 let _stageTouchDrag = null;          // { colId, ghost, startX, origLeft, toId }
 let _stageHScrollbarDrag = false, _stageHScrollbarStartX = 0, _stageHScrollbarStartScroll = 0;
-const isStageColFixed = id => id === 'num' || id === 'name';
+const isStageColFixed = id => id === 'name';
 
 // ── State ─────────────────────────────────────────────────────────────────────
 const _currentUserId  = {{ current_user_id | tojson }};
@@ -766,72 +717,8 @@ let tourInfo         = null;
 let tourStages       = [];
 let selectedId       = null;
 let mapH             = 0;
-let _mobElevCollapsed = false;
-let _mobInfoCollapsed = false;
 let _tourPointsCache = {};   // byStage points for current tour, keyed by stage_id string
 let _lastRouteBounds = null; // { bounds, opts } — used by resetMapZoom
-let _stageElevChart  = null; // Chart.js instance for the elevation strip
-let _stageElevRawPts = null; // [[lat,lon,alt_ft], ...] parallel to chartPts for hover lookup
-let _stageChartPts   = null; // downsampled [{x,y}] for redraw on grade toggle
-let _stageGradPts    = null; // pre-computed gradient [{x,y}] from full-res raw pts
-let _stageGradeOn    = true;
-let _stagePeaksOn    = true;
-let _stageHoverDot   = null; // Leaflet marker for yellow hover dot on map
-let _stageActData    = null; // per-point chart data for completed stage ({dist_m,hr,speed,power,cadence,time})
-
-function _saveStageChartPrefs() {
-  try { localStorage.setItem('ascent-stage-chart-prefs', JSON.stringify({ gradeOn: _stageGradeOn, peaksOn: _stagePeaksOn })); } catch(e) {}
-}
-function _loadStageChartPrefs() {
-  try {
-    const p = JSON.parse(localStorage.getItem('ascent-stage-chart-prefs') || 'null');
-    if (!p) return;
-    if (p.gradeOn !== undefined) { _stageGradeOn = !!p.gradeOn; const cb = document.getElementById('stage-grade-cb'); if (cb) cb.checked = _stageGradeOn; }
-    if (p.peaksOn !== undefined) { _stagePeaksOn = !!p.peaksOn; const cb = document.getElementById('stage-peaks-cb'); if (cb) cb.checked = _stagePeaksOn; }
-  } catch(e) {}
-}
-function onStagePeaksCbChange(cb) {
-  _stagePeaksOn = cb.checked;
-  _saveStageChartPrefs();
-  if (_stageChartPts) _rebuildStageElevChart();
-}
-function onStageGradeCbChange(cb) {
-  _stageGradeOn = cb.checked;
-  _saveStageChartPrefs();
-  if (_stageChartPts) _rebuildStageElevChart();
-}
-let _stageSettingsOpen = false;
-function toggleStageSettings(e) {
-  e.stopPropagation();
-  const pop = document.getElementById('stage-chart-settings');
-  if (!pop) return;
-  if (_stageSettingsOpen) { pop.style.display = 'none'; _stageSettingsOpen = false; return; }
-  const btn = document.getElementById('stage-settings-btn');
-  if (btn) {
-    const r = btn.getBoundingClientRect();
-    pop.style.top   = (r.bottom + 4) + 'px';
-    pop.style.right = (window.innerWidth - r.right) + 'px';
-    pop.style.left  = 'auto';
-  }
-  pop.style.display = 'block';
-  _stageSettingsOpen = true;
-}
-document.addEventListener('click', e => {
-  if (!_stageSettingsOpen) return;
-  const pop = document.getElementById('stage-chart-settings');
-  const btn = document.getElementById('stage-settings-btn');
-  if (pop && !pop.contains(e.target) && e.target !== btn) {
-    pop.style.display = 'none'; _stageSettingsOpen = false;
-  }
-});
-function _rebuildStageElevChart() {
-  const canvas = document.getElementById('stage-elev-canvas');
-  if (!canvas || !_stageChartPts) return;
-  if (_stageElevChart) { _stageElevChart.destroy(); _stageElevChart = null; }
-  _stageElevChart = buildStageElevChart(canvas, _stageChartPts, { gradeOn: _stageGradeOn, gradPts: _stageGradPts, showPeaks: _stagePeaksOn });
-  _stageElevChart._elevChartPts = _stageChartPts;
-  window._stageElevReapplySel?.();
-}
 
 // Modal state
 let modalMode   = 'define';   // 'define' | 'edit'
@@ -839,17 +726,10 @@ let modalMode   = 'define';   // 'define' | 'edit'
 let modalStages = [];
 
 // ── Map styles ────────────────────────────────────────────────────────────────
-const MAP_STYLES = {
-  'osm':        { url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',                                               attr: '© OpenStreetMap' },
-  'topo':       { url: 'https://tile.opentopomap.org/{z}/{x}/{y}.png',                                                 attr: '© OpenStreetMap, © OpenTopoMap' },
-  'carto-dark': { url: 'https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',                                    attr: '© OpenStreetMap, © CARTO' },
-  'carto-light':{ url: 'https://basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',                                   attr: '© OpenStreetMap, © CARTO' },
-  'esri-sat':   { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', attr: '© Esri' },
-};
 let tourTileLayer = null;
 
 function setTourMapStyle(styleKey) {
-  const style = MAP_STYLES[styleKey] || MAP_STYLES['osm'];
+  const style = MAP_TILES[styleKey] || MAP_TILES['osm'];
   if(tourTileLayer) tourMap.removeLayer(tourTileLayer);
   tourTileLayer = L.tileLayer(style.url, { maxZoom:19, attribution:style.attr }).addTo(tourMap);
   try { localStorage.setItem('ascent-map-style', styleKey); } catch(e) {}
@@ -864,50 +744,11 @@ function mobTourTab(tab) {
 }
 
 // ── Map init + resize ─────────────────────────────────────────────────────────
-// Use min(width,height) so isMobTour stays true after rotating to landscape
-// (large iPhones go from 390px wide portrait to 844px wide landscape).
-const isMobTour  = () => Math.min(window.innerWidth, window.innerHeight) <= 767;
-const isPortrait = () => window.innerWidth < window.innerHeight;
 const tourChromeH = () => {
   if (!isMobTour()) return 44;
   const tb = document.querySelector('.mob-topbar');
   return tb ? tb.offsetHeight : 52;
 };
-// Returns the correct `top` for the portrait fixed stage-detail panel,
-// accounting for map + resize handle + elevation strip (if visible).
-function _stageDetailTop() {
-  const strip = document.getElementById('stage-elev-strip');
-  const rh    = document.getElementById('resize-handle');
-  const erh   = document.getElementById('elev-resize-handle');
-  const rhH   = rh  ? rh.offsetHeight  : 6;
-  const elevH = (strip && strip.style.display !== 'none') ? strip.offsetHeight : 0;
-  const erhH  = erh ? erh.offsetHeight : 0;
-  return (tourChromeH() + mapH + rhH + elevH + erhH) + 'px';
-}
-function toggleMobElev() {
-  if (!isMobTour()) return;
-  const strip = document.getElementById('stage-elev-strip');
-  const btn   = document.getElementById('mob-elev-disclose');
-  const arr   = btn && btn.querySelector('.mob-arr');
-  if (!strip || (strip.style.display === 'none' && !_mobElevCollapsed)) return;
-  _mobElevCollapsed = !_mobElevCollapsed;
-  strip.style.display = _mobElevCollapsed ? 'none' : '';
-  if (arr) arr.classList.toggle('collapsed', _mobElevCollapsed);
-  if (document.body.classList.contains('mob-stage-view') && isPortrait()) {
-    const sd = document.getElementById('stage-detail');
-    if (sd) sd.style.top = _stageDetailTop();
-  }
-}
-function toggleMobInfo() {
-  if (!isMobTour()) return;
-  const detail = document.getElementById('stage-detail');
-  const btn    = document.getElementById('mob-info-disclose');
-  const arr    = btn && btn.querySelector('.mob-arr');
-  if (!detail) return;
-  _mobInfoCollapsed = !_mobInfoCollapsed;
-  detail.style.display = _mobInfoCollapsed ? 'none' : '';
-  if (arr) arr.classList.toggle('collapsed', _mobInfoCollapsed);
-}
 
 // iOS rubber-band fix: #stage-list-wrap is position:fixed in portrait; set its
 // top by summing the heights of the elements above it (header + tour-controls + main).
@@ -929,6 +770,7 @@ function _syncStageListHeight() {
   wrap.style.top = top + 'px';
 }
 
+function getStageMap() { return tourMap; }
 function initMap() {
   // Portrait mobile: use a smaller map fraction so the stage list has room
   const mapFrac = (isMobTour() && isPortrait()) ? 0.38 : 0.55;
@@ -971,14 +813,6 @@ function initMap() {
   handle.addEventListener('touchend',   endDrag);
 })();
 
-function toggleMobStats() {
-  const mps = document.getElementById('mob-portrait-stats');
-  const btn = document.getElementById('stats-toggle');
-  if (!mps || !btn) return;
-  const collapsed = mps.classList.toggle('stats-collapsed');
-  btn.textContent = collapsed ? '▸' : '▾';
-  _syncStageListHeight();
-}
 
 // ── Sidebar horizontal resize ─────────────────────────────────────────────────
 (function() {
@@ -1017,54 +851,6 @@ function toggleMobStats() {
   }
 })();
 
-// ── Elevation strip vertical resize ──────────────────────────────────────────
-const _ELEV_H_KEY = 'ascent-stage-elev-h';
-const _ELEV_H_MIN = 60, _ELEV_H_MAX = 400, _ELEV_H_DEF = 100;
-function _elevHSaved() {
-  try { const v = parseInt(localStorage.getItem(_ELEV_H_KEY)); return (v >= _ELEV_H_MIN && v <= _ELEV_H_MAX) ? v : _ELEV_H_DEF; } catch(e) { return _ELEV_H_DEF; }
-}
-function _elevHSave(h) { try { localStorage.setItem(_ELEV_H_KEY, h); } catch(e) {} }
-
-(function() {
-  const handle = document.getElementById('elev-resize-handle');
-  if (!handle) return;
-  let drag = false, startY = 0, startH = 0;
-  function startDrag(y) {
-    const strip = document.getElementById('stage-elev-strip');
-    if (!strip) return;
-    drag = true; startY = y; startH = strip.offsetHeight;
-    handle.classList.add('dragging');
-    document.body.style.cursor = 'row-resize';
-    document.body.style.userSelect = 'none';
-  }
-  function moveDrag(y) {
-    if (!drag) return;
-    const strip = document.getElementById('stage-elev-strip');
-    if (!strip) return;
-    const newH = Math.max(_ELEV_H_MIN, Math.min(_ELEV_H_MAX, startH + (y - startY)));
-    strip.style.height = newH + 'px';
-    _stageElevChart?.resize?.();
-    if (document.body.classList.contains('mob-stage-view') && isPortrait()) {
-      document.getElementById('stage-detail').style.top = _stageDetailTop();
-    }
-  }
-  function endDrag() {
-    if (!drag) return;
-    drag = false;
-    handle.classList.remove('dragging');
-    document.body.style.cursor = '';
-    document.body.style.userSelect = '';
-    const strip = document.getElementById('stage-elev-strip');
-    if (strip) _elevHSave(strip.offsetHeight);
-    _stageElevChart?.resize?.();
-  }
-  handle.addEventListener('mousedown',  e => { startDrag(e.clientY); e.preventDefault(); });
-  document.addEventListener('mousemove', e => moveDrag(e.clientY));
-  document.addEventListener('mouseup',   endDrag);
-  handle.addEventListener('touchstart', e => { startDrag(e.touches[0].clientY); e.preventDefault(); }, {passive:false});
-  handle.addEventListener('touchmove',  e => { moveDrag(e.touches[0].clientY); e.preventDefault(); }, {passive:false});
-  handle.addEventListener('touchend',   endDrag);
-})();
 
 // ── User selector ─────────────────────────────────────────────────────────────
 let tourMatchUserId = null;
@@ -1164,6 +950,7 @@ async function onTourSelect(id) {
   buildStageColHead();
   renderStageList();
   await drawRoutes(null);
+  renderStageList();   // re-render: alt routes are now known from the loaded points
   renderDetail(null);
 }
 
@@ -1413,7 +1200,7 @@ function buildStageColPicker() {
   const picker = document.getElementById('stage-col-picker');
   picker.innerHTML = '<div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:2px 8px 6px">Visible Columns</div>';
   STAGE_ALL_COLS.forEach(col => {
-    if(col.id === 'num' || col.id === 'name') return; // always shown
+    if(col.id === 'name') return; // always shown
     const checked = stageColIds.includes(col.id);
     const item = document.createElement('label');
     item.className = 'cp-item';
@@ -1433,7 +1220,7 @@ function buildStageColPicker() {
           }
         }
       } else {
-        if(stageColIds.filter(id => id !== 'name' && id !== 'num').length <= 1) { e.target.checked = true; return; }
+        if(stageColIds.filter(id => id !== 'name').length <= 1) { e.target.checked = true; return; }
         stageColIds = stageColIds.filter(id => id !== col.id);
       }
       saveStageColPrefs(stageColIds);
@@ -1475,6 +1262,7 @@ function renderStageList() {
   const list = document.getElementById('stage-list');
   list.innerHTML = '';
   document.getElementById('sidebar-empty').style.display = tourStages.length ? 'none' : '';
+  _stageAltIds = _altStageIds(tourStages, _tourPointsCache);
 
   const cols = getActiveStageCols();
   const tpl  = buildStageColsTemplate();
@@ -1620,18 +1408,35 @@ async function drawRoutes(activeId) {
     _tourPointsCache = {...byStage};
     Object.entries(actPts).forEach(([sid, pts]) => { if(pts?.length) _tourPointsCache[sid] = pts; });
     const allPts  = [];
+    const altIds  = _altStageIds(tourStages, _tourPointsCache);
+    // When a stage that belongs to an alternate-route group is selected, show the
+    // selected route bold-red-solid and its sibling alternate(s) dashed together.
+    const activeGroup = activeId
+      ? (_stageSegmentGroups(tourStages, _tourPointsCache).find(g => g.some(s => String(s.id)===String(activeId))) || [])
+      : [];
+    const groupIds = new Set(activeGroup.map(s => String(s.id)));
 
+    let activeLine = null;
     tourStages.forEach((s) => {
       const pts = _tourPointsCache[String(s.id)];
       if(!pts?.length) return;
-      const isActive = activeId && String(s.id)===String(activeId);
-      L.polyline(pts, {
-        color:   isActive ? C.sel : stageColor(s),
-        weight:  isActive ? 5 : 3,
-        opacity: activeId ? (isActive ? 1.0 : 0.18) : 0.85,
-      }).addTo(routeGroup);
+      const sid = String(s.id);
+      const isActive  = activeId && sid===String(activeId);
+      const isSibling = activeId && !isActive && groupIds.has(sid);
+      let opts;
+      if(isActive) {
+        opts = { color: C.sel, weight: 5, opacity: 1.0 };                    // selected → bold red solid
+      } else if(isSibling) {
+        opts = { color: C.sel, weight: 3, opacity: 0.9, dashArray: '6,8' };  // its alternate(s) → dashed
+      } else {
+        opts = { color: stageColor(s), weight: 3, opacity: activeId ? 0.18 : 0.85 };
+        if(altIds.has(sid)) opts.dashArray = '6,8';                          // alternative route (overview)
+      }
+      const line = L.polyline(pts, opts).addTo(routeGroup);
+      if(isActive) activeLine = line;
       allPts.push(...pts);
     });
+    if(activeLine) activeLine.bringToFront();   // keep the selected route above its alternates
 
     // Stage start-point circle indicators — entire tour view only
     if(!activeId) {
@@ -1640,12 +1445,15 @@ async function drawRoutes(activeId) {
       if(first?.start_lat != null)
         L.marker([first.start_lat, first.start_lon], { icon: _startIcon, zIndexOffset: 50, interactive: false }).addTo(routeGroup);
 
-      // Stage number circles — on top of the start flag
-      tourStages.forEach(s => {
+      // Stage number circles — on top of the start flag.
+      // Alternate routes share a start with their sibling, so draw one
+      // numbered circle per segment group, renumbered sequentially so the
+      // alternates are excluded from the numbering.
+      _dedupeStatStages(tourStages, _tourPointsCache).forEach((s, i) => {
         if(s.start_lat == null || s.start_lon == null) return;
         const icon = L.divIcon({
           className: '',
-          html: `<div style="width:16px;height:16px;border-radius:50%;background:#fff;border:1.5px solid #000;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:#000;font-family:-apple-system,sans-serif;line-height:1;box-sizing:border-box">${s.stage_num}</div>`,
+          html: `<div style="width:16px;height:16px;border-radius:50%;background:#fff;border:1.5px solid #000;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:#000;font-family:-apple-system,sans-serif;line-height:1;box-sizing:border-box">${i + 1}</div>`,
           iconSize:   [16, 16],
           iconAnchor: [8, 8],
         });
@@ -1663,7 +1471,13 @@ async function drawRoutes(activeId) {
       if(pts?.length) {
         L.marker(pts[0],            { icon: _startIcon, zIndexOffset: 200, interactive: false }).addTo(routeGroup);
         L.marker(pts[pts.length-1], { icon: _endIcon,   zIndexOffset: 200, interactive: false }).addTo(routeGroup);
-        const b = L.latLngBounds(pts);
+      }
+      // Fit to the selected route plus any of its alternates so both are visible.
+      const boundsPts = [];
+      groupIds.forEach(id => { const p = _tourPointsCache[id]; if(p?.length) boundsPts.push(...p); });
+      const fitPts = boundsPts.length ? boundsPts : pts;
+      if(fitPts?.length) {
+        const b = L.latLngBounds(fitPts);
         _lastRouteBounds = { bounds: b, opts: { padding:[36,36] } };
         tourMap.fitBounds(b, { padding:[36,36] });
       }
@@ -1681,12 +1495,6 @@ function resetMapZoom() {
 }
 
 // ── Date / time helpers ───────────────────────────────────────────────────────
-function fmtHMS(s) {
-  if(s == null) return '—';
-  const h=Math.floor(s/3600), m=Math.floor((s%3600)/60), ss=Math.floor(s%60);
-  if(h>0) return `${h}:${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
-  return `${m}:${String(ss).padStart(2,'0')}`;
-}
 function fmtDate(ts) {
   if(!ts) return '—';
   try { return new Date(parseInt(ts)*1000).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}); }
@@ -1701,70 +1509,6 @@ function mkStatChip(label, val, sub) {
   return `<div class="stat-chip"><div class="sc-label">${label}</div><div class="sc-val">${val}</div><div class="sc-sub">${sub||''}</div></div>`;
 }
 
-// Returns {gainFt, startKm} for the biggest climb in a [[lat,lon,alt_ft],...] array.
-// A climb begins when gradient exceeds 3% and ends when gradient is flat/negative
-// for more than 250 ft of horizontal distance. Altitude is smoothed (5-pt moving
-// average) before gradient calculation to suppress GPS noise.
-function biggestClimbInfo(pts) {
-  if(!pts?.length || pts[0].length < 3) return {gainFt:0, startKm:0};
-
-  // 5-point moving-average altitude smoothing
-  const raw  = pts.map(p => p[2] || 0);
-  const half = 2;
-  const alts = raw.map((_, i) => {
-    let s = 0, c = 0;
-    for(let j = Math.max(0,i-half); j <= Math.min(raw.length-1,i+half); j++) { s+=raw[j]; c++; }
-    return s/c;
-  });
-
-  // Cumulative distance in km, one entry per point
-  const cumKm = [0];
-  for(let i = 1; i < pts.length; i++)
-    cumKm.push(cumKm[i-1] + _haversineMi(pts[i-1][0],pts[i-1][1],pts[i][0],pts[i][1]) * 1.60934);
-
-  const START_GRAD  = 3;    // % gradient required to begin a climb
-  const END_DIST_FT = 250;  // ft of flat/negative gradient before climb is considered over
-
-  let bestGain = 0, bestStartKm = 0;
-  let inClimb = false;
-  let climbStartKm = 0, climbStartAlt = 0, climbMaxAlt = 0;
-  let flatFt = 0;
-
-  for(let i = 1; i < pts.length; i++) {
-    const dAltFt  = alts[i] - alts[i-1];
-    const dDistFt = (cumKm[i] - cumKm[i-1]) * 3280.84;  // km → ft
-    const grad    = dDistFt > 0 ? (dAltFt / dDistFt) * 100 : 0;
-
-    if(!inClimb) {
-      if(grad > START_GRAD) {
-        inClimb       = true;
-        climbStartKm  = cumKm[i-1];
-        climbStartAlt = alts[i-1];
-        climbMaxAlt   = Math.max(alts[i-1], alts[i]);
-        flatFt        = 0;
-      }
-    } else {
-      if(grad > 0) {
-        flatFt      = 0;
-        climbMaxAlt = Math.max(climbMaxAlt, alts[i]);
-      } else {
-        flatFt += dDistFt;
-        if(flatFt > END_DIST_FT) {
-          const gain = climbMaxAlt - climbStartAlt;
-          if(gain > bestGain) { bestGain = gain; bestStartKm = climbStartKm; }
-          inClimb = false; flatFt = 0;
-        }
-      }
-    }
-  }
-  // Flush a climb that runs all the way to the end of the route
-  if(inClimb) {
-    const gain = climbMaxAlt - climbStartAlt;
-    if(gain > bestGain) { bestGain = gain; bestStartKm = climbStartKm; }
-  }
-
-  return {gainFt: bestGain, startKm: bestStartKm};
-}
 
 // ── Build full activity detail HTML — delegates to shared module ──────────────
 function buildStageActivityDetail(a) {
@@ -1907,109 +1651,7 @@ async function confirmStageSaveAsRoute() {
   }
 }
 
-// ── Stage elevation profile ───────────────────────────────────────────────────
-function _haversineMi(lat1, lon1, lat2, lon2) {
-  const R = 3958.8;
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
-  return R * 2 * Math.asin(Math.sqrt(a));
-}
-
-function drawStageElevation(pts) {
-  const strip  = document.getElementById('stage-elev-strip');
-  const canvas = document.getElementById('stage-elev-canvas');
-  if(!strip || !canvas) return;
-
-  // Reset state
-  _stageActData = null;
-  window._stageElevClearSel?.();
-  if(_stageElevChart) { _stageElevChart.destroy(); _stageElevChart = null; }
-  if(_stageHoverDot) { _stageHoverDot.remove(); _stageHoverDot = null; }
-  _stageElevRawPts = null;
-  _stageChartPts   = null;
-  _stageGradPts    = null;
-  // Reset mobile collapse state for new stage
-  _mobElevCollapsed = false;
-  _mobInfoCollapsed = false;
-  const _mehBtn = document.getElementById('mob-elev-disclose');
-  if (_mehBtn) { const _a = _mehBtn.querySelector('.mob-arr'); if(_a) _a.classList.remove('collapsed'); }
-  const _mihBtn = document.getElementById('mob-info-disclose');
-  if (_mihBtn) { const _a = _mihBtn.querySelector('.mob-arr'); if(_a) _a.classList.remove('collapsed'); }
-  const _detailEl = document.getElementById('stage-detail');
-  if (_detailEl) _detailEl.style.display = '';
-
-  // Need altitude data — pts is [[lat,lon,alt_ft], ...]
-  if(!pts?.length || pts[0].length < 3) { strip.style.display = 'none'; return; }
-  const hasAlt = pts.some(p => p[2] && p[2] !== 0);
-  if(!hasAlt) { strip.style.display = 'none'; return; }
-
-  // Build {x: cumDist, y: alt} points, downsampled to ≤600
-  const step = Math.max(1, Math.floor(pts.length / 600));
-  const distConv = U.metric ? (mi => +(mi * 1.60934).toFixed(3)) : (mi => +mi.toFixed(3));
-  const altConv  = U.metric ? (ft => Math.round(ft * 0.3048))    : (ft => Math.round(ft));
-
-  let cumDist = 0;
-  const chartPts = [];
-  const rawPts   = [];
-  for(let i = 0; i < pts.length; i++) {
-    if(i > 0) {
-      cumDist += _haversineMi(pts[i-1][0], pts[i-1][1], pts[i][0], pts[i][1]);
-    }
-    if(i % step === 0 || i === pts.length - 1) {
-      chartPts.push({ x: distConv(cumDist), y: altConv(pts[i][2] || 0) });
-      rawPts.push(pts[i]);
-    }
-  }
-  if(!chartPts.length) { strip.style.display = 'none'; return; }
-
-  _stageElevRawPts = rawPts;
-  _stageChartPts   = chartPts;
-  _stageGradPts    = computeStageGradFromRawPts(pts, step, distConv);
-  strip.style.height = _elevHSaved() + 'px';
-  strip.style.display = '';
-  const _elevHandle = document.getElementById('elev-resize-handle');
-  if (_elevHandle) _elevHandle.style.display = '';
-  _rebuildStageElevChart();
-
-  // Attach HUD + drag-selection interaction
-  stageElevInteraction({
-    getChart:    () => _stageElevChart,
-    getChartPts: () => _stageChartPts,
-    getGradPts:  () => _stageGradPts,
-    getRawPts:   () => _stageElevRawPts,
-    getActData:  () => _stageActData,
-    getMap:      () => tourMap,
-    getMapDot:   () => _stageHoverDot,
-    setMapDot:   m  => { _stageHoverDot = m; },
-    onSelection: (lo, hi) => { /* grades modal reads via window._stageElevGetSel() */ },
-    onClear:     () => {},
-  });
-}
-
-function hideStageElevation() {
-  const strip = document.getElementById('stage-elev-strip');
-  if(strip) {
-    strip.style.display = 'none';
-    const _elevHandle = document.getElementById('elev-resize-handle');
-    if (_elevHandle) _elevHandle.style.display = 'none';
-  }
-  window._stageElevClearSel?.();
-  if(_stageElevChart) { _stageElevChart.destroy(); _stageElevChart = null; }
-  if(_stageHoverDot) { _stageHoverDot.remove(); _stageHoverDot = null; }
-  _stageElevRawPts = null;
-  _stageChartPts   = null;
-  _stageActData    = null;
-  // Reset mobile collapse state
-  _mobElevCollapsed = false;
-  _mobInfoCollapsed = false;
-  const _mehBtn2 = document.getElementById('mob-elev-disclose');
-  if (_mehBtn2) { const _a = _mehBtn2.querySelector('.mob-arr'); if(_a) _a.classList.remove('collapsed'); }
-  const _mihBtn2 = document.getElementById('mob-info-disclose');
-  if (_mihBtn2) { const _a = _mihBtn2.querySelector('.mob-arr'); if(_a) _a.classList.remove('collapsed'); }
-  const _detailEl2 = document.getElementById('stage-detail');
-  if (_detailEl2) _detailEl2.style.display = '';
-}
+// ── Stage elevation profile: drawStageElevation / hideStageElevation live in tour_elev.js ──
 
 // ── Grades modal ──────────────────────────────────────────────────────────────
 const GRADE_BANDS = [
@@ -2026,7 +1668,7 @@ function _gradeColor(pct) { for(const b of GRADE_BANDS) if(pct<b.max) return b.c
 function openGradesModal() {
   const _sel = window._stageElevGetSel?.(); if(!_sel) return;
   const ia = _sel.lo, ib = _sel.hi;
-  const pts = (_stageElevRawPts||[]).slice(ia, ib+1);
+  const pts = (_elevRawPts||[]).slice(ia, ib+1);
   if(pts.length<2) return;
   const stage   = tourStages.find(s=>String(s.id)===String(selectedId));
   const titleEl = document.getElementById('grades-modal-title');
@@ -2139,6 +1781,7 @@ async function geocodeAlongRoute(pts) {
   return deduped.join(' → ') || null;
 }
 
+
 // ── Detail panel ──────────────────────────────────────────────────────────────
 async function renderDetail(activeId) {
   const el = document.getElementById('stage-detail');
@@ -2146,14 +1789,15 @@ async function renderDetail(activeId) {
   if(!activeId) {
     hideStageElevation();
     if(!tourStages.length) { el.innerHTML=''; const _m=document.getElementById('mob-portrait-stats'); if(_m)_m.innerHTML=''; return; }
-    const done       = tourStages.filter(s=>s.completion);
-    const totalDist  = tourStages.reduce((s,x)=>s+(x.distance_mi||0),0);
-    const totalClimb = tourStages.reduce((s,x)=>s+(x.climb_ft||0),0);
+    const statStages = _dedupeStatStages(tourStages, _tourPointsCache);
+    const done       = statStages.filter(s=>s.completion);
+    const totalDist  = statStages.reduce((s,x)=>s+(x.distance_mi||0),0);
+    const totalClimb = statStages.reduce((s,x)=>s+(x.climb_ft||0),0);
     const doneDist   = done.reduce((s,x)=>s+(x.completion?.distance_mi??x.distance_mi??0),0);
     const doneClimb  = done.reduce((s,x)=>s+(x.completion?.climb_ft??x.climb_ft??0),0);
     const pctD = totalDist >0 ? Math.round(doneDist /totalDist *100) : 0;
     const pctC = totalClimb>0 ? Math.round(doneClimb/totalClimb*100) : 0;
-    const n            = tourStages.length || 1;
+    const n            = statStages.length || 1;
     const avgDist      = totalDist  / n;
     const avgClimb     = totalClimb / n;
     const maxDistIdx   = tourStages.reduce((mi,x,i)=>(x.distance_mi||0)>(tourStages[mi].distance_mi||0)?i:mi, 0);
@@ -2168,7 +1812,7 @@ async function renderDetail(activeId) {
     const altMaxCStr   = U.metric ? Math.round(maxClimb)+' ft'   : Math.round(maxClimb*0.3048)+' m';
 
     const _chips =
-      `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Stages</div><div class="sc-val">${done.length} / ${tourStages.length}</div><div class="sc-sub">completed</div></div>` +
+      `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Stages</div><div class="sc-val">${done.length} / ${statStages.length}</div><div class="sc-sub">completed</div></div>` +
       `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Total Dist</div><div class="sc-val">${U.distS(totalDist)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${altDistStr}</div><div class="sc-sub">${U.distS(doneDist)} done (${pctD}%)</div></div>` +
       `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Total Ascent</div><div class="sc-val">${U.climbS(totalClimb)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${altClimbStr}</div><div class="sc-sub">${U.climbS(doneClimb)} done (${pctC}%)</div></div>` +
       `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Avg Dist</div><div class="sc-val">${U.distS(avgDist)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${altAvgDStr}</div><div class="sc-sub">per stage</div></div>` +
@@ -2235,7 +1879,7 @@ async function renderDetail(activeId) {
     // AI Tour Summary card — show when tour is not fully completed OR end date has passed
     const today = new Date().toISOString().slice(0,10);
     const tourEnded    = tourInfo.end_date < today;
-    const allCompleted = tourStages.length > 0 && done.length === tourStages.length;
+    const allCompleted = statStages.length > 0 && done.length === statStages.length;
     if(!allCompleted || tourEnded) {
       const _aiCardHtml = (idSuffix) => `<div class="ai-card" id="tour-ai-summary-card${idSuffix}">
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
@@ -2483,7 +2127,7 @@ async function renderDetail(activeId) {
       fetch(`/activities/${stage.completion.activity_id}/json`).then(r=>r.json()),
       fetch(`/api/activities/${stage.completion.activity_id}/charts`).then(r=>r.json()).catch(()=>null),
     ]);
-    _stageActData = _chartData;
+    _elevActData = _chartData;
     // Build avatar for stage header
     const _u = _tourUserMap[act.user_id];
     const _avUrl = _u?.avatar_url ? _u.avatar_url.replace('?thumb=1','')+'?thumb=1' : null;
@@ -2750,17 +2394,6 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
-// ── Reverse-geocode a lat/lon via BigDataCloud (no key, generous rate limit) ──
-async function reverseGeocode(lat, lon) {
-  try {
-    const r = await fetch(
-      `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`
-    );
-    const d = await r.json();
-    const parts = [d.city||d.locality||d.principalSubdivision, d.countryName].filter(Boolean);
-    return parts.slice(0,2).join(', ');
-  } catch(e) { return null; }
-}
 
 // ── Modal: Define / Edit ──────────────────────────────────────────────────────
 function openDefineModal() { _openDefine(); }
@@ -3057,7 +2690,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // ── Init ──────────────────────────────────────────────────────────────────────
 (async () => {
   await U.load();
-  _loadStageChartPrefs();
+  _loadElevChartPrefs();
   initMap();
   initStageHScrollbar();
   buildStageColHead();
@@ -3142,18 +2775,6 @@ function copyShareUrl() {
     setTimeout(() => { status.textContent = ''; }, 2000);
   });
 }
-(function(){
-  const strip = document.getElementById('stage-elev-strip');
-  const help  = document.getElementById('stage-elev-help');
-  if (!strip || !help) return;
-  function dismiss() {
-    help.classList.add('hidden');
-    strip.removeEventListener('mousedown',  dismiss);
-    strip.removeEventListener('touchstart', dismiss);
-  }
-  strip.addEventListener('mousedown',  dismiss);
-  strip.addEventListener('touchstart', dismiss, {passive:true});
-})();
 </script>
 {% include '_about.html' %}
 
