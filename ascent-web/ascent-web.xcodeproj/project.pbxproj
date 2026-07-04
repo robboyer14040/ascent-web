@@ -7,11 +7,6 @@
 	objects = {
 
 /* Begin PBXFileReference section */
-		D48FB4F62F8C69D1009570CD /* __init__.cpython-312.pyc */ = {isa = PBXFileReference; lastKnownFileType = file; path = "__init__.cpython-312.pyc"; sourceTree = "<group>"; };
-		D48FB4F72F8C69D1009570CD /* auth.cpython-312.pyc */ = {isa = PBXFileReference; lastKnownFileType = file; path = "auth.cpython-312.pyc"; sourceTree = "<group>"; };
-		D48FB4F82F8C69D1009570CD /* db.cpython-312.pyc */ = {isa = PBXFileReference; lastKnownFileType = file; path = "db.cpython-312.pyc"; sourceTree = "<group>"; };
-		D48FB4F92F8C69D1009570CD /* main.cpython-312.pyc */ = {isa = PBXFileReference; lastKnownFileType = file; path = "main.cpython-312.pyc"; sourceTree = "<group>"; };
-		D48FB4FA2F8C69D1009570CD /* strava_importer.cpython-312.pyc */ = {isa = PBXFileReference; lastKnownFileType = file; path = "strava_importer.cpython-312.pyc"; sourceTree = "<group>"; };
 		D48FB4FC2F8C69D1009570CD /* __init__.cpython-312.pyc */ = {isa = PBXFileReference; lastKnownFileType = file; path = "__init__.cpython-312.pyc"; sourceTree = "<group>"; };
 		D48FB4FD2F8C69D1009570CD /* activities.cpython-312.pyc */ = {isa = PBXFileReference; lastKnownFileType = file; path = "activities.cpython-312.pyc"; sourceTree = "<group>"; };
 		D48FB4FE2F8C69D1009570CD /* api.cpython-312.pyc */ = {isa = PBXFileReference; lastKnownFileType = file; path = "api.cpython-312.pyc"; sourceTree = "<group>"; };
@@ -102,6 +97,22 @@
 		D4A0818D2FF9687A00635CEF /* tour_stage.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = tour_stage.js; sourceTree = "<group>"; };
 		D4A0818E2FF9688300635CEF /* tour_stage.css */ = {isa = PBXFileReference; lastKnownFileType = text.css; path = tour_stage.css; sourceTree = "<group>"; };
 		D4A0818F2FF9729C00635CEF /* activity_chips.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = activity_chips.js; path = ../routers/activity_chips.js; sourceTree = "<group>"; };
+		D4A081922FF98C3B00635CEF /* test_tours_backend.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = test_tours_backend.py; sourceTree = "<group>"; };
+		D4A081942FF98D8700635CEF /* finalize.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = finalize.js; sourceTree = "<group>"; };
+		D4A081952FF98D8700635CEF /* harness.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = harness.js; sourceTree = "<group>"; };
+		D4A081962FF98D8700635CEF /* run.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = run.sh; sourceTree = "<group>"; };
+		D4A081972FF98D8700635CEF /* test_activity_chips.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = test_activity_chips.js; sourceTree = "<group>"; };
+		D4A081982FF98D8700635CEF /* test_common.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = test_common.js; sourceTree = "<group>"; };
+		D4A081992FF98D8700635CEF /* test_tour_stage.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = test_tour_stage.js; sourceTree = "<group>"; };
+		D4A0819B2FF99E9900635CEF /* live_creds.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = live_creds.py; sourceTree = "<group>"; };
+		D4A0819C2FF99E9900635CEF /* samples.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = samples.py; sourceTree = "<group>"; };
+		D4A0819D2FF99E9900635CEF /* test_ai.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = test_ai.py; sourceTree = "<group>"; };
+		D4A0819E2FF99E9900635CEF /* test_db_users.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = test_db_users.py; sourceTree = "<group>"; };
+		D4A0819F2FF99E9900635CEF /* test_gpx.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = test_gpx.py; sourceTree = "<group>"; };
+		D4A081A02FF99E9900635CEF /* test_js_static.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = test_js_static.py; sourceTree = "<group>"; };
+		D4A081A12FF99E9900635CEF /* test_live_apis.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = test_live_apis.py; sourceTree = "<group>"; };
+		D4A081A22FF99E9900635CEF /* test_segment_compare.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = test_segment_compare.py; sourceTree = "<group>"; };
+		D4A081A32FF99E9900635CEF /* test_strava_parsing.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = test_strava_parsing.py; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -110,18 +121,6 @@
 			children = (
 				D48FB5352F8C69D1009570CD /* app */,
 			);
-			sourceTree = "<group>";
-		};
-		D48FB4FB2F8C69D1009570CD /* __pycache__ */ = {
-			isa = PBXGroup;
-			children = (
-				D48FB4F62F8C69D1009570CD /* __init__.cpython-312.pyc */,
-				D48FB4F72F8C69D1009570CD /* auth.cpython-312.pyc */,
-				D48FB4F82F8C69D1009570CD /* db.cpython-312.pyc */,
-				D48FB4F92F8C69D1009570CD /* main.cpython-312.pyc */,
-				D48FB4FA2F8C69D1009570CD /* strava_importer.cpython-312.pyc */,
-			);
-			path = __pycache__;
 			sourceTree = "<group>";
 		};
 		D48FB5062F8C69D1009570CD /* __pycache__ */ = {
@@ -239,7 +238,7 @@
 		D48FB5352F8C69D1009570CD /* app */ = {
 			isa = PBXGroup;
 			children = (
-				D48FB4FB2F8C69D1009570CD /* __pycache__ */,
+				D4A081932FF98C3B00635CEF /* tests */,
 				D48FB5132F8C69D1009570CD /* routers */,
 				D48FB5182F8C69D1009570CD /* static */,
 				D48FB52D2F8C69D1009570CD /* templates */,
@@ -254,6 +253,38 @@
 			name = app;
 			path = ../app;
 			sourceTree = SOURCE_ROOT;
+		};
+		D4A081932FF98C3B00635CEF /* tests */ = {
+			isa = PBXGroup;
+			children = (
+				D4A0819B2FF99E9900635CEF /* live_creds.py */,
+				D4A0819C2FF99E9900635CEF /* samples.py */,
+				D4A0819D2FF99E9900635CEF /* test_ai.py */,
+				D4A0819E2FF99E9900635CEF /* test_db_users.py */,
+				D4A0819F2FF99E9900635CEF /* test_gpx.py */,
+				D4A081A02FF99E9900635CEF /* test_js_static.py */,
+				D4A081A12FF99E9900635CEF /* test_live_apis.py */,
+				D4A081A22FF99E9900635CEF /* test_segment_compare.py */,
+				D4A081A32FF99E9900635CEF /* test_strava_parsing.py */,
+				D4A081922FF98C3B00635CEF /* test_tours_backend.py */,
+				D4A0819A2FF98D8700635CEF /* js */,
+			);
+			name = tests;
+			path = ../tests;
+			sourceTree = SOURCE_ROOT;
+		};
+		D4A0819A2FF98D8700635CEF /* js */ = {
+			isa = PBXGroup;
+			children = (
+				D4A081942FF98D8700635CEF /* finalize.js */,
+				D4A081952FF98D8700635CEF /* harness.js */,
+				D4A081962FF98D8700635CEF /* run.sh */,
+				D4A081972FF98D8700635CEF /* test_activity_chips.js */,
+				D4A081982FF98D8700635CEF /* test_common.js */,
+				D4A081992FF98D8700635CEF /* test_tour_stage.js */,
+			);
+			path = js;
+			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
 

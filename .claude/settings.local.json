@@ -78,7 +78,10 @@
       "WebFetch(domain:shop.sram.com)",
       "Bash(fly volumes *)",
       "Bash(awk '{del+=$2} END{print del \" lines deleted\"}')",
-      "Bash(xargs cat)"
+      "Bash(xargs cat)",
+      "Bash(tests/js/run.sh)",
+      "Bash(echo \"exit=$?\")",
+      "Bash(export ASCENT_DB_PATH=\"/Users/rob/Desktop/AscentDB/Ascent.ascentdb\")"
     ]
   }
 }

@@ -83,7 +83,38 @@ fly deploy
 fly logs
 ```
 
-No test suite exists. Testing is manual via browser.
+## Testing
+
+```bash
+# Backend + JS suites (JS auto-skips where jsc is unavailable, e.g. non-macOS)
+venv_arm64/bin/python -m pytest
+
+# Static-JS unit tests directly (macOS JavaScriptCore — no node/npm needed)
+tests/js/run.sh
+
+# Live external-API check (ON DEMAND ONLY — real network + real credentials)
+venv_arm64/bin/python -m pytest --run-live tests/test_live_apis.py -v
+```
+
+- `tests/` — pytest suite. `conftest.py` provides the shared harness: a real temp
+  DB built by the app's own `create_db()` (+ the `user_id` migration production DBs
+  carry), plus `make_user` / `add_activity` factories and a `TestClient`
+  (`client` / `authed_client`) that carries a real session cookie.
+- `tests/samples.py` — captured-shape Strava and Anthropic payloads so tests never
+  hit the network; the two external APIs are mocked at the `httpx.AsyncClient` layer.
+- `tests/js/` — static-JS unit tests run under macOS `jsc`; `tests/test_js_static.py`
+  runs them from pytest too.
+- `tests/test_live_apis.py` — live checks that each external API (Anthropic, Strava,
+  Open-Meteo weather/elevation, Nominatim + BigDataCloud geocoding, Valhalla routing,
+  map tile providers, jsdelivr) is up and returning the expected shape. Opt-in only
+  via `--run-live` (skipped by the normal suite). Credentials come from a local
+  `.env` (primary — see `.env.example`: `ANTHROPIC_API_KEY`, `STADIA_API_KEY`,
+  `STRAVA_REFRESH_TOKEN` + `STRAVA_CLIENT_ID/SECRET`); `tests/live_creds.py` also
+  falls back to the real DB (`ASCENT_DB_PATH`). A check whose credential is missing
+  skips rather than fails.
+
+Interactive UI behavior (maps, elevation strip, mobile gestures) still needs manual
+browser verification — the JS harness only covers the pure helpers.
 
 ## Architecture
 
