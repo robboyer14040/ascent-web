@@ -6,8 +6,21 @@ on:
     branches:
       - main
 jobs:
+  test:
+    name: Run tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'   # match Dockerfile / production
+          cache: pip
+      - run: pip install -r requirements.txt pytest
+      - run: python -m pytest -q    # JS + live-API tests skip on Linux CI
+
   deploy:
     name: Deploy app
+    needs: test                     # deploy only if tests pass
     runs-on: ubuntu-latest
     concurrency: deploy-group    # optional: ensure only one action runs at a time
     steps:
