@@ -58,6 +58,8 @@ let gradArr = null;        // gradient array from last drawElevation; read by ca
 let hudModeActive = false;
 let hudDataIdx    = -1;    // data index of last HUD position; used for keyboard nav
 let _showElevHudAt = null; // assigned by hover IIFE; called from touch handler
+let _moveElevDots = null;     // assigned by hover IIFE; moves puck + map dot to the cursor
+let _hideElevHoverUI = null;  // assigned by hover IIFE; hides the hover panel + crosshair
 
 function toggleElevHudMode() {
   hudModeActive = !hudModeActive;
@@ -776,59 +778,39 @@ async function drawElevation(data, version) {
     const dist  = lerp(data.dist_m,  idx);
 
     const _prof = cachedProfile || {};
-    const _hrZC = (hr && hr>0) ? (zoneColorFor(hr,  hrBoundsFor(_prof, currentAct))  || COLORS.hr)    : COLORS.hr;
-    const _pwZC = (pwr && pwr>0)? (zoneColorFor(pwr, pwrBoundsFor(_prof, currentAct)) || COLORS.power) : COLORS.power;
-    const rows = [
-      { label:'Time',     val: hoverSecs != null ? (()=>{ const h=Math.floor(hoverSecs/3600),m=Math.floor((hoverSecs%3600)/60),s=Math.floor(hoverSecs%60); return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`; })() : '—', color: 'rgba(255,255,255,.75)' },
-      { label:'Distance', val: dist != null ? U.distS(+(dist/1609.344).toFixed(2)) : '—', color: COLORS.distance },
-      { label:'Altitude', val: alt  != null ? U.altS(alt)                      : '—', color: COLORS.altitude },
-      { label:'Gradient', val: grad != null ? grad.toFixed(1)+'%'              : '—', color: COLORS.gradient },
-      { label:'Heart Rate',val:hr && hr>0   ? Math.round(hr)+' bpm'           : '—', color: _hrZC },
-      { label:'Power',    val: pwr && pwr>0  ? Math.round(pwr)+' W'           : '—', color: _pwZC },
-      { label:'Cadence',  val: cad && cad>0 ? Math.round(cad)+' rpm'          : '—', color: COLORS.cadence },
-      { label:'Speed',    val: spd && spd>0 ? U.speedS(spd)                   : '—', color: COLORS.speed },
-    ];
+    const _cmap = { dist:'distance', alt:'altitude', grad:'gradient', cadence:'cadence', speed:'speed' };
+    const rowColor = (field, v) => {
+      if (field === 'time')  return 'rgba(255,255,255,.75)';
+      if (field === 'hr')    return (v && v>0) ? (zoneColorFor(v, hrBoundsFor(_prof, currentAct))  || COLORS.hr)    : COLORS.hr;
+      if (field === 'power') return (v && v>0) ? (zoneColorFor(v, pwrBoundsFor(_prof, currentAct)) || COLORS.power) : COLORS.power;
+      return COLORS[_cmap[field]];
+    };
+    const rows = elevHudRows({
+      time: hoverSecs,                                       // number or null → "—"
+      dist: dist,                                            // metres
+      alt:  alt != null ? (U.metric ? alt * 0.3048 : alt) : null,
+      grad: grad,
+      hr:      (hr  && hr  > 0) ? hr  : null,
+      power:   (pwr && pwr > 0) ? pwr : null,
+      cadence: (cad && cad > 0) ? cad : null,
+      speed:   (spd && spd > 0) ? (U.metric ? spd * 1.60934 : spd) : null,
+    }, rowColor);
 
     elevHudRender(panel, rows, px, rect.width);
   }
 
-  // Expose for touch HUD mode
-  _showElevHudAt = showHudAt;
-
-  function setupHover() {
-    const wrap = document.getElementById('elev-canvas-area') || document.getElementById('chart-wrap');
-    const panel = document.getElementById('elev-hover-panel');
-    const cross = document.getElementById('elev-crosshair');
-    if (!wrap || !panel || !cross) return;
-
-    wrap.addEventListener('mousemove', e => {
-      if (!hudModeActive) {
-        _moveDots(e.clientX);
-        panel.style.display = 'none';
-        cross.style.display = 'none';
-        return;
-      }
-      showHudAt(e.clientX);
-    });
-
-    wrap.addEventListener('mouseleave', () => {
-      // Just hide the hover panel and crosshair — leave dots, scrub, and timecode where they are
-      panel.style.display = 'none';
-      cross.style.display = 'none';
-    });
-  }
-
-  document.addEventListener('DOMContentLoaded', setupHover);
-  setTimeout(setupHover, 800);
+  // Expose the hover helpers so the shared interaction module (wired from the range-
+  // selection IIFE below) can drive hover, HUD-mode touch, and mouseleave.
+  _showElevHudAt   = showHudAt;
+  _moveElevDots    = _moveDots;
+  _hideElevHoverUI = () => {
+    const p = document.getElementById('elev-hover-panel'); if (p) p.style.display = 'none';
+    const c = document.getElementById('elev-crosshair');   if (c) c.style.display = 'none';
+  };
 })();
 
 // ── ELEVATION RANGE SELECTION ─────────────────────────────────────────────────
 (function() {
-  let dragging   = false;
-  let startPx    = 0;
-  let startIdx   = 0;
-  let _outsideTapSetup = false;
-
   // Convert pixel x within chart-wrap → data index
   function pxToIdx(px) {
     if (!elevChart || !elevChartData) return -1;
@@ -903,107 +885,24 @@ async function drawElevation(data, version) {
     const safeLo = Math.max(0, lo);
     const safeHi = Math.min(hi, n - 1);
 
-    const speeds = data.speed   ? data.speed.slice(safeLo, safeHi + 1)   : [];
-    const hrs    = data.hr      ? data.hr.slice(safeLo, safeHi + 1)      : [];
-    const powers = data.power   ? data.power.slice(safeLo, safeHi + 1)   : [];
-    const cads   = data.cadence ? data.cadence.slice(safeLo, safeHi + 1) : [];
-    const alts   = data.alt_ft  ? data.alt_ft.slice(safeLo, safeHi + 1)  : [];
-    const grads  = gradArr      ? gradArr.slice(safeLo, safeHi + 1)       : [];
-
-    const validSpeeds = speeds.filter(v => v > 0);
-    const movSpeeds   = speeds.filter(v => v >= 0.5);
-    const validHrs    = hrs.filter(v => v > 0);
-    const validPowers = powers.filter(v => v > 0);
-    const validCads   = cads.filter(v => v > 0);
-
-    const _avg = arr => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null;
-    const _max = arr => arr.length ? Math.max(...arr) : null;
-    const _min = arr => arr.length ? Math.min(...arr) : null;
-    // Returns index of max (optionally filtered by pred), or null if nothing qualifies
-    const _argmaxF  = (arr, pred=()=>true) => { let bi=-1,bv=-Infinity; for(let i=0;i<arr.length;i++) if(pred(arr[i])&&arr[i]>bv){bv=arr[i];bi=i;} return bi<0?null:bi; };
-    const _argmaxAb = arr => { let bi=-1,ba=-Infinity; for(let i=0;i<arr.length;i++) if(Math.abs(arr[i])>ba){ba=Math.abs(arr[i]);bi=i;} return bi<0?null:bi; };
-    const toG = i => i==null ? null : safeLo+i;  // local slice index → global data index
-
-    let maxGradVal = null, _maxGradLocalIdx = null;
-    if (grads.length) {
-      const hasPos = grads.some(g => g > 0);
-      let best = -Infinity;
-      for (let i = 0; i < grads.length; i++) {
-        const g = grads[i];
-        if (hasPos && g <= 0) continue;
-        if (Math.abs(g) > best) { best = Math.abs(g); maxGradVal = g; _maxGradLocalIdx = i; }
-      }
-    }
-    let avgGrad = null;
-    if (alts.length >= 2) {
-      const distSpan = data.dist_m[safeHi] - data.dist_m[safeLo];
-      if (distSpan > 0) avgGrad = (alts[alts.length - 1] - alts[0]) * 0.3048 / distSpan * 100;
-    }
-
-    let totalClimb = 0, totalDescent = 0;
-    for (let i = 1; i < alts.length; i++) {
-      const d = alts[i] - alts[i-1];
-      if (d > 0) totalClimb += d; else totalDescent += Math.abs(d);
-    }
-
-    const hasPower   = validPowers.length > 0;
-    const hasHR      = validHrs.length > 0;
-    const hasSpeed   = validSpeeds.length > 0;
-    const hasCadence = validCads.length > 0;
-
-    // Global data indices for each "Max" field (used for click-to-seek)
-    const maxAltGIdx  = toG(_argmaxF(alts));
-    const maxGradGIdx = toG(_maxGradLocalIdx);
-    const maxHRGIdx   = toG(_argmaxF(hrs,    v => v > 0));
-    const maxPwrGIdx  = toG(_argmaxF(powers, v => v > 0));
-    const maxSpdGIdx  = toG(_argmaxF(speeds, v => v > 0));
-    const maxCadGIdx  = toG(_argmaxF(cads,   v => v > 0));
-
-    const fmtSpd  = v => v != null ? `${U.speed(v).toFixed(1)} ${U.speedUnit()}` : '—';
-    const fmtHR   = v => v != null ? `${Math.round(v)} bpm` : '—';
-    const fmtAlt  = v => v != null ? `${Math.round(U.metric ? v * 0.3048 : v)} ${U.altUnit()}` : '—';
-    const fmtClmb = v => v > 0 ? `${Math.round(U.metric ? v * 0.3048 : v)} ${U.altUnit()}` : '—';
-    const fmtPwr  = v => v != null ? `${Math.round(v)} W` : '—';
-    const fmtGrad = v => v != null ? `${v.toFixed(1)}%` : '—';
-    const fmtCad  = v => v != null ? `${Math.round(v)} rpm` : '—';
-
-    // Start time and duration from time array
-    let headerHtml = '';
-    if (data.time && data.time.length > safeHi) {
-      const startSec = data.time[safeLo] || 0;
-      const durSec   = Math.round((data.time[safeHi] || 0) - startSec);
-      const fmtElapsed = s => {
-        const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), ss = s % 60;
-        return h > 0
-          ? `${h}:${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}`
-          : `${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
-      };
-      const selDistM = (data.dist_m[safeHi] || 0) - (data.dist_m[safeLo] || 0);
-      const selDistStr = U.metric ? (selDistM/1000).toFixed(2)+' km' : (selDistM/1609.344).toFixed(2)+' mi';
-      headerHtml = `<div class="es-header">` +
-        `<span><span class="es-lbl">Start </span><span class="es-val">${fmtElapsed(Math.round(startSec))}</span></span>` +
-        `<span class="es-hdr-dur"><span class="es-lbl">Duration </span><span class="es-val">${fmtElapsed(durSec)}</span></span>` +
-        `<span class="es-maxat" style="display:none"><span class="es-lbl">max@ </span><span class="es-val es-maxat-val"></span></span>` +
-        `<span class="es-hdr-dist"><span class="es-val">${selDistStr}</span></span>` +
-        `</div>`;
-    }
-
-    const rows = [
-      [{ label: 'Min Altitude',  val: fmtAlt(alts.length ? _min(alts) : null) },
-       { label: 'Max Altitude',  val: fmtAlt(alts.length ? _max(alts) : null), clickIdx: maxAltGIdx }],
-      [{ label: 'Total Climb',   val: fmtClmb(totalClimb) },
-       { label: 'Total Descent', val: fmtClmb(totalDescent) }],
-      [{ label: 'Max Gradient',  val: fmtGrad(maxGradVal), clickIdx: maxGradGIdx },
-       { label: 'Avg Gradient',  val: fmtGrad(avgGrad) }],
-      ...(hasHR      ? [[{ label: 'Max HR',       val: fmtHR(_max(validHrs)),    clickIdx: maxHRGIdx  },
-                         { label: 'Avg HR',       val: fmtHR(_avg(validHrs))  }]] : []),
-      ...(hasPower   ? [[{ label: 'Max 3s Power', val: fmtPwr(_max(validPowers)), clickIdx: maxPwrGIdx },
-                         { label: 'Avg 3s Power', val: fmtPwr(_avg(validPowers)) }]] : []),
-      ...(hasSpeed   ? [[{ label: 'Max Speed',    val: fmtSpd(_max(validSpeeds)), clickIdx: maxSpdGIdx },
-                         { label: 'Mov Speed',    val: fmtSpd(_avg(movSpeeds))  }]] : []),
-      ...(hasCadence ? [[{ label: 'Max Cadence',  val: fmtCad(_max(validCads)),   clickIdx: maxCadGIdx },
-                         { label: 'Avg Cadence',  val: fmtCad(_avg(validCads))  }]] : []),
-    ];
+    // Data access for the shared region-stats computation. The Activity chart's
+    // interaction runs on the full-resolution arrays, so a seek index is a data index and
+    // per-point metrics share that index space (identity mapping).
+    const ctx = {
+      altAt:   si => data.alt_ft ? (U.metric ? data.alt_ft[si] * 0.3048 : data.alt_ft[si]) : null,
+      gradAt:  si => gradArr ? (gradArr[si] == null ? null : gradArr[si]) : null,
+      distMAt: si => data.dist_m[si],
+      metricSamples: (field, l, h) => {
+        const arr = data[field];
+        if (!arr || !arr.length) return null;
+        return { values: arr.slice(l, h + 1), toSeekIdx: li => l + li };
+      },
+      rangeHeader: (l, h) => (data.time && data.time.length > h)
+        ? { startSec: data.time[l] || 0, durSec: (data.time[h] || 0) - (data.time[l] || 0),
+            distM: (data.dist_m[h] || 0) - (data.dist_m[l] || 0) }
+        : null,
+    };
+    const { rows, headerHtml } = computeRegionStats(ctx, safeLo, safeHi);
 
     const useTimeAxis = (document.getElementById('xaxis-time')?.checked ?? false)
                         && data.time && data.time.length === n;
@@ -1017,13 +916,19 @@ async function drawElevation(data, version) {
     const hasTime = !!(data.time && data.time.length > safeHi);
     elevSelRender(box, pxLo, pxHi, ca, headerHtml, rows,
       document.getElementById('elev-hud-btn'), wrap,
-      (idx, b) => {
+      (idx, b, e) => {
         _hudMoveToIdx(idx);
         // _hudMoveToIdx shows the hover panel/crosshair — hide them so the stats pane stays visible
         const _hp = document.getElementById('elev-hover-panel');
         const _xh = document.getElementById('elev-crosshair');
         if (_hp) _hp.style.display = 'none';
         if (_xh) _xh.style.display = 'none';
+        // Freeze the puck at the clicked point so the next mousemove doesn't yank it to the cursor.
+        const _wrap = document.getElementById('elev-canvas-area') || document.getElementById('chart-wrap');
+        const _dot  = document.getElementById('elev-anim-dot');
+        if (e && _wrap && _dot && _dot.style.left) {
+          puckStickArm(_wrap.getBoundingClientRect().left + parseFloat(_dot.style.left), e.clientX);
+        }
         if (hasTime) {
           const t = data.time[idx] || 0;
           const h = Math.floor(t/3600), m = Math.floor((t%3600)/60), s = Math.floor(t%60);
@@ -1062,128 +967,42 @@ async function drawElevation(data, version) {
   }
 
   function setup() {
-    const wrap  = document.getElementById('elev-canvas-area');
-    const panel = document.getElementById('elev-hover-panel');
-    const cross = document.getElementById('elev-crosshair');
-    const rect  = document.getElementById('elev-sel-rect');
+    const wrap = document.getElementById('elev-canvas-area');
+    const rect = document.getElementById('elev-sel-rect');
     if (!wrap || !rect) return;
 
-    function beginDrag(clientX) {
-      if (!elevChart || !elevChartData) return false;
-      const ca = elevChart.chartArea;
-      if (!ca) return false;
-      const wRect = wrap.getBoundingClientRect();
-      const px = clientX - wRect.left;
-      if (px < ca.left || px > ca.right) return false;
-      dragging = true;
-      startPx  = px;
-      startIdx = pxToIdx(px);
-      if (panel) panel.style.display = 'none';
-      if (cross) cross.style.display = 'none';
-      rect.style.display = 'block';
-      rect.style.left  = px + 'px';
-      rect.style.width = '0px';
-      // Reset segment selector when user draws a new region
-      const segSel = document.getElementById('seg-selector');
-      if (segSel && segSel.value) {
-        segSel.value = '';
-        window._selectedSegmentId = null;
-        const defineBtn = document.getElementById('seg-define-btn');
-        if (defineBtn) defineBtn.textContent = 'Define…';
-        const segLbl = document.getElementById('seg-selector-label');
-        if (segLbl) segLbl.textContent = 'Entire activity';
-        const beBtn2 = document.getElementById('seg-best-efforts-btn');
-        if (beBtn2) beBtn2.disabled = true;
-      }
-      return true;
-    }
-
-    function moveDrag(clientX) {
-      if (!dragging) return;
-      const ca = elevChart.chartArea;
-      const wRect = wrap.getBoundingClientRect();
-      const curPx  = clientX - wRect.left;
-      const lo     = Math.max(ca.left, Math.min(startPx, curPx));
-      const hi     = Math.min(ca.right, Math.max(startPx, curPx));
-      rect.style.left  = lo + 'px';
-      rect.style.width = (hi - lo) + 'px';
-      applyElevSelection(startIdx, pxToIdx(curPx));
-    }
-
-    function endDrag(clientX) {
-      const wRect = wrap.getBoundingClientRect();
-      const curPx  = clientX - wRect.left;
-      const moved  = Math.abs(curPx - startPx) > 4;
-      if (moved) applyElevSelection(startIdx, pxToIdx(curPx));
-      else { rect.style.display = 'none'; clearElevSelection(); }
-      dragging = false;
-    }
-
-    // Mouse
-    wrap.addEventListener('mousedown', e => {
-      if (!beginDrag(e.clientX)) return;
-      e.preventDefault();
-      function onMove(ev) { moveDrag(ev.clientX); }
-      function onUp(ev)   { document.removeEventListener('mousemove', onMove);
-                            document.removeEventListener('mouseup', onUp);
-                            endDrag(ev.clientX); }
-      document.addEventListener('mousemove', onMove);
-      document.addEventListener('mouseup', onUp);
+    elevRegionInteraction({
+      container:      wrap,
+      chartArea:      () => (elevChart && elevChartData && elevChart.chartArea) ? elevChart.chartArea : null,
+      clientXToIndex: clientX => pxToIdx(clientX - wrap.getBoundingClientRect().left),
+      hudActive:      () => hudModeActive,
+      hover:          clientX => { if (_moveElevDots) _moveElevDots(clientX); if (_hideElevHoverUI) _hideElevHoverUI(); },
+      showHud:        clientX => { if (_showElevHudAt) _showElevHudAt(clientX); },
+      hideHover:      () => { if (_hideElevHoverUI) _hideElevHoverUI(); },
+      onDragStart: () => {
+        if (_hideElevHoverUI) _hideElevHoverUI();
+        // Reset segment selector when the user draws a new region
+        const segSel = document.getElementById('seg-selector');
+        if (segSel && segSel.value) {
+          segSel.value = '';
+          window._selectedSegmentId = null;
+          const defineBtn = document.getElementById('seg-define-btn');
+          if (defineBtn) defineBtn.textContent = 'Define…';
+          const segLbl = document.getElementById('seg-selector-label');
+          if (segLbl) segLbl.textContent = 'Entire activity';
+          const beBtn2 = document.getElementById('seg-best-efforts-btn');
+          if (beBtn2) beBtn2.disabled = true;
+        }
+      },
+      applySelection: (lo, hi) => applyElevSelection(lo, hi),
+      clearSelection: () => clearElevSelection(),
+      dragRectStart:  px => { rect.style.display = 'block'; rect.style.left = px + 'px'; rect.style.width = '0px'; },
+      dragRectUpdate: (lo, hi) => { rect.style.left = lo + 'px'; rect.style.width = (hi - lo) + 'px'; },
+      dragRectHide:   () => { rect.style.display = 'none'; },
+      suppressHoverWhileDragging: false,
+      dismissBox:  () => document.getElementById('elev-sel-stats'),
+      dismissKeep: target => { const tb = document.getElementById('chart-toolbar'); return !!(tb && tb.contains(target)); },
     });
-
-    // Touch (phone/iPad)
-    wrap.addEventListener('touchstart', e => {
-      const t = e.touches[0];
-      if (!t) return;
-      if (hudModeActive) {
-        // HUD mode: drag moves the HUD panel; panel stays visible after lift
-        if (_showElevHudAt) _showElevHudAt(t.clientX);
-        function onHudMove(ev) {
-          const t2 = ev.touches[0];
-          if (t2 && _showElevHudAt) _showElevHudAt(t2.clientX);
-        }
-        function onHudEnd() {
-          document.removeEventListener('touchmove', onHudMove);
-          document.removeEventListener('touchend', onHudEnd);
-        }
-        document.addEventListener('touchmove', onHudMove, {passive: true});
-        document.addEventListener('touchend', onHudEnd, {passive: true});
-        return;
-      }
-      if (!beginDrag(t.clientX)) return;
-      // Don't preventDefault — allow scroll unless we actually started dragging
-      function onMove(ev) { const t2 = ev.touches[0]; if (t2) moveDrag(t2.clientX); }
-      function onEnd(ev)  { const t2 = ev.changedTouches[0];
-                            document.removeEventListener('touchmove', onMove);
-                            document.removeEventListener('touchend', onEnd);
-                            if (t2) endDrag(t2.clientX); }
-      document.addEventListener('touchmove', onMove, {passive: true});
-      document.addEventListener('touchend',  onEnd,  {passive: true});
-    }, {passive: true});
-
-    // Dismiss region stats popup when tapping outside it (phone/tablet).
-    // Only set up once even though setup() may be called twice.
-    if (!_outsideTapSetup) {
-      _outsideTapSetup = true;
-      let _tapX = 0, _tapY = 0;
-      document.addEventListener('touchstart', ev => {
-        const t = ev.touches[0];
-        if (t) { _tapX = t.clientX; _tapY = t.clientY; }
-      }, {passive: true});
-      document.addEventListener('touchend', ev => {
-        const box = document.getElementById('elev-sel-stats');
-        if (!box || box.style.display === 'none') return;
-        const t = ev.changedTouches[0];
-        if (!t) return;
-        // Ignore if the finger moved significantly (scroll or region-drag, not a tap)
-        if (Math.abs(t.clientX - _tapX) > 12 || Math.abs(t.clientY - _tapY) > 12) return;
-        // Dismiss if tap landed outside the popup — but NOT on toolbar buttons
-        // (Compare, Define, etc. need the selection to still be set when onclick fires)
-        const el = document.elementFromPoint(t.clientX, t.clientY);
-        const toolbar = document.getElementById('chart-toolbar');
-        if (!box.contains(el) && !(toolbar && toolbar.contains(el))) clearElevSelection();
-      }, {passive: true});
-    }
   }
 
   document.addEventListener('DOMContentLoaded', setup);

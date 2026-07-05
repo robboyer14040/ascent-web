@@ -139,7 +139,7 @@ input,select{font:inherit}
 .act-row{
   display:grid;grid-template-columns:var(--cols);
   padding:0 8px;border-bottom:1px solid rgba(255,255,255,.04);
-  cursor:pointer;align-items:center;height:34px;
+  cursor:pointer;align-items:center;height:26px;
 }
 .act-row:hover{background:var(--row-hover)}
 .act-row.selected{background:var(--row-sel);border-left:3px solid var(--row-sel-border)}

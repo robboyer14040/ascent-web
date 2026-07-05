@@ -46,8 +46,8 @@ def pytest_collection_modifyitems(config, items):
 
 # ── reassuring per-API progress output (live run only) ────────────────────────
 # Prints "running <API> ... " before each live test and "passed/failed/skipped"
-# after. Writes to the real terminal (sys.__stdout__) so it shows regardless of
-# pytest's output capture.
+# after. pytest captures stdout during the setup/call phases, so we suspend
+# capture around each write to reach the real terminal.
 
 def _live_active(item) -> bool:
     return bool(item.config.getoption("--run-live")) and item.get_closest_marker("live") is not None
@@ -61,10 +61,30 @@ def _api_label(item) -> str:
     return label
 
 
+def _write_uncaptured(config, text):
+    """Write to the real terminal, suspending pytest's output capture."""
+    capman = config.pluginmanager.getplugin("capturemanager")
+    if capman:
+        capman.suspend_global_capture(in_=True)
+    try:
+        sys.stdout.write(text)
+        sys.stdout.flush()
+    finally:
+        if capman:
+            capman.resume_global_capture()
+
+
+_live_started = {"done": False}
+
+
 def pytest_runtest_setup(item):
     if _live_active(item):
-        sys.__stdout__.write(f"  running {_api_label(item)} ... ")
-        sys.__stdout__.flush()
+        prefix = ""
+        if not _live_started["done"]:
+            # Break off pytest's own "<file> " header so our first line is clean.
+            prefix = "\n\nLive external-API checks:\n"
+            _live_started["done"] = True
+        _write_uncaptured(item.config, f"{prefix}  running {_api_label(item)} ... ")
 
 
 @pytest.hookimpl(hookwrapper=True)
@@ -74,10 +94,10 @@ def pytest_runtest_makereport(item, call):
     if not _live_active(item):
         return
     if rep.when == "setup" and rep.skipped:
-        sys.__stdout__.write("skipped\n"); sys.__stdout__.flush()
+        _write_uncaptured(item.config, "skipped\n")
     elif rep.when == "call":
         word = "passed" if rep.passed else ("skipped" if rep.skipped else "FAILED")
-        sys.__stdout__.write(word + "\n"); sys.__stdout__.flush()
+        _write_uncaptured(item.config, word + "\n")
 
 
 def pytest_report_teststatus(report, config):

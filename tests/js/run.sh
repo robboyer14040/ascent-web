@@ -23,7 +23,9 @@ exec "$JSC" \
   "$S/common.js" \
   "$S/tour_stage.js" \
   "$S/activity_chips.js" \
+  "$S/elev_panel.js" \
   "$DIR/test_common.js" \
   "$DIR/test_tour_stage.js" \
   "$DIR/test_activity_chips.js" \
+  "$DIR/test_elev_panel.js" \
   "$DIR/finalize.js"

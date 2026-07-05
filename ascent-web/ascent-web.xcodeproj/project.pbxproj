@@ -96,7 +96,6 @@
 		D4A0818C2FF965B500635CEF /* forecast.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = forecast.py; sourceTree = "<group>"; };
 		D4A0818D2FF9687A00635CEF /* tour_stage.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = tour_stage.js; sourceTree = "<group>"; };
 		D4A0818E2FF9688300635CEF /* tour_stage.css */ = {isa = PBXFileReference; lastKnownFileType = text.css; path = tour_stage.css; sourceTree = "<group>"; };
-		D4A0818F2FF9729C00635CEF /* activity_chips.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = activity_chips.js; path = ../routers/activity_chips.js; sourceTree = "<group>"; };
 		D4A081922FF98C3B00635CEF /* test_tours_backend.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = test_tours_backend.py; sourceTree = "<group>"; };
 		D4A081942FF98D8700635CEF /* finalize.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = finalize.js; sourceTree = "<group>"; };
 		D4A081952FF98D8700635CEF /* harness.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = harness.js; sourceTree = "<group>"; };
@@ -113,6 +112,7 @@
 		D4A081A12FF99E9900635CEF /* test_live_apis.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = test_live_apis.py; sourceTree = "<group>"; };
 		D4A081A22FF99E9900635CEF /* test_segment_compare.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = test_segment_compare.py; sourceTree = "<group>"; };
 		D4A081A32FF99E9900635CEF /* test_strava_parsing.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = test_strava_parsing.py; sourceTree = "<group>"; };
+		D4A081A42FF99F4900635CEF /* activity_chips.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = activity_chips.js; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -165,7 +165,7 @@
 			isa = PBXGroup;
 			children = (
 				D48FB5392F8C8E9C009570CD /* altitude_chart.js */,
-				D4A0818F2FF9729C00635CEF /* activity_chips.js */,
+				D4A081A42FF99F4900635CEF /* activity_chips.js */,
 				D48FB53C2F8D38BB009570CD /* activity_detail.js */,
 				D48FB53A2F8C8EA1009570CD /* activity_edit.js */,
 				D48FB5142F8C69D1009570CD /* apple-touch-icon.png */,

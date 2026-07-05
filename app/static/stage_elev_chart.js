@@ -222,12 +222,6 @@ function stageElevInteraction(opts) {
     const hi = lo + 1;
     return arr[lo] + (arr[hi] - arr[lo]) * (fi - lo);
   }
-  function _fmtElap(s) {
-    s = Math.max(0, Math.round(s));
-    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), ss = s % 60;
-    return h ? `${h}:${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}`
-             : `${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
-  }
   const _HC = { hr:'#ef4444', power:'#eab308', cadence:'#a855f7', speed:'#22c55e',
                 altitude:'#60a5fa', distance:'rgba(255,255,255,.75)', gradient:'#fb923c' };
 
@@ -298,16 +292,18 @@ function stageElevInteraction(opts) {
       }
     }
 
-    const rows = [
-      tSec != null ? { label:'Time',       val:_fmtElap(tSec),                                                              color:_HC.distance } : null,
-      { label:'Distance',  val: U.metric ? (distM/1000).toFixed(2)+' km' : (distM/1609.344).toFixed(2)+' mi',               color:_HC.distance },
-      altD != null ? { label:'Altitude',   val: Math.round(altD)+' '+(U.metric?'m':'ft'),                                   color:_HC.altitude } : null,
-      grad != null ? { label:'Gradient',   val: grad.toFixed(1)+'%',                                                        color:_HC.gradient } : null,
-      { label:'Heart Rate', val:(hr&&hr>0)  ? Math.round(hr)+' bpm'  : '—',                                                 color:_HC.hr },
-      { label:'Power',      val:(pwr&&pwr>0)? Math.round(pwr)+' W'   : '—',                                                 color:_HC.power },
-      { label:'Cadence',    val:(cad&&cad>0)? Math.round(cad)+' rpm' : '—',                                                 color:_HC.cadence },
-      { label:'Speed',      val:(spd&&spd>0)? (U.metric?(spd*1.60934).toFixed(1)+' km/h':spd.toFixed(1)+' mph'):'—',        color:_HC.speed },
-    ].filter(Boolean);
+    const _cmap = { time:'distance', dist:'distance', alt:'altitude', grad:'gradient',
+                    hr:'hr', power:'power', cadence:'cadence', speed:'speed' };
+    const rows = elevHudRows({
+      time: tSec != null ? tSec : undefined,     // omit Time row when there's no time data
+      dist: distM,
+      alt:  altD != null ? altD : undefined,     // omit when absent (route with no altitude)
+      grad: grad != null ? grad : undefined,     // omit when there's no gradient series
+      hr:      (hr  && hr  > 0) ? hr  : null,
+      power:   (pwr && pwr > 0) ? pwr : null,
+      cadence: (cad && cad > 0) ? cad : null,
+      speed:   (spd && spd > 0) ? (U.metric ? spd * 1.60934 : spd) : null,
+    }, field => _HC[_cmap[field]]);
 
     elevHudRender(hudPanel, rows, px, strip.offsetWidth);
   }
@@ -339,163 +335,49 @@ function stageElevInteraction(opts) {
     const ad = opts.getActData?.();
     if (!chart || !cpts || hi - lo < 5) { selBox.style.display = 'none'; return; }
     const ca = chart.chartArea;
-    const distM0 = U.metric ? cpts[lo].x*1000 : cpts[lo].x*1609.344;
-    const distM1 = U.metric ? cpts[hi].x*1000 : cpts[hi].x*1609.344;
-
-    // climb from chartPts (always available)
-    let totalClimbFt = 0;
-    for (let i = lo + 1; i <= hi; i++) {
-      const dAlt = cpts[i].y - cpts[i-1].y;
-      if (dAlt > 0) totalClimbFt += U.metric ? dAlt / 0.3048 : dAlt;
-    }
-
-    // steepest gradient
-    let maxGradVal = null, maxGradCptsIdx = null;
-    if (gpts?.length) {
-      const hiClamped = Math.min(hi, gpts.length - 1);
-      const hasPos = Array.from({length: hiClamped - lo + 1}, (_, k) => gpts[lo + k].y).some(g => g > 0);
-      let best = -Infinity;
-      for (let i = lo; i <= hiClamped; i++) {
-        const g = gpts[i].y;
-        if (hasPos && g <= 0) continue;
-        if (Math.abs(g) > best) { best = Math.abs(g); maxGradVal = g; maxGradCptsIdx = i; }
-      }
-    }
-
-    // per-point actData fields
-    let maxSpd=null, avgSpd=null, movSpd=null, maxHR=null, avgHR=null, maxPwr=null, avgPwr=null;
-    let maxCad=null, avgCad=null;
-    let startSec=null, durSec=null;
-    let maxHRCptsIdx=null, maxPwrCptsIdx=null, maxSpdCptsIdx=null, maxCadCptsIdx=null;
-    if (ad?.dist_m?.length) {
-      const ai0 = Math.max(0, Math.floor(_bsearch(ad.dist_m, distM0)));
-      const ai1 = Math.min(ad.dist_m.length - 1, Math.ceil(_bsearch(ad.dist_m, distM1)));
-      const cxArr = cpts.map(p => p.x);
-      const _aiToCi = ai => Math.max(0, Math.min(cpts.length-1,
-        Math.round(_bsearch(cxArr, U.metric ? ad.dist_m[ai]/1000 : ad.dist_m[ai]/1609.344))));
-      const _argmaxAi = (arr, from, to, pred=()=>true) => {
-        let bi=-1, bv=-Infinity;
-        for (let k=from; k<=to; k++) if (arr[k]!=null && pred(arr[k]) && arr[k]>bv) { bv=arr[k]; bi=k; }
-        return bi;
-      };
-      if (ad.speed?.length) {
-        const sl = ad.speed.slice(ai0, ai1+1);
-        const v = sl.filter(x=>x>0), mv = sl.filter(x=>x>=0.5);
-        maxSpd = v.length  ? Math.max(...v)                    : null;
-        avgSpd = v.length  ? v.reduce((a,b)=>a+b,0)/v.length  : null;
-        movSpd = mv.length ? mv.reduce((a,b)=>a+b,0)/mv.length : null;
-        const bi = _argmaxAi(ad.speed, ai0, ai1, v=>v>0);
-        if (bi >= 0) maxSpdCptsIdx = _aiToCi(bi);
-      }
-      if (ad.hr?.length) {
-        const hl = ad.hr.slice(ai0, ai1+1).filter(x=>x>0);
-        maxHR = hl.length ? Math.max(...hl)                    : null;
-        avgHR = hl.length ? hl.reduce((a,b)=>a+b,0)/hl.length : null;
-        const bi = _argmaxAi(ad.hr, ai0, ai1, v=>v>0);
-        if (bi >= 0) maxHRCptsIdx = _aiToCi(bi);
-      }
-      if (ad.power?.length) {
-        const pl = ad.power.slice(ai0, ai1+1).filter(x=>x>0);
-        maxPwr = pl.length ? Math.max(...pl)                    : null;
-        avgPwr = pl.length ? pl.reduce((a,b)=>a+b,0)/pl.length : null;
-        const bi = _argmaxAi(ad.power, ai0, ai1, v=>v>0);
-        if (bi >= 0) maxPwrCptsIdx = _aiToCi(bi);
-      }
-      if (ad.cadence?.length) {
-        const cl = ad.cadence.slice(ai0, ai1+1).filter(x=>x>0);
-        maxCad = cl.length ? Math.max(...cl)                    : null;
-        avgCad = cl.length ? cl.reduce((a,b)=>a+b,0)/cl.length : null;
-        const bi = _argmaxAi(ad.cadence, ai0, ai1, v=>v>0);
-        if (bi >= 0) maxCadCptsIdx = _aiToCi(bi);
-      }
-      if (ad.time?.length) { startSec = ad.time[ai0]; durSec = ad.time[ai1] - startSec; }
-    }
-
-    // min/max altitude from chartPts (always available)
-    let minAltDisplay = null, maxAltDisplay = null;
-    let maxAltCptsIdx = null;
-    if (hi > lo) {
-      minAltDisplay = cpts[lo].y;
-      maxAltDisplay = cpts[lo].y;
-      maxAltCptsIdx = lo;
-      for (let i = lo + 1; i <= hi; i++) {
-        if (cpts[i].y < minAltDisplay) minAltDisplay = cpts[i].y;
-        if (cpts[i].y > maxAltDisplay) { maxAltDisplay = cpts[i].y; maxAltCptsIdx = i; }
-      }
-    }
-
-    // total descent from chartPts
-    let totalDescentFt = 0;
-    for (let i = lo + 1; i <= hi; i++) {
-      const dAlt = cpts[i].y - cpts[i-1].y;
-      if (dAlt < 0) totalDescentFt += U.metric ? Math.abs(dAlt) / 0.3048 : Math.abs(dAlt);
-    }
-
-    // average gradient: net elevation / total distance
-    let avgGrad = null;
-    if (hi > lo) {
-      const dxDisplay = cpts[hi].x - cpts[lo].x;
-      const dyDisplay = cpts[hi].y - cpts[lo].y;
-      const factor = U.metric ? 1000 : 5280;
-      if (dxDisplay > 0) avgGrad = dyDisplay / (dxDisplay * factor) * 100;
-    }
-
-    const fS  = v => v!=null ? (U.metric?(v*1.60934).toFixed(1)+' km/h':v.toFixed(1)+' mph') : '—';
-    const fH  = v => v!=null ? Math.round(v)+' bpm' : '—';
-    const fP  = v => v!=null ? Math.round(v)+' W'   : '—';
-    const fG  = v => v!=null ? v.toFixed(1)+'%'     : '—';
-    const fC  = ft => ft>0 ? Math.round(U.metric?ft*0.3048:ft)+(U.metric?' m':' ft') : '—';
-    const fA  = v => v!=null ? Math.round(v)+(U.metric?' m':' ft') : '—';
-    const fCd = v => v!=null ? Math.round(v)+' rpm' : '—';
-
-    const hasT = startSec != null && durSec != null;
-    const selDistM = distM1 - distM0;
-    const selDistStr = U.metric ? (selDistM/1000).toFixed(2)+' km' : (selDistM/1609.344).toFixed(2)+' mi';
-    let hdr = '';
-    if (hasT) {
-      hdr = `<div class="es-header"><span><span class="es-lbl">Start </span><span class="es-val">${_fmtElap(Math.round(startSec))}</span></span>` +
-            `<span class="es-hdr-dur"><span class="es-lbl">Duration </span><span class="es-val">${_fmtElap(Math.round(durSec))}</span></span>` +
-            `<span class="es-maxat" style="display:none"><span class="es-lbl">max@ </span><span class="es-val es-maxat-val"></span></span>` +
-            `<span class="es-hdr-dist"><span class="es-val">${selDistStr}</span></span></div>`;
-    } else {
-      hdr = `<div class="es-header"><span><span class="es-val">${selDistStr}</span></span></div>`;
-    }
-    const rows = [
-      [{ label:'Min Altitude',  val:fA(minAltDisplay) },
-       { label:'Max Altitude',  val:fA(maxAltDisplay), clickIdx: maxAltCptsIdx }],
-      [{ label:'Total Climb',   val:fC(totalClimbFt) },
-       { label:'Total Descent', val:fC(totalDescentFt) }],
-      [{ label:'Max Gradient',  val:fG(maxGradVal), clickIdx: maxGradCptsIdx },
-       { label:'Avg Gradient',  val:fG(avgGrad) }],
-      ...(maxHR!=null  ? [[{ label:'Max HR',       val:fH(maxHR),  clickIdx: maxHRCptsIdx  },
-                            { label:'Avg HR',       val:fH(avgHR)  }]] : []),
-      ...(maxPwr!=null ? [[{ label:'Max 3s Power',  val:fP(maxPwr), clickIdx: maxPwrCptsIdx },
-                            { label:'Avg 3s Power', val:fP(avgPwr) }]] : []),
-      ...(maxSpd!=null ? [[{ label:'Max Speed',     val:fS(maxSpd), clickIdx: maxSpdCptsIdx },
-                            { label:'Mov Speed',    val:fS(movSpd) }]] : []),
-      ...(maxCad!=null ? [[{ label:'Max Cadence',   val:fCd(maxCad), clickIdx: maxCadCptsIdx },
-                            { label:'Avg Cadence',  val:fCd(avgCad) }]] : []),
+    // Data access for the shared region-stats computation. Seek indices are chartPts
+    // indices; altitude/gradient come from cpts/gpts, per-point metrics from the finer
+    // actData (mapped back to a chartPts index by distance so a short spike keeps its spot).
+    const _distM = si => U.metric ? cpts[si].x * 1000 : cpts[si].x * 1609.344;
+    const _aiRange = (l, h) => [
+      Math.max(0, Math.floor(_bsearch(ad.dist_m, _distM(l)))),
+      Math.min(ad.dist_m.length - 1, Math.ceil(_bsearch(ad.dist_m, _distM(h)))),
     ];
+    const hasT = !!(ad?.time?.length && ad?.dist_m?.length);
+    const ctx = {
+      altAt:   si => cpts[si].y,
+      gradAt:  si => (gpts && si < gpts.length) ? gpts[si].y : null,
+      distMAt: _distM,
+      metricSamples: (field, l, h) => {
+        if (!ad?.[field]?.length || !ad?.dist_m?.length) return null;
+        const [ai0, ai1] = _aiRange(l, h);
+        const cxArr = cpts.map(p => p.x);
+        return {
+          values: ad[field].slice(ai0, ai1 + 1),
+          toSeekIdx: li => { const ai = ai0 + li; return Math.max(0, Math.min(cpts.length - 1,
+            Math.round(_bsearch(cxArr, U.metric ? ad.dist_m[ai] / 1000 : ad.dist_m[ai] / 1609.344)))); },
+        };
+      },
+      rangeHeader: (l, h) => {
+        if (hasT) { const [ai0, ai1] = _aiRange(l, h);
+          return { startSec: ad.time[ai0], durSec: ad.time[ai1] - ad.time[ai0], distM: _distM(h) - _distM(l) }; }
+        return { distM: _distM(h) - _distM(l) };
+      },
+    };
+    const { rows, headerHtml: hdr } = computeRegionStats(ctx, lo, hi);
     const xLo = chart.scales.x.getPixelForValue(cpts[lo].x);
     const xHi = chart.scales.x.getPixelForValue(cpts[hi].x);
     elevSelRender(selBox, xLo, xHi, ca, hdr, rows,
       document.getElementById('stage-elev-hud-btn'), strip,
-      (ci, b) => {
-        // Move the map dot to the position at cpts index ci
-        const rpts = opts.getRawPts?.(), theMap = opts.getMap?.();
-        if (rpts?.length && theMap && ci >= 0 && ci < rpts.length) {
-          const rp = rpts[ci];
-          if (rp) {
-            const ll = [rp[0], rp[1]];
-            const dh = `<div style="width:10px;height:10px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#ffe066,#f59e0b 55%,#b45309);border:1.5px solid #fff;box-shadow:0 0 3px rgba(0,0,0,.5)"></div>`;
-            let dot = opts.getMapDot?.();
-            if (!dot) {
-              dot = L.marker(ll, { icon: L.divIcon({ html: dh, className: '', iconSize: [10,10], iconAnchor: [5,5] }),
-                zIndexOffset: 1000, interactive: false }).addTo(theMap);
-              opts.setMapDot?.(dot);
-            } else { dot.setLatLng(ll); }
-          }
+      (ci, b, e) => {
+        // Move the strip puck + map dot to the clicked point (cpts index ci), then freeze
+        // them there so the next mousemove doesn't yank the puck back to the cursor.
+        let puckClientX = null;
+        if (chart?.scales?.x && cpts[ci]) {
+          puckClientX = strip.getBoundingClientRect().left + chart.scales.x.getPixelForValue(cpts[ci].x);
+          _trackPosOnly(puckClientX);
         }
+        if (e && puckClientX != null) puckStickArm(puckClientX, e.clientX);
         // Hide hover HUD so the stats pane isn't visually replaced
         hudPanel.style.display = 'none';
         const xh = document.getElementById('stage-elev-xhair');
@@ -509,7 +391,7 @@ function stageElevInteraction(opts) {
             const t2 = _lerp(ad2.time, afi2) || 0;
             const maxAtEl = b.querySelector('.es-maxat');
             const maxAtVal = b.querySelector('.es-maxat-val');
-            if (maxAtVal) maxAtVal.textContent = _fmtElap(t2);
+            if (maxAtVal) maxAtVal.textContent = elevFmtElapsed(t2);
             if (maxAtEl) maxAtEl.style.display = '';
           }
         }
@@ -600,16 +482,7 @@ function stageElevInteraction(opts) {
     _zoomAtPixel(px, factor);
   }
 
-  // ── event wiring (replaces old listeners) ─────────────────────────────────
-  const prev = strip._seiH;
-  if (prev) {
-    strip.removeEventListener('mousemove',  prev.mm);
-    strip.removeEventListener('mouseleave', prev.ml);
-    strip.removeEventListener('mousedown',  prev.md);
-    strip.removeEventListener('touchstart', prev.ts);
-    if (prev.wh) strip.removeEventListener('wheel', prev.wh);
-  }
-
+  // ── dot tracking + event wiring ───────────────────────────────────────────
   function _trackPosOnly(clientX) {
     const chart = opts.getChart?.(), cpts = opts.getChartPts?.();
     if (!chart || !cpts?.length) return;
@@ -644,94 +517,21 @@ function stageElevInteraction(opts) {
     }
   }
 
-  function _onMM(e) {
-    if (strip._seiDrag) return;
-    if (hudOn) _showHud(e.clientX);
-    else _trackPosOnly(e.clientX);
-  }
-  function _onML() {
-    if (!strip._seiDrag) {
-      _hideHud();
-      chartDot.style.display = 'none';
-    }
-  }
-
-  function _onMD(e) {
-    const chart = opts.getChart?.(); if (!chart) return;
-    const ca = chart.chartArea, rect = strip.getBoundingClientRect();
-    const px = e.clientX - rect.left;
-    if (!ca || px < ca.left || px > ca.right) return;
-    e.preventDefault(); _hideHud();
-    strip._seiDrag = true;
-    const startPx = px, startIdx = Math.round(_clientXToFi(e.clientX));
-    dragRect.style.cssText = `display:block;position:absolute;top:0;bottom:0;background:rgba(160,160,160,.18);border-left:1px solid rgba(130,130,130,.5);border-right:1px solid rgba(130,130,130,.5);pointer-events:none;z-index:4;left:${px}px;width:0`;
-
-    function _docMM(ev) {
-      const r2 = strip.getBoundingClientRect(), cur = ev.clientX - r2.left;
-      const lo2 = Math.max(ca.left, Math.min(startPx, cur)), hi2 = Math.min(ca.right, Math.max(startPx, cur));
-      dragRect.style.left = lo2+'px'; dragRect.style.width = (hi2-lo2)+'px';
-      const curIdx = Math.round(_clientXToFi(ev.clientX));
-      _applySel(Math.min(startIdx, curIdx), Math.max(startIdx, curIdx));
-    }
-    function _docMU(ev) {
-      document.removeEventListener('mousemove', _docMM);
-      document.removeEventListener('mouseup',   _docMU);
-      strip._seiDrag = false;
-      const curPx = ev.clientX - strip.getBoundingClientRect().left;
-      if (Math.abs(curPx - startPx) > 4) {
-        const curIdx = Math.round(_clientXToFi(ev.clientX));
-        _applySel(Math.min(startIdx, curIdx), Math.max(startIdx, curIdx));
-      } else { dragRect.style.display = 'none'; _clearSel(); }
-    }
-    document.addEventListener('mousemove', _docMM);
-    document.addEventListener('mouseup',   _docMU);
-  }
-
-  function _onTS(e) {
-    const t = e.touches[0]; if (!t) return;
-    const chart = opts.getChart?.(); if (!chart) return;
-    if (hudOn) {
-      _showHud(t.clientX);
-      function _tM(ev) { const t2=ev.touches[0]; if (t2) _showHud(t2.clientX); }
-      function _tE()   { document.removeEventListener('touchmove',_tM); document.removeEventListener('touchend',_tE); }
-      document.addEventListener('touchmove', _tM, { passive:true });
-      document.addEventListener('touchend',  _tE, { passive:true });
-      return;
-    }
-    const ca = chart.chartArea, rect = strip.getBoundingClientRect();
-    const px = t.clientX - rect.left;
-    if (!ca || px < ca.left || px > ca.right) return;
-    const startPx = px, startIdx = Math.round(_clientXToFi(t.clientX));
-    dragRect.style.cssText = `display:block;position:absolute;top:0;bottom:0;background:rgba(160,160,160,.18);border-left:1px solid rgba(130,130,130,.5);border-right:1px solid rgba(130,130,130,.5);pointer-events:none;z-index:4;left:${px}px;width:0`;
-
-    function _tM(ev) {
-      const t2=ev.touches[0]; if (!t2) return;
-      const r2=strip.getBoundingClientRect(), cur=t2.clientX-r2.left;
-      const lo2=Math.max(ca.left,Math.min(startPx,cur)), hi2=Math.min(ca.right,Math.max(startPx,cur));
-      dragRect.style.left=lo2+'px'; dragRect.style.width=(hi2-lo2)+'px';
-      const curIdx=Math.round(_clientXToFi(t2.clientX));
-      _applySel(Math.min(startIdx,curIdx), Math.max(startIdx,curIdx));
-    }
-    function _tE(ev) {
-      document.removeEventListener('touchmove', _tM);
-      document.removeEventListener('touchend',  _tE);
-      const t2 = ev.changedTouches[0];
-      if (t2) {
-        const curPx = t2.clientX - strip.getBoundingClientRect().left;
-        if (Math.abs(curPx - startPx) > 4) {
-          const curIdx = Math.round(_clientXToFi(t2.clientX));
-          _applySel(Math.min(startIdx,curIdx), Math.max(startIdx,curIdx));
-        } else { dragRect.style.display = 'none'; _clearSel(); }
-      }
-    }
-    document.addEventListener('touchmove', _tM, { passive:true });
-    document.addEventListener('touchend',  _tE, { passive:true });
-  }
-
-  strip.addEventListener('mousemove',  _onMM);
-  strip.addEventListener('mouseleave', _onML);
-  strip.addEventListener('mousedown',  _onMD);
-  strip.addEventListener('touchstart', _onTS, { passive:true });
-  strip.addEventListener('wheel',      _onWheel, { passive: false });
-  strip._seiH = { mm:_onMM, ml:_onML, md:_onMD, ts:_onTS, wh:_onWheel };
+  elevRegionInteraction({
+    container:   strip,
+    chartArea:   () => opts.getChart?.()?.chartArea || null,
+    clientXToIndex: clientX => Math.round(_clientXToFi(clientX)),
+    hudActive:   () => hudOn,
+    hover:       clientX => _trackPosOnly(clientX),
+    showHud:     clientX => _showHud(clientX),
+    hideHover:   () => { _hideHud(); chartDot.style.display = 'none'; },
+    onDragStart: () => _hideHud(),
+    applySelection: (lo, hi) => _applySel(lo, hi),
+    clearSelection: () => _clearSel(),
+    dragRectStart:  px => { dragRect.style.cssText = `display:block;position:absolute;top:0;bottom:0;background:rgba(160,160,160,.18);border-left:1px solid rgba(130,130,130,.5);border-right:1px solid rgba(130,130,130,.5);pointer-events:none;z-index:4;left:${px}px;width:0`; },
+    dragRectUpdate: (lo, hi) => { dragRect.style.left = lo+'px'; dragRect.style.width = (hi-lo)+'px'; },
+    dragRectHide:   () => { dragRect.style.display = 'none'; },
+    suppressHoverWhileDragging: true,
+    onWheel: _onWheel,
+  });
 }
