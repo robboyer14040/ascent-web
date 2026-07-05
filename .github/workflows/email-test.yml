@@ -1,0 +1,14 @@
+name: Email Test
+on:
+  push:
+    branches:
+      - main
+jobs:
+  fail:
+    name: Intentional failure to test email routing
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "This run fails on purpose to generate a GitHub 'Run failed' email."
+          echo "Safe to ignore — the workflow file is deleted right after."
+          exit 1
