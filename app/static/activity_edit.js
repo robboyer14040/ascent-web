@@ -306,6 +306,7 @@ async function resyncActivity(activityId) {
       infoDiv.innerHTML = buildDetailHTML(updated);
       loadWeatherLocation(activityId);
       loadAISummary(activityId, true);
+      loadPhotos(activityId);
     }
     renderVirtualList();
 
