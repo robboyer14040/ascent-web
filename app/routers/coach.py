@@ -906,7 +906,7 @@ async def _call_claude(
                     },
                     json={
                         "model":      model if model in MODELS else DEFAULT_MODEL,
-                        "max_tokens": 2048,
+                        "max_tokens": 8192,
                         "system":     system_prompt,
                         "messages":   messages,
                     },
