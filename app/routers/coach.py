@@ -896,7 +896,7 @@ async def _call_claude(
 
     for attempt in range(max_retries):
         try:
-            async with httpx.AsyncClient(timeout=60) as client:
+            async with httpx.AsyncClient(timeout=180) as client:
                 resp = await client.post(
                     "https://api.anthropic.com/v1/messages",
                     headers={
