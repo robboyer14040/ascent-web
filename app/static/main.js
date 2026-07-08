@@ -1195,7 +1195,12 @@ async function loadWeatherLocation(activityId) {
 
     const locEl = document.getElementById('wx-location-text');
     if (locEl && d.locations) {
-      locEl.textContent = d.locations;
+      if (d.locations_points && d.locations_points.length) {
+        locEl.innerHTML = LocationSummary.linkifyList(
+          d.locations_points.map(p => ({ label: p.name, name: p.name, lat: p.lat, lon: p.lon })));
+      } else {
+        locEl.innerHTML = LocationSummary.linkifyNames(d.locations, d.region);
+      }
     }
   } catch(e) {}
 }

@@ -577,6 +577,7 @@ body.mob-stage-view #elev-resize-handle::after{display:none}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="/static/common.js?v={{ app_version }}"></script>
 <script src="/static/tour_stage.js?v={{ app_version }}"></script>
+<script src="/static/location_summary.js?v={{ app_version }}"></script>
 <script src="/static/lightbox.js?v={{ app_version }}"></script>
 <script src="/static/activity_chips.js?v={{ app_version }}"></script>
 <script src="/static/activity_detail.js?v={{ app_version }}"></script>
@@ -1765,8 +1766,9 @@ function _drawGradesChart(pts) {
 }
 
 // ── Client-side multi-point geocoding for trajectory ─────────────────────────
+// Returns a list of {name, lat, lon}, adjacent duplicates collapsed.
 async function geocodeAlongRoute(pts) {
-  if(!pts?.length) return null;
+  if(!pts?.length) return [];
   const n    = pts.length;
   const num  = Math.min(5, n);
   const idxs = num < 2 ? [0] :
@@ -1775,10 +1777,9 @@ async function geocodeAlongRoute(pts) {
   for(let i = 0; i < idxs.length; i++) {
     const [lat, lon] = pts[idxs[i]];
     const p = await reverseGeocode(lat, lon);
-    if(p) places.push(p);
+    if(p) places.push({name: p, lat, lon});
   }
-  const deduped = places.filter((p, i) => i === 0 || p !== places[i - 1]);
-  return deduped.join(' → ') || null;
+  return places.filter((p, i) => i === 0 || p.name !== places[i - 1].name);
 }
 
 
@@ -1855,11 +1856,12 @@ async function renderDetail(activeId) {
     function _geocacheFill(lat, lon, elId, cacheKey) {
       const _ls = s => { try { return localStorage.getItem(s); } catch(e) { return null; } };
       const _lsSet = (k,v) => { try { localStorage.setItem(k,v); } catch(e) {} };
+      const _fill = (el, loc) => { el.innerHTML = loc ? LocationSummary.linkHTML(loc, {lat, lon}) : '—'; };
       const cached = _ls(cacheKey);
-      if(cached) { const e=document.getElementById(elId); if(e) e.textContent=cached; return; }
+      if(cached) { const e=document.getElementById(elId); if(e) _fill(e, cached); return; }
       reverseGeocode(lat, lon).then(loc => {
         if(loc) _lsSet(cacheKey, loc);
-        const e=document.getElementById(elId); if(e) e.textContent=loc||'—';
+        const e=document.getElementById(elId); if(e) _fill(e, loc);
       });
     }
     if(first?.start_lat != null)
@@ -1984,17 +1986,30 @@ async function renderDetail(activeId) {
     html += `<div class="mob-view-tour-wrap"><button class="mob-view-tour-btn" onclick="mobPortraitBack()">View Entire Tour</button></div>`;
     el.innerHTML = html;
 
-    // Trajectory — check localStorage cache first, else geocode client-side
+    // Trajectory — check localStorage cache first, else geocode client-side.
+    // Cache now holds a JSON list of {name,lat,lon}; older caches hold a plain
+    // "A → B" string, still rendered (name-only) for backward compatibility.
     const _locKey = `tour-stage-loc-${stage.id}`;
-    const _cached = (() => { try { return localStorage.getItem(_locKey); } catch(e) { return null; } })();
-    if(_cached) {
+    const _renderTraj = items => {
       const locEl = document.getElementById('stage-loc-text');
-      if(locEl) locEl.textContent = _cached;
+      if(locEl) locEl.innerHTML = LocationSummary.linkifyList(
+        items.map(p => ({label: p.name, name: p.name, lat: p.lat, lon: p.lon})));
+    };
+    const _cached = (() => { try { return localStorage.getItem(_locKey); } catch(e) { return null; } })();
+    let _cachedList = null;
+    if(_cached) { try { const j = JSON.parse(_cached); if(Array.isArray(j)) _cachedList = j; } catch(e) {} }
+    if(_cachedList) {
+      _renderTraj(_cachedList);
+    } else if(_cached) {
+      const locEl = document.getElementById('stage-loc-text');
+      if(locEl) locEl.innerHTML = LocationSummary.linkifyNames(_cached);
     } else {
-      geocodeAlongRoute(_tourPointsCache[String(stage.id)]).then(loc => {
-        if(loc) { try { localStorage.setItem(_locKey, loc); } catch(e) {} }
+      geocodeAlongRoute(_tourPointsCache[String(stage.id)]).then(items => {
         const locEl = document.getElementById('stage-loc-text');
-        if(locEl) locEl.textContent = loc || '';
+        if(items && items.length) {
+          try { localStorage.setItem(_locKey, JSON.stringify(items)); } catch(e) {}
+          _renderTraj(items);
+        } else if(locEl) { locEl.innerHTML = ''; }
       });
     }
 
@@ -2191,7 +2206,7 @@ async function loadStageActivityWx(actId) {
       if(w.precip_mm  >  0)  parts.push(U.precipS(w.precip_mm));
       wxEl.textContent = parts.join(' · ');
     }
-    if(locEl && d.locations) locEl.textContent = d.locations;
+    if(locEl && d.locations) locEl.innerHTML = (d.locations_points&&d.locations_points.length) ? LocationSummary.linkifyList(d.locations_points.map(p=>({label:p.name,name:p.name,lat:p.lat,lon:p.lon}))) : LocationSummary.linkifyNames(d.locations, d.region);
   } catch(e) {}
 }
 

@@ -27,7 +27,13 @@ function _escElement() {
     get innerHTML() { return _html; },
   };
 }
-var document = { createElement: function () { return _escElement(); } };
+var document = {
+  createElement: function () { return _escElement(); },
+  addEventListener: function () {},          // location_summary.js wires a click handler at load
+  getElementById: function () { return null; },
+  head: { appendChild: function () {} },
+  body: { appendChild: function () {} },
+};
 var window = {};
 var localStorage = {
   _s: {},

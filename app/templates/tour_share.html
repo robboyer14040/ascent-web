@@ -196,6 +196,7 @@ body.mob-stage-view #elev-resize-handle::after{display:none}
 <script src="/static/common.js?v={{ app_version }}"></script>
 <script src="/static/share_common.js?v={{ app_version }}"></script>
 <script src="/static/tour_stage.js?v={{ app_version }}"></script>
+<script src="/static/location_summary.js?v={{ app_version }}"></script>
 <script src="/static/activity_chips.js?v={{ app_version }}"></script>
 <script src="/static/map_utils.js"></script>
 <script src="/static/lightbox.js?v={{ app_version }}"></script>
@@ -560,8 +561,8 @@ async function renderDetail(activeId) {
       `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Total Dist</div><div class="sc-val">${U.distS(totalDist)}</div><div class="sc-sub">${U.distS(doneDist)} done</div></div>`+
       `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Total Ascent</div><div class="sc-val">${U.climbS(totalClimb)}</div><div class="sc-sub">${U.climbS(doneClimb)} done</div></div>`
     }</div>`;
-    if(first?.start_lat!=null) reverseGeocode(first.start_lat,first.start_lon).then(loc=>{const e=document.getElementById('ov-start-loc');if(e)e.textContent=loc||'—';});
-    if(lastPt) reverseGeocode(lastPt[0],lastPt[1]).then(loc=>{const e=document.getElementById('ov-end-loc');if(e)e.textContent=loc||'—';});
+    if(first?.start_lat!=null) reverseGeocode(first.start_lat,first.start_lon).then(loc=>{const e=document.getElementById('ov-start-loc');if(e)e.innerHTML=loc?LocationSummary.linkHTML(loc,{lat:first.start_lat,lon:first.start_lon}):'—';});
+    if(lastPt) reverseGeocode(lastPt[0],lastPt[1]).then(loc=>{const e=document.getElementById('ov-end-loc');if(e)e.innerHTML=loc?LocationSummary.linkHTML(loc,{lat:lastPt[0],lon:lastPt[1]}):'—';});
     if(tourInfo.ai_summary) {
       el.insertAdjacentHTML('beforeend',`<div class="ai-card"><div class="ai-card-label">AI Tour Summary</div><div class="ai-card-body">${esc(tourInfo.ai_summary)}</div></div>`);
     }
@@ -614,9 +615,10 @@ async function renderDetail(activeId) {
     // Trajectory geocode (3 sample points)
     if(pts?.length) {
       const p0=pts[0], pm=pts[Math.floor(pts.length/2)], pn=pts[pts.length-1];
+      const _pcoord=[p0,pm,pn];
       Promise.all([reverseGeocode(p0[0],p0[1]), reverseGeocode(pm[0],pm[1]), reverseGeocode(pn[0],pn[1])]).then(locs=>{
-        const deduped=locs.filter(Boolean).filter((p,i,a)=>i===0||p!==a[i-1]);
-        const locEl=document.getElementById('share-loc-text'); if(locEl) locEl.textContent=deduped.join(' → ')||'';
+        const seen=locs.map((loc,i)=>({loc,pt:_pcoord[i]})).filter(x=>x.loc).filter((x,i,a)=>i===0||x.loc!==a[i-1].loc);
+        const locEl=document.getElementById('share-loc-text'); if(locEl) locEl.innerHTML=LocationSummary.linkifyList(seen.map(x=>({label:x.loc,name:x.loc,lat:x.pt[0],lon:x.pt[1]})));
       });
     } else { const e=document.getElementById('share-loc-text');if(e)e.textContent=''; }
 
@@ -697,7 +699,7 @@ async function renderDetail(activeId) {
         fetch(`/api/activities/${act.id}/weather-location`).then(r=>r.json()).then(d=>{
           const wx=document.getElementById('share-wx'), loc=document.getElementById('share-loc');
           if(wx&&d.weather?.description){const w=d.weather,parts=[w.description];if(w.avg_temp_f!=null)parts.push(U.tempS(w.avg_temp_f));if(w.avg_wind_kph!=null)parts.push('Wind '+U.windS(w.avg_wind_kph));if(w.precip_mm>0)parts.push(U.precipS(w.precip_mm));wx.textContent=parts.join(' · ');}
-          if(loc&&d.locations) loc.textContent=d.locations;
+          if(loc&&d.locations) loc.innerHTML=(d.locations_points&&d.locations_points.length)?LocationSummary.linkifyList(d.locations_points.map(p=>({label:p.name,name:p.name,lat:p.lat,lon:p.lon}))):LocationSummary.linkifyNames(d.locations,d.region);
         }).catch(()=>{});
 
         // Async: photos (flex-wrap, no autoplay)

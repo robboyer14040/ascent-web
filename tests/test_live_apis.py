@@ -9,6 +9,9 @@ ASCENT_DB_PATH) by tests/live_creds.py. A check whose credential is missing is
 SKIPPED, not failed. The normal suite never runs these (see conftest --run-live).
 """
 
+import re
+import time
+
 import httpx
 import pytest
 
@@ -210,3 +213,156 @@ def test_jsdelivr_cdn():
     r = httpx.get("https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js", timeout=15)
     assert r.status_code == 200
     assert len(r.content) > 1000
+
+
+# ── Wikipedia place resolver (Location Summary) ───────────────────────────────
+# The "Location Summary" modal resolves a reverse-geocoded label (e.g.
+# "Dimos Epidaurus, Greece") to a Wikipedia article. The resolution LOGIC lives
+# in app/static/location_summary.js and is unit-tested deterministically in
+# tests/js/test_location_summary.js. The mirror below re-implements that same
+# strategy in Python so we can assert, against the REAL Wikipedia API, that each
+# label historically reported as broken now lands on the right place — catching
+# both our-strategy bugs and upstream data/ranking changes. Keep it in lockstep
+# with the JS (the JS unit tests are the source of truth for the logic).
+
+_PLACE_DESC = re.compile(
+    r"\b(municipalit|cit(y|ies)|town|village|commune|count(y|ies)|region|province|"
+    r"prefectur|district|settlement|communit|administrativ|capital|localit|borough|"
+    r"hamlet|neighbourhood|neighborhood|suburb|metropolis|metropolitan|urban|"
+    r"human settlement|island|isle|mountain|peak|summit|hill|lake|river|valley|"
+    r"glacier|national park|range|plateau|massif|resort|seat of|place in|place located)", re.I)
+_NON_PLACE_DESC = re.compile(
+    r"\b(scandal|elections?|referendum|actor|actress|player|footballer|coach|singer|"
+    r"musician|writer|author|poet|painter|politician|film|movie|album|song|single|"
+    r"tv series|series|team|club|f\.?c\.?|tournament|championship|\bcup\b|league|"
+    r"festival|season|company|corporation|band|novel|video game|battle|war|treaty|"
+    r"dynasty|manuscript|species|genus|deity|mytholog|saint|monarch|king|queen|"
+    r"emperor|president|minister|general)\b", re.I)
+_YEAR_TITLE = re.compile(r"\b(1[6-9]\d\d|20\d\d)\b")
+_ADMIN_PREFIX = re.compile(
+    r"^(dimos|bashkia e|bashkia|komuna e|komuna|qarku i|qarku|rrethi i|rrethi|"
+    r"municipality of|municipality|city of|town of|commune de|commune of|comune di|"
+    r"città di|gemeinde|ciudad de|concello de|freguesia de|distrito de|kommune|kommun|"
+    r"obshtina|op[sš]tina|gmina|powiat|comuna|municipio de|municipio|prefecture of)\s+", re.I)
+
+_WIKI_PROPS = {"prop": "coordinates|description|pageprops", "ppprop": "disambiguation",
+               "colimit": "max", "format": "json"}
+
+
+def _wiki(client, params):
+    """GET the Wikipedia query API, backing off on rate limits (429)."""
+    for attempt in range(6):
+        r = client.get("https://en.wikipedia.org/w/api.php",
+                        params={**_WIKI_PROPS, "action": "query", **params},
+                        headers=UA, timeout=15)
+        if r.status_code == 429:
+            retry_after = r.headers.get("Retry-After")
+            wait = float(retry_after) if (retry_after or "").isdigit() else 2.0 * (2 ** attempt)
+            time.sleep(min(wait, 20))
+            continue
+        r.raise_for_status()
+        return r.json().get("query", {}).get("pages", {})
+    r.raise_for_status()
+
+
+def _parse_label(name):
+    parts = [s.strip() for s in name.split(",") if s.strip()]
+    bare = parts[0] if parts else ""
+    place = _ADMIN_PREFIX.sub("", bare).strip() or bare
+    last = place.split()[-1] if place.split() else ""
+    country = parts[-1] if len(parts) > 1 else ""
+    return place, last, country, bare
+
+
+def _pick_place(pages, prefer, near):
+    cands = []
+    for p in sorted(pages.values(), key=lambda p: p.get("index", 0)):
+        co = (p.get("coordinates") or [None])[0]
+        cands.append({"title": p.get("title", ""), "desc": p.get("description", "") or "",
+                      "dis": p.get("pageprops", {}).get("disambiguation") is not None,
+                      "lat": co["lat"] if co else None, "lon": co["lon"] if co else None})
+    is_bad = lambda c: c["dis"] or bool(_NON_PLACE_DESC.search(c["desc"]) or _YEAR_TITLE.search(c["title"]))
+    is_place = lambda c: bool(_PLACE_DESC.search(c["desc"]))
+    if prefer:
+        pl = prefer.strip().lower()
+        for c in cands:
+            if c["title"].lower() == pl and not is_bad(c) and (is_place(c) or c["lat"] is not None):
+                return c["title"]
+    places = [c for c in cands if is_place(c) and not is_bad(c)]
+    if not places:
+        return None
+    if near:
+        with_coord = [c for c in places if c["lat"] is not None]
+        if with_coord:
+            with_coord.sort(key=lambda c: (c["lat"] - near[0]) ** 2 + (c["lon"] - near[1]) ** 2)
+            return with_coord[0]["title"]
+    return places[0]["title"]
+
+
+def _resolve_title(client, name, near=None):
+    place, last, country, bare = _parse_label(name)
+
+    def prefix(q, prefer):
+        return _pick_place(_wiki(client, {"generator": "prefixsearch", "gpslimit": 6,
+                                          "gpssearch": q}), prefer, near)
+
+    def search(q, prefer):
+        return _pick_place(_wiki(client, {"generator": "search", "gsrnamespace": 0,
+                                          "gsrlimit": 8, "gsrsearch": q}), prefer, near)
+
+    attempts = [(prefix, place, place)]
+    if last and last != place:
+        attempts.append((prefix, last, last))
+    attempts.append((search, f"{place} {country}".strip() if country else place, place))
+    if place != bare:
+        attempts.append((search, place, place))
+    if last and last != place:
+        attempts.append((search, f"{last} {country}".strip() if country else last, last))
+    for fn, q, prefer in attempts:
+        if q and q.strip():
+            t = fn(q.strip(), prefer)
+            if t:
+                return t
+    return None
+
+
+# (label, near-coord or None, {acceptable article titles}) — every case here is a
+# label that once resolved to the WRONG article (an event, a person, a
+# disambiguation page, a distant city) or to nothing.
+_RESOLVER_CASES = [
+    # Admin-prefix stripping + non-place rejection (Greek "Dimos", Albanian "Bashkia").
+    ("Dimos Epidaurus, Greece",   None, {"Epidaurus"}),                  # was → Athens
+    ("Dimos Fyli, Greece",        None, {"Fyli"}),                       # was → 2004–05 Greek Football Cup
+    ("Bashkia Roskovec, Albania", None, {"Roskovec"}),                   # was → 2015 Albanian local elections
+    ("Bashkia e Fierit, Albania", None, {"Fier", "Fier County"}),        # was → Albanian incinerators scandal
+    ("Nafplio, Greece",           None, {"Nafplio"}),
+    ("Athens, Greece",            None, {"Athens"}),
+    ("Chamonix, France",          None, {"Chamonix"}),
+    # US trajectory names: disambiguation page + redirect handling.
+    ("Santa Cruz County",         None, {"Santa Cruz County, California"}),  # was → disambiguation page
+    ("Scotts Valley",             None, {"Scotts Valley, California"}),
+    ("Capitola",                  None, {"Capitola, California"}),
+    # Coordinate disambiguation of identical names.
+    ("San Jose",   (36.97, -122.03), {"San Jose, California"}),             # was → no summary (redirect)
+    ("San Jose",   (9.93,  -84.08),  {"San José, Costa Rica"}),
+    ("Santa Cruz", (36.97, -122.03), {"Santa Cruz, California"}),
+    ("Santa Cruz", (-17.8,  -63.18), {"Santa Cruz de la Sierra", "Santa Cruz Department"}),
+]
+
+
+@pytest.mark.api("Wikipedia place resolver")
+def test_location_summary_resolver():
+    """Every historically-broken label resolves to the correct place via the real
+    Wikipedia API (mirrors app/static/location_summary.js)."""
+    try:
+        with httpx.Client() as client:
+            failures = []
+            for name, near, acceptable in _RESOLVER_CASES:
+                got = _resolve_title(client, name, near)
+                near_s = f" near {near}" if near else ""
+                if got not in acceptable:
+                    failures.append(f"{name!r}{near_s} → {got!r} (expected one of {sorted(acceptable)})")
+                time.sleep(0.6)  # be polite to the API
+    except (httpx.HTTPStatusError, httpx.RequestError) as e:
+        pytest.skip(f"Wikipedia API unavailable: {e}")
+    assert not failures, "resolver mismatches:\n  " + "\n  ".join(failures)

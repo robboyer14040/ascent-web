@@ -24,8 +24,10 @@ exec "$JSC" \
   "$S/tour_stage.js" \
   "$S/activity_chips.js" \
   "$S/elev_panel.js" \
+  "$S/location_summary.js" \
   "$DIR/test_common.js" \
   "$DIR/test_tour_stage.js" \
   "$DIR/test_activity_chips.js" \
   "$DIR/test_elev_panel.js" \
+  "$DIR/test_location_summary.js" \
   "$DIR/finalize.js"

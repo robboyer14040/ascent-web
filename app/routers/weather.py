@@ -41,22 +41,32 @@ async def activity_weather_location(activity_id: int):
     cached_weather   = act.get("weather", "")
     cached_location  = act.get("location", "")
 
-    # Fast path: both cached
-    if cached_weather and cached_location:
-        return {"weather": {"description": cached_weather}, "locations": cached_location}
-
-    # Need GPS points to fetch whatever is missing
+    # GPS points — always loaded so we can supply a `region` hint (used to
+    # disambiguate same-named places) even when the location string is cached.
     pts = db.get_track_points(activity_id)
     valid_pts = [p for p in pts
                  if p["lat"] != 999.0 and p["lon"] != 999.0
                  and -90 <= p["lat"] <= 90 and -180 <= p["lon"] <= 180
                  and not (p["lat"] == 0 and p["lon"] == 0)]
 
+    region = None
+    if valid_pts:
+        mid = valid_pts[len(valid_pts) // 2]
+        region = {"lat": round(mid["lat"], 5), "lon": round(mid["lon"], 5)}
+
+    location_points = None
+
+    # Fast path: both cached (still return the region hint).
+    if cached_weather and cached_location:
+        return {"weather": {"description": cached_weather},
+                "locations": cached_location, "locations_points": None, "region": region}
+
     if not valid_pts:
         # Return whatever we have cached rather than nulling both
         return {
             "weather":   {"description": cached_weather} if cached_weather else None,
             "locations": cached_location or None,
+            "locations_points": None, "region": region,
         }
 
     start_ts   = act.get("start_time")
@@ -64,7 +74,7 @@ async def activity_weather_location(activity_id: int):
 
     # Fetch whatever is missing
     weather_task  = fetch_weather(valid_pts, start_ts, duration_s) if not cached_weather  else asyncio.sleep(0)
-    location_task = fetch_locations(valid_pts)                      if not cached_location else asyncio.sleep(0)
+    location_task = fetch_location_points(valid_pts)               if not cached_location else asyncio.sleep(0)
 
     weather_result, location_result = await asyncio.gather(
         weather_task, location_task, return_exceptions=True
@@ -74,15 +84,19 @@ async def activity_weather_location(activity_id: int):
     updates = {}
     if not cached_weather and isinstance(weather_result, dict) and weather_result.get("description"):
         updates["weather"] = weather_result["description"]
-    if not cached_location and isinstance(location_result, str) and location_result:
-        updates["location"] = location_result
+    if not cached_location and isinstance(location_result, list) and location_result:
+        location_points = location_result
+        cached_location = " → ".join(p["name"] for p in location_result)
+        updates["location"] = cached_location
 
     if updates:
         db.update_activity_attrs(activity_id, updates)
 
     return {
         "weather":   weather_result if isinstance(weather_result, dict) else ({"description": cached_weather} if cached_weather else None),
-        "locations": location_result if isinstance(location_result, str) else (cached_location or None),
+        "locations": cached_location or None,
+        "locations_points": location_points,
+        "region": region,
     }
 
 
@@ -171,16 +185,19 @@ async def fetch_weather(pts: list, start_ts: int, duration_s: float) -> Optional
     }
 
 
-async def fetch_locations(pts: list) -> Optional[str]:
+async def fetch_location_points(pts: list) -> list:
+    """Sample points along a track and reverse-geocode each to a place, keeping
+    the sampled coordinate. Returns a list of {"name", "lat", "lon"} with
+    consecutive duplicate places collapsed."""
     n = len(pts)
     num_samples = min(8, n)
     if num_samples < 2:
-        return None
+        return []
 
     indices = [int(i * (n-1) / (num_samples-1)) for i in range(num_samples)]
     samples = [pts[i] for i in indices]
 
-    places = []
+    found = []
     async with httpx.AsyncClient(timeout=10, headers={"User-Agent": "Ascent-Web/1.0"}) as client:
         for i, pt in enumerate(samples):
             try:
@@ -195,18 +212,22 @@ async def fetch_locations(pts: list) -> Optional[str]:
                              addr.get("village") or addr.get("municipality") or
                              addr.get("county") or addr.get("state"))
                     if place:
-                        places.append(place)
+                        found.append({"name": place,
+                                      "lat": round(pt["lat"], 5),
+                                      "lon": round(pt["lon"], 5)})
             except Exception:
                 pass
             if i < len(samples) - 1:
                 await asyncio.sleep(1.1)
 
-    if not places:
-        return None
+    deduped = []
+    for f in found:
+        if not deduped or f["name"] != deduped[-1]["name"]:
+            deduped.append(f)
+    return deduped
 
-    deduped = [places[0]]
-    for p in places[1:]:
-        if p != deduped[-1]:
-            deduped.append(p)
 
-    return " → ".join(deduped)
+async def fetch_locations(pts: list) -> Optional[str]:
+    """Backward-compatible string form: "Place A → Place B → …" (or None)."""
+    points = await fetch_location_points(pts)
+    return " → ".join(p["name"] for p in points) if points else None
