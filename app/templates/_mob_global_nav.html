@@ -1,24 +1,26 @@
 {% set mob_active = mob_active | default('') %}
 <script>
 (function(){
-  // iOS standalone PWA: pin the bottom nav to the VISUAL viewport bottom so it lands in
-  // the same spot on every page. Pages that scroll the body resolve position:fixed;bottom:0
-  // at the physical bottom, but fixed-layout pages resolve it against the taller layout
-  // viewport and float higher — that's the jump between Activities and Summary. The visual
-  // viewport is the same on every page, so anchoring to it makes them consistent.
+  // iOS standalone PWA: anchor the bottom nav to the PHYSICAL screen bottom so it lands in
+  // the same place on every page. /activities (main.html) uses a fixed inner-scroll layout
+  // while / (dashboard.html) scrolls the body, and iOS resolves position:fixed;bottom:0 (and
+  // visualViewport.height) differently for those two models — hence the jump. window.screen
+  // .height is the one value that's identical on every page. nav.offsetHeight includes the
+  // safe-area padding (from CSS), so top = screenH - offsetHeight puts the bar's bottom edge
+  // at the physical bottom with its labels above the home indicator.
   if (!navigator.standalone) return;
-  var vv = window.visualViewport;
   function fix() {
     var nav = document.getElementById('mob-global-nav');
     if (!nav) return;
-    // Landscape: nav is a CSS side-bar — clear overrides and let CSS handle it.
-    if (!vv || window.innerWidth >= window.innerHeight) { nav.style.top = ''; nav.style.bottom = ''; return; }
+    if (window.innerWidth >= window.innerHeight) { nav.style.top = ''; nav.style.bottom = ''; return; } // landscape → CSS side-bar
+    var h = nav.offsetHeight; if (!h) return;
+    var screenH = Math.max(window.screen.width, window.screen.height);
     nav.style.bottom = 'auto';
-    nav.style.top = Math.round(vv.offsetTop + vv.height - nav.offsetHeight) + 'px';
+    nav.style.top = (screenH - h) + 'px';
   }
-  if (vv) { vv.addEventListener('resize', fix); vv.addEventListener('scroll', fix); }
   window.addEventListener('load', function(){ requestAnimationFrame(fix); });
   window.addEventListener('resize', fix);
+  setTimeout(fix, 250);   // re-measure after the safe-area padding is applied to offsetHeight
 })();
 </script>
 <div id="mob-global-nav">
