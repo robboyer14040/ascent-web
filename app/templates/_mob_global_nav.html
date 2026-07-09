@@ -1,16 +1,22 @@
 {% set mob_active = mob_active | default('') %}
 <script>
 (function(){
-  // iOS standalone PWA: current iOS positions position:fixed;bottom:0 + safe-area
-  // padding correctly (as proven by the Tours sub-nav, which uses exactly that and no
-  // JS). An older screen.height-based `top` workaround now over-positions the bar so its
-  // labels fall into the home-indicator zone — so we just clear any inline positioning
-  // and let the CSS (mob_nav.css) place it, identical to the Tours nav.
+  // iOS standalone PWA: pin the bottom nav to the VISUAL viewport bottom so it lands in
+  // the same spot on every page. Pages that scroll the body resolve position:fixed;bottom:0
+  // at the physical bottom, but fixed-layout pages resolve it against the taller layout
+  // viewport and float higher — that's the jump between Activities and Summary. The visual
+  // viewport is the same on every page, so anchoring to it makes them consistent.
   if (!navigator.standalone) return;
+  var vv = window.visualViewport;
   function fix() {
     var nav = document.getElementById('mob-global-nav');
-    if (nav) { nav.style.top = ''; nav.style.bottom = ''; }
+    if (!nav) return;
+    // Landscape: nav is a CSS side-bar — clear overrides and let CSS handle it.
+    if (!vv || window.innerWidth >= window.innerHeight) { nav.style.top = ''; nav.style.bottom = ''; return; }
+    nav.style.bottom = 'auto';
+    nav.style.top = Math.round(vv.offsetTop + vv.height - nav.offsetHeight) + 'px';
   }
+  if (vv) { vv.addEventListener('resize', fix); vv.addEventListener('scroll', fix); }
   window.addEventListener('load', function(){ requestAnimationFrame(fix); });
   window.addEventListener('resize', fix);
 })();
