@@ -38,6 +38,12 @@
   // bottom on every page and never moves. Hide until placed so there's no first-paint flash.
   var nav = document.getElementById('mob-global-nav');
   if (!nav) return;
+  // Body-scroll pages (has-mob-topbar: Summary, Settings) already anchor the nav at the
+  // physical bottom via CSS bottom:0 — their innerHeight equals the screen — and the nav grows
+  // UPWARD as the safe area resolves, so the bottom strip is never exposed. Only fixed-layout
+  // pages (Activities, Routes, Tours) report a short innerHeight and need repositioning; leave
+  // the scroll pages on their correct, flash-free CSS.
+  if (document.body && document.body.classList.contains('has-mob-topbar')) return;
   nav.style.visibility = 'hidden';
   // Nav height is deterministic from CSS: calc(58px + safe-area-inset-bottom) — see
   // mob_nav.css. Read the safe inset from a probe (resolves immediately) rather than the
