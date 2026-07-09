@@ -67,7 +67,9 @@
     nav.style.top = (screenH - navH) + 'px';
     nav.style.visibility = '';
   }
-  requestAnimationFrame(place);
+  place();   // synchronous — runs during parse right after the nav element, before first
+             // paint. Uses only stable values (screen.height + env probe, never innerHeight),
+             // so the nav is correct from frame one and is never hidden during a visible paint.
   window.addEventListener('resize', place);
   if (window.visualViewport) window.visualViewport.addEventListener('resize', place);
   window.addEventListener('load', place);
