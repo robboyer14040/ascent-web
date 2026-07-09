@@ -1,32 +1,4 @@
 {% set mob_active = mob_active | default('') %}
-<script>
-(function(){
-  if (!window.navigator.standalone) return;
-  // In standalone, position:fixed;bottom:0 anchors to window.innerHeight. On body-scrolling
-  // pages innerHeight equals the physical screen, but on fixed-layout pages it settles ~24px
-  // shorter AFTER first layout — so the nav paints at bottom:0 then jumps. Hide the nav until
-  // it's positioned (one frame), then push it down by exactly the gap (screen height −
-  // innerHeight): 0 on scrolling pages, the float amount on fixed pages. No visible reposition.
-  var nav0 = document.getElementById('mob-global-nav');
-  if (nav0) nav0.style.visibility = 'hidden';
-  function fix() {
-    var nav = document.getElementById('mob-global-nav');
-    if (!nav) return;
-    if (window.innerWidth >= window.innerHeight) { nav.style.top = ''; nav.style.bottom = ''; nav.style.visibility = ''; return; } // landscape → CSS side-bar
-    var screenH = Math.max(window.screen.width, window.screen.height);
-    var gap = screenH - window.innerHeight;
-    nav.style.top = '';
-    nav.style.bottom = (gap > 0 ? -gap : 0) + 'px';
-    nav.style.visibility = '';   // reveal once positioned
-  }
-  requestAnimationFrame(fix);   // after first layout, when innerHeight has settled
-  window.addEventListener('resize', fix);
-  if (window.visualViewport) window.visualViewport.addEventListener('resize', fix);
-  window.addEventListener('load', fix);
-  // Failsafe: never leave the nav hidden if something goes wrong.
-  setTimeout(function(){ if (nav0 && nav0.style.visibility === 'hidden') nav0.style.visibility = ''; }, 600);
-})();
-</script>
 <div id="mob-global-nav">
   <a href="/activities" class="mob-nav-btn{% if mob_active == 'activities' %} active{% endif %}">
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
@@ -53,3 +25,43 @@
     <span>Settings</span>
   </a>
 </div>
+<script>
+(function(){
+  if (!window.navigator.standalone) return;
+  // This script runs immediately after the nav element above, so getElementById finds it and
+  // the hide below applies before first paint (avoiding the reposition flash).
+  //
+  // In standalone, position:fixed;bottom:0 anchors to window.innerHeight. On body-scrolling
+  // pages innerHeight equals the physical screen, but on fixed-layout pages it settles ~24px
+  // shorter AFTER first layout — so we hide the nav until innerHeight stops changing, then
+  // push it down by exactly the gap (screen height − innerHeight): 0 on scrolling pages, the
+  // float amount on fixed pages. The nav is revealed only once, already in its final spot.
+  var nav = document.getElementById('mob-global-nav');
+  if (!nav) return;
+  nav.style.visibility = 'hidden';
+  function place() {
+    if (window.innerWidth >= window.innerHeight) { nav.style.top = ''; nav.style.bottom = ''; nav.style.visibility = ''; return; } // landscape → CSS side-bar
+    var screenH = Math.max(window.screen.width, window.screen.height);
+    var gap = screenH - window.innerHeight;
+    nav.style.top = '';
+    nav.style.bottom = (gap > 0 ? -gap : 0) + 'px';
+    nav.style.visibility = '';
+  }
+  // Wait until innerHeight stops changing (settles) before positioning + revealing, so the
+  // nav is never painted at a stale position.
+  var last = null, stable = 0, tries = 0;
+  function waitStable() {
+    var ih = window.innerHeight;
+    if (ih === last) stable++; else { stable = 0; last = ih; }
+    if (stable >= 2 || tries >= 30) { place(); return; }
+    tries++;
+    requestAnimationFrame(waitStable);
+  }
+  requestAnimationFrame(waitStable);
+  window.addEventListener('resize', place);
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', place);
+  window.addEventListener('load', place);
+  // Failsafe: never leave the nav hidden.
+  setTimeout(function(){ if (nav.style.visibility === 'hidden') place(); }, 800);
+})();
+</script>
