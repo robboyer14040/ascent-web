@@ -1,27 +1,15 @@
 {% set mob_active = mob_active | default('') %}
 <script>
 (function(){
-  // iOS standalone PWA: on non-scrollable pages, WKWebView uses the layout viewport
-  // (~screen minus 34px safe area) for BOTH position:fixed AND window.innerHeight.
-  // So bottom:0 and innerHeight-based top calculations are both off by 34px.
-  // window.screen.height is the true physical screen height and is not affected by
-  // the layout/visual viewport distinction — use it as the anchor instead.
+  // iOS standalone PWA: current iOS positions position:fixed;bottom:0 + safe-area
+  // padding correctly (as proven by the Tours sub-nav, which uses exactly that and no
+  // JS). An older screen.height-based `top` workaround now over-positions the bar so its
+  // labels fall into the home-indicator zone — so we just clear any inline positioning
+  // and let the CSS (mob_nav.css) place it, identical to the Tours nav.
   if (!navigator.standalone) return;
   function fix() {
     var nav = document.getElementById('mob-global-nav');
-    if (!nav) return;
-    // Landscape nav is a CSS side-bar; clear any portrait overrides and let CSS handle it
-    if (window.innerWidth >= window.innerHeight) {
-      nav.style.top = '';
-      nav.style.bottom = '';
-      return;
-    }
-    if (!nav.offsetHeight) return;
-    // In portrait, screen.height is the full physical screen (e.g. 852px on iPhone 15),
-    // and nav.offsetHeight includes env(safe-area-inset-bottom) from CSS (e.g. 92px).
-    var screenH = Math.max(window.screen.width, window.screen.height);
-    nav.style.bottom = 'auto';
-    nav.style.top = (screenH - nav.offsetHeight) + 'px';
+    if (nav) { nav.style.top = ''; nav.style.bottom = ''; }
   }
   window.addEventListener('load', function(){ requestAnimationFrame(fix); });
   window.addEventListener('resize', fix);

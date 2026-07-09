@@ -14,6 +14,7 @@
 <link rel="stylesheet" href="/static/mob_nav.css?v={{ app_version }}">
 <link rel="stylesheet" href="/static/common.css?v={{ app_version }}">
 <link rel="stylesheet" href="/static/tour_stage.css?v={{ app_version }}">
+<link rel="stylesheet" href="/static/tour_mob_nav.css?v={{ app_version }}">
 <script>(function(){var t={{ ui_prefs.get('theme','') | tojson }};if(t)document.documentElement.dataset.theme=t;})();</script>
 <script>(function(){if(window.self!==window.top)document.documentElement.classList.add('mob-embedded')})();</script>
 <style>
@@ -202,103 +203,15 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
 .mf-label{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
 .mf-val{font-size:12px;color:var(--text);margin-top:1px}
 
-/* ── Mobile layout ─────────────────────────────────────────────────── */
-/* max-width:767px catches phones in portrait + small phones in landscape.
-   The second condition catches large iPhones (≥12) in landscape where the
-   rotated width (≈844px) exceeds 767px but the height (≈390px) doesn't. */
-@media(max-width:767px), (max-height:500px) and (orientation:landscape) and (pointer:coarse){
-  nav{display:none}
-#sidebar-resize{display:none}
-  #resize-handle{
-    height:28px;display:flex;align-items:center;justify-content:center;cursor:row-resize
-  }
-  #resize-handle::after{
-    content:'';display:block;width:40px;height:4px;
-    background:var(--border2);border-radius:2px
-  }
-  #tour-controls{padding:8px}
-  #tour-btn-row{grid-template-columns:repeat(4,1fr);gap:4px}
-  .sb-btn{padding:6px 4px;font-size:11px;min-height:36px}
-  #stage-h-scroll{-webkit-overflow-scrolling:touch}
-  #stage-detail{-webkit-overflow-scrolling:touch;padding:12px}
+/* ── Mobile layout ───────────────────────────────────────────────────
+   The phone layout (nested nav + tab panels) now lives in the shared
+   tour_mob_nav.css, driven by tour_mob_nav.js. */
+/* Non-phone: the sidebar "View Entire Tour" button is always visible, so the
+   in-detail button above the AI Stage Summary is redundant — hide it there.
+   Phones (portrait + small/large landscape) keep it. */
+@media(min-width:768px) and (min-height:501px), (min-width:768px) and (pointer:fine){
+  .mob-view-tour-wrap{display:none!important}
 }
-/* ── Portrait: stacked column overview ── */
-@media(max-width:767px) and (orientation:portrait){
-  #view-all-btn{display:none!important}
-  #page{
-    display:flex;flex-direction:column;
-    height:calc(100vh - 52px - env(safe-area-inset-top,0px) - 58px - env(safe-area-inset-bottom,0px));margin-top:calc(52px + env(safe-area-inset-top,0px));
-    overflow:hidden;position:static
-  }
-  /* Flatten sidebar so #tour-controls and #stage-list-wrap become
-     direct flex children of #page, enabling the right vertical order */
-  #sidebar{display:contents}
-  #tour-controls{order:1;flex-shrink:0;border-bottom:1px solid var(--border)}
-  #main{
-    order:2;flex:0 0 auto;
-    position:static;width:100%;
-    display:flex;flex-direction:column
-  }
-  /* Stage list: position:fixed (like stage-detail in stage-view) so iOS scroll works.
-     top/bottom set by JS via _syncStageListHeight(). */
-  #stage-list-wrap{position:fixed;left:0;right:0;bottom:calc(58px + env(safe-area-inset-bottom,0px));overflow:hidden;display:flex;flex-direction:column;background:var(--bg);z-index:5}
-  #stage-h-scroll{-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain}
-  /* Stage detail is hidden in overview mode; shown in stage-view state */
-  #stage-detail{display:none;padding:12px}
-  /* Stage view: body gets .mob-stage-view when a stage is selected */
-  body.mob-stage-view #tour-controls{display:none}
-  body.mob-stage-view #stage-list-wrap{display:none}
-  /* Stage detail uses position:fixed so iOS gives it an explicit pixel height to scroll */
-  body.mob-stage-view #main{flex:1}
-  body.mob-stage-view #stage-detail{display:block;position:fixed;left:0;right:0;bottom:0;overflow-y:scroll;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;background:var(--bg);z-index:20;padding:12px 12px 66px}
-  /* top is set dynamically in JS (52 + mapH + 6) */
-  /* "View Entire Tour" button — portrait stage view only */
-  .mob-view-tour-wrap{display:none}
-  body.mob-stage-view .mob-view-tour-wrap{display:block;padding:16px 0 8px}
-  .mob-view-tour-btn{width:100%;padding:11px;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;font-size:13px;font-weight:500;color:var(--text);cursor:pointer;text-align:center}
-  .mob-view-tour-btn:active{background:var(--border2)}
-  /* Portrait stat chips: AI summary full-width on top, chips horizontal below */
-  body.mob-stage-view .act-stats-row{flex-direction:column!important;overflow:visible!important;max-width:none!important;gap:8px!important}
-  body.mob-stage-view .act-stats-row #ai-summary-chip{width:100%!important;max-height:none!important;order:-1}
-  body.mob-stage-view .act-stats-row .stats-grid{width:100%;flex:none}
-  /* Portrait tour overview: show compact stats between map and stage list */
-  #mob-portrait-stats{display:block;padding:8px;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;max-height:220px;border-bottom:1px solid var(--border)}
-  body.mob-stage-view #mob-portrait-stats{display:none}
-  #stats-toggle{display:block}
-}
-/* ── Landscape: sidebar always visible on left, map+detail on right ── */
-/* Use max-height (≤500px) not max-width: large iPhones are ~844px wide in landscape
-   but only ~390px tall, so height-based matching catches all phones correctly. */
-@media(max-height:500px) and (orientation:landscape) and (pointer:coarse){
-  #page{
-    display:flex;flex-direction:row;
-    height:100vh!important;
-    margin-top:0!important;overflow:hidden
-  }
-  body.mob-landscape-stage #stage-detail{padding-bottom:12px}
-  #sidebar{
-    width:200px;flex-shrink:0;
-    display:flex;flex-direction:column;
-    overflow:hidden;border-right:1px solid var(--border)
-  }
-  /* stage-list-wrap: position:static so any portrait-set inline top is ignored */
-  #stage-list-wrap{position:static;flex:1;min-height:0}
-  /* Compact tour controls so stage list gets max vertical space */
-  #tour-controls{padding:6px;gap:4px}
-  #tour-btn-row{grid-template-columns:repeat(2,1fr);gap:4px}
-  #main{
-    flex:1;min-width:0;
-    display:flex;flex-direction:column;
-    overflow:hidden
-  }
-}
-body.mob-stage-view #resize-handle{padding:0 4px 0 12px;justify-content:flex-start}
-body.mob-stage-view #resize-handle::after{display:none}
-body.mob-stage-view #stats-toggle{display:none!important}
-body.mob-stage-view .rh-section-lbl{display:block}
-body.mob-stage-view #resize-handle .mob-disclose,body.mob-stage-view #elev-resize-handle .mob-disclose{display:flex}
-body.mob-stage-view #elev-resize-handle{height:28px;display:flex;align-items:center;padding:0 4px 0 12px;gap:4px}
-body.mob-stage-view #elev-resize-handle::after{display:none}
 </style>
 </head>
 <body>
@@ -397,6 +310,8 @@ body.mob-stage-view #elev-resize-handle::after{display:none}
   </div>
 
 </div>
+
+{% include '_tour_mob_nav.html' %}
 
 <!-- ── Tour modal (Define / Edit) ── -->
 <div id="tour-modal">
@@ -577,6 +492,8 @@ body.mob-stage-view #elev-resize-handle::after{display:none}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="/static/common.js?v={{ app_version }}"></script>
 <script src="/static/tour_stage.js?v={{ app_version }}"></script>
+<script src="/static/tour_stage_detail.js?v={{ app_version }}"></script>
+<script src="/static/tour_mob_nav.js?v={{ app_version }}"></script>
 <script src="/static/location_summary.js?v={{ app_version }}"></script>
 <script src="/static/lightbox.js?v={{ app_version }}"></script>
 <script src="/static/activity_chips.js?v={{ app_version }}"></script>
@@ -942,7 +859,7 @@ async function onTourSelect(id) {
   document.getElementById('publish-btn').style.visibility  = 'visible';
   const vab = document.getElementById('view-all-btn');
   vab.style.display  = '';
-  vab.disabled = true;
+  updateViewAllBtn();
 
   document.getElementById('main-empty').style.display     = 'none';
   document.getElementById('map-and-detail').style.display = 'flex';
@@ -953,6 +870,7 @@ async function onTourSelect(id) {
   await drawRoutes(null);
   renderStageList();   // re-render: alt routes are now known from the loaded points
   renderDetail(null);
+  if (TourNav.isPhone()) { _setTourMobTitle(); TourNav.showStage(false); }
 }
 
 function confirmDelete() {
@@ -1261,10 +1179,16 @@ function sortedStages() {
 
 function renderStageList() {
   const list = document.getElementById('stage-list');
-  list.innerHTML = '';
   document.getElementById('sidebar-empty').style.display = tourStages.length ? 'none' : '';
   _stageAltIds = _altStageIds(tourStages, _tourPointsCache);
 
+  // Phone: the shared simple list (identical to Tour_share). Desktop: the column table.
+  if (TourNav.isPhone()) {
+    TourStageDetail.stageList(list, { stages: tourStages, pointsCache: _tourPointsCache });
+    return;
+  }
+
+  list.innerHTML = '';
   const cols = getActiveStageCols();
   const tpl  = buildStageColsTemplate();
 
@@ -1283,61 +1207,68 @@ function renderStageList() {
 }
 
 // ── Stage selection + "View Entire Tour" ──────────────────────────────────────
+// Reflect selection state on the sidebar "View Entire Tour" button (orange when a stage is selected).
+function updateViewAllBtn() {
+  const btn = document.getElementById('view-all-btn');
+  if(!btn) return;
+  const on = !!selectedId;
+  btn.classList.toggle('primary', on);
+  btn.disabled = !on;
+}
+
 async function selectStage(id) {
   selectedId = (id === selectedId) ? null : id;
-  document.getElementById('view-all-btn').disabled = !selectedId;
+  updateViewAllBtn();
   renderStageList();
   await drawRoutes(selectedId);
   renderDetail(selectedId);
-  if (isMobTour()) {
-    if (isPortrait()) {
-      // Portrait: toggle stage-view mode on body
-      if (selectedId) {
-        document.body.classList.add('mob-stage-view');
-        document.getElementById('stage-detail').style.top = _stageDetailTop();
-        const s = tourStages.find(s => String(s.id) === String(selectedId));
-      } else {
-        document.body.classList.remove('mob-stage-view');
-        document.getElementById('stage-detail').style.top = '';
-      }
-      setTimeout(() => tourMap && tourMap.invalidateSize(), 50);
-    } else {
-      // Landscape: horizontal split when stage selected, normal column when deselected
-      if (selectedId) {
-        document.body.classList.add('mob-landscape-stage');
-        mobTourTab('map');
-      } else {
-        document.body.classList.remove('mob-landscape-stage');
-      }
-      setTimeout(() => tourMap && tourMap.invalidateSize(), 60);
-    }
+  if (TourNav.isPhone()) {
+    _setTourMobTitle();
+    TourNav.showStage(!!selectedId);
+    setTimeout(() => tourMap && tourMap.invalidateSize(), 60);
   }
 }
 
-// ── Portrait: back from stage view → overview ─────────────────────────────────
-function mobPortraitBack() {
-  if (document.body.classList.contains('mob-stage-view')) {
-    document.body.classList.remove('mob-stage-view');
-    document.getElementById('stage-detail').style.top = '';
-    selectedId = null;
-    renderStageList();
-    drawRoutes(null);
-    renderDetail(null);
-    setTimeout(() => { tourMap && tourMap.invalidateSize(); _syncStageListHeight(); }, 50);
-  } else {
-    window.location.href = '/activities';
-  }
+// Header title reflects the selected stage (or the tour) on phone.
+function _setTourMobTitle() {
+  const el = document.getElementById('tour-mob-title');
+  if (!el) return;
+  const s = selectedId ? tourStages.find(s => String(s.id) === String(selectedId)) : null;
+  el.textContent = s ? `Stage ${s.stage_num}: ${s.name}` : (tourInfo?.title || 'Tour');
 }
+
+// ── Back from a selected stage → tour level (used by the mobile nav Back button) ──
+// The controller calls this only when a stage is selected (level 2).
+window.onTourMobBack = function () {
+  if (selectedId) selectStage(selectedId);   // toggles selection off, re-renders, exits level 2
+};
+TourNav.homeHref = '/activities';             // level-1 Back leaves the tour
+// Legacy alias — the in-detail "View Entire Tour" button (hidden on phone) still calls this.
+function mobPortraitBack() { tourMobBack(); }
 
 async function viewEntireTour() {
   selectedId = null;
-  document.getElementById('view-all-btn').disabled = true;
-  document.body.classList.remove('mob-landscape-stage');
+  updateViewAllBtn();
   renderStageList();
   await drawRoutes(null);
   renderDetail(null);
+  if (TourNav.isPhone()) { _setTourMobTitle(); TourNav.showStage(false); }
   setTimeout(() => tourMap && tourMap.invalidateSize(), 60);
 }
+
+// ── Lazy tab renderers for the mobile stage nav (Photos / Forecast) — shared code ──
+function _curStage() { return selectedId ? tourStages.find(s => String(s.id) === String(selectedId)) : null; }
+window.renderStagePhotosTab = function (el) {
+  const stage = _curStage();
+  const actId = stage && stage.completion && stage.completion.activity_id;
+  TourStageDetail.photosTab(el, { activityId: actId, lightboxName: 'openTourLightbox',
+    setMedia: m => { _tourLbMedia = m; _tourLbActId = actId; } });
+};
+window.renderStageForecastTab = function (el) {
+  const stage = _curStage();
+  TourStageDetail.forecastTab(el, { stage,
+    forecastUrl: stage ? `/tours/${tourInfo.id}/stages/${stage.id}/forecast` : '' });
+};
 
 // ── Orientation change: re-apply correct mobile layout ────────────────────────
 (function() {
@@ -1398,8 +1329,6 @@ async function viewEntireTour() {
 // ── Map drawing ───────────────────────────────────────────────────────────────
 async function drawRoutes(activeId) {
   if(!tourMap || !routeGroup || !tourInfo) return;
-  routeGroup.clearLayers();
-  MapUtils.clearPhotoMarkers(tourMap);
   try {
     const _muParam = tourMatchUserId ? `?match_user_id=${tourMatchUserId}` : '';
     const [byStage, actPts] = await Promise.all([
@@ -1408,75 +1337,14 @@ async function drawRoutes(activeId) {
     ]);
     _tourPointsCache = {...byStage};
     Object.entries(actPts).forEach(([sid, pts]) => { if(pts?.length) _tourPointsCache[sid] = pts; });
-    const allPts  = [];
-    const altIds  = _altStageIds(tourStages, _tourPointsCache);
-    // When a stage that belongs to an alternate-route group is selected, show the
-    // selected route bold-red-solid and its sibling alternate(s) dashed together.
-    const activeGroup = activeId
-      ? (_stageSegmentGroups(tourStages, _tourPointsCache).find(g => g.some(s => String(s.id)===String(activeId))) || [])
-      : [];
-    const groupIds = new Set(activeGroup.map(s => String(s.id)));
-
-    let activeLine = null;
-    tourStages.forEach((s) => {
-      const pts = _tourPointsCache[String(s.id)];
-      if(!pts?.length) return;
-      const sid = String(s.id);
-      const isActive  = activeId && sid===String(activeId);
-      const isSibling = activeId && !isActive && groupIds.has(sid);
-      let opts;
-      if(isActive) {
-        opts = { color: C.sel, weight: 5, opacity: 1.0 };                    // selected → bold red solid
-      } else if(isSibling) {
-        opts = { color: C.sel, weight: 3, opacity: 0.9, dashArray: '6,8' };  // its alternate(s) → dashed
-      } else {
-        opts = { color: stageColor(s), weight: 3, opacity: activeId ? 0.18 : 0.85 };
-        if(altIds.has(sid)) opts.dashArray = '6,8';                          // alternative route (overview)
-      }
-      const line = L.polyline(pts, opts).addTo(routeGroup);
-      if(isActive) activeLine = line;
-      allPts.push(...pts);
+    const { allPts, groupIds } = TourStageDetail.drawRoutes({
+      map: tourMap, routeGroup, stages: tourStages, pointsCache: _tourPointsCache,
+      activeId, selColor: C.sel, startIcon: _startIcon, endIcon: _endIcon,
     });
-    if(activeLine) activeLine.bringToFront();   // keep the selected route above its alternates
-
-    // Stage start-point circle indicators — entire tour view only
-    if(!activeId) {
-      // Start flag behind stage-1 circle — drawn first, lower zIndexOffset
-      const first = tourStages.length ? tourStages[0] : null;
-      if(first?.start_lat != null)
-        L.marker([first.start_lat, first.start_lon], { icon: _startIcon, zIndexOffset: 50, interactive: false }).addTo(routeGroup);
-
-      // Stage number circles — on top of the start flag.
-      // Alternate routes share a start with their sibling, so draw one
-      // numbered circle per segment group, renumbered sequentially so the
-      // alternates are excluded from the numbering.
-      _dedupeStatStages(tourStages, _tourPointsCache).forEach((s, i) => {
-        if(s.start_lat == null || s.start_lon == null) return;
-        const icon = L.divIcon({
-          className: '',
-          html: `<div style="width:16px;height:16px;border-radius:50%;background:#fff;border:1.5px solid #000;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:#000;font-family:-apple-system,sans-serif;line-height:1;box-sizing:border-box">${i + 1}</div>`,
-          iconSize:   [16, 16],
-          iconAnchor: [8, 8],
-        });
-        L.marker([s.start_lat, s.start_lon], { icon, zIndexOffset: 150, interactive: false }).addTo(routeGroup);
-      });
-
-      // Finish flag at end of last stage
-      const lastPts = tourStages.length ? _tourPointsCache[String(tourStages[tourStages.length-1].id)] : null;
-      if(lastPts?.length)
-        L.marker(lastPts[lastPts.length-1], { icon: _endIcon, zIndexOffset: 200, interactive: false }).addTo(routeGroup);
-    }
-
     if(activeId) {
-      const pts = _tourPointsCache[String(activeId)];
-      if(pts?.length) {
-        L.marker(pts[0],            { icon: _startIcon, zIndexOffset: 200, interactive: false }).addTo(routeGroup);
-        L.marker(pts[pts.length-1], { icon: _endIcon,   zIndexOffset: 200, interactive: false }).addTo(routeGroup);
-      }
-      // Fit to the selected route plus any of its alternates so both are visible.
       const boundsPts = [];
       groupIds.forEach(id => { const p = _tourPointsCache[id]; if(p?.length) boundsPts.push(...p); });
-      const fitPts = boundsPts.length ? boundsPts : pts;
+      const fitPts = boundsPts.length ? boundsPts : _tourPointsCache[String(activeId)];
       if(fitPts?.length) {
         const b = L.latLngBounds(fitPts);
         _lastRouteBounds = { bounds: b, opts: { padding:[36,36] } };
@@ -1494,6 +1362,8 @@ function resetMapZoom() {
   if(_lastRouteBounds && tourMap)
     tourMap.fitBounds(_lastRouteBounds.bounds, _lastRouteBounds.opts);
 }
+// Mobile nav: re-fit the map to the current route/stage bounds after a tab becomes visible.
+window.refitTourMap = resetMapZoom;
 
 // ── Date / time helpers ───────────────────────────────────────────────────────
 function fmtDate(ts) {
@@ -1789,144 +1659,47 @@ async function renderDetail(activeId) {
 
   if(!activeId) {
     hideStageElevation();
-    if(!tourStages.length) { el.innerHTML=''; const _m=document.getElementById('mob-portrait-stats'); if(_m)_m.innerHTML=''; return; }
-    const statStages = _dedupeStatStages(tourStages, _tourPointsCache);
-    const done       = statStages.filter(s=>s.completion);
-    const totalDist  = statStages.reduce((s,x)=>s+(x.distance_mi||0),0);
-    const totalClimb = statStages.reduce((s,x)=>s+(x.climb_ft||0),0);
-    const doneDist   = done.reduce((s,x)=>s+(x.completion?.distance_mi??x.distance_mi??0),0);
-    const doneClimb  = done.reduce((s,x)=>s+(x.completion?.climb_ft??x.climb_ft??0),0);
-    const pctD = totalDist >0 ? Math.round(doneDist /totalDist *100) : 0;
-    const pctC = totalClimb>0 ? Math.round(doneClimb/totalClimb*100) : 0;
-    const n            = statStages.length || 1;
-    const avgDist      = totalDist  / n;
-    const avgClimb     = totalClimb / n;
-    const maxDistIdx   = tourStages.reduce((mi,x,i)=>(x.distance_mi||0)>(tourStages[mi].distance_mi||0)?i:mi, 0);
-    const maxClimbIdx  = tourStages.reduce((mi,x,i)=>(x.climb_ft||0)>(tourStages[mi].climb_ft||0)?i:mi, 0);
-    const maxDist      = tourStages[maxDistIdx]?.distance_mi || 0;
-    const maxClimb     = tourStages[maxClimbIdx]?.climb_ft   || 0;
-    const altDistStr   = U.metric ? totalDist.toFixed(1)+' mi'   : (totalDist*1.60934).toFixed(1)+' km';
-    const altClimbStr  = U.metric ? Math.round(totalClimb)+' ft' : Math.round(totalClimb*0.3048)+' m';
-    const altAvgDStr   = U.metric ? avgDist.toFixed(1)+' mi'     : (avgDist*1.60934).toFixed(1)+' km';
-    const altAvgCStr   = U.metric ? Math.round(avgClimb)+' ft'   : Math.round(avgClimb*0.3048)+' m';
-    const altMaxDStr   = U.metric ? maxDist.toFixed(1)+' mi'     : (maxDist*1.60934).toFixed(1)+' km';
-    const altMaxCStr   = U.metric ? Math.round(maxClimb)+' ft'   : Math.round(maxClimb*0.3048)+' m';
-
-    const _chips =
-      `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Stages</div><div class="sc-val">${done.length} / ${statStages.length}</div><div class="sc-sub">completed</div></div>` +
-      `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Total Dist</div><div class="sc-val">${U.distS(totalDist)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${altDistStr}</div><div class="sc-sub">${U.distS(doneDist)} done (${pctD}%)</div></div>` +
-      `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Total Ascent</div><div class="sc-val">${U.climbS(totalClimb)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${altClimbStr}</div><div class="sc-sub">${U.climbS(doneClimb)} done (${pctC}%)</div></div>` +
-      `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Avg Dist</div><div class="sc-val">${U.distS(avgDist)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${altAvgDStr}</div><div class="sc-sub">per stage</div></div>` +
-      `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Avg Ascent</div><div class="sc-val">${U.climbS(avgClimb)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${altAvgCStr}</div><div class="sc-sub">per stage</div></div>` +
-      `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Max Stage Dist</div><div class="sc-val">${U.distS(maxDist)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${altMaxDStr}</div><div class="sc-sub">Stage ${maxDistIdx+1}</div></div>` +
-      `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Max Ascent</div><div class="sc-val">${U.climbS(maxClimb)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${altMaxCStr}</div><div class="sc-sub">Stage ${maxClimbIdx+1}</div></div>`;
-    let html = `<div class="stats-grid" style="grid-template-columns:repeat(7,1fr);margin-bottom:14px">${_chips}</div>`;
-
-    // Locations
-    const first = tourStages[0];
-    const last  = tourStages[tourStages.length-1];
-    const lastDone = done.length ? done[done.length-1] : null;
-    // End of tour = last point of last stage's route (not its start point)
-    const _lastStagePts = last ? (_tourPointsCache[String(last.id)] || []) : [];
-    const _lastPt = _lastStagePts.length ? _lastStagePts[_lastStagePts.length - 1] : null;
-    html += `<div style="display:flex;flex-direction:column;gap:6px">`;
-    if(first?.start_lat != null)
-      html += `<div style="font-size:12px"><span style="color:var(--muted);margin-right:6px">Start:</span><span id="ov-start-loc">Loading…</span></div>`;
-    if(_lastPt)
-      html += `<div style="font-size:12px"><span style="color:var(--muted);margin-right:6px">End:</span><span id="ov-end-loc">Loading…</span></div>`;
-    if(lastDone && lastDone.start_lat != null)
-      html += `<div style="font-size:12px"><span style="color:var(--muted);margin-right:6px">Last completed:</span><span id="ov-last-loc">Loading…</span></div>`;
-    html += `</div>`;
-    el.innerHTML = html;
-    // Portrait overview: populate scrollable info panel between map and stage list
-    const _mpsEl = document.getElementById('mob-portrait-stats');
-    if (_mpsEl) {
-      let _mobHtml = `<div class="stats-grid">${_chips}</div>`;
-      _mobHtml += `<div style="display:flex;flex-direction:column;gap:4px;margin-top:6px;padding-top:6px;border-top:1px solid var(--border)">`;
-      if(first?.start_lat != null)
-        _mobHtml += `<div style="font-size:12px"><span style="color:var(--muted);margin-right:6px">Start:</span><span id="mob-ov-start-loc">Loading…</span></div>`;
-      if(_lastPt)
-        _mobHtml += `<div style="font-size:12px"><span style="color:var(--muted);margin-right:6px">End:</span><span id="mob-ov-end-loc">Loading…</span></div>`;
-      if(lastDone && lastDone.start_lat != null)
-        _mobHtml += `<div style="font-size:12px"><span style="color:var(--muted);margin-right:6px">Last completed:</span><span id="mob-ov-last-loc">Loading…</span></div>`;
-      _mobHtml += `</div>`;
-      _mpsEl.innerHTML = _mobHtml;
-    }
-
-    function _geocacheFill(lat, lon, elId, cacheKey) {
-      const _ls = s => { try { return localStorage.getItem(s); } catch(e) { return null; } };
-      const _lsSet = (k,v) => { try { localStorage.setItem(k,v); } catch(e) {} };
-      const _fill = (el, loc) => { el.innerHTML = loc ? LocationSummary.linkHTML(loc, {lat, lon}) : '—'; };
-      const cached = _ls(cacheKey);
-      if(cached) { const e=document.getElementById(elId); if(e) _fill(e, cached); return; }
-      reverseGeocode(lat, lon).then(loc => {
-        if(loc) _lsSet(cacheKey, loc);
-        const e=document.getElementById(elId); if(e) _fill(e, loc);
-      });
-    }
-    if(first?.start_lat != null)
-      _geocacheFill(first.start_lat, first.start_lon, 'ov-start-loc', `tour-ov-start-${tourInfo.id}`);
-    if(_lastPt)
-      _geocacheFill(_lastPt[0], _lastPt[1], 'ov-end-loc', `tour-ov-endpt-${tourInfo.id}`);
-    if(lastDone?.start_lat != null)
-      _geocacheFill(lastDone.start_lat, lastDone.start_lon, 'ov-last-loc', `tour-ov-last-${lastDone.id}`);
-    // Same for mobile portrait panel
-    if(first?.start_lat != null)
-      _geocacheFill(first.start_lat, first.start_lon, 'mob-ov-start-loc', `tour-ov-start-${tourInfo.id}`);
-    if(_lastPt)
-      _geocacheFill(_lastPt[0], _lastPt[1], 'mob-ov-end-loc', `tour-ov-endpt-${tourInfo.id}`);
-    if(lastDone?.start_lat != null)
-      _geocacheFill(lastDone.start_lat, lastDone.start_lon, 'mob-ov-last-loc', `tour-ov-last-${lastDone.id}`);
-
-    // AI Tour Summary card — show when tour is not fully completed OR end date has passed
-    const today = new Date().toISOString().slice(0,10);
-    const tourEnded    = tourInfo.end_date < today;
-    const allCompleted = statStages.length > 0 && done.length === statStages.length;
-    if(!allCompleted || tourEnded) {
-      const _aiCardHtml = (idSuffix) => `<div class="ai-card" id="tour-ai-summary-card${idSuffix}">
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
-          <div class="ai-card-label" style="margin-bottom:0">AI Tour Summary</div>
-          <button id="tour-ai-summary-refresh${idSuffix}" title="Regenerate summary" onclick="refreshTourAiSummary()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:13px;padding:0;line-height:1;flex-shrink:0">↺</button>
-        </div>
-        <div class="ai-card-body ai-card-loading" id="tour-ai-summary-text${idSuffix}">Generating summary…</div>
-      </div>`;
-      el.insertAdjacentHTML('beforeend', _aiCardHtml(''));
-      const _mpsAi = document.getElementById('mob-portrait-stats');
-      if(_mpsAi) _mpsAi.insertAdjacentHTML('beforeend', _aiCardHtml('-mob'));
-      function _loadTourAiSummary(force) {
-        const ids = ['', '-mob'];
-        ids.forEach(sfx => {
-          const txt = document.getElementById(`tour-ai-summary-text${sfx}`);
-          const btn = document.getElementById(`tour-ai-summary-refresh${sfx}`);
+    TourStageDetail.overview(el, {
+      stages: tourStages, pointsCache: _tourPointsCache, cacheId: tourInfo.id,
+      renderAi: (elx) => {
+        // AI Tour Summary — show when the tour is not fully completed OR its end date passed.
+        const today = new Date().toISOString().slice(0,10);
+        const _stat = _dedupeStatStages(tourStages, _tourPointsCache);
+        const _done = _stat.filter(s => s.completion);
+        const allCompleted = _stat.length > 0 && _done.length === _stat.length;
+        if(allCompleted && !(tourInfo.end_date < today)) return;
+        elx.insertAdjacentHTML('beforeend', `<div class="ai-card" id="tour-ai-summary-card">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
+            <div class="ai-card-label" style="margin-bottom:0">AI Tour Summary</div>
+            <button id="tour-ai-summary-refresh" title="Regenerate summary" onclick="refreshTourAiSummary()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:13px;padding:0;line-height:1;flex-shrink:0">↺</button>
+          </div>
+          <div class="ai-card-body ai-card-loading" id="tour-ai-summary-text">Generating summary…</div>
+        </div>`);
+        function _loadTourAiSummary(force) {
+          const txt = document.getElementById('tour-ai-summary-text');
+          const btn = document.getElementById('tour-ai-summary-refresh');
           if(txt) { txt.textContent = 'Generating summary…'; txt.classList.add('ai-card-loading'); }
           if(btn) btn.style.opacity = '0.4';
-        });
-        const forceParam = force ? '&force=1' : '';
-        fetch(`/tours/${tourInfo.id}/ai-summary?model=${encodeURIComponent(tourCoachModel)}${forceParam}`)
-          .then(r => r.ok ? r.json() : null)
-          .then(d => {
-            ids.forEach(sfx => {
-              const el2 = document.getElementById(`tour-ai-summary-text${sfx}`);
-              const b   = document.getElementById(`tour-ai-summary-refresh${sfx}`);
-              if(el2) {
-                if(d?.summary) { el2.textContent = d.summary; el2.classList.remove('ai-card-loading'); }
-                else { el2.textContent = 'Summary unavailable.'; el2.classList.remove('ai-card-loading'); }
-              }
+          const forceParam = force ? '&force=1' : '';
+          fetch(`/tours/${tourInfo.id}/ai-summary?model=${encodeURIComponent(tourCoachModel)}${forceParam}`)
+            .then(r => r.ok ? r.json() : null)
+            .then(d => {
+              const el2 = document.getElementById('tour-ai-summary-text');
+              const b   = document.getElementById('tour-ai-summary-refresh');
+              if(el2) { if(d?.summary){el2.textContent=d.summary;el2.classList.remove('ai-card-loading');} else {el2.textContent='Summary unavailable.';el2.classList.remove('ai-card-loading');} }
+              if(b) b.style.opacity = '';
+            })
+            .catch(() => {
+              const el2 = document.getElementById('tour-ai-summary-text');
+              const b   = document.getElementById('tour-ai-summary-refresh');
+              if(el2){el2.textContent='Summary unavailable.';el2.classList.remove('ai-card-loading');}
               if(b) b.style.opacity = '';
             });
-          })
-          .catch(() => {
-            ids.forEach(sfx => {
-              const el2 = document.getElementById(`tour-ai-summary-text${sfx}`);
-              const b   = document.getElementById(`tour-ai-summary-refresh${sfx}`);
-              if(el2) { el2.textContent = 'Summary unavailable.'; el2.classList.remove('ai-card-loading'); }
-              if(b) b.style.opacity = '';
-            });
-          });
+        }
+        window.refreshTourAiSummary = () => _loadTourAiSummary(true);
+        _loadTourAiSummary(false);
       }
-      window.refreshTourAiSummary = () => _loadTourAiSummary(true);
-      _loadTourAiSummary(false);
-    }
+    });
     return;
   }
 
@@ -1972,7 +1745,7 @@ async function renderDetail(activeId) {
 
     let html = stageHead;
     html += `<div class="section-label" style="margin-bottom:6px">Estimated Route</div>`;
-    html += `<div class="stats-grid" style="grid-template-columns:repeat(${bigClimbFt>0?3:2},1fr);margin-bottom:10px">`;
+    html += `<div class="stats-grid est-stats" style="grid-template-columns:repeat(${bigClimbFt>0?3:2},1fr);margin-bottom:10px">`;
     html += chip4('Distance',     distP, distS,     '&nbsp;');
     html += chip4('Total Ascent',  climP, climS,     '&nbsp;');
     if(bigClimbFt > 0)
@@ -2160,6 +1933,7 @@ async function renderDetail(activeId) {
         <button onclick="sessionStorage.setItem('selectActivityId','${act.id}');window.location='/activities'" style="font-size:10px;padding:2px 7px;border-radius:4px;border:1px solid var(--border2);background:var(--surface2);color:var(--muted);cursor:pointer;line-height:1.5">View on Activities page</button>
       </div>` +
       buildStageActivityDetail(act);
+    if (TourNav.isPhone()) TourStageDetail.enhanceAnalysis();
     setTimeout(() => {
       loadStageActivityWx(act.id);
       loadStagePhotos(act.id);
@@ -2783,19 +2557,41 @@ async function doRevoke() {
   } catch(e) { status.textContent = 'Error revoking link.'; }
 }
 function copyShareUrl() {
-  const url = document.getElementById('publish-url').value;
-  navigator.clipboard.writeText(url).then(() => {
+  const input = document.getElementById('publish-url');
+  const url   = input.value;
+  const done  = () => {
     const status = document.getElementById('publish-status');
-    status.textContent = 'Copied!';
-    setTimeout(() => { status.textContent = ''; }, 2000);
-  });
+    if (status) { status.textContent = 'Copied!'; setTimeout(() => { status.textContent = ''; }, 2000); }
+  };
+  // execCommand fallback — works on insecure origins (LAN dev server) and iOS, where
+  // navigator.clipboard is unavailable. Copy from an off-screen textarea with a 16px
+  // font so iOS doesn't auto-zoom (which it does when focusing sub-16px inputs).
+  const fallback = () => {
+    const ta = document.createElement('textarea');
+    ta.value = url;
+    ta.setAttribute('readonly', '');
+    ta.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;padding:0;border:0;opacity:0;font-size:16px';
+    document.body.appendChild(ta);
+    ta.select();
+    try { ta.setSelectionRange(0, url.length); } catch (e) {}
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) {}
+    document.body.removeChild(ta);
+    if (ok) done();
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(url).then(done).catch(fallback);
+  } else {
+    fallback();
+  }
 }
 </script>
 {% include '_about.html' %}
 
 <div class="mob-topbar">
+  <button id="tour-mob-back" onclick="tourMobBack()"><span>‹</span><span>Back</span></button>
   <img src="/static/favicon.svg" style="width:18px;height:18px;border-radius:3px;flex-shrink:0">
-  <span class="mob-topbar-brand">Ascent</span>
+  <span class="mob-topbar-brand" id="tour-mob-title">Ascent</span>
   <span class="mob-topbar-version">{{ app_version }}</span>
 </div>
 {% set mob_active = 'tours' %}

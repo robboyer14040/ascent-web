@@ -26,3 +26,18 @@
 .mob-arr{display:inline-block;transform:scale(2.25);transform-origin:center;transition:transform .2s}
 .mob-arr.collapsed{transform:scale(2.25) rotate(-90deg)}
 .rh-section-lbl{display:none;flex:1;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+
+/* Uncompleted-stage "Estimated Route" chips blend into the background — text only. */
+.est-stats .stat-chip{background:none;border-color:transparent}
+
+/* ── Simple stage list (shared: Tour_share always, Tours on phone) ── */
+.stage-item{display:flex;align-items:center;gap:7px;padding:3px 10px;line-height:1.15;cursor:pointer;border-left:3px solid transparent}
+.stage-item:hover{background:rgba(255,255,255,.04)}
+.stage-item.active{background:rgba(249,115,22,.1);border-left-color:var(--accent)}
+.stage-item-body{flex:1;min-width:0}
+.stage-item-name{font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stage-item-sub{font-size:10px;color:var(--muted);margin-top:0}
+.stage-status{text-align:right;flex-shrink:0;min-width:52px}
+.stage-status-done{font-size:12px;font-weight:600;color:#22c55e;line-height:1.2}
+.stage-status-date{font-size:10px;color:var(--muted)}
+.stage-status-none{font-size:14px;color:var(--muted2);line-height:1}

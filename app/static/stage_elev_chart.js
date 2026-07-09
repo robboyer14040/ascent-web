@@ -517,6 +517,49 @@ function stageElevInteraction(opts) {
     }
   }
 
+  // Is a tap (clientX) within the current selection's pixel range on the strip?
+  function _tapInSelection(clientX) {
+    const chart = opts.getChart?.(), cpts = opts.getChartPts?.();
+    if (!chart || !cpts || selLo < 0 || selHi <= selLo) return false;
+    const rect = strip.getBoundingClientRect();
+    const px = clientX - rect.left;
+    const xLo = chart.scales.x.getPixelForValue(cpts[selLo].x);
+    const xHi = chart.scales.x.getPixelForValue(cpts[selHi].x);
+    return px >= Math.min(xLo, xHi) - 6 && px <= Math.max(xLo, xHi) + 6;
+  }
+
+  // Stable per-strip API the once-registered document handler reads at event time,
+  // so it always sees the CURRENT stage's selection/functions (not a stale closure).
+  strip._tourSelApi = {
+    getSel:    () => ({ lo: selLo, hi: selHi }),
+    selBox:    selBox,
+    tapInSel:  clientX => _tapInSelection(clientX),
+    showStats: () => _showSelStats(selLo, selHi),
+  };
+
+  // Single document-level tap handler owns modal show/hide (touch). One decision per
+  // tap, modal state read once — no oscillation. A drag (>10px) is left to runDrag,
+  // which starts a fresh selection. onTapNoDrag is a no-op so a tap never clears.
+  if (!strip._tourModalTap) {
+    strip._tourModalTap = true;
+    let _tsx = 0, _tsy = 0, _tmoved = false;
+    document.addEventListener('touchstart', e => { const t = e.touches[0]; if (t) { _tsx = t.clientX; _tsy = t.clientY; _tmoved = false; } }, { passive: true });
+    document.addEventListener('touchmove',  e => { const t = e.touches[0]; if (t && (Math.abs(t.clientX - _tsx) > 10 || Math.abs(t.clientY - _tsy) > 10)) _tmoved = true; }, { passive: true });
+    document.addEventListener('touchend',   e => {
+      if (_tmoved) return;                                 // a drag/scroll, not a tap
+      const api = strip._tourSelApi; if (!api) return;
+      const { lo, hi } = api.getSel(); if (lo < 0 || hi <= lo) return;   // no selection
+      const t = e.changedTouches[0]; if (!t) return;
+      const target = document.elementFromPoint(t.clientX, t.clientY);
+      if (api.selBox.contains(target)) return;             // tap on the modal → let it handle itself
+      if (api.selBox.style.display !== 'none') {
+        api.selBox.style.display = 'none';                 // modal open → dismiss, keep selection
+      } else if (strip.contains(target) && api.tapInSel(t.clientX)) {
+        api.showStats();                                   // modal hidden + tap on selection → re-open
+      }
+    }, { passive: true });
+  }
+
   elevRegionInteraction({
     container:   strip,
     chartArea:   () => opts.getChart?.()?.chartArea || null,
@@ -528,6 +571,8 @@ function stageElevInteraction(opts) {
     onDragStart: () => _hideHud(),
     applySelection: (lo, hi) => _applySel(lo, hi),
     clearSelection: () => _clearSel(),
+    onTapNoDrag: () => {},                        // taps are owned by the document handler above
+    tapOnModal:  target => selBox.contains(target),
     dragRectStart:  px => { dragRect.style.cssText = `display:block;position:absolute;top:0;bottom:0;background:rgba(160,160,160,.18);border-left:1px solid rgba(130,130,130,.5);border-right:1px solid rgba(130,130,130,.5);pointer-events:none;z-index:4;left:${px}px;width:0`; },
     dragRectUpdate: (lo, hi) => { dragRect.style.left = lo+'px'; dragRect.style.width = (hi-lo)+'px'; },
     dragRectHide:   () => { dragRect.style.display = 'none'; },

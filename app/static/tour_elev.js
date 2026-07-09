@@ -170,6 +170,13 @@ function drawStageElevation(pts) {
   _elevGradPts=computeStageGradFromRawPts(pts, step, distConv);
   strip.style.height=_elevHSaved()+'px';
   strip.style.display='block';
+  // Show the "drag over a region…" hint only the first time a stage is ever opened.
+  const _help=document.getElementById('stage-elev-help');
+  if(_help){
+    let _seen=false; try{_seen=localStorage.getItem('ascent-stage-elev-help-seen')==='1';}catch(e){}
+    if(_seen){ _help.classList.add('hidden'); }
+    else { _help.classList.remove('hidden'); try{localStorage.setItem('ascent-stage-elev-help-seen','1');}catch(e){} }
+  }
   const _elevHandle=document.getElementById('elev-resize-handle');
   if(_elevHandle) _elevHandle.style.display='';
   _rebuildElevChart();
@@ -202,6 +209,10 @@ function hideStageElevation() {
   const _detailEl2=document.getElementById('stage-detail');
   if(_detailEl2) _detailEl2.style.display='';
 }
+
+// Redraw hook for the mobile Analysis tab — the strip's container size changes when
+// the tab becomes visible, so Chart.js needs a nudge. Safe no-op if no chart.
+window.redrawStageElev = function () { if (_elevChart) { try { _elevChart.resize(); } catch (e) {} } };
 
 // ── Mobile helpers (shared subset; tourChromeH + _syncStageListHeight stay per-page) ──
 const isMobTour  = () => Math.min(window.innerWidth, window.innerHeight) <= 767;

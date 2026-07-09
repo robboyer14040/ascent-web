@@ -432,14 +432,20 @@ function elevRegionInteraction(ctx) {
   function onMouseLeave() { if (!dragging) ctx.hideHover(); }
 
   // Shared drag driver (mouse + touch). getX(ev) extracts the pointer clientX.
-  function runDrag(startClientX, startPx, ca, moveEvt, endEvt, getX, opt) {
+  function runDrag(startClientX, startPx, ca, moveEvt, endEvt, getX, opt, slop) {
+    slop = slop || 4;   // touch uses a larger slop so a wobbly tap isn't read as a drag
     dragging = true;
     ctx.onDragStart();
     const startIdx = ctx.clientXToIndex(startClientX);
-    ctx.dragRectStart(startPx);
+    let armed = false;   // true once movement passes the click threshold — until then it's a tap
     function onTrack(ev) {
       const clientX = getX(ev); if (clientX == null) return;
       const cur = containerPx(clientX);
+      if (!armed) {
+        if (Math.abs(cur - startPx) <= slop) return;   // still a tap — leave any existing selection intact
+        armed = true;
+        ctx.dragRectStart(startPx);
+      }
       ctx.dragRectUpdate(Math.max(ca.left, Math.min(startPx, cur)), Math.min(ca.right, Math.max(startPx, cur)));
       const curIdx = ctx.clientXToIndex(clientX);
       ctx.applySelection(Math.min(startIdx, curIdx), Math.max(startIdx, curIdx));
@@ -448,18 +454,24 @@ function elevRegionInteraction(ctx) {
       document.removeEventListener(moveEvt, onTrack);
       document.removeEventListener(endEvt, onEnd);
       dragging = false;
-      const clientX = getX(ev);
-      const cur = clientX == null ? startPx : containerPx(clientX);
-      if (Math.abs(cur - startPx) > 4) {
-        const curIdx = ctx.clientXToIndex(clientX);
-        ctx.applySelection(Math.min(startIdx, curIdx), Math.max(startIdx, curIdx));
-      } else { ctx.dragRectHide(); ctx.clearSelection(); }
+      if (armed) {
+        const clientX = getX(ev);
+        if (clientX != null) {
+          const curIdx = ctx.clientXToIndex(clientX);
+          ctx.applySelection(Math.min(startIdx, curIdx), Math.max(startIdx, curIdx));
+        }
+      } else {
+        // A tap (never armed) drew no band this gesture, so don't touch the existing one —
+        // the tour keeps its selection band; Activities' clearSelection hides its own.
+        if (ctx.onTapNoDrag) ctx.onTapNoDrag(startClientX); else ctx.clearSelection();
+      }
     }
     document.addEventListener(moveEvt, onTrack, opt);
     document.addEventListener(endEvt, onEnd, opt);
   }
 
   function onMouseDown(e) {
+    if (ctx.tapOnModal && ctx.tapOnModal(e.target)) return;   // let the region modal handle its own clicks
     const hit = pxInChart(e.clientX); if (!hit) return;
     e.preventDefault();
     runDrag(e.clientX, hit.px, hit.ca, 'mousemove', 'mouseup', ev => ev.clientX, false);
@@ -467,6 +479,7 @@ function elevRegionInteraction(ctx) {
 
   function onTouchStart(e) {
     const t = e.touches[0]; if (!t) return;
+    if (ctx.tapOnModal && ctx.tapOnModal(e.target)) return;   // let the region modal handle its own touches
     if (ctx.hudActive()) {                       // HUD mode: touch drags the HUD, no selection
       ctx.showHud(t.clientX);
       const tm = ev => { const t2 = ev.touches[0]; if (t2) ctx.showHud(t2.clientX); };
@@ -478,7 +491,7 @@ function elevRegionInteraction(ctx) {
     const hit = pxInChart(t.clientX); if (!hit) return;   // no preventDefault → page can still scroll
     runDrag(t.clientX, hit.px, hit.ca, 'touchmove', 'touchend',
       ev => { const t2 = (ev.touches && ev.touches[0]) || (ev.changedTouches && ev.changedTouches[0]); return t2 ? t2.clientX : null; },
-      { passive: true });
+      { passive: true }, 10);
   }
 
   el.addEventListener('mousemove', onMouseMove);

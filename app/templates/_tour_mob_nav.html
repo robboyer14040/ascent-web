@@ -1,0 +1,50 @@
+{# ── Tours mobile nested nav — shared by tour.html and tour_share.html ──
+   Phone only. The sub-nav bar swaps between level 1 (Entire Route / Stages / Info)
+   and level 2 (Map / Analysis / Photos / Forecast). The panels below are empty
+   reparent targets that tour_mob_nav.js fills from the existing desktop DOM. #}
+<div id="tour-subnav">
+  {# Landscape-only back (header/back is hidden in landscape) — returns level 2 → 1 #}
+  <button id="tour-subnav-back" onclick="tourMobBack()" aria-label="Back">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+  </button>
+  {# ── Level 1 ── #}
+  <button class="tmob-btn active" data-l1="route" onclick="tourNavL1('route')">
+    <span class="tmob-btn-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/><path d="M6 17C6 11 18 13 18 7"/></svg></span>
+    <span>Entire Route</span>
+  </button>
+  <button class="tmob-btn" data-l1="stages" onclick="tourNavL1('stages')">
+    <span class="tmob-btn-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></span>
+    <span>Stages</span>
+  </button>
+  <button class="tmob-btn" data-l1="info" onclick="tourNavL1('info')">
+    <span class="tmob-btn-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="8"/><polyline points="11 11 12 11 12 16 13 16"/></svg></span>
+    <span>Info</span>
+  </button>
+  {# ── Level 2 (a stage is selected) ── #}
+  <button class="tmob-btn active" data-l2="map" onclick="tourNavL2('map')">
+    <span class="tmob-btn-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg></span>
+    <span>Map</span>
+  </button>
+  <button class="tmob-btn" data-l2="analysis" onclick="tourNavL2('analysis')">
+    <span class="tmob-btn-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span>
+    <span>Analysis</span>
+  </button>
+  <button class="tmob-btn" data-l2="photos" onclick="tourNavL2('photos')">
+    <span class="tmob-btn-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span>
+    <span>Photos</span>
+  </button>
+  <button class="tmob-btn" data-l2="forecast" onclick="tourNavL2('forecast')">
+    <span class="tmob-btn-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 17.58A5 5 0 0 0 18 8h-1.26A8 8 0 1 0 4 16.25"/><line x1="8" y1="19" x2="8" y2="21"/><line x1="8" y1="13" x2="8" y2="15"/><line x1="16" y1="19" x2="16" y2="21"/><line x1="16" y1="13" x2="16" y2="15"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="12" y1="15" x2="12" y2="17"/></svg></span>
+    <span>Forecast</span>
+  </button>
+</div>
+
+<div id="tour-panels">
+  <div id="tour-panel-route"    class="tour-panel active"></div>
+  <div id="tour-panel-stages"   class="tour-panel"></div>
+  <div id="tour-panel-info"     class="tour-panel"></div>
+  <div id="tour-panel-map"      class="tour-panel"></div>
+  <div id="tour-panel-analysis" class="tour-panel"></div>
+  <div id="tour-panel-photos"   class="tour-panel"></div>
+  <div id="tour-panel-forecast" class="tour-panel"></div>
+</div>

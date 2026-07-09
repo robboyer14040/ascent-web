@@ -1,0 +1,178 @@
+/* ── Tours mobile nested nav — shared by tour.html and tour_share.html ─────────
+   Phone only (portrait ≤767px OR short landscape). Desktop is untouched: the
+   panels are display:none above the breakpoints and the original desktop DOM
+   keeps its place. On phone the controller (tour_mob_nav.js) reparents #map,
+   #stage-list-wrap, the tour-overview stats, #stage-elev-strip and the stage
+   detail sub-sections into the panels below.
+
+   Two nav levels share one bar (#tour-subnav):
+     level 1 (no stage)  → Entire Route / Stages / Info
+     level 2 (stage)     → Map / Analysis / Photos / Forecast
+   A Back button in the header returns level 2 → level 1, level 1 → previous page. */
+
+#tour-subnav { display:none; }
+#tour-panels { display:none; }
+.tour-panel  { display:none; }
+#tour-subnav-back { display:none; }
+
+@media(max-width:767px),(max-height:500px) and (orientation:landscape) and (pointer:coarse){
+
+  /* Hide the desktop layout on phone — its content lives in the panels now. */
+  body.tour-mob-nav #page{display:none!important}
+  /* The in-detail "View Entire Tour" button is redundant (Back button replaces it). */
+  body.tour-mob-nav .mob-view-tour-wrap{display:none!important}
+  /* Photos live in the Photos tab — hide the in-detail photo block inside Analysis. */
+  #tour-panel-analysis #sd-photos{display:none!important}
+  #tour-panel-analysis #share-photos{display:none!important}
+
+  /* ── The contextual sub-nav bar — sits at the BOTTOM, replacing the global nav ──
+     (pushes the previous nav onto a stack; a Back button in the header pops it,
+     exactly like the Activities detail tab bar.) */
+  #tour-subnav{
+    display:flex;align-items:stretch;flex-shrink:0;
+    background:var(--surface);border-top:1px solid var(--border);
+    position:fixed;left:0;right:0;z-index:600;
+  }
+  #tour-panels{display:flex;flex-direction:column;position:fixed;left:0;right:0;z-index:490;background:var(--bg)}
+  /* Landscape-only back button inside the sub-nav */
+  #tour-subnav-back{
+    display:none;align-items:center;justify-content:center;width:44px;flex:none;
+    color:var(--accent);background:none;border:none;border-right:1px solid var(--border);cursor:pointer;
+  }
+  #tour-subnav-back svg{width:20px;height:20px}
+  .tmob-btn{
+    flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+    padding:4px 2px;font-size:9px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;
+    color:var(--muted);background:none;border:none;cursor:pointer;min-width:0;
+  }
+  .tmob-btn span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+  .tmob-btn-icon{display:flex;align-items:center;justify-content:center}
+  .tmob-btn-icon svg{width:22px;height:22px}
+  .tmob-btn.active{color:var(--accent)}
+  /* Level-2 (stage) buttons hidden until a stage is selected, and vice-versa. */
+  body.tour-l2 #tour-subnav .tmob-btn[data-l1]{display:none}
+  body:not(.tour-l2) #tour-subnav .tmob-btn[data-l2]{display:none}
+
+  /* ── Tab panels — the reparent targets ── */
+  #tour-panels{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
+  .tour-panel{flex:1;min-height:0;overflow:hidden;flex-direction:column}
+  .tour-panel.active{display:flex}
+  /* Scrollable content panels */
+  #tour-panel-info,#tour-panel-analysis,#tour-panel-photos,#tour-panel-forecast{
+    overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;
+    padding:12px 12px calc(12px + env(safe-area-inset-bottom,0px));
+  }
+  /* Map + Entire-Route panels hold the live map — no padding, map fills */
+  #tour-panel-route,#tour-panel-map{padding:0}
+  #tour-panel-route #map,#tour-panel-map #map{flex:1;min-height:0;height:auto!important;width:100%}
+  /* Stages panel holds the stage list, fills height */
+  #tour-panel-stages{padding:0}
+  #tour-panel-stages #stage-list-wrap{position:static!important;flex:1;min-height:0;inset:auto!important;top:auto!important;bottom:auto!important}
+  /* Tours phone uses the shared simple list — hide the desktop column-table chrome. */
+  #tour-panel-stages #stage-col-head,
+  #tour-panel-stages #stage-hscroll-track,
+  #tour-panel-stages #stage-col-gear-btn{display:none!important}
+  #tour-panel-stages #stage-list-v-scroll{overflow-y:auto;-webkit-overflow-scrolling:touch;flex:1;min-height:0}
+
+  /* Entire-Route management block (tour.html only; gated by controller) */
+  #tour-route-controls{flex-shrink:0}
+  #tour-panel-route{display:none;flex-direction:column}
+  #tour-panel-route.active{display:flex}
+
+  /* Analysis panel: elevation strip pinned on top, stage detail scrolls below */
+  #tour-panel-analysis{padding:0}
+  #tour-panel-analysis #stage-elev-strip{flex-shrink:0;display:block;height:120px}
+  #tour-panel-analysis #stage-detail{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;
+    display:block!important;position:static!important;inset:auto!important;padding:12px 12px calc(12px + env(safe-area-inset-bottom,0px))}
+
+  /* Placeholder shown in a tab that has no content for this stage (3b) */
+  .tour-tab-empty{padding:28px 16px;text-align:center;color:var(--muted);font-size:13px}
+
+  /* Back button in the mobile header */
+  #tour-mob-back{
+    display:none;align-items:center;gap:2px;padding:4px 6px;
+    color:var(--accent);background:none;border:none;font-size:13px;font-weight:600;
+    min-width:56px;min-height:44px;cursor:pointer;flex-shrink:0;
+  }
+  #tour-mob-back span:first-child{font-size:26px;line-height:1;margin-top:-2px}
+  body.tour-mob-nav #tour-mob-back{display:flex}
+
+  /* Hide the legacy per-page mobile layout machinery — superseded by panels */
+  #mob-portrait-stats{display:none!important}
+  #resize-handle{display:none!important}
+
+  /* Draggable divider between the elevation chart and the info section (Analysis tab).
+     Reuses #elev-resize-handle + its existing drag logic; styled here as a grip. */
+  #tour-panel-analysis #elev-resize-handle{
+    display:flex!important;align-items:center;justify-content:center;position:relative;
+    height:22px;flex-shrink:0;cursor:row-resize;touch-action:none;padding:0;
+    background:var(--surface);border-top:1px solid var(--border);border-bottom:1px solid var(--border);
+  }
+  #tour-panel-analysis #elev-resize-handle > *{display:none!important}
+  #tour-panel-analysis #elev-resize-handle::after{
+    content:'';display:block;width:36px;height:4px;border-radius:2px;background:var(--muted);opacity:.5;
+  }
+  /* Elevation overlay buttons (mobile): smaller gear, larger HUD, matched height */
+  #tour-panel-analysis #stage-settings-btn{font-size:21px!important}
+  #tour-panel-analysis #stage-elev-hud-btn{font-size:12px}
+  #tour-panel-analysis #stage-elev-hud-btn,
+  #tour-panel-analysis #stage-settings-btn{
+    height:26px;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;line-height:1;
+  }
+  /* Info section: AI summary full width, chips stacked (they now live in the Stats pane) */
+  #tour-panel-analysis .act-stats-row{flex-direction:column!important;max-width:none!important;overflow:visible!important}
+  #tour-panel-analysis #ai-summary-chip{width:100%!important;max-height:none!important}
+
+  /* Collapsible "STATS" section (Analysis tab, under the AI summary) — shaded bar in
+     the same form as the elevation divider, with a large disclosure icon. */
+  .tour-stats-section{margin-top:12px}
+  .tour-stats-bar{
+    width:100%;display:flex;align-items:center;justify-content:space-between;
+    padding:0 14px;height:22px;box-sizing:border-box;cursor:pointer;line-height:1;
+    -webkit-appearance:none;appearance:none;
+    background:var(--surface);border-top:1px solid var(--border);border-bottom:1px solid var(--border);
+    color:var(--text);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;
+  }
+  /* Same disclosure triangle as the rest of the app (.mob-arr / #stats-disclose):
+     a ▾ glyph enlarged with transform:scale so it doesn't affect the row height. */
+  .tour-stats-arrow{display:inline-block;font-size:14px;line-height:1;color:var(--muted);
+    transform:scale(2.25) rotate(-90deg);transform-origin:center;transition:transform .2s}
+  .tour-stats-section.open .tour-stats-arrow{transform:scale(2.25)}
+  .tour-stats-pane{display:none;padding:10px 2px 8px}
+  .tour-stats-section.open .tour-stats-pane{display:block}
+  /* Chips blend into the background — no box highlight, just the text/values. */
+  .tour-stats-pane .stat-chip{background:none!important;border-color:transparent!important}
+}
+
+/* ── Portrait phone: sub-nav REPLACES the bottom global nav (same space) ──
+   Top bar (52px) stays with the Back button; panels fill between them. */
+@media(max-width:767px) and (orientation:portrait){
+  /* Hide the global 6-item nav while on the tour page — the sub-nav takes its place. */
+  body.tour-mob-nav #mob-global-nav{display:none!important}
+  #tour-subnav{
+    bottom:0;height:calc(58px + env(safe-area-inset-bottom,0px));
+    padding-bottom:env(safe-area-inset-bottom,0px);
+  }
+  #tour-panels{
+    top:calc(52px + env(safe-area-inset-top,0px));
+    bottom:calc(58px + env(safe-area-inset-bottom,0px));
+  }
+}
+
+/* ── Landscape phone: global nav stays as the 60px left strip (like Activities).
+   Stage list pinned left; the tour sub-nav sits at the bottom of the content. */
+@media(max-height:500px) and (orientation:landscape) and (pointer:coarse){
+  #tour-subnav{bottom:0;left:60px;height:44px;padding-bottom:env(safe-area-inset-bottom,0px)}
+  #tour-panels{top:0;left:60px;bottom:calc(44px + env(safe-area-inset-bottom,0px));flex-direction:row}
+  /* Stages list always shown, fixed width on the left */
+  #tour-panel-stages{display:flex!important;width:190px;flex:none;border-right:1px solid var(--border)}
+  /* The active (non-stages) panel fills the remaining width */
+  #tour-panel-route,#tour-panel-info,#tour-panel-map,
+  #tour-panel-analysis,#tour-panel-photos,#tour-panel-forecast{flex:1;min-width:0}
+  /* STAGES nav button redundant (list always visible); back button appears at level 2 */
+  #tour-subnav .tmob-btn[data-l1="stages"]{display:none}
+  body.tour-l2 #tour-subnav-back{display:flex}
+  /* No global nav (tour_share) → no 60px left gutter. */
+  body.tour-no-gnav #tour-subnav{left:0}
+  body.tour-no-gnav #tour-panels{left:0}
+}
