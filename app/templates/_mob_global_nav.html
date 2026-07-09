@@ -25,57 +25,27 @@
     <span>Settings</span>
   </a>
 </div>
+<script src="/static/mob_nav_anchor.js?v={{ app_version }}"></script>
 <script>
 (function(){
   if (!window.navigator.standalone) return;
-  // This script runs immediately after the nav element above, so getElementById finds it and
-  // the hide below applies before first paint (avoiding the reposition flash).
-  //
-  // position:fixed;bottom:0 anchors to window.innerHeight, which keeps CHANGING during load
-  // on fixed-layout pages (852 → 828) — so any bottom-based offset jumps as it settles.
-  // Instead anchor to a STABLE reference: place the nav's top at (physical screen height −
-  // nav height). screen.height never changes, so the nav's bottom edge sits at the physical
-  // bottom on every page and never moves. Hide until placed so there's no first-paint flash.
+  // Runs immediately after the nav element above (before first paint). On fixed-layout
+  // pages, position:fixed;bottom:0 anchors to the SHORT layout viewport, so the nav sits
+  // too high — MobNavAnchor re-pins it to the physical screen bottom. Scroll pages
+  // (has-mob-topbar: Summary, Settings) already anchor correctly via CSS and the nav grows
+  // upward there, so leave them alone. Hide until placed so there's no first-paint flash.
   var nav = document.getElementById('mob-global-nav');
   if (!nav) return;
-  // Body-scroll pages (has-mob-topbar: Summary, Settings) already anchor the nav at the
-  // physical bottom via CSS bottom:0 — their innerHeight equals the screen — and the nav grows
-  // UPWARD as the safe area resolves, so the bottom strip is never exposed. Only fixed-layout
-  // pages (Activities, Routes, Tours) report a short innerHeight and need repositioning; leave
-  // the scroll pages on their correct, flash-free CSS.
   if (document.body && document.body.classList.contains('has-mob-topbar')) return;
   nav.style.visibility = 'hidden';
-  // Nav height is deterministic from CSS: calc(58px + safe-area-inset-bottom) — see
-  // mob_nav.css. Read the safe inset from a probe (resolves immediately) rather than the
-  // nav's offsetHeight, which reads short on heavy pages (Settings) before its padding applies.
-  function safeBottom() {
-    var p = document.createElement('div');
-    p.style.cssText = 'position:fixed;left:0;bottom:0;width:0;height:env(safe-area-inset-bottom,0px);visibility:hidden;pointer-events:none';
-    document.body.appendChild(p);
-    var h = p.offsetHeight;
-    document.body.removeChild(p);
-    return h;
-  }
   function place() {
-    if (window.innerWidth >= window.innerHeight) { // landscape → CSS side-bar
-      nav.style.top = ''; nav.style.bottom = ''; nav.style.height = ''; nav.style.paddingBottom = ''; nav.style.visibility = '';
-      return;
+    // null → not standalone / landscape: drop inline styles, fall back to CSS.
+    if (window.MobNavAnchor.anchorBottomBar(nav, 58) === null) {
+      nav.style.top = ''; nav.style.bottom = ''; nav.style.height = ''; nav.style.paddingBottom = '';
     }
-    var screenH = Math.max(window.screen.width, window.screen.height);
-    var safe = safeBottom();
-    var navH = 58 + safe;
-    // Pin height + bottom padding explicitly too: on Settings env() resolves after first paint,
-    // so the nav's CSS height is briefly 58px and the bottom strip shows through. Setting them
-    // here makes the nav full-size the instant it's revealed.
-    nav.style.bottom = 'auto';
-    nav.style.height = navH + 'px';
-    nav.style.paddingBottom = safe + 'px';
-    nav.style.top = (screenH - navH) + 'px';
     nav.style.visibility = '';
   }
-  place();   // synchronous — runs during parse right after the nav element, before first
-             // paint. Uses only stable values (screen.height + env probe, never innerHeight),
-             // so the nav is correct from frame one and is never hidden during a visible paint.
+  place();   // synchronous — before first paint, stable values only
   window.addEventListener('resize', place);
   if (window.visualViewport) window.visualViewport.addEventListener('resize', place);
   window.addEventListener('load', place);

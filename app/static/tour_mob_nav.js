@@ -55,40 +55,21 @@ const TourNav = (function () {
 
   // ── iOS standalone: pin the sub-nav to the PHYSICAL bottom ──────────────────
   // #tour-subnav is position:fixed;bottom:0, but on these fixed-layout tour pages
-  // (no has-mob-topbar) bottom:0 anchors to the SHORT layout viewport — innerHeight
-  // (~828) sits ~24px above the physical screen (~852) — so the bar and its panels
-  // float too high with a gap below. Anchor to the stable screen height instead:
-  // place the sub-nav's top at (screen height − nav height). Same fix the global nav
-  // uses in _mob_global_nav.html; done here because the global nav is hidden on tour
-  // pages (and absent from tour_share), so the sub-nav needs its own repositioning.
-  function _envPx(side) {
-    const p = document.createElement('div');
-    p.style.cssText = 'position:fixed;left:0;' + side +
-      ':0;width:0;height:env(safe-area-inset-' + side + ',0px);visibility:hidden;pointer-events:none';
-    document.body.appendChild(p);
-    const h = p.offsetHeight;
-    document.body.removeChild(p);
-    return h;
-  }
+  // (no has-mob-topbar) bottom:0 anchors to the SHORT layout viewport, so the bar and
+  // its panels float too high with a gap below. MobNavAnchor re-pins the bar to the
+  // physical screen bottom (same helper the global nav uses); we then stretch the
+  // panels down to meet it. Done here because the global nav is hidden on tour.html
+  // and absent from tour_share.html, so the sub-nav needs its own repositioning.
   function _placeChrome() {
-    if (!window.navigator.standalone) return;
     const nav = $('tour-subnav'), panels = $('tour-panels');
-    if (!nav || !panels) return;
-    // Portrait only — landscape uses the CSS left-strip layout; clear any inline styles.
-    if (!(window.innerWidth <= 767 && window.innerHeight > window.innerWidth)) {
+    if (!nav || !panels || !window.MobNavAnchor) return;
+    const navTop = window.MobNavAnchor.anchorBottomBar(nav, 58);
+    if (navTop === null) {   // not standalone / landscape → fall back to CSS
       nav.style.top = nav.style.height = nav.style.bottom = nav.style.paddingBottom = '';
       panels.style.top = panels.style.height = panels.style.bottom = '';
       return;
     }
-    const screenH = Math.max(window.screen.width, window.screen.height);
-    const safeB = _envPx('bottom'), safeT = _envPx('top');
-    const navH = 58 + safeB;
-    const navTop = screenH - navH;
-    const panelTop = 52 + safeT;              // matches .mob-topbar height (mob_nav.css)
-    nav.style.bottom = 'auto';
-    nav.style.top = navTop + 'px';
-    nav.style.height = navH + 'px';
-    nav.style.paddingBottom = safeB + 'px';
+    const panelTop = 52 + window.MobNavAnchor.safeInset('top');  // .mob-topbar height
     panels.style.bottom = 'auto';
     panels.style.top = panelTop + 'px';
     panels.style.height = (navTop - panelTop) + 'px';

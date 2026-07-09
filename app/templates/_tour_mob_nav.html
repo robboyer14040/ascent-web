@@ -2,6 +2,7 @@
    Phone only. The sub-nav bar swaps between level 1 (Entire Route / Stages / Info)
    and level 2 (Map / Analysis / Photos / Forecast). The panels below are empty
    reparent targets that tour_mob_nav.js fills from the existing desktop DOM. #}
+<script src="/static/mob_nav_anchor.js?v={{ app_version }}"></script>
 <div id="tour-subnav">
   {# Landscape-only back (header/back is hidden in landscape) — returns level 2 → 1 #}
   <button id="tour-subnav-back" onclick="tourMobBack()" aria-label="Back">
