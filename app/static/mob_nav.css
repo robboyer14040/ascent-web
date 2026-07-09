@@ -82,13 +82,3 @@
   .mob-nav-btn span { display:none }
 }
 
-/* ── Standalone PWA, portrait: unify the bottom-nav position ───────────────────
-   Body-scrolling pages (.has-mob-topbar: Summary, Settings) put position:fixed;bottom:0
-   at the physical bottom. Fixed-layout pages (Activities, Routes — no .has-mob-topbar,
-   body doesn't scroll) anchor it against the shorter layout viewport, floating the nav a
-   safe-inset above the home indicator. Push those down so every page matches. */
-@media(max-width:767px) and (orientation:portrait){
-  html.standalone-pwa body:not(.has-mob-topbar) #mob-global-nav{
-    bottom: calc(-1 * env(safe-area-inset-bottom, 0px));
-  }
-}
