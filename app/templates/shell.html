@@ -186,7 +186,24 @@ html,body{height:100%;overflow:hidden;background:var(--bg)}
     try {
       if (frame.contentWindow.location.pathname === '/login') window.location.href = '/login';
     } catch(e) {}
+    fixEmbeddedViewport();
   });
+
+  // iOS standalone (Home Screen) WKWebView renders iframes at a ~980px viewport,
+  // ignoring the embedded page's width=device-width — so every page falls into its
+  // desktop layout. Same-origin lets us force the embedded viewport to the real width.
+  function fixEmbeddedViewport() {
+    if (!navigator.standalone) return;
+    try {
+      var doc = frame.contentDocument; if (!doc) return;
+      var w = window.innerWidth || document.documentElement.clientWidth;
+      var vp = doc.querySelector('meta[name=viewport]');
+      if (!vp) { vp = doc.createElement('meta'); vp.setAttribute('name','viewport'); doc.head.appendChild(vp); }
+      vp.setAttribute('content', 'width=' + w + ',initial-scale=1,viewport-fit=cover');
+      // Re-set device-width on the next frame — some WebKit builds only re-layout on change.
+      requestAnimationFrame(function(){ try { vp.setAttribute('content','width=device-width,initial-scale=1,viewport-fit=cover'); } catch(e){} });
+    } catch(e) {}
+  }
 
   // Android/hardware back button: keep shell in history, navigate within iframe first
   history.replaceState({shell:true}, '');
