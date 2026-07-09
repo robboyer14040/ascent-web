@@ -51,10 +51,19 @@
     return h;
   }
   function place() {
-    if (window.innerWidth >= window.innerHeight) { nav.style.top = ''; nav.style.bottom = ''; nav.style.visibility = ''; return; } // landscape → CSS side-bar
+    if (window.innerWidth >= window.innerHeight) { // landscape → CSS side-bar
+      nav.style.top = ''; nav.style.bottom = ''; nav.style.height = ''; nav.style.paddingBottom = ''; nav.style.visibility = '';
+      return;
+    }
     var screenH = Math.max(window.screen.width, window.screen.height);
-    var navH = 58 + safeBottom();
+    var safe = safeBottom();
+    var navH = 58 + safe;
+    // Pin height + bottom padding explicitly too: on Settings env() resolves after first paint,
+    // so the nav's CSS height is briefly 58px and the bottom strip shows through. Setting them
+    // here makes the nav full-size the instant it's revealed.
     nav.style.bottom = 'auto';
+    nav.style.height = navH + 'px';
+    nav.style.paddingBottom = safe + 'px';
     nav.style.top = (screenH - navH) + 'px';
     nav.style.visibility = '';
   }
