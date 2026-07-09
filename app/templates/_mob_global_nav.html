@@ -1,17 +1,15 @@
 {% set mob_active = mob_active | default('') %}
 <script>
 (function(){
-  // iOS standalone PWA: let CSS (position:fixed;bottom:0 + safe-area padding) place the nav.
-  // We only clear any stale inline top/bottom. (JS anchoring via screen.height or
-  // visualViewport can't unify the two page scroll models — main.html is a fixed inner-scroll
-  // layout, dashboard.html body-scrolls — without breaking one of them.)
-  if (!navigator.standalone) return;
-  function fix() {
-    var nav = document.getElementById('mob-global-nav');
-    if (nav) { nav.style.top = ''; nav.style.bottom = ''; }
-  }
-  window.addEventListener('load', function(){ requestAnimationFrame(fix); });
-  window.addEventListener('resize', fix);
+  if (!window.navigator.standalone) return;
+  // Marker for CSS. In standalone, fixed-layout pages (no .has-mob-topbar → body doesn't
+  // scroll) anchor position:fixed;bottom:0 against the layout viewport, floating the nav a
+  // safe-inset above the physical bottom. mob_nav.css uses this class to push it down so it
+  // matches the body-scrolling pages (Summary, Settings).
+  document.documentElement.classList.add('standalone-pwa');
+  // Clear any stale inline positioning left by earlier versions so the CSS applies.
+  function clr() { var n = document.getElementById('mob-global-nav'); if (n) { n.style.top = ''; n.style.bottom = ''; } }
+  window.addEventListener('load', function(){ requestAnimationFrame(clr); });
 })();
 </script>
 <div id="mob-global-nav">
