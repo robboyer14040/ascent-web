@@ -3,23 +3,28 @@
 (function(){
   if (!window.navigator.standalone) return;
   // In standalone, position:fixed;bottom:0 anchors to window.innerHeight. On body-scrolling
-  // pages innerHeight equals the physical screen, but on fixed-layout pages it's ~24px
-  // shorter — so the nav floats above the home indicator there. Push it down by exactly that
-  // gap (screen height − innerHeight): 0 on scrolling pages, the float amount on fixed pages.
+  // pages innerHeight equals the physical screen, but on fixed-layout pages it settles ~24px
+  // shorter AFTER first layout — so the nav paints at bottom:0 then jumps. Hide the nav until
+  // it's positioned (one frame), then push it down by exactly the gap (screen height −
+  // innerHeight): 0 on scrolling pages, the float amount on fixed pages. No visible reposition.
+  var nav0 = document.getElementById('mob-global-nav');
+  if (nav0) nav0.style.visibility = 'hidden';
   function fix() {
     var nav = document.getElementById('mob-global-nav');
     if (!nav) return;
-    if (window.innerWidth >= window.innerHeight) { nav.style.top = ''; nav.style.bottom = ''; return; } // landscape → CSS side-bar
+    if (window.innerWidth >= window.innerHeight) { nav.style.top = ''; nav.style.bottom = ''; nav.style.visibility = ''; return; } // landscape → CSS side-bar
     var screenH = Math.max(window.screen.width, window.screen.height);
     var gap = screenH - window.innerHeight;
     nav.style.top = '';
     nav.style.bottom = (gap > 0 ? -gap : 0) + 'px';
+    nav.style.visibility = '';   // reveal once positioned
   }
-  fix();   // synchronous — the nav element already exists above this script, so this runs
-           // before first paint and avoids the reposition flash.
+  requestAnimationFrame(fix);   // after first layout, when innerHeight has settled
   window.addEventListener('resize', fix);
   if (window.visualViewport) window.visualViewport.addEventListener('resize', fix);
-  window.addEventListener('load', fix);   // safety re-run if innerHeight settled late
+  window.addEventListener('load', fix);
+  // Failsafe: never leave the nav hidden if something goes wrong.
+  setTimeout(function(){ if (nav0 && nav0.style.visibility === 'hidden') nav0.style.visibility = ''; }, 600);
 })();
 </script>
 <div id="mob-global-nav">
