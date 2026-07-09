@@ -1,26 +1,17 @@
 {% set mob_active = mob_active | default('') %}
 <script>
 (function(){
-  // iOS standalone PWA: anchor the bottom nav to the PHYSICAL screen bottom so it lands in
-  // the same place on every page. /activities (main.html) uses a fixed inner-scroll layout
-  // while / (dashboard.html) scrolls the body, and iOS resolves position:fixed;bottom:0 (and
-  // visualViewport.height) differently for those two models — hence the jump. window.screen
-  // .height is the one value that's identical on every page. nav.offsetHeight includes the
-  // safe-area padding (from CSS), so top = screenH - offsetHeight puts the bar's bottom edge
-  // at the physical bottom with its labels above the home indicator.
+  // iOS standalone PWA: let CSS (position:fixed;bottom:0 + safe-area padding) place the nav.
+  // We only clear any stale inline top/bottom. (JS anchoring via screen.height or
+  // visualViewport can't unify the two page scroll models — main.html is a fixed inner-scroll
+  // layout, dashboard.html body-scrolls — without breaking one of them.)
   if (!navigator.standalone) return;
   function fix() {
     var nav = document.getElementById('mob-global-nav');
-    if (!nav) return;
-    if (window.innerWidth >= window.innerHeight) { nav.style.top = ''; nav.style.bottom = ''; return; } // landscape → CSS side-bar
-    var h = nav.offsetHeight; if (!h) return;
-    var screenH = Math.max(window.screen.width, window.screen.height);
-    nav.style.bottom = 'auto';
-    nav.style.top = (screenH - h) + 'px';
+    if (nav) { nav.style.top = ''; nav.style.bottom = ''; }
   }
   window.addEventListener('load', function(){ requestAnimationFrame(fix); });
   window.addEventListener('resize', fix);
-  setTimeout(fix, 250);   // re-measure after the safe-area padding is applied to offsetHeight
 })();
 </script>
 <div id="mob-global-nav">
