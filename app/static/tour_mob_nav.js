@@ -53,6 +53,47 @@ const TourNav = (function () {
     }
   }
 
+  // ── iOS standalone: pin the sub-nav to the PHYSICAL bottom ──────────────────
+  // #tour-subnav is position:fixed;bottom:0, but on these fixed-layout tour pages
+  // (no has-mob-topbar) bottom:0 anchors to the SHORT layout viewport — innerHeight
+  // (~828) sits ~24px above the physical screen (~852) — so the bar and its panels
+  // float too high with a gap below. Anchor to the stable screen height instead:
+  // place the sub-nav's top at (screen height − nav height). Same fix the global nav
+  // uses in _mob_global_nav.html; done here because the global nav is hidden on tour
+  // pages (and absent from tour_share), so the sub-nav needs its own repositioning.
+  function _envPx(side) {
+    const p = document.createElement('div');
+    p.style.cssText = 'position:fixed;left:0;' + side +
+      ':0;width:0;height:env(safe-area-inset-' + side + ',0px);visibility:hidden;pointer-events:none';
+    document.body.appendChild(p);
+    const h = p.offsetHeight;
+    document.body.removeChild(p);
+    return h;
+  }
+  function _placeChrome() {
+    if (!window.navigator.standalone) return;
+    const nav = $('tour-subnav'), panels = $('tour-panels');
+    if (!nav || !panels) return;
+    // Portrait only — landscape uses the CSS left-strip layout; clear any inline styles.
+    if (!(window.innerWidth <= 767 && window.innerHeight > window.innerWidth)) {
+      nav.style.top = nav.style.height = nav.style.bottom = nav.style.paddingBottom = '';
+      panels.style.top = panels.style.height = panels.style.bottom = '';
+      return;
+    }
+    const screenH = Math.max(window.screen.width, window.screen.height);
+    const safeB = _envPx('bottom'), safeT = _envPx('top');
+    const navH = 58 + safeB;
+    const navTop = screenH - navH;
+    const panelTop = 52 + safeT;              // matches .mob-topbar height (mob_nav.css)
+    nav.style.bottom = 'auto';
+    nav.style.top = navTop + 'px';
+    nav.style.height = navH + 'px';
+    nav.style.paddingBottom = safeB + 'px';
+    panels.style.bottom = 'auto';
+    panels.style.top = panelTop + 'px';
+    panels.style.height = (navTop - panelTop) + 'px';
+  }
+
   // One-time reparent of shared elements into their home panels.
   function _wire() {
     if (_ready) return;
@@ -201,9 +242,14 @@ const TourNav = (function () {
     if (!isPhone()) return;
     _wire();
     navL1('route');
+    _placeChrome();
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', _placeChrome);
+    window.addEventListener('load', _placeChrome);
+    setTimeout(_placeChrome, 800);   // failsafe: env() can resolve after first paint
     // Refit the map after orientation / viewport changes.
     let t = null;
     window.addEventListener('resize', () => {
+      _placeChrome();
       if (!isPhone() || !_ready) return;
       clearTimeout(t);
       t = setTimeout(() => {
