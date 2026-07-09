@@ -129,7 +129,7 @@ def type_badge(t):
 
 templates.env.filters["fmt_date"]   = fmt_date
 templates.env.filters["type_badge"] = type_badge
-templates.env.globals["app_version"] = "v0.7.372"
+templates.env.globals["app_version"] = "v0.7.373"
 
 # ── wire routers ──────────────────────────────────────────────────────────────
 activities.db_getter = get_db
