@@ -31,33 +31,23 @@
   // This script runs immediately after the nav element above, so getElementById finds it and
   // the hide below applies before first paint (avoiding the reposition flash).
   //
-  // In standalone, position:fixed;bottom:0 anchors to window.innerHeight. On body-scrolling
-  // pages innerHeight equals the physical screen, but on fixed-layout pages it settles ~24px
-  // shorter AFTER first layout — so we hide the nav until innerHeight stops changing, then
-  // push it down by exactly the gap (screen height − innerHeight): 0 on scrolling pages, the
-  // float amount on fixed pages. The nav is revealed only once, already in its final spot.
+  // position:fixed;bottom:0 anchors to window.innerHeight, which keeps CHANGING during load
+  // on fixed-layout pages (852 → 828) — so any bottom-based offset jumps as it settles.
+  // Instead anchor to a STABLE reference: place the nav's top at (physical screen height −
+  // nav height). screen.height never changes, so the nav's bottom edge sits at the physical
+  // bottom on every page and never moves. Hide until placed so there's no first-paint flash.
   var nav = document.getElementById('mob-global-nav');
   if (!nav) return;
   nav.style.visibility = 'hidden';
   function place() {
     if (window.innerWidth >= window.innerHeight) { nav.style.top = ''; nav.style.bottom = ''; nav.style.visibility = ''; return; } // landscape → CSS side-bar
     var screenH = Math.max(window.screen.width, window.screen.height);
-    var gap = screenH - window.innerHeight;
-    nav.style.top = '';
-    nav.style.bottom = (gap > 0 ? -gap : 0) + 'px';
+    var navH = nav.offsetHeight || 92;
+    nav.style.bottom = 'auto';
+    nav.style.top = (screenH - navH) + 'px';
     nav.style.visibility = '';
   }
-  // Wait until innerHeight stops changing (settles) before positioning + revealing, so the
-  // nav is never painted at a stale position.
-  var last = null, stable = 0, tries = 0;
-  function waitStable() {
-    var ih = window.innerHeight;
-    if (ih === last) stable++; else { stable = 0; last = ih; }
-    if (stable >= 2 || tries >= 30) { place(); return; }
-    tries++;
-    requestAnimationFrame(waitStable);
-  }
-  requestAnimationFrame(waitStable);
+  requestAnimationFrame(place);
   window.addEventListener('resize', place);
   if (window.visualViewport) window.visualViewport.addEventListener('resize', place);
   window.addEventListener('load', place);
