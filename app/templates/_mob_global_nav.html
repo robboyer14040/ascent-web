@@ -39,10 +39,21 @@
   var nav = document.getElementById('mob-global-nav');
   if (!nav) return;
   nav.style.visibility = 'hidden';
+  // Nav height is deterministic from CSS: calc(58px + safe-area-inset-bottom) — see
+  // mob_nav.css. Read the safe inset from a probe (resolves immediately) rather than the
+  // nav's offsetHeight, which reads short on heavy pages (Settings) before its padding applies.
+  function safeBottom() {
+    var p = document.createElement('div');
+    p.style.cssText = 'position:fixed;left:0;bottom:0;width:0;height:env(safe-area-inset-bottom,0px);visibility:hidden;pointer-events:none';
+    document.body.appendChild(p);
+    var h = p.offsetHeight;
+    document.body.removeChild(p);
+    return h;
+  }
   function place() {
     if (window.innerWidth >= window.innerHeight) { nav.style.top = ''; nav.style.bottom = ''; nav.style.visibility = ''; return; } // landscape → CSS side-bar
     var screenH = Math.max(window.screen.width, window.screen.height);
-    var navH = nav.offsetHeight || 92;
+    var navH = 58 + safeBottom();
     nav.style.bottom = 'auto';
     nav.style.top = (screenH - navH) + 'px';
     nav.style.visibility = '';
