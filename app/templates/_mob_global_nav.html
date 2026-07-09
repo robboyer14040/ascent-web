@@ -12,6 +12,40 @@
   window.addEventListener('load', function(){ requestAnimationFrame(clr); });
 })();
 </script>
+<script>
+/* Nav-position diagnostic. Enable once by visiting any page with ?navdebug=1 (persists via
+   localStorage); disable with ?navdebug=0. Prints the viewport values so the nav-jump fix
+   can be computed exactly instead of guessed. Remove after diagnosing. */
+(function(){
+  try {
+    if (location.search.indexOf('navdebug=1') >= 0) localStorage.setItem('navdebug','1');
+    if (location.search.indexOf('navdebug=0') >= 0) localStorage.removeItem('navdebug');
+    if (!localStorage.getItem('navdebug')) return;
+  } catch(e) { return; }
+  function safeInset(){ var p=document.createElement('div');
+    p.style.cssText='position:fixed;bottom:0;left:0;width:1px;height:env(safe-area-inset-bottom,0px)';
+    document.body.appendChild(p); var h=p.offsetHeight; p.parentNode.removeChild(p); return h; }
+  function show(){
+    var nav=document.getElementById('mob-global-nav');
+    var r=nav?nav.getBoundingClientRect():{top:0,bottom:0};
+    var vv=window.visualViewport||{};
+    var d=document.getElementById('__navdbg')||document.createElement('div');
+    d.id='__navdbg';
+    d.style.cssText='position:fixed;top:96px;left:8px;right:8px;z-index:99999;background:rgba(0,0,0,.88);color:#3f3;font:12px/1.5 monospace;padding:8px 10px;border-radius:8px;white-space:pre;pointer-events:none';
+    d.textContent =
+      'path='+location.pathname+'   standalone='+window.navigator.standalone+'\n'+
+      'innerH='+window.innerHeight+'  screenH='+Math.max(screen.width,screen.height)+'\n'+
+      'vv.height='+Math.round(vv.height||0)+'  vv.offsetTop='+Math.round(vv.offsetTop||0)+'\n'+
+      'safeInsetBottom='+safeInset()+'\n'+
+      'navOffsetH='+(nav?nav.offsetHeight:0)+'  navTop='+Math.round(r.top)+'  navBottom='+Math.round(r.bottom)+'\n'+
+      'has-mob-topbar='+document.body.classList.contains('has-mob-topbar')+
+      '   standalone-pwa='+document.documentElement.classList.contains('standalone-pwa');
+    if(!d.parentNode) document.body.appendChild(d);
+  }
+  window.addEventListener('load', function(){ setTimeout(show, 350); });
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', show);
+})();
+</script>
 <div id="mob-global-nav">
   <a href="/activities" class="mob-nav-btn{% if mob_active == 'activities' %} active{% endif %}">
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
