@@ -17,11 +17,11 @@
    localStorage); disable with ?navdebug=0. Prints the viewport values so the nav-jump fix
    can be computed exactly instead of guessed. Remove after diagnosing. */
 (function(){
+  // TEMPORARY: auto-on in standalone (Home Screen app) so no URL flag is needed.
   try {
-    if (location.search.indexOf('navdebug=1') >= 0) localStorage.setItem('navdebug','1');
-    if (location.search.indexOf('navdebug=0') >= 0) localStorage.removeItem('navdebug');
-    if (!localStorage.getItem('navdebug')) return;
-  } catch(e) { return; }
+    if (location.search.indexOf('navdebug=0') >= 0) { localStorage.removeItem('navdebug'); return; }
+    if (!window.navigator.standalone && !localStorage.getItem('navdebug')) return;
+  } catch(e) { if (!window.navigator.standalone) return; }
   function safeInset(){ var p=document.createElement('div');
     p.style.cssText='position:fixed;bottom:0;left:0;width:1px;height:env(safe-area-inset-bottom,0px)';
     document.body.appendChild(p); var h=p.offsetHeight; p.parentNode.removeChild(p); return h; }
