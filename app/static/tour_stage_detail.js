@@ -84,6 +84,80 @@ const TourStageDetail = {
     if (ctx.renderAi) ctx.renderAi(el);
   },
 
+  // Prev/next stage nav buttons (the small ←/→ pair). Shared by both pages.
+  // Uses the page-global selectStage(); `stages` is the ordered stage list.
+  stageNav(stage, stages) {
+    const i = stages.findIndex(s => String(s.id) === String(stage.id));
+    const prev = i > 0 ? stages[i - 1] : null;
+    const next = (i >= 0 && i < stages.length - 1) ? stages[i + 1] : null;
+    const btn = (s, arrow) => s
+      ? `<button onclick="selectStage('${s.id}')" title="Stage ${s.stage_num}" style="background:none;border:1px solid var(--border2);border-radius:4px;width:26px;height:24px;font-size:13px;color:var(--text);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${arrow}</button>`
+      : `<button disabled style="background:none;border:1px solid var(--border2);border-radius:4px;width:26px;height:24px;font-size:13px;color:var(--muted);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;opacity:.3">${arrow}</button>`;
+    return `<div style="display:flex;gap:4px;margin-right:4px;flex-shrink:0">${btn(prev, '←')}${btn(next, '→')}</div>`;
+  },
+
+  // Full stage header: "Stage N: name" + the prev/next nav. Shared by both pages
+  // (Tour_share uses it for completed stages too; Tours builds a custom avatar
+  // header for completed stages and calls stageNav() directly).
+  stageHeader(stage, stages) {
+    return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><div style="font-size:15px;font-weight:600;line-height:1.3;flex:1">Stage ${stage.stage_num}: ${esc(stage.name)}</div>${this.stageNav(stage, stages)}</div>`;
+  },
+
+  // Uncompleted-stage detail: header + estimated-route chips + trajectory/GPX/forecast.
+  // Identical on both pages; per-page bits come via ctx:
+  //   { stage, stages, pts, gpxHref, forecastEndpoint,
+  //     renderTrajectory(pts),      // each page keeps its own geocode strategy;
+  //                                 // fills #stage-loc-text
+  //     afterForecastHtml }         // optional HTML appended inside the block
+  // After this returns, the caller appends page-specific AI cards / buttons to `el`.
+  estimatedRoute(el, ctx) {
+    const { stage, stages, pts } = ctx;
+    const distP = U.metric ? (+(stage.distance_mi * 1.60934).toFixed(1)) + ' km' : (+stage.distance_mi).toFixed(1) + ' mi';
+    const distS = U.metric ? (+stage.distance_mi.toFixed(1)) + ' mi' : (+(stage.distance_mi * 1.60934).toFixed(1)) + ' km';
+    const climP = U.metric ? Math.round(stage.climb_ft * 0.3048) + ' m' : Math.round(stage.climb_ft) + ' ft';
+    const climS = U.metric ? Math.round(stage.climb_ft) + ' ft' : Math.round(stage.climb_ft * 0.3048) + ' m';
+    const { gainFt: bigFt, startKm: bigKm } = biggestClimbInfo(pts);
+    const bigP = U.metric ? Math.round(bigFt * 0.3048) + ' m' : Math.round(bigFt) + ' ft';
+    const bigS = U.metric ? Math.round(bigFt) + ' ft' : Math.round(bigFt * 0.3048) + ' m';
+    const bigAt = U.metric ? `at ${bigKm.toFixed(1)} km` : `at ${(bigKm * 0.621371).toFixed(1)} mi`;
+    const chip4 = (label, val, altSub, bot) =>
+      `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">${label}</div><div class="sc-val">${val}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${altSub}</div><div class="sc-sub">${bot}</div></div>`;
+
+    let html = this.stageHeader(stage, stages);
+    html += `<div class="section-label" style="margin-bottom:6px">Estimated Route</div>`;
+    html += `<div class="stats-grid est-stats" style="grid-template-columns:repeat(${bigFt > 0 ? 3 : 2},1fr);margin-bottom:10px">`;
+    html += chip4('Distance', distP, distS, '&nbsp;');
+    html += chip4('Total Ascent', climP, climS, '&nbsp;');
+    if (bigFt > 0) html += chip4('Biggest Ascent', bigP, bigS, bigAt);
+    html += `</div>`;
+    html += `<div style="display:flex;align-items:baseline;gap:10px;min-height:1.4em">
+      <div style="flex:1;font-size:11px;color:var(--muted)"><span style="font-size:10px;text-transform:uppercase;letter-spacing:.06em">Trajectory:</span> <span id="stage-loc-text">Loading…</span></div>
+      <a href="${ctx.gpxHref}" download style="flex-shrink:0;font-size:11px;font-weight:600;color:#f97316;border:1px solid #f97316;border-radius:4px;padding:2px 8px;text-decoration:none;line-height:1.6">↓ GPX</a>
+    </div>`;
+    html += `<div style="margin-top:6px;font-size:11px;color:var(--muted)"><span style="font-size:10px;text-transform:uppercase;letter-spacing:.06em">Forecast:</span> <span id="stage-forecast-text">Loading…</span></div>`;
+    html += ctx.afterForecastHtml || '';
+    el.innerHTML = html;
+
+    ctx.renderTrajectory(pts);
+
+    fetch(ctx.forecastEndpoint)
+      .then(r => r.json())
+      .then(d => {
+        const txt = document.getElementById('stage-forecast-text');
+        if (!txt) return;
+        if (d.out_of_range) { txt.textContent = 'unavailable'; return; }
+        const fc = d.forecast;
+        if (!fc) { txt.textContent = ''; return; }
+        const parts = [];
+        if (fc.description) parts.push(fc.description);
+        if (fc.temp_max_f != null && fc.temp_min_f != null) parts.push(U.tempS(fc.temp_max_f) + ' / ' + U.tempS(fc.temp_min_f));
+        if (fc.wind_kph != null) parts.push('Wind ' + U.windS(fc.wind_kph));
+        if (fc.precip_mm > 0) parts.push(U.precipS(fc.precip_mm));
+        txt.textContent = parts.join(' · ');
+      })
+      .catch(() => { const t = document.getElementById('stage-forecast-text'); if (t) t.textContent = ''; });
+  },
+
   // Draw the tour routes onto the map. Shared drawing core; each page provides its own
   // data (Tours fetches live points; Tour_share uses pre-loaded ones) and handles the
   // bounds-fit afterwards. ctx: { map, routeGroup, stages, pointsCache, activeId,
@@ -166,38 +240,47 @@ const TourStageDetail = {
     });
   },
 
-  // Lazy Forecast tab. ctx: { stage, forecastUrl } — completed stages use the
-  // activity's actual weather; uncompleted use the daily forecast at forecastUrl.
+  // Lazy Forecast tab. ctx: { stage, forecastEndpoint }. Opens the shared
+  // weather-forecast modal (openWeatherForecast) so the user can pick a date/time
+  // and see conditions sampled along the stage's route — same modal the route
+  // builder and activity detail use. forecastEndpoint points at the stage's
+  // route-forecast URL (authed or public share).
   forecastTab(el, ctx) {
     const stage = ctx.stage;
     if (!stage) return;
-    el.innerHTML = '<div class="tour-tab-empty">Loading…</div>';
-    const render = parts => { el.innerHTML = parts.length
-      ? `<div class="ai-card" style="margin-top:0"><div class="ai-card-label">Forecast</div><div class="ai-card-body">${parts.join(' · ')}</div></div>`
-      : '<div class="tour-tab-empty">No forecast available.</div>'; };
-    if (stage.completion && stage.completion.activity_id) {
-      fetch(`/api/activities/${stage.completion.activity_id}/weather-location`).then(r => r.json()).then(d => {
-        const w = d.weather, parts = [];
-        if (w && w.description) {
-          parts.push(w.description);
-          if (w.avg_temp_f != null) parts.push(U.tempS(w.avg_temp_f));
-          if (w.avg_wind_kph != null) parts.push('Wind ' + U.windS(w.avg_wind_kph));
-          if (w.precip_mm > 0) parts.push(U.precipS(w.precip_mm));
-        }
-        render(parts);
-      }).catch(() => render([]));
+    const name = stage.name || 'Stage';
+    const open = () => {
+      if (typeof window.openWeatherForecast === 'function') {
+        window.openWeatherForecast('tour_stage', stage.id, name, ctx.forecastEndpoint);
+      }
+    };
+    el.innerHTML =
+      '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:36px 20px;text-align:center">' +
+        '<button type="button" class="tour-fc-btn" style="background:#f97316;color:#fff;border:none;border-radius:10px;padding:11px 18px;font-size:14px;font-weight:600;cursor:pointer">Get Route Forecast</button>' +
+        '<div style="font-size:12px;color:var(--muted)">Pick a date &amp; time to see weather along this stage.</div>' +
+      '</div>';
+    el.querySelector('.tour-fc-btn').addEventListener('click', open);
+    open();   // entering the tab brings up the date/time picker straight away
+  },
+
+  // Fill the always-on map badge (bottom-left) with the focused route's distance +
+  // climb. A selected stage shows that stage; the whole-tour view shows the tour
+  // totals (deduped like the overview stats, so alternates aren't double-counted).
+  // ctx: { stages, pointsCache, activeId }.
+  updateMapBadge(ctx) {
+    const badge = document.getElementById('mapBadge');
+    if (!badge) return;
+    const { stages, pointsCache, activeId } = ctx;
+    let dist, climb;
+    if (activeId) {
+      const s = stages.find(x => String(x.id) === String(activeId));
+      dist = s?.distance_mi || 0; climb = s?.climb_ft || 0;
     } else {
-      fetch(ctx.forecastUrl).then(r => r.json()).then(d => {
-        if (d.out_of_range) { el.innerHTML = '<div class="tour-tab-empty">Forecast unavailable (out of range).</div>'; return; }
-        const fc = d.forecast, parts = [];
-        if (fc) {
-          if (fc.description) parts.push(fc.description);
-          if (fc.temp_max_f != null && fc.temp_min_f != null) parts.push(U.tempS(fc.temp_max_f) + ' / ' + U.tempS(fc.temp_min_f));
-          if (fc.wind_kph != null) parts.push('Wind ' + U.windS(fc.wind_kph));
-          if (fc.precip_mm > 0) parts.push(U.precipS(fc.precip_mm));
-        }
-        render(parts);
-      }).catch(() => render([]));
+      const stat = _dedupeStatStages(stages, pointsCache);
+      dist  = stat.reduce((t, x) => t + (x.distance_mi || 0), 0);
+      climb = stat.reduce((t, x) => t + (x.climb_ft || 0), 0);
     }
+    badge.textContent = `${U.distS(dist)} · ${U.climbS(climb)} climb`;
+    badge.style.display = 'block';
   },
 };

@@ -30,6 +30,51 @@ def _haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     return 2 * R * math.asin(math.sqrt(max(0.0, a)))
 
 
+def parse_start_time(start_str: Optional[str]) -> datetime:
+    """Parse an ISO-8601 start time (UTC-defaulted) and enforce the 16-day horizon.
+    Shared by /api/forecast and the tour-stage forecast endpoints."""
+    try:
+        start_dt = datetime.fromisoformat(start_str.replace("Z", "+00:00"))
+        if start_dt.tzinfo is None:
+            start_dt = start_dt.replace(tzinfo=timezone.utc)
+    except Exception:
+        raise HTTPException(400, "Invalid start_time format — expected ISO-8601")
+
+    if start_dt > datetime.now(tz=timezone.utc) + timedelta(days=16):
+        raise HTTPException(400, "Forecast is only available up to 16 days ahead")
+    return start_dt
+
+
+async def build_route_forecast(pts: list, start_dt: datetime, name: str,
+                               avg_speed_mps: float = 5.0) -> dict:
+    """Build a weather-along-route forecast from raw {lat, lon, alt_m?} points.
+
+    Missing/implausible alt_m is filled via the elevation API. This is the shared
+    entry point so callers with their own point source (e.g. tour stages) reuse
+    the sampling + weather logic instead of duplicating it.
+    """
+    clean = [
+        {
+            "lat":   float(p["lat"]),
+            "lon":   float(p["lon"]),
+            "alt_m": p["alt_m"] if p.get("alt_m") and 0 < p["alt_m"] < 8850 else None,
+        }
+        for p in pts
+        if -90 <= p["lat"] <= 90 and -180 <= p["lon"] <= 180
+        and p["lat"] != 999.0 and not (p["lat"] == 0 and p["lon"] == 0)
+    ]
+    if len(clean) < 2:
+        raise HTTPException(400, "Not enough GPS points to generate a weather forecast")
+
+    if any(p["alt_m"] is None for p in clean):
+        await _fetch_elevations(clean)
+
+    if avg_speed_mps < 0.5:
+        avg_speed_mps = 5.0
+
+    return await _build_forecast(clean, start_dt.timestamp(), avg_speed_mps, name)
+
+
 @router.post("/forecast")
 async def get_forecast(request: Request):
     uid  = require_user(request)
@@ -42,15 +87,7 @@ async def get_forecast(request: Request):
     if not all([source, source_id is not None, start_str]):
         raise HTTPException(400, "source, source_id, and start_time are required")
 
-    try:
-        start_dt = datetime.fromisoformat(start_str.replace("Z", "+00:00"))
-        if start_dt.tzinfo is None:
-            start_dt = start_dt.replace(tzinfo=timezone.utc)
-    except Exception:
-        raise HTTPException(400, "Invalid start_time format — expected ISO-8601")
-
-    if start_dt > datetime.now(tz=timezone.utc) + timedelta(days=16):
-        raise HTTPException(400, "Forecast is only available up to 16 days ahead")
+    start_dt = parse_start_time(start_str)
 
     db  = db_getter()
     pts: list[dict] = []

@@ -1,3 +1,4 @@
+{% from "_map_controls.html" import map_controls %}
 <div id="root">
   <div id="top-row">
   <div id="sidebar">
@@ -45,15 +46,7 @@
       <div id="map">
         <div class="map-placeholder" id="mapPlaceholder">Select an activity to view its map</div>
       </div>
-      <div class="map-badge" id="mapBadge" style="display:none"></div>
-      <div id="map-style-bar" style="position:absolute;top:8px;right:8px;z-index:500;display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end">
-        <button class="map-style-btn active" data-style="osm"         onclick="setMapStyle('osm')">Street</button>
-        <button class="map-style-btn"        data-style="topo"        onclick="setMapStyle('topo')">Topo</button>
-        <button class="map-style-btn"        data-style="carto-dark"  onclick="setMapStyle('carto-dark')">Dark</button>
-        <button class="map-style-btn"        data-style="carto-light" onclick="setMapStyle('carto-light')">Light</button>
-        <button class="map-style-btn"        data-style="esri-sat"    onclick="setMapStyle('esri-sat')">Satellite</button>
-      </div>
-      <button onclick="refitMap()" title="Re-center map" style="position:absolute;bottom:8px;left:8px;z-index:500;background:rgba(0,0,0,.6);color:#ccc;border:1px solid rgba(255,255,255,.15);border-radius:4px;padding:3px 6px;font-size:13px;line-height:1;cursor:pointer;backdrop-filter:blur(4px)"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1 5V1h4M9 1h4v4M13 9v4H9M5 13H1V9"/></svg></button>
+      {{ map_controls('setMapStyle', 'refitMap', 'Re-center map') }}
     </div>
   </div>
   </div><!-- #top-row -->

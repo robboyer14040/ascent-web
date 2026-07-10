@@ -476,6 +476,7 @@ function initMap() {
   leafMap.once('load', function() {
     leafScaleCtrl = MapUtils.addScale(leafMap, U.metric);
   });
+  MapUtils.wirePhotoToggle(document.getElementById('mapPhotosToggle'), leafMap);
 }
 
 function setMapStyle(styleKey, save=true) {

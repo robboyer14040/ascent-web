@@ -103,6 +103,7 @@
 
   // ── State ────────────────────────────────────────────────────────────────────
   let _source = null, _sourceId = null, _sourceName = null;
+  let _endpoint = '/api/forecast';
   let _tChart = null, _wChart = null, _pChart = null;
 
   // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -224,8 +225,12 @@
   }
 
   // ── Public entry point ───────────────────────────────────────────────────────
-  window.openWeatherForecast = function (source, sourceId, name) {
+  // endpoint (optional) overrides the POST target — used by tour stages whose
+  // route lives behind a different (incl. public share-token) URL. The request
+  // body shape is identical, so the same modal/renderer is reused everywhere.
+  window.openWeatherForecast = function (source, sourceId, name, endpoint) {
     _source = source; _sourceId = sourceId; _sourceName = name;
+    _endpoint = endpoint || '/api/forecast';
     document.getElementById('wx-picker-name').textContent = name;
     _setDefaultDT();
     _pickerEl.classList.add('open');
@@ -294,7 +299,7 @@
     _tChart = _wChart = _pChart = null;
 
     try {
-      const resp = await fetch('/api/forecast', {
+      const resp = await fetch(_endpoint, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({

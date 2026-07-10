@@ -25,6 +25,34 @@ M_TO_FT    = 3.28084
 _EXP_ALPHA = 0.18
 
 
+def _wx_tile_url() -> str:
+    """Dark tile URL for the weather-forecast route thumbnail (Stadia if keyed)."""
+    key = os.environ.get("STADIA_API_KEY", "")
+    if key:
+        return ("https://tiles.stadiamaps.com/tiles/alidade_smooth_dark"
+                "/{z}/{x}/{y}.png?api_key=" + key)
+    return "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+
+
+def _load_stage_route(con, tour_id: int, stage_id: int):
+    """Return (stage_name, points) for a stage, where points are
+    [{lat, lon, alt_m}]. Raises HTTPException if the stage/route is missing."""
+    stage = con.execute(
+        "SELECT name FROM tour_stages WHERE id=? AND tour_id=?", (stage_id, tour_id)
+    ).fetchone()
+    if not stage:
+        raise HTTPException(404, "Stage not found")
+    rows = con.execute(
+        "SELECT lat, lon, alt_ft FROM tour_stage_points WHERE stage_id=? ORDER BY seq",
+        (stage_id,),
+    ).fetchall()
+    if len(rows) < 2:
+        raise HTTPException(400, "Stage has no route to forecast")
+    pts = [{"lat": r[0], "lon": r[1], "alt_m": (r[2] * 0.3048 if r[2] else None)}
+           for r in rows]
+    return stage[0] or "Stage", pts
+
+
 # ── DB setup ──────────────────────────────────────────────────────────────────
 
 def _ensure_tables(con):
@@ -1036,6 +1064,25 @@ async def get_stage_forecast(tour_id: int, stage_id: int, request: Request):
     }})
 
 
+@router.post("/tours/{tour_id}/stages/{stage_id}/route-forecast")
+async def stage_route_forecast(tour_id: int, stage_id: int, request: Request):
+    """Weather-along-route forecast for a tour stage at a user-chosen start time.
+    Reuses the shared route-forecast builder (same engine as /api/forecast)."""
+    require_user(request)
+    body = await request.json()
+
+    con = sqlite3.connect(db_getter().path, timeout=15)
+    try:
+        _ensure_tables(con)
+        name, pts = _load_stage_route(con, tour_id, stage_id)
+    finally:
+        con.close()
+
+    from app.routers.forecast import build_route_forecast, parse_start_time
+    start_dt = parse_start_time(body.get("start_time"))
+    return JSONResponse(await build_route_forecast(pts, start_dt, name))
+
+
 @router.get("/tours/{tour_id}/ai-summary")
 async def get_tour_ai_summary(tour_id: int, request: Request, model: Optional[str] = Query(default=None), force: bool = Query(default=False)):
     """Return an AI-generated summary of the entire tour (structure only, no activity data)."""
@@ -1518,6 +1565,7 @@ async def tour_share_page(token: str, request: Request):
         "display_name": display_name,
         "share_uid":    share_uid,
         "use_metric":   use_metric,
+        "wx_tile_url":  _wx_tile_url(),
     })
 
 
@@ -1708,6 +1756,28 @@ async def tour_share_forecast(token: str, stage_id: int):
         "precip_mm":   round(precip[0], 1) if precip[0] is not None else None,
         "wind_kph":    round(wind[0],   1) if wind[0]   is not None else None,
     }})
+
+
+@router.post("/tours/share/{token}/stages/{stage_id}/route-forecast")
+async def tour_share_route_forecast(token: str, stage_id: int, request: Request):
+    """Public — weather-along-route forecast for a shared tour stage."""
+    body = await request.json()
+
+    con = sqlite3.connect(db_getter().path, timeout=15)
+    try:
+        _ensure_tables(con)
+        tour_row = con.execute(
+            "SELECT tour_id FROM tour_shares WHERE token=?", (token,)
+        ).fetchone()
+        if not tour_row:
+            raise HTTPException(404, "Share link not found or revoked")
+        name, pts = _load_stage_route(con, tour_row[0], stage_id)
+    finally:
+        con.close()
+
+    from app.routers.forecast import build_route_forecast, parse_start_time
+    start_dt = parse_start_time(body.get("start_time"))
+    return JSONResponse(await build_route_forecast(pts, start_dt, name))
 
 
 def _stage_gpx_response(stage_name: str, pts: list) -> bytes:
@@ -1994,4 +2064,5 @@ async def tour_page(request: Request):
         "is_admin": is_admin,
         "has_anthropic_key": bool((user or {}).get("anthropic_api_key") or os.environ.get("ANTHROPIC_API_KEY")),
         "ui_prefs": ui_prefs,
+        "wx_tile_url": _wx_tile_url(),
     })

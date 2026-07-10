@@ -3,6 +3,61 @@
 
 const MapUtils = {
   _photoMarkers: new WeakMap(),
+  _lastMedia: new WeakMap(),
+  _toggleEl: new WeakMap(),
+  _PHOTOS_KEY: 'ascent-map-photos',
+
+  /** Whether photo markers should be shown on maps (shared across all maps, persisted). Default on. */
+  photosEnabled() {
+    return localStorage.getItem(this._PHOTOS_KEY) !== '0';
+  },
+
+  /** Persist the shared show-photos preference. */
+  setPhotosEnabled(on) {
+    localStorage.setItem(this._PHOTOS_KEY, on ? '1' : '0');
+  },
+
+  /**
+   * Wire a "photos" camera-icon button to the shared preference for a given map.
+   * The button's highlighted state reflects the current preference and toggles it on click.
+   * @param {HTMLButtonElement} btn
+   * @param {L.Map} map
+   */
+  wirePhotoToggle(btn, map) {
+    if (!btn) return;
+    this._toggleEl.set(map, btn);
+    this._showToggle(map, false);   // hidden until geotagged photos are placed
+    this._reflectToggle(map);
+    btn.addEventListener('click', () => {
+      this.setPhotosEnabled(!this.photosEnabled());
+      this._reflectToggle(map);
+      this.refreshPhotoMarkers(map);
+    });
+  },
+
+  /** Show/hide the "photos" toggle button for a map. */
+  _showToggle(map, visible) {
+    const btn = this._toggleEl.get(map);
+    if (btn) btn.style.display = visible ? 'flex' : 'none';
+  },
+
+  /** Update the toggle button's appearance to reflect the current photos-on state. */
+  _reflectToggle(map) {
+    const btn = this._toggleEl.get(map);
+    if (!btn) return;
+    const on = this.photosEnabled();
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    btn.style.background  = on ? 'rgba(10,132,255,.85)' : 'rgba(0,0,0,.6)';
+    btn.style.borderColor = on ? 'rgba(10,132,255,.9)'  : 'rgba(255,255,255,.15)';
+    btn.style.color       = on ? '#fff' : '#999';
+    btn.title = on ? 'Photos shown — click to hide' : 'Photos hidden — click to show';
+  },
+
+  /** Re-render photo markers for a map from the last media passed to placePhotoMarkers. */
+  refreshPhotoMarkers(map) {
+    const saved = this._lastMedia.get(map);
+    if (saved) this.placePhotoMarkers(map, saved.media, saved.onClickFn);
+  },
 
   /**
    * Add a distance scale bar to the bottom-right corner of a Leaflet map.
@@ -29,7 +84,11 @@ const MapUtils = {
    * @param {Function} onClickFn - called with the media index when a marker is clicked
    */
   placePhotoMarkers(map, media, onClickFn) {
+    this._lastMedia.set(map, { media, onClickFn });
     this.clearPhotoMarkers(map);
+    // Only offer the toggle when there's at least one geotagged photo to place.
+    this._showToggle(map, media.some(item => item.location));
+    if (!this.photosEnabled()) return;
     const markers = [];
     media.forEach((item, idx) => {
       if (!item.location) return;
@@ -54,5 +113,6 @@ const MapUtils = {
     if (!map) return;
     (this._photoMarkers.get(map) || []).forEach(m => map.removeLayer(m));
     this._photoMarkers.set(map, []);
+    this._showToggle(map, false);
   },
 };

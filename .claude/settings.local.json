@@ -81,7 +81,32 @@
       "Bash(xargs cat)",
       "Bash(tests/js/run.sh)",
       "Bash(echo \"exit=$?\")",
-      "Bash(export ASCENT_DB_PATH=\"/Users/rob/Desktop/AscentDB/Ascent.ascentdb\")"
+      "Bash(export ASCENT_DB_PATH=\"/Users/rob/Desktop/AscentDB/Ascent.ascentdb\")",
+      "WebFetch(domain:support.anthropic.com)",
+      "WebFetch(domain:support.claude.com)",
+      "WebFetch(domain:www.morphllm.com)",
+      "WebFetch(domain:ccforeveryone.com)",
+      "Bash(/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers/jsc -e 'var window={},document={addEventListener:function\\(\\){}}; __CMDSUB_OUTPUT__; var r=window.LocationSummary.linkifyNames\\('\\\\''Chamonix → Argentière → Chamonix'\\\\''\\); print\\(r.split\\('\\\\''loc-link'\\\\''\\).length-1 === 2 ? '\\\\''PASS: 2 links \\(first Chamonix linked, repeat plain\\)'\\\\'' : '\\\\''FAIL: '\\\\''+r\\);')",
+      "Bash(/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers/jsc -e ' *)",
+      "Bash(/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers/jsc -e 'var window={},document={addEventListener:function\\(\\){},head:{appendChild:function\\(\\){}}};var fetch=function\\(\\){return Promise.resolve\\({ok:false}\\);};var AbortController=function\\(\\){this.signal=null;this.abort=function\\(\\){};};var setTimeout=function\\(\\){return 0;},clearTimeout=function\\(\\){};__CMDSUB_OUTPUT__;print\\('\\\\''parse OK: '\\\\''+Object.keys\\(window.LocationSummary\\).join\\('\\\\'','\\\\''\\)\\);')",
+      "Bash(command -v node)",
+      "Bash(/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers/jsc -e 'var window={},document={addEventListener:function\\(\\){},head:{appendChild:function\\(\\){}}};var fetch=function\\(\\){return Promise.resolve\\({ok:false}\\);};var AbortController=function\\(\\){this.signal=null;this.abort=function\\(\\){};};var setTimeout=function\\(\\){return 0;},clearTimeout=function\\(\\){};__CMDSUB_OUTPUT__;var re=window.LocationSummary; print\\('\\\\''parse OK'\\\\''\\);')",
+      "Bash(cp app/static/location_summary.js /tmp/ls_backup.js)",
+      "Bash(sed -i '' 's#|place in|place located\\)/i;#|place in|place located\\)\\\\\\\\b/i;#' app/static/location_summary.js)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(/System/Library/Frameworks/JavaScriptCore.framework/Versions/Current/Helpers/jsc -e \"try{}catch\\(e\\){}\")",
+      "Bash(gh run *)",
+      "Bash(brew install *)",
+      "Bash(gh auth *)",
+      "Bash(command -v jsc)",
+      "Read(//usr/bin/**)",
+      "Bash(awk '/<style>/{f=1;next}/<\\\\/style>/{f=0}f' app/templates/tour.html)",
+      "Bash(awk '/<style>/{f=1;next}/<\\\\/style>/{f=0}f' app/templates/tour_share.html)",
+      "Bash(awk '/<style>/{f=1}f{print NR\": \"$0}/<\\\\/style>/{f=0}' app/templates/tour_share.html)",
+      "Bash(awk '/<style>/{f=1}f{print NR\": \"$0}/<\\\\/style>/{f=0}' app/templates/tour.html)",
+      "Bash(awk '/const U = \\\\{/{f=1} f{print} /^};/{if\\(f\\){f=0}}' app/templates/tour.html)",
+      "Bash(awk '/const U = \\\\{/{f=1} f{print} /^};/{if\\(f\\){f=0}}' app/templates/tour_share.html)",
+      "Bash(/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Resources/jsc -e \"var localStorage={_d:{},getItem:function\\(k\\){return this._d[k]===undefined?null:this._d[k]},setItem:function\\(k,v\\){this._d[k]=v}}; var WeakMap=this.WeakMap; load\\('app/static/map_utils.js'\\); print\\('default='+MapUtils.photosEnabled\\(\\)\\); MapUtils.setPhotosEnabled\\(false\\); print\\('afterOff='+MapUtils.photosEnabled\\(\\)\\); MapUtils.setPhotosEnabled\\(true\\); print\\('afterOn='+MapUtils.photosEnabled\\(\\)\\)\")"
     ]
   }
 }
