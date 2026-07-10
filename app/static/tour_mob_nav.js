@@ -73,32 +73,6 @@ const TourNav = (function () {
     panels.style.bottom = 'auto';
     panels.style.top = panelTop + 'px';
     panels.style.height = (navTop - panelTop) + 'px';
-    _diag(navTop);
-  }
-
-  // TEMP diagnostic overlay — remove once the tour_share anchor is dialed in.
-  function _diag(navTop) {
-    if (!window.navigator.standalone) return;
-    let d = $('tour-diag');
-    if (!d) {
-      d = document.createElement('div'); d.id = 'tour-diag';
-      d.style.cssText = 'position:fixed;top:90px;left:8px;z-index:99999;background:rgba(0,80,0,.9);' +
-        'color:#0f0;font:11px/1.4 monospace;padding:6px 8px;border-radius:6px;white-space:pre;pointer-events:none';
-      document.body.appendChild(d);
-    }
-    const nav = $('tour-subnav');
-    const r = nav ? nav.getBoundingClientRect() : {top:0, bottom:0, height:0};
-    const vv = window.visualViewport || {};
-    d.textContent =
-      'gnav=' + (document.body.classList.contains('tour-no-gnav') ? 'no(share)' : 'yes') + '\n' +
-      'standalone=' + window.navigator.standalone + '\n' +
-      'screen=' + window.screen.width + 'x' + window.screen.height + '\n' +
-      'inner=' + window.innerWidth + 'x' + window.innerHeight + '\n' +
-      'vv.h=' + (vv.height || '?') + ' vv.top=' + (vv.offsetTop || 0) + '\n' +
-      'clientH=' + document.documentElement.clientHeight + '\n' +
-      'safeT=' + window.MobNavAnchor.safeInset('top') + ' safeB=' + window.MobNavAnchor.safeInset('bottom') + '\n' +
-      'setNavTop=' + Math.round(navTop) + '\n' +
-      'navRect top=' + Math.round(r.top) + ' bot=' + Math.round(r.bottom) + ' h=' + Math.round(r.height);
   }
 
   // One-time reparent of shared elements into their home panels.
