@@ -219,6 +219,19 @@ def build_attributes_json(act: dict, detail: Optional[dict] = None,
     return json.dumps(flat)
 
 
+def patch_attributes_name(attrs_json: str, new_name: str) -> str:
+    """Return the flat-array attributes_json string with its 'name' value replaced."""
+    try:
+        flat = json.loads(attrs_json) if attrs_json else []
+    except (ValueError, TypeError):
+        return attrs_json
+    for i in range(0, len(flat) - 1, 2):
+        if flat[i] == "name":
+            flat[i + 1] = new_name
+            return json.dumps(flat)
+    return json.dumps(["name", new_name] + flat)
+
+
 def build_points_rows(streams: dict, activity_id_db: int) -> list[tuple]:
     """
     Convert Strava streams dict into list of tuples for INSERT into points table.
@@ -486,6 +499,33 @@ class StravaImporter:
         finally:
             con.close()
 
+    def refresh_summary_name(self, strava_id: int, new_name: str) -> Optional[str]:
+        """
+        Update the Strava-sourced title of an already-imported activity when it
+        has been renamed on Strava. Touches only the `name` column and the name
+        key in attributes_json — streams, stats, photos, and pending local edits
+        are left untouched. Returns the new name if a row changed, else None.
+        """
+        con = self._connect()
+        try:
+            row = con.execute(
+                "SELECT id, name, attributes_json FROM activities WHERE strava_activity_id=?",
+                (strava_id,),
+            ).fetchone()
+            if not row:
+                return None
+            act_id, cur_name, attrs_json = row
+            if (cur_name or "") == (new_name or ""):
+                return None
+            con.execute(
+                "UPDATE activities SET name=?, attributes_json=? WHERE id=?",
+                (new_name, patch_attributes_name(attrs_json, new_name or ""), act_id),
+            )
+            con.commit()
+            return new_name
+        finally:
+            con.close()
+
     def get_last_sync_time(self) -> Optional[int]:
         con = self._connect()
         try:
@@ -649,6 +689,7 @@ class StravaImporter:
         page         = 1
         imported     = 0
         skipped      = 0
+        updated      = 0
         errors       = 0
         total_fetched = 0
 
@@ -690,6 +731,17 @@ class StravaImporter:
 
                     if strava_id in existing_ids:
                         skipped += 1
+                        # Already imported — refresh the title in case it was
+                        # renamed on Strava after the original import.
+                        renamed = self.refresh_summary_name(strava_id, act.get("name") or "")
+                        if renamed:
+                            updated += 1
+                            yield {
+                                "type":     "progress",
+                                "msg":      f"Updated title: {renamed}",
+                                "imported": imported,
+                                "skipped":  skipped,
+                            }
                         continue
 
                     name = act.get("name", "(unnamed)")
@@ -732,10 +784,12 @@ class StravaImporter:
         yield {
             "type":     "done",
             "msg":      (f"Sync complete — {imported} imported, {skipped} already existed"
+                         + (f", {updated} title{'s' if updated != 1 else ''} updated" if updated else "")
                          + (f", {errors} errors" if errors else "")
                          + ". GPS tracks load automatically when you view each activity."),
             "imported": imported,
             "skipped":  skipped,
+            "updated":  updated,
             "errors":   errors,
         }
 

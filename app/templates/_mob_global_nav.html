@@ -49,6 +49,12 @@
   window.addEventListener('resize', place);
   if (window.visualViewport) window.visualViewport.addEventListener('resize', place);
   window.addEventListener('load', place);
+  window.addEventListener('pageshow', place);   // bfcache restore
+  // Cold launch (iOS standalone): visualViewport.height isn't settled at the first
+  // synchronous paint and no resize fires afterward, so the nav lands too high until a
+  // navigation gives correct metrics. Re-measure unconditionally once it settles.
+  requestAnimationFrame(place);
+  setTimeout(place, 300);
   // Failsafe: never leave the nav hidden.
   setTimeout(function(){ if (nav.style.visibility === 'hidden') place(); }, 800);
 })();

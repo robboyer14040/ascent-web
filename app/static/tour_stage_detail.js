@@ -159,23 +159,11 @@ const TourStageDetail = {
   photosTab(el, ctx) {
     const actId = ctx.activityId;
     if (!actId) return;   // uncompleted stage → controller shows the placeholder
-    fetch(`/activities/${actId}/photos`).then(r => r.ok ? r.json() : null).then(d => {
-      if (!d) return;
-      const media = d.media || (d.photos ? d.photos.map(f => ({ url: d.base_url + f, type: 'image' })) : []);
+    Lightbox.fetchMedia(actId).then(media => {
       if (!media.length) { el.innerHTML = '<div class="tour-tab-empty">No photos for this stage.</div>'; return; }
       ctx.setMedia(media);
-      let html = '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:flex-start">';
-      media.forEach((m, i) => {
-        const cap = m.caption ? `<div style="font-size:10px;color:var(--muted);margin-top:3px;line-height:1.3;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-word">${esc(m.caption)}</div>` : '';
-        if (m.type === 'image') {
-          html += `<div style="flex-shrink:0;width:calc(33.33% - 4px)"><img src="${m.url}" loading="lazy" style="height:96px;width:100%;object-fit:cover;border-radius:5px;cursor:pointer;display:block" onclick="${ctx.lightboxName}(${i})">${cap}</div>`;
-        } else {
-          html += `<div style="flex-shrink:0;width:calc(33.33% - 4px)"><div style="position:relative;height:96px;border-radius:5px;overflow:hidden;cursor:pointer;background:#000" onclick="${ctx.lightboxName}(${i})"><video src="${m.hls_url || m.url}" muted preload="metadata" playsinline style="width:100%;height:100%;object-fit:cover;pointer-events:none" onloadedmetadata="this.currentTime=0.1"></video><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none"><div style="width:28px;height:28px;border-radius:50%;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center"><span style="font-size:13px;margin-left:2px">▶</span></div></div></div>${cap}</div>`;
-        }
-      });
-      html += '</div>';
-      el.innerHTML = html;
-    }).catch(() => {});
+      Lightbox.renderGrid(el, media, i => window[ctx.lightboxName](i));
+    });
   },
 
   // Lazy Forecast tab. ctx: { stage, forecastUrl } — completed stages use the

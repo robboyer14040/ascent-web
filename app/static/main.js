@@ -269,7 +269,10 @@ function buildColsTemplate() {
 
 const COLS = buildColsTemplate(); // kept for backward compat but dynamic now
 function currentCOLS() { return buildColsTemplate(); }
-const ROW_H = 34;
+// Virtual-scroll row pitch — read from the shared --list-row-h (list.css) so the
+// scroll math stays tied to the actual .act-row height. Falls back to 34.
+const ROW_H = parseInt(getComputedStyle(document.documentElement)
+  .getPropertyValue('--list-row-h')) || 34;
 
 // Event delegation for activity rows — handles click, cmd-click, shift-click
 document.addEventListener('click', function(e) {
@@ -532,11 +535,7 @@ function placePhotoMarkers(media) {
   if (!leafMap) return;
   MapUtils.placePhotoMarkers(leafMap, media, idx => {
     showPhoto(idx);
-    if (typeof _isPhoneLayout === 'function' && _isPhoneLayout()) {
-      mobSwitchTab('photos');
-    } else {
-      photoClick();
-    }
+    openPhotoLightbox(idx);
   });
 }
 

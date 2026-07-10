@@ -15,11 +15,20 @@ function _mobMoveElements() {
   const transport = document.getElementById('transport-bar');
   if (detail)    tabMap.insertBefore(detail, tabMap.firstChild);
   if (transport) tabMap.appendChild(transport);
-  // Photo panel → photos tab (extracted from info-panel)
+  // Photos tab → thumbnail grid (same as Tours). The single-photo panel
+  // (#info-right) is kept in the DOM but hidden so showPhoto()/map markers
+  // still have their elements; the visible UI is the grid + lightbox.
   const photoDragH = document.getElementById('photo-drag-handle');
   const infoRight  = document.getElementById('info-right');
   if (photoDragH) photoDragH.remove();
-  if (infoRight)  tabPhotos.appendChild(infoRight);
+  if (!document.getElementById('mob-photos-grid')) {
+    const grid = document.createElement('div');
+    grid.id = 'mob-photos-grid';
+    grid.style.padding = '8px';
+    tabPhotos.appendChild(grid);
+  }
+  if (infoRight) { infoRight.style.display = 'none'; tabPhotos.appendChild(infoRight); }
+  if (typeof renderPhotoGrid === 'function') renderPhotoGrid();
   // Chart wrap → analysis tab
   const chartWrap = document.getElementById('chart-wrap');
   if (chartWrap) tabAnalysis.appendChild(chartWrap);

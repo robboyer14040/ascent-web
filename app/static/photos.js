@@ -10,21 +10,24 @@ async function loadPhotos(activityId) {
   showPhoto(null);
   if (typeof placePhotoMarkers === 'function') placePhotoMarkers([]);
 
-  try {
-    const r = await fetch(`/activities/${activityId}/photos`);
-    if (!r.ok) return;
-    const d = await r.json();
-    if (d.media && d.media.length) {
-      photoState.media = d.media;
-    } else if (d.photos && d.photos.length) {
-      // backward compat
-      photoState.media = d.photos.map(f => ({url: d.base_url + f, type: 'image'}));
-    }
-    if (photoState.media.length) {
-      showPhoto(0);
-      if (typeof placePhotoMarkers === 'function') placePhotoMarkers(photoState.media);
-    }
-  } catch(e) {}
+  photoState.media = await Lightbox.fetchMedia(activityId);
+  if (photoState.media.length) {
+    showPhoto(0);
+    if (typeof placePhotoMarkers === 'function') placePhotoMarkers(photoState.media);
+  }
+  renderPhotoGrid();
+}
+
+// Phone-only thumbnail grid (mirrors the Tours stage Photos tab). The grid
+// container only exists in the phone photos tab; on desktop this is a no-op.
+function renderPhotoGrid() {
+  const grid = document.getElementById('mob-photos-grid');
+  if (!grid) return;
+  if (!photoState.media.length) {
+    grid.innerHTML = '<div style="color:var(--muted2);font-size:12px;padding:10px">No photos for this activity.</div>';
+    return;
+  }
+  Lightbox.renderGrid(grid, photoState.media, i => openPhotoLightbox(i));
 }
 
 function _panelDetach() {
@@ -105,9 +108,12 @@ function photoNav(delta) {
   showPhoto(next);
 }
 
-function photoClick() {
+function photoClick() { openPhotoLightbox(photoState.idx); }
+
+function openPhotoLightbox(idx) {
   if (!photoState.media.length) return;
-  Lightbox.open(photoState.media, photoState.idx, {
+  photoState.idx = idx;
+  Lightbox.open(photoState.media, idx, {
     download:    true,
     captionEdit: true,
     onNav: idx => { showPhoto(idx); },
