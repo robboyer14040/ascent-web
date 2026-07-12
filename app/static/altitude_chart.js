@@ -683,6 +683,7 @@ async function drawElevation(data, version) {
         } else {
           anim.mapDot.setLatLng(ll);
         }
+        MapUtils.keepPointVisible(leafMap, ll);
       }
     }
   }
@@ -765,6 +766,7 @@ async function drawElevation(data, version) {
         } else {
           anim.mapDot.setLatLng(ll);
         }
+        MapUtils.keepPointVisible(leafMap, ll);
       }
     }
 
@@ -1305,6 +1307,7 @@ function animUpdateUI(i) {
   // Map dot
   if (anim.mapDot && anim.latLon?.[i]) {
     anim.mapDot.setLatLng(anim.latLon[i]);
+    MapUtils.keepPointVisible(leafMap, anim.latLon[i]);
   }
 
   // Elevation chart dot

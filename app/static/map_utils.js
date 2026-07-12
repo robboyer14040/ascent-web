@@ -108,6 +108,21 @@ const MapUtils = {
     this._photoMarkers.set(map, markers);
   },
 
+  /**
+   * Pan the map the minimum amount needed to keep a point clear of the edges.
+   * No-op when the point already sits inside the padded viewport. Used to follow
+   * the elevation-chart position puck so it never hides behind (or hugs) the map
+   * edge as the puck is scrubbed, dragged, or seeked from the region-info modal.
+   * @param {L.Map} map
+   * @param {L.LatLngExpression} latLng - map-dot centre
+   * @param {number} margin - min pixels between the dot's edge and every map edge
+   */
+  keepPointVisible(map, latLng, margin = 50) {
+    if (!map || !latLng) return;
+    const pad = margin + 5;   // dot is 10px, anchored centre → +5 keeps its edge `margin` px clear
+    map.panInside(latLng, { padding: [pad, pad], animate: false });
+  },
+
   /** Remove all photo markers previously placed on this map instance. */
   clearPhotoMarkers(map) {
     if (!map) return;

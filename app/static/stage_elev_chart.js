@@ -289,6 +289,7 @@ function stageElevInteraction(opts) {
             zIndexOffset: 1000, interactive: false }).addTo(theMap);
           opts.setMapDot?.(dot);
         } else { dot.setLatLng(ll); }
+        MapUtils.keepPointVisible(theMap, ll);
       }
     }
 
@@ -513,6 +514,7 @@ function stageElevInteraction(opts) {
             zIndexOffset: 1000, interactive: false }).addTo(theMap);
           opts.setMapDot?.(dot);
         } else { dot.setLatLng(ll); }
+        MapUtils.keepPointVisible(theMap, ll);
       }
     }
   }
