@@ -126,6 +126,55 @@ def test_parse_gpx_route_name_from_filename():
     assert s["name"] == "my cool ride"
 
 
+# ── Create/edit HTTP endpoints (multipart GPX upload) ─────────────────────────
+
+def _gpx_file(name):
+    return ("files", (name, GPX_TRK.encode(), "application/gpx+xml"))
+
+
+def test_edit_tour_add_new_stage_via_upload(authed_client):
+    """Editing a tour with a new GPX file must accept the upload.
+
+    Regression: an `Optional[List[UploadFile]]` signature made FastAPI reject any
+    uploaded file on PUT with a 422 ("Input should be a valid list"), which the UI
+    surfaced as "[object Object]" and blocked adding stages to an existing tour.
+    """
+    c = authed_client
+    r = c.post(
+        "/tours",
+        data={"title": "T", "start_date": "2026-07-01", "end_date": "2026-07-26", "shared": "1"},
+        files=[_gpx_file("a.gpx")],
+    )
+    assert r.status_code == 201, r.text
+    tid = r.json()["id"]
+
+    order = [{"type": "existing", "id": 1}, {"type": "new", "idx": 0}]
+    r2 = c.put(
+        f"/tours/{tid}",
+        data={"title": "T2", "start_date": "2026-07-01", "end_date": "2026-07-26",
+              "shared": "1", "stage_order": json.dumps(order)},
+        files=[_gpx_file("b.gpx")],
+    )
+    assert r2.status_code == 200, r2.text
+
+
+def test_edit_tour_reorder_only_no_files(authed_client):
+    """Editing with no new files (reorder/remove only) still works."""
+    c = authed_client
+    r = c.post(
+        "/tours",
+        data={"title": "T", "start_date": "2026-07-01", "end_date": "2026-07-26", "shared": "1"},
+        files=[_gpx_file("a.gpx")],
+    )
+    tid = r.json()["id"]
+    r2 = c.put(
+        f"/tours/{tid}",
+        data={"title": "T", "start_date": "2026-07-01", "end_date": "2026-07-26",
+              "shared": "1", "stage_order": json.dumps([{"type": "existing", "id": 1}])},
+    )
+    assert r2.status_code == 200, r2.text
+
+
 def test_parse_gpx_route_invalid_xml():
     with pytest.raises(ValueError):
         tours._parse_gpx_route(b"<gpx><unclosed>", "x.gpx")

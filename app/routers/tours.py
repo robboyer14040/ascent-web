@@ -845,7 +845,7 @@ async def update_tour(
     end_date:    str                       = Form(...),
     shared:      int                       = Form(default=1),
     stage_order: str                       = Form(default="[]"),
-    files:       Optional[List[UploadFile]] = File(default=None),
+    files:       List[UploadFile]           = File(default=[]),
 ):
     """Edit an existing tour: update metadata, reorder/remove/add stages."""
     uid = require_user(request)
