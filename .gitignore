@@ -13,3 +13,4 @@ build/
 .DS_Store
 scripts/set_fly_secrets.sh
 db/*
+.claude/settings.local.json
