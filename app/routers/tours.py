@@ -96,6 +96,26 @@ def _ensure_tables(con):
         con.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_tour_shares_token ON tour_shares(token)")
     except Exception:
         pass
+    # A share link now targets a specific attempt (tracking window) of its user.
+    try:
+        con.execute("ALTER TABLE tour_shares ADD COLUMN attempt_id INTEGER")
+    except Exception:
+        pass
+    # Per-user tracking windows ("attempts"). A user with no attempt row for a
+    # tour is "unsubscribed": no stage/activity matching runs for them.
+    con.execute("""
+        CREATE TABLE IF NOT EXISTS tour_attempts (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            tour_id    INTEGER NOT NULL REFERENCES tours(id) ON DELETE CASCADE,
+            user_id    INTEGER NOT NULL,
+            start_date TEXT    NOT NULL,
+            end_date   TEXT,
+            created_at INTEGER NOT NULL
+        )
+    """)
+    con.execute(
+        "CREATE INDEX IF NOT EXISTS idx_tour_attempts ON tour_attempts(tour_id, user_id)"
+    )
     # Migrate existing share_token / share_user_id rows into tour_shares
     try:
         con.execute("""
@@ -148,7 +168,60 @@ def _ensure_tables(con):
     con.execute(
         "CREATE INDEX IF NOT EXISTS idx_tour_stage_pts ON tour_stage_points(stage_id)"
     )
+    _migrate_legacy_tours_to_attempts(con)
     con.commit()
+
+
+def _migrate_legacy_tours_to_attempts(con):
+    """One-time, idempotent: convert legacy tours (which carried a single global
+    start_date/end_date) into the per-user attempts model. For each such tour we
+    mark it public and create one attempt spanning the old dates for the creator
+    and for every other user with an activity inside that window. Tours created
+    under the new model store empty dates and are skipped."""
+    try:
+        legacy = con.execute(
+            "SELECT id, created_by, start_date, end_date FROM tours "
+            "WHERE start_date IS NOT NULL AND start_date != '' "
+            "AND end_date IS NOT NULL AND end_date != ''"
+        ).fetchall()
+    except Exception:
+        return
+
+    for tour_id, creator, sd, ed in legacy:
+        # Skip if already migrated (an attempt already exists for this tour).
+        if con.execute(
+            "SELECT 1 FROM tour_attempts WHERE tour_id=? LIMIT 1", (tour_id,)
+        ).fetchone():
+            continue
+
+        con.execute("UPDATE tours SET shared=1 WHERE id=?", (tour_id,))
+
+        users = {creator}
+        try:
+            sd_ts = int(datetime.fromisoformat(sd).replace(tzinfo=timezone.utc).timestamp())
+            ed_ts = int(datetime.fromisoformat(ed).replace(
+                hour=23, minute=59, second=59, tzinfo=timezone.utc).timestamp())
+            for (u,) in con.execute(
+                "SELECT DISTINCT user_id FROM activities "
+                "WHERE COALESCE(creation_time_override_s, creation_time_s) BETWEEN ? AND ?",
+                (sd_ts, ed_ts),
+            ).fetchall():
+                if u is not None:
+                    users.add(u)
+        except Exception:
+            pass  # e.g. no activities table (unit-test connections)
+
+        for u in users:
+            cur = con.execute(
+                "INSERT INTO tour_attempts (tour_id, user_id, start_date, end_date, created_at) "
+                "VALUES (?,?,?,?,?)",
+                (tour_id, u, sd, ed, int(_time.time())),
+            )
+            con.execute(
+                "UPDATE tour_shares SET attempt_id=? "
+                "WHERE tour_id=? AND user_id=? AND attempt_id IS NULL",
+                (cur.lastrowid, tour_id, u),
+            )
 
 
 # ── GPX parsing for route (no activity creation) ──────────────────────────────
@@ -517,6 +590,164 @@ def _collapse_alternate_stages(con, stages: list, prefer_id: Optional[int] = Non
     return reps
 
 
+# ── Attempts (per-user tracking windows) ──────────────────────────────────────
+
+def _list_attempts(con, tour_id: int, user_id: int) -> list:
+    """A user's attempts for a tour, ordered by start date ascending."""
+    rows = con.execute(
+        "SELECT id, start_date, end_date FROM tour_attempts "
+        "WHERE tour_id=? AND user_id=? ORDER BY start_date ASC, id ASC",
+        (tour_id, user_id),
+    ).fetchall()
+    return [{"id": r[0], "start_date": r[1], "end_date": r[2]} for r in rows]
+
+
+def _resolve_attempt(attempts: list, requested_id: Optional[int]) -> Optional[dict]:
+    """Pick the active attempt: the requested one if it belongs to the user,
+    otherwise the most recent (latest start date). None if unsubscribed."""
+    if not attempts:
+        return None
+    if requested_id is not None:
+        for a in attempts:
+            if a["id"] == requested_id:
+                return a
+    return attempts[-1]
+
+
+def _attempt_window(attempts: list, attempt: dict) -> tuple:
+    """Return (start_date, end_date) strings bounding an attempt's activities,
+    per the Section-4 matching rules. `attempts` is the user's full ordered list
+    (needed to find the subsequent attempt for open-ended windows)."""
+    from datetime import date as _date, timedelta
+
+    start = attempt["start_date"]
+    if attempt.get("end_date"):
+        return start, attempt["end_date"]
+
+    # Open-ended: bounded by the next attempt's start (exclusive), if any.
+    later = [a for a in attempts
+             if a["start_date"] > start or (a["start_date"] == start and a["id"] > attempt["id"])]
+    if later:
+        nxt = min(later, key=lambda a: (a["start_date"], a["id"]))
+        try:
+            cap = _date.fromisoformat(nxt["start_date"]) - timedelta(days=1)
+            return start, cap.isoformat()
+        except ValueError:
+            return start, start
+    # No end and no subsequent attempt: match everything up to and incl. start.
+    return "1900-01-01", start
+
+
+def _estimate_stage_date(attempt: dict, attempts: list, stage_num: int, total_stages: int):
+    """Best-guess calendar date a rider reaches a stage, anchored on their
+    selected attempt. Interpolates evenly across the attempt's window when an end
+    is known (explicit end, or capped by a later attempt); otherwise falls back
+    to one-stage-per-day from the start. Returns a date, or None if unparseable."""
+    from datetime import date as _date, timedelta
+    try:
+        sd = _date.fromisoformat(attempt["start_date"])
+    except (ValueError, TypeError):
+        return None
+
+    ed = None
+    if attempt.get("end_date"):
+        try:
+            ed = _date.fromisoformat(attempt["end_date"])
+        except ValueError:
+            ed = None
+    else:
+        later = [a for a in attempts
+                 if a["start_date"] > attempt["start_date"]
+                 or (a["start_date"] == attempt["start_date"] and a["id"] > attempt["id"])]
+        if later:
+            nxt = min(later, key=lambda a: (a["start_date"], a["id"]))
+            try:
+                ed = _date.fromisoformat(nxt["start_date"]) - timedelta(days=1)
+            except ValueError:
+                ed = None
+
+    if ed is not None:
+        tour_days = (ed - sd).days
+        offset = round((stage_num - 1) * tour_days / max(total_stages - 1, 1)) if total_stages > 1 else 0
+        return sd + timedelta(days=offset)
+    return sd + timedelta(days=(stage_num - 1))
+
+
+def _completions_for_user(con, tour_id: int, user_id: int, stages: list,
+                          requested_attempt_id: Optional[int]) -> tuple:
+    """Compute stage completions for a user's selected attempt. Returns
+    (completions, attempts, selected_attempt_id). Unsubscribed users (no
+    attempts) get all-None completions and no matching."""
+    attempts = _list_attempts(con, tour_id, user_id)
+    attempt  = _resolve_attempt(attempts, requested_attempt_id)
+    if attempt is None:
+        return {s["id"]: None for s in stages}, attempts, None
+    sd, ed = _attempt_window(attempts, attempt)
+    completions = _global_stage_matching(con, user_id, sd, ed, stages)
+    return completions, attempts, attempt["id"]
+
+
+def _place_attempt(others: list, start: str, end: Optional[str]) -> tuple:
+    """Validate a proposed attempt (start/end ISO strings) against the user's
+    OTHER attempts and apply the overlap-resolution rules. Returns
+    (error_or_None, cap) where cap is (attempt_id, new_end_iso) for a prior
+    open-ended attempt that must be auto-capped (Rule 2), or None."""
+    from datetime import date as _date, timedelta
+
+    try:
+        s = _date.fromisoformat(start)
+    except (ValueError, TypeError):
+        return "Invalid start date.", None
+    e = None
+    if end:
+        try:
+            e = _date.fromisoformat(end)
+        except ValueError:
+            return "Invalid end date.", None
+        if e < s:
+            return "End date must be on or after the start date.", None
+
+    parsed = []
+    for a in others:
+        try:
+            a_s = _date.fromisoformat(a["start_date"])
+        except (ValueError, TypeError):
+            continue
+        a_e = None
+        if a.get("end_date"):
+            try:
+                a_e = _date.fromisoformat(a["end_date"])
+            except ValueError:
+                a_e = None
+        parsed.append((a_s, a_e))
+
+    for a_s, a_e in parsed:
+        if a_s == s:
+            return "An attempt already starts on that date.", None
+        # Rule 1 — the intersect reject (against attempts with an explicit end).
+        if a_e is not None and a_s <= s <= a_e:
+            return ("That start date falls inside an existing attempt "
+                    f"({a_s.isoformat()} to {a_e.isoformat()})."), None
+
+    nxt = min((a_s for a_s, _ in parsed if a_s > s), default=None)
+    prev = max(((a_s, a_e) for a_s, a_e in parsed if a_s < s), default=None,
+               key=lambda p: p[0])
+
+    # Rule 4 — future collision: an explicit end may not reach the next start.
+    if e is not None and nxt is not None and e >= nxt:
+        return (f"End date must be before the next attempt's start ({nxt.isoformat()})."), None
+
+    # Rule 2 — auto-cap a prior open-ended attempt at (newStart - 1 day).
+    cap = None
+    if prev is not None and prev[1] is None:
+        cap_date = (s - timedelta(days=1)).isoformat()
+        for a in others:
+            if a["start_date"] == prev[0].isoformat() and not a.get("end_date"):
+                cap = (a["id"], cap_date)
+                break
+    return None, cap
+
+
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @router.get("/tours")
@@ -549,23 +780,13 @@ async def list_tours(request: Request):
 async def create_tour(
     request:    Request,
     title:      str               = Form(...),
-    start_date: str               = Form(...),
-    end_date:   str               = Form(...),
-    shared:     int               = Form(default=1),
+    shared:     int               = Form(default=0),
     files:      List[UploadFile]  = File(...),
 ):
     uid = require_user(request)
 
     if not title.strip():
         raise HTTPException(400, "Title is required")
-    try:
-        from datetime import date as _date
-        sd = _date.fromisoformat(start_date)
-        ed = _date.fromisoformat(end_date)
-    except ValueError:
-        raise HTTPException(400, "Invalid date format (use YYYY-MM-DD)")
-    if ed < sd:
-        raise HTTPException(400, "End date must be on or after start date")
     if not files:
         raise HTTPException(400, "At least one GPX file is required")
 
@@ -589,7 +810,7 @@ async def create_tour(
         cur = con.execute(
             "INSERT INTO tours (created_by, title, start_date, end_date, created_at, shared) "
             "VALUES (?,?,?,?,?,?)",
-            (uid, title.strip(), start_date, end_date, int(_time.time()), shared),
+            (uid, title.strip(), "", "", int(_time.time()), shared),
         )
         tour_id = cur.lastrowid
 
@@ -619,8 +840,79 @@ async def create_tour(
         con.close()
 
 
+@router.post("/tours/{tour_id}/stages")
+async def add_tour_stages(
+    tour_id: int,
+    request: Request,
+    files:   List[UploadFile] = File(...),
+):
+    """Append a batch of GPX files as new stages, continuing the stage_num
+    sequence. Used by the batched uploader so large tours don't require one
+    giant multipart POST (which iPad Safari can fail to build)."""
+    uid = require_user(request)
+
+    real_files = [f for f in (files or []) if f.filename]
+    if not real_files:
+        raise HTTPException(400, "At least one GPX file is required")
+
+    stages = []
+    for i, f in enumerate(real_files):
+        data = await f.read()
+        try:
+            s = _parse_gpx_route(data, f.filename or f"Stage {i + 1}")
+        except ValueError as e:
+            raise HTTPException(400, f"File '{f.filename}': {e}")
+        stages.append(s)
+
+    con = sqlite3.connect(db_getter().path, timeout=30)
+    try:
+        con.execute("PRAGMA journal_mode=WAL")
+        con.execute("PRAGMA foreign_keys=ON")
+        _ensure_tables(con)
+
+        row = con.execute(
+            "SELECT created_by FROM tours WHERE id=?", (tour_id,)
+        ).fetchone()
+        if not row:
+            raise HTTPException(404, "Tour not found")
+        if row[0] != uid:
+            raise HTTPException(403, "Only the tour creator can add stages")
+
+        base = con.execute(
+            "SELECT COALESCE(MAX(stage_num), 0) FROM tour_stages WHERE tour_id=?",
+            (tour_id,),
+        ).fetchone()[0]
+
+        for j, s in enumerate(stages):
+            cur = con.execute(
+                "INSERT INTO tour_stages "
+                "(tour_id, stage_num, name, distance_mi, climb_ft, start_lat, start_lon) "
+                "VALUES (?,?,?,?,?,?,?)",
+                (tour_id, base + j + 1, s["name"],
+                 s["distance_mi"], s["climb_ft"],
+                 s["start_lat"], s["start_lon"]),
+            )
+            stage_id = cur.lastrowid
+            con.executemany(
+                "INSERT INTO tour_stage_points (stage_id, seq, lat, lon, alt_ft) "
+                "VALUES (?,?,?,?,?)",
+                [(stage_id, seq, lat, lon, alt_ft)
+                 for seq, (lat, lon, alt_ft) in enumerate(s["points"])],
+            )
+
+        con.commit()
+        return JSONResponse({"added": len(stages)}, status_code=201)
+    except Exception:
+        con.rollback()
+        raise
+    finally:
+        con.close()
+
+
 @router.get("/tours/{tour_id}")
-async def get_tour(tour_id: int, request: Request, match_user_id: Optional[int] = Query(default=None)):
+async def get_tour(tour_id: int, request: Request,
+                   match_user_id: Optional[int] = Query(default=None),
+                   attempt_id: Optional[int] = Query(default=None)):
     uid = require_user(request)
 
     con = sqlite3.connect(db_getter().path, timeout=15)
@@ -632,6 +924,9 @@ async def get_tour(tour_id: int, request: Request, match_user_id: Optional[int] 
             (tour_id,),
         ).fetchone()
         if not row:
+            raise HTTPException(404, "Tour not found")
+        # Private tours are visible only to their creator.
+        if row[1] != uid and not row[5]:
             raise HTTPException(404, "Tour not found")
 
         share_row = con.execute(
@@ -666,14 +961,16 @@ async def get_tour(tour_id: int, request: Request, match_user_id: Optional[int] 
             "completion":  None,
         } for sr in stage_rows]
 
-        completions = _global_stage_matching(
-            con, match_user_id if match_user_id is not None else uid,
-            tour["start_date"], tour["end_date"], stages,
+        match_uid = match_user_id if match_user_id is not None else uid
+        completions, attempts, sel_attempt_id = _completions_for_user(
+            con, tour_id, match_uid, stages, attempt_id,
         )
         for stage in stages:
             stage["completion"] = completions.get(stage["id"])
 
-        tour["stages"] = stages
+        tour["stages"]      = stages
+        tour["attempts"]    = attempts
+        tour["attempt_id"]  = sel_attempt_id
         return JSONResponse(tour)
     finally:
         con.close()
@@ -749,6 +1046,7 @@ def _activity_pts_for_stages(con, stages: list, completions: dict) -> dict:
 async def get_tour_activity_points(
     tour_id: int, request: Request,
     match_user_id: Optional[int] = Query(default=None),
+    attempt_id: Optional[int] = Query(default=None),
 ):
     """GPS points from matched actual activities for completed stages, keyed by stage_id."""
     uid = require_user(request)
@@ -757,10 +1055,7 @@ async def get_tour_activity_points(
     con = sqlite3.connect(db_getter().path, timeout=15)
     try:
         _ensure_tables(con)
-        row = con.execute(
-            "SELECT start_date, end_date FROM tours WHERE id=?", (tour_id,)
-        ).fetchone()
-        if not row:
+        if not con.execute("SELECT 1 FROM tours WHERE id=?", (tour_id,)).fetchone():
             raise HTTPException(404, "Tour not found")
 
         stage_rows = con.execute(
@@ -774,7 +1069,7 @@ async def get_tour_activity_points(
             "start_lat": sr[5], "start_lon": sr[6],
         } for sr in stage_rows]
 
-        completions = _global_stage_matching(con, actual_uid, row[0], row[1], stages)
+        completions, _, _ = _completions_for_user(con, tour_id, actual_uid, stages, attempt_id)
         return JSONResponse(_activity_pts_for_stages(con, stages, completions))
     finally:
         con.close()
@@ -797,9 +1092,172 @@ async def delete_tour(tour_id: int, request: Request):
         if row[0] != uid:
             raise HTTPException(403, "Only the tour creator can delete it")
 
+        # Hard-delete the tour and every user's attempts + share links for it.
+        con.execute("DELETE FROM tour_attempts WHERE tour_id=?", (tour_id,))
+        con.execute("DELETE FROM tour_shares WHERE tour_id=?", (tour_id,))
         con.execute("DELETE FROM tours WHERE id=?", (tour_id,))
         con.commit()
         return JSONResponse({"ok": True})
+    finally:
+        con.close()
+
+
+def _tour_visible_or_404(con, tour_id: int, uid: int) -> tuple:
+    """Return (created_by, shared) for a tour the user may see, else raise."""
+    row = con.execute(
+        "SELECT created_by, shared FROM tours WHERE id=?", (tour_id,)
+    ).fetchone()
+    if not row:
+        raise HTTPException(404, "Tour not found")
+    created_by, shared = row[0], bool(row[1])
+    if created_by != uid and not shared:
+        raise HTTPException(404, "Tour not found")
+    return created_by, shared
+
+
+@router.get("/tours/{tour_id}/attempts")
+async def list_tour_attempts(tour_id: int, request: Request,
+                             user_id: Optional[int] = Query(default=None)):
+    """List a user's attempts for a tour. Peers' attempts are only visible on
+    public tours (used for read-only peer browsing)."""
+    uid = require_user(request)
+    target = user_id if user_id is not None else uid
+    con = sqlite3.connect(db_getter().path, timeout=10)
+    try:
+        _ensure_tables(con)
+        created_by, shared = _tour_visible_or_404(con, tour_id, uid)
+        if target != uid and not shared:
+            raise HTTPException(403, "Not authorised")
+        return JSONResponse({
+            "attempts":  _list_attempts(con, tour_id, target),
+            "read_only": target != uid,
+        })
+    finally:
+        con.close()
+
+
+@router.post("/tours/{tour_id}/attempts")
+async def add_tour_attempt(tour_id: int, request: Request,
+                           start_date: str = Form(...),
+                           end_date:   str = Form(default="")):
+    """Subscribe / add an attempt for the current user (overlap engine applies)."""
+    uid = require_user(request)
+    con = sqlite3.connect(db_getter().path, timeout=10)
+    try:
+        con.execute("PRAGMA foreign_keys=ON")
+        _ensure_tables(con)
+        _tour_visible_or_404(con, tour_id, uid)
+
+        others = _list_attempts(con, tour_id, uid)
+        err, cap = _place_attempt(others, start_date, end_date or None)
+        if err:
+            raise HTTPException(400, err)
+        if cap:
+            con.execute("UPDATE tour_attempts SET end_date=? WHERE id=?", (cap[1], cap[0]))
+        cur = con.execute(
+            "INSERT INTO tour_attempts (tour_id, user_id, start_date, end_date, created_at) "
+            "VALUES (?,?,?,?,?)",
+            (tour_id, uid, start_date, end_date or None, int(_time.time())),
+        )
+        con.commit()
+        return JSONResponse({"id": cur.lastrowid}, status_code=201)
+    finally:
+        con.close()
+
+
+@router.put("/tours/{tour_id}/attempts/{attempt_id}")
+async def edit_tour_attempt(tour_id: int, attempt_id: int, request: Request,
+                            start_date: str = Form(...),
+                            end_date:   str = Form(default="")):
+    """Edit the current user's attempt dates (overlap engine applies)."""
+    uid = require_user(request)
+    con = sqlite3.connect(db_getter().path, timeout=10)
+    try:
+        _ensure_tables(con)
+        row = con.execute(
+            "SELECT user_id FROM tour_attempts WHERE id=? AND tour_id=?",
+            (attempt_id, tour_id),
+        ).fetchone()
+        if not row:
+            raise HTTPException(404, "Attempt not found")
+        if row[0] != uid:
+            raise HTTPException(403, "Not authorised")
+
+        others = [a for a in _list_attempts(con, tour_id, uid) if a["id"] != attempt_id]
+        err, cap = _place_attempt(others, start_date, end_date or None)
+        if err:
+            raise HTTPException(400, err)
+        if cap:
+            con.execute("UPDATE tour_attempts SET end_date=? WHERE id=?", (cap[1], cap[0]))
+        con.execute(
+            "UPDATE tour_attempts SET start_date=?, end_date=? WHERE id=?",
+            (start_date, end_date or None, attempt_id),
+        )
+        con.commit()
+        return JSONResponse({"id": attempt_id})
+    finally:
+        con.close()
+
+
+@router.delete("/tours/{tour_id}/attempts/{attempt_id}")
+async def delete_tour_attempt(tour_id: int, attempt_id: int, request: Request):
+    """Hard-delete the current user's attempt (and any share link to it)."""
+    uid = require_user(request)
+    con = sqlite3.connect(db_getter().path, timeout=10)
+    try:
+        _ensure_tables(con)
+        row = con.execute(
+            "SELECT user_id FROM tour_attempts WHERE id=? AND tour_id=?",
+            (attempt_id, tour_id),
+        ).fetchone()
+        if not row:
+            raise HTTPException(404, "Attempt not found")
+        if row[0] != uid:
+            raise HTTPException(403, "Not authorised")
+        con.execute("DELETE FROM tour_attempts WHERE id=?", (attempt_id,))
+        con.execute(
+            "DELETE FROM tour_shares WHERE tour_id=? AND user_id=? AND attempt_id=?",
+            (tour_id, uid, attempt_id),
+        )
+        con.commit()
+        return JSONResponse({"ok": True})
+    finally:
+        con.close()
+
+
+@router.get("/tours/{tour_id}/subscriber-count")
+async def tour_subscriber_count(tour_id: int, request: Request):
+    """Number of OTHER users with at least one attempt (for delete warnings)."""
+    uid = require_user(request)
+    con = sqlite3.connect(db_getter().path, timeout=10)
+    try:
+        _ensure_tables(con)
+        _tour_visible_or_404(con, tour_id, uid)
+        n = con.execute(
+            "SELECT COUNT(DISTINCT user_id) FROM tour_attempts WHERE tour_id=? AND user_id!=?",
+            (tour_id, uid),
+        ).fetchone()[0]
+        return JSONResponse({"others": n})
+    finally:
+        con.close()
+
+
+@router.patch("/tours/{tour_id}/visibility")
+async def set_tour_visibility(tour_id: int, request: Request, body: dict = Body(...)):
+    """Creator-only: toggle a tour public/private."""
+    uid = require_user(request)
+    con = sqlite3.connect(db_getter().path, timeout=10)
+    try:
+        _ensure_tables(con)
+        row = con.execute("SELECT created_by FROM tours WHERE id=?", (tour_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "Tour not found")
+        if row[0] != uid:
+            raise HTTPException(403, "Only the tour creator can change visibility")
+        shared = 1 if body.get("public") else 0
+        con.execute("UPDATE tours SET shared=? WHERE id=?", (shared, tour_id))
+        con.commit()
+        return JSONResponse({"public": bool(shared)})
     finally:
         con.close()
 
@@ -841,9 +1299,7 @@ async def update_tour(
     tour_id:     int,
     request:     Request,
     title:       str                       = Form(...),
-    start_date:  str                       = Form(...),
-    end_date:    str                       = Form(...),
-    shared:      int                       = Form(default=1),
+    shared:      int                       = Form(default=0),
     stage_order: str                       = Form(default="[]"),
     files:       List[UploadFile]           = File(default=[]),
 ):
@@ -852,14 +1308,6 @@ async def update_tour(
 
     if not title.strip():
         raise HTTPException(400, "Title is required")
-    try:
-        from datetime import date as _date
-        sd = _date.fromisoformat(start_date)
-        ed = _date.fromisoformat(end_date)
-    except ValueError:
-        raise HTTPException(400, "Invalid date format")
-    if ed < sd:
-        raise HTTPException(400, "End date must be on or after start date")
 
     # Parse stage_order JSON
     try:
@@ -894,8 +1342,8 @@ async def update_tour(
 
         # Update metadata and clear cached AI content
         con.execute(
-            "UPDATE tours SET title=?, start_date=?, end_date=?, shared=?, ai_summary=NULL WHERE id=?",
-            (title.strip(), start_date, end_date, shared, tour_id),
+            "UPDATE tours SET title=?, shared=?, ai_summary=NULL WHERE id=?",
+            (title.strip(), shared, tour_id),
         )
         con.execute(
             "DELETE FROM tour_stage_ai_advice WHERE stage_id IN "
@@ -985,41 +1433,40 @@ async def get_stage_locations(tour_id: int, stage_id: int, request: Request):
 
 
 @router.get("/tours/{tour_id}/stages/{stage_id}/forecast")
-async def get_stage_forecast(tour_id: int, stage_id: int, request: Request):
-    """Return an Open-Meteo forecast for the estimated date of an uncompleted tour stage."""
+async def get_stage_forecast(tour_id: int, stage_id: int, request: Request,
+                             match_user_id: Optional[int] = Query(default=None),
+                             attempt_id: Optional[int] = Query(default=None)):
+    """Return an Open-Meteo forecast for the estimated date of an uncompleted
+    tour stage. The date is anchored on the viewing user's selected attempt."""
     uid = require_user(request)
+    view_uid = match_user_id if match_user_id is not None else uid
 
-    from datetime import date as _date, timedelta
     import httpx
 
     con = sqlite3.connect(db_getter().path, timeout=10)
     try:
         _ensure_tables(con)
         stage_row = con.execute(
-            "SELECT ts.stage_num, ts.start_lat, ts.start_lon, t.start_date, t.end_date "
-            "FROM tour_stages ts JOIN tours t ON t.id = ts.tour_id "
-            "WHERE ts.id=? AND ts.tour_id=?",
+            "SELECT stage_num, start_lat, start_lon "
+            "FROM tour_stages WHERE id=? AND tour_id=?",
             (stage_id, tour_id),
         ).fetchone()
         if not stage_row:
             raise HTTPException(404, "Stage not found")
-        stage_num, start_lat, start_lon, tour_start, tour_end = stage_row
+        stage_num, start_lat, start_lon = stage_row
         total_stages = con.execute(
             "SELECT COUNT(*) FROM tour_stages WHERE tour_id=?", (tour_id,)
         ).fetchone()[0]
+        attempts = _list_attempts(con, tour_id, view_uid)
+        attempt  = _resolve_attempt(attempts, attempt_id)
     finally:
         con.close()
 
-    if start_lat is None or start_lon is None:
+    if start_lat is None or start_lon is None or attempt is None:
         return JSONResponse({"forecast": None, "out_of_range": False})
 
-    try:
-        sd = _date.fromisoformat(tour_start)
-        ed = _date.fromisoformat(tour_end)
-        tour_days = (ed - sd).days
-        offset = round((stage_num - 1) * tour_days / max(total_stages - 1, 1)) if total_stages > 1 else 0
-        stage_date = sd + timedelta(days=offset)
-    except Exception:
+    stage_date = _estimate_stage_date(attempt, attempts, stage_num, total_stages)
+    if stage_date is None:
         return JSONResponse({"forecast": None, "out_of_range": False})
 
     today = datetime.now(timezone.utc).date()
@@ -1188,6 +1635,7 @@ async def get_stage_ai_advice(
     stage_id: int,
     request: Request,
     match_user_id: Optional[int] = Query(default=None),
+    attempt_id: Optional[int] = Query(default=None),
     model: Optional[str] = Query(default=None),
     force: bool = Query(default=False),
     readonly: bool = Query(default=False),
@@ -1268,7 +1716,7 @@ async def get_stage_ai_advice(
     target = next(s for s in stages if s["id"] == target_row[0])
     con2 = sqlite3.connect(db.path, timeout=15)
     try:
-        completions = _global_stage_matching(con2, actual_uid, start_date, end_date, stages)
+        completions, _, _ = _completions_for_user(con2, tour_id, actual_uid, stages, attempt_id)
         # Count one route per segment (exclude alternates); keep THIS stage even
         # if it is itself an alternate. Matching still runs over the full list.
         stat_stages = _collapse_alternate_stages(con2, stages, prefer_id=target["id"])
@@ -1493,9 +1941,16 @@ def _resolve_share_token(con, token: str):
 
 @router.post("/tours/{tour_id}/publish")
 async def publish_tour(tour_id: int, request: Request):
-    """Generate (or return existing) share token for this user on a tour."""
+    """Generate (or return existing) share token for one of this user's attempts.
+    The chosen attempt fixes the tracking window shown on the public page."""
     import secrets
     uid = require_user(request)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    req_attempt_id = body.get("attempt_id")
+
     con = sqlite3.connect(db_getter().path, timeout=10)
     try:
         _ensure_tables(con)
@@ -1504,16 +1959,23 @@ async def publish_tour(tour_id: int, request: Request):
         ).fetchone()
         if not row:
             raise HTTPException(404, "Tour not found")
+
+        attempts = _list_attempts(con, tour_id, uid)
+        if not attempts:
+            raise HTTPException(400, "Subscribe to this tour before sharing it.")
+        attempt = _resolve_attempt(attempts, req_attempt_id)
+
         existing = con.execute(
             "SELECT token FROM tour_shares WHERE tour_id=? AND user_id=?", (tour_id, uid)
         ).fetchone()
         token = existing[0] if existing else secrets.token_hex(20)
         con.execute(
-            "INSERT OR REPLACE INTO tour_shares (tour_id, user_id, token) VALUES (?,?,?)",
-            (tour_id, uid, token),
+            "INSERT OR REPLACE INTO tour_shares (tour_id, user_id, token, attempt_id) "
+            "VALUES (?,?,?,?)",
+            (tour_id, uid, token, attempt["id"]),
         )
         con.commit()
-        return JSONResponse({"token": token})
+        return JSONResponse({"token": token, "attempt_id": attempt["id"]})
     finally:
         con.close()
 
@@ -1576,13 +2038,13 @@ async def tour_share_data(token: str):
     try:
         _ensure_tables(con)
         tour_row = con.execute(
-            "SELECT t.id, t.title, t.start_date, t.end_date, ts.user_id, t.ai_summary "
+            "SELECT t.id, t.title, ts.user_id, ts.attempt_id, t.ai_summary "
             "FROM tour_shares ts JOIN tours t ON t.id=ts.tour_id WHERE ts.token=?",
             (token,),
         ).fetchone()
         if not tour_row:
             raise HTTPException(404, "Share link not found or revoked")
-        tour_id, title, start_date, end_date, share_uid, ai_summary = tour_row
+        tour_id, title, share_uid, share_attempt_id, ai_summary = tour_row
 
         stage_rows = con.execute(
             "SELECT id, stage_num, name, distance_mi, climb_ft, start_lat, start_lon "
@@ -1600,15 +2062,24 @@ async def tour_share_data(token: str):
             "completion":  None,
         } for sr in stage_rows]
 
-        completions = _global_stage_matching(con, share_uid, start_date, end_date, stages)
+        completions, _, _ = _completions_for_user(con, tour_id, share_uid, stages, share_attempt_id)
         for stage in stages:
             stage["completion"] = completions.get(stage["id"])
+
+        # Date range for display: the shared attempt's own window.
+        attempts    = _list_attempts(con, tour_id, share_uid)
+        attempt     = _resolve_attempt(attempts, share_attempt_id)
+        disp_start  = attempt["start_date"] if attempt else ""
+        disp_end    = ""
+        if attempt:
+            win_lo, win_hi = _attempt_window(attempts, attempt)
+            disp_end = attempt["end_date"] or (win_hi if win_lo != "1900-01-01" else "")
 
         return JSONResponse({
             "id":         tour_id,
             "title":      title,
-            "start_date": start_date,
-            "end_date":   end_date,
+            "start_date": disp_start,
+            "end_date":   disp_end,
             "ai_summary": ai_summary,
             "stages":     stages,
         })
@@ -1654,13 +2125,13 @@ async def tour_share_activity_points(token: str):
     try:
         _ensure_tables(con)
         tour_row = con.execute(
-            "SELECT t.id, t.start_date, t.end_date, ts.user_id "
+            "SELECT t.id, ts.user_id, ts.attempt_id "
             "FROM tour_shares ts JOIN tours t ON t.id=ts.tour_id WHERE ts.token=?",
             (token,),
         ).fetchone()
         if not tour_row:
             raise HTTPException(404, "Share link not found or revoked")
-        tour_id, start_date, end_date, share_uid = tour_row
+        tour_id, share_uid, share_attempt_id = tour_row
 
         stage_rows = con.execute(
             "SELECT id, stage_num, name, distance_mi, climb_ft, start_lat, start_lon "
@@ -1673,7 +2144,7 @@ async def tour_share_activity_points(token: str):
             "start_lat": sr[5], "start_lon": sr[6],
         } for sr in stage_rows]
 
-        completions = _global_stage_matching(con, share_uid, start_date, end_date, stages)
+        completions, _, _ = _completions_for_user(con, tour_id, share_uid, stages, share_attempt_id)
         return JSONResponse(_activity_pts_for_stages(con, stages, completions))
     finally:
         con.close()
@@ -1681,44 +2152,40 @@ async def tour_share_activity_points(token: str):
 
 @router.get("/tours/share/{token}/stages/{stage_id}/forecast")
 async def tour_share_forecast(token: str, stage_id: int):
-    """Public endpoint — forecast for an uncompleted stage on a shared tour."""
-    from datetime import date as _date, timedelta
+    """Public endpoint — forecast for an uncompleted stage on a shared tour,
+    anchored on the shared attempt's window."""
     import httpx
 
     con = sqlite3.connect(db_getter().path, timeout=10)
     try:
         _ensure_tables(con)
         tour_row = con.execute(
-            "SELECT tour_id FROM tour_shares WHERE token=?", (token,)
+            "SELECT tour_id, user_id, attempt_id FROM tour_shares WHERE token=?", (token,)
         ).fetchone()
         if not tour_row:
             raise HTTPException(404, "Share link not found or revoked")
-        tour_id = tour_row[0]
+        tour_id, share_uid, share_attempt_id = tour_row
 
         stage_row = con.execute(
-            "SELECT ts.stage_num, ts.start_lat, ts.start_lon, t.start_date, t.end_date "
-            "FROM tour_stages ts JOIN tours t ON t.id = ts.tour_id "
-            "WHERE ts.id=? AND ts.tour_id=?",
+            "SELECT stage_num, start_lat, start_lon "
+            "FROM tour_stages WHERE id=? AND tour_id=?",
             (stage_id, tour_id),
         ).fetchone()
         if not stage_row:
             raise HTTPException(404, "Stage not found")
-        stage_num, start_lat, start_lon, tour_start, tour_end = stage_row
+        stage_num, start_lat, start_lon = stage_row
         total_stages = con.execute(
             "SELECT COUNT(*) FROM tour_stages WHERE tour_id=?", (tour_id,)
         ).fetchone()[0]
+        attempts = _list_attempts(con, tour_id, share_uid)
+        attempt  = _resolve_attempt(attempts, share_attempt_id)
     finally:
         con.close()
 
-    if start_lat is None or start_lon is None:
+    if start_lat is None or start_lon is None or attempt is None:
         return JSONResponse({"forecast": None, "out_of_range": False})
-    try:
-        sd = _date.fromisoformat(tour_start)
-        ed = _date.fromisoformat(tour_end)
-        tour_days  = (ed - sd).days
-        offset     = round((stage_num - 1) * tour_days / max(total_stages - 1, 1)) if total_stages > 1 else 0
-        stage_date = sd + timedelta(days=offset)
-    except Exception:
+    stage_date = _estimate_stage_date(attempt, attempts, stage_num, total_stages)
+    if stage_date is None:
         return JSONResponse({"forecast": None, "out_of_range": False})
 
     today = datetime.now(timezone.utc).date()

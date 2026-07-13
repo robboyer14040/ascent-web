@@ -225,10 +225,9 @@ html.mob-embedded body.mob-stage-view #stage-detail { padding-bottom:12px!import
         <option value="">— select a tour —</option>
       </select>
       <div id="tour-btn-row">
-        <button class="sb-btn primary" id="new-tour-btn"   onclick="openDefineModal()">New Tour…</button>
-        <button class="sb-btn"         id="edit-tour-btn"  style="visibility:hidden" onclick="openEditModal()">Edit…</button>
+        <button class="sb-btn primary" id="new-tour-btn"   onclick="openDefineModal()">Define Tour…</button>
+        <button class="sb-btn"         id="manage-btn"     style="visibility:hidden" onclick="openManageModal()">Manage…</button>
         <button class="sb-btn"         id="publish-btn"    style="visibility:hidden" onclick="openPublishModal()">Share…</button>
-        <button class="sb-btn danger"  id="delete-btn"     style="visibility:hidden" onclick="confirmDelete()">Delete…</button>
       </div>
       <select id="tour-user-selector" onchange="onUserSelect(this.value)">
         <option value="">Match activities for…</option>
@@ -297,19 +296,9 @@ html.mob-embedded body.mob-stage-view #stage-detail { padding-bottom:12px!import
           <input type="text" id="title-input" placeholder="e.g. Tour de France 2025">
         </div>
       </div>
-      <div class="form-row">
-        <div class="form-field">
-          <label>Start Date *</label>
-          <input type="date" id="start-input">
-        </div>
-        <div class="form-field">
-          <label>End Date *</label>
-          <input type="date" id="end-input">
-        </div>
-      </div>
       <div style="display:flex;align-items:center;gap:7px;margin-bottom:10px">
-        <input type="checkbox" id="shared-input" checked style="width:14px;height:14px;accent-color:var(--accent);cursor:pointer;flex-shrink:0">
-        <label for="shared-input" style="font-size:12px;color:var(--text);cursor:pointer;user-select:none">Share with friends</label>
+        <input type="checkbox" id="shared-input" style="width:14px;height:14px;accent-color:var(--accent);cursor:pointer;flex-shrink:0">
+        <label for="shared-input" style="font-size:12px;color:var(--text);cursor:pointer;user-select:none">Public — visible to all users</label>
       </div>
       <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">Stages — drag to reorder</div>
     </div>
@@ -338,6 +327,10 @@ html.mob-embedded body.mob-stage-view #stage-detail { padding-bottom:12px!import
     </div>
     <div id="publish-unpublished">
       <div style="font-size:13px;color:var(--muted);margin-bottom:14px">Create a public link anyone can use to view your progress on this tour. No sign-in required.</div>
+      <div id="publish-attempt-row" style="display:none;margin-bottom:14px">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em">Attempt to share</div>
+        <select id="publish-attempt-select" style="width:100%;font-size:13px;padding:6px 8px;background:var(--surface2);border:1px solid var(--border2);border-radius:6px;color:var(--text);outline:none"></select>
+      </div>
       <button class="sb-btn primary" onclick="doPublish()">Generate Share Link</button>
     </div>
     <div id="publish-published" style="display:none">
@@ -349,6 +342,59 @@ html.mob-embedded body.mob-stage-view #stage-detail { padding-bottom:12px!import
       <button onclick="doRevoke()" style="font-size:12px;color:#f87171;background:none;border:none;cursor:pointer;padding:0">Revoke link</button>
     </div>
     <div id="publish-status" style="font-size:12px;color:var(--muted);margin-top:8px"></div>
+  </div>
+</div>
+
+<!-- ── Manage tour modal ── -->
+<div id="manage-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:520;align-items:center;justify-content:center" onclick="if(event.target===this)closeManageModal()">
+  <div style="background:var(--surface);border:1px solid var(--border2);border-radius:12px;padding:22px 24px;width:440px;max-width:96vw;box-shadow:0 8px 40px rgba(0,0,0,.5)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div style="font-size:15px;font-weight:600" id="manage-title">Manage Tour</div>
+      <button onclick="closeManageModal()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:18px;padding:0;line-height:1">✕</button>
+    </div>
+
+    <div style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px" id="manage-attempts-label">Attempts</div>
+    <div style="display:flex;gap:6px;margin-bottom:8px">
+      <select id="manage-attempt-select" onchange="onManageAttemptChange(this.value)" style="flex:1;font-size:13px;padding:6px 8px;background:var(--surface2);border:1px solid var(--border2);border-radius:6px;color:var(--text);outline:none"></select>
+      <button class="sb-btn" id="manage-edit-attempt-btn" onclick="openAttemptModal('edit')">Edit…</button>
+    </div>
+    <div id="manage-unsub-note" style="font-size:12px;color:var(--muted2);margin-bottom:8px;display:none">Not subscribed — no activities are matched to this tour.</div>
+    <button class="sb-btn primary full" id="manage-subscribe-btn" onclick="openAttemptModal('add')" style="margin-bottom:14px">Subscribe…</button>
+
+    <div id="manage-creator" style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px;display:none">
+      <label style="display:flex;align-items:center;gap:7px;margin-bottom:12px;cursor:pointer">
+        <input type="checkbox" id="manage-public-cb" onchange="onManagePublicToggle(this.checked)" style="width:14px;height:14px;accent-color:var(--accent);cursor:pointer">
+        <span style="font-size:13px;color:var(--text)">Public — visible to all users</span>
+      </label>
+      <div style="display:flex;gap:8px">
+        <button class="sb-btn" onclick="editStagesFromManage()">Edit Stages…</button>
+        <button class="sb-btn danger" onclick="deleteTourFromManage()">Delete Tour…</button>
+      </div>
+    </div>
+    <div id="manage-status" style="font-size:12px;color:var(--muted);margin-top:10px"></div>
+  </div>
+</div>
+
+<!-- ── Attempt dates sub-modal (add / edit) ── -->
+<div id="attempt-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:640;align-items:center;justify-content:center" onclick="if(event.target===this)closeAttemptModal()">
+  <div style="background:var(--surface);border:1px solid var(--border2);border-radius:12px;padding:22px 24px;width:360px;max-width:96vw;box-shadow:0 8px 40px rgba(0,0,0,.5)">
+    <div style="font-size:15px;font-weight:600;margin-bottom:14px" id="attempt-modal-title">Add Attempt</div>
+    <div style="margin-bottom:10px">
+      <label style="display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">Start Date *</label>
+      <input type="date" id="attempt-start" style="width:100%;padding:6px 8px;background:var(--surface2);border:1px solid var(--border2);border-radius:6px;color:var(--text);outline:none;box-sizing:border-box">
+    </div>
+    <div style="margin-bottom:14px">
+      <label style="display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">End Date (optional)</label>
+      <input type="date" id="attempt-end" style="width:100%;padding:6px 8px;background:var(--surface2);border:1px solid var(--border2);border-radius:6px;color:var(--text);outline:none;box-sizing:border-box">
+    </div>
+    <div id="attempt-status" style="font-size:12px;color:#f87171;margin-bottom:10px;min-height:14px"></div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button id="attempt-delete-btn" onclick="deleteAttempt()" style="font-size:12px;color:#f87171;background:none;border:none;cursor:pointer;padding:0;display:none">Delete attempt</button>
+      <div style="display:flex;gap:8px;margin-left:auto">
+        <button class="sb-btn" onclick="closeAttemptModal()">Cancel</button>
+        <button class="sb-btn primary" id="attempt-save-btn" onclick="saveAttempt()">Save</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -603,6 +649,11 @@ let mapH             = 0;
 let _tourPointsCache = {};   // byStage points for current tour, keyed by stage_id string
 let _lastRouteBounds = null; // { bounds, opts } — used by resetMapZoom
 
+// Attempts (per-user tracking windows) state for the current tour + viewed user
+let tourAttempts     = [];      // [{id, start_date, end_date}]
+let currentAttemptId = null;    // selected attempt driving the stage matching
+let _attemptSelMap   = {};      // { tourId(str): attemptId } — persisted last selection
+
 // Modal state
 let modalMode   = 'define';   // 'define' | 'edit'
 // Each item: {type:'existing'|'new', id, name, completion, file}
@@ -767,22 +818,44 @@ async function onUserSelect(uid) {
     method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({prefs: {tour_match_user_id: tourMatchUserId || null}}),
   }).catch(()=>{});
-  // Reload current tour with new user's activities
+  // Reload current tour with new user's activities (and their attempts)
   const tourSel = document.getElementById('tour-selector');
   if(tourSel.value) await onTourSelect(tourSel.value);
 }
 
+// Scope the user-selector to the current tour: a private tour is only visible
+// to its creator, so peers are hidden and the view resets to self.
+function _applyUserSelectorScope() {
+  const sel = document.getElementById('tour-user-selector');
+  if(!sel) return;
+  const isPublic = !tourInfo || tourInfo.shared !== false;
+  Array.from(sel.options).forEach(o => {
+    const uidOpt = parseInt(o.value);
+    const show = isPublic || uidOpt === _currentUserId;
+    o.hidden = !show;
+    o.disabled = !show;
+  });
+  if(!isPublic && !_isViewingSelf()) {
+    tourMatchUserId = _currentUserId;
+    sel.value = String(_currentUserId);
+  }
+}
+
 // ── Tour CRUD ─────────────────────────────────────────────────────────────────
+let _toursById = {};   // id(str) → tour summary {shared, is_mine, …}
+
 async function loadTours() {
   try {
     const tours = await fetch('/tours').then(r=>r.json());
     const sel = document.getElementById('tour-selector');
     const prev = sel.value;
     sel.innerHTML = '<option value="">— select a tour —</option>';
+    _toursById = {};
     tours.forEach(t => {
+      _toursById[String(t.id)] = t;
       const o = document.createElement('option');
       o.value = t.id;
-      o.textContent = `${t.title}  (${t.start_date} – ${t.end_date})`;
+      o.textContent = t.title;
       sel.appendChild(o);
     });
     if(prev && tours.find(t=>String(t.id)===prev)) sel.value=prev;
@@ -796,12 +869,16 @@ function _saveLastTour(id) {
   }).catch(()=>{});
 }
 
+// True when the user-selector is on the current logged-in user (i.e. own data).
+function _isViewingSelf() {
+  return !tourMatchUserId || tourMatchUserId === _currentUserId;
+}
+
 async function onTourSelect(id) {
   _saveLastTour(id || null);
-  selectedId=null; tourInfo=null; tourStages=[];
+  selectedId=null; tourInfo=null; tourStages=[]; tourAttempts=[]; currentAttemptId=null;
   routeGroup && routeGroup.clearLayers();
-  document.getElementById('delete-btn').style.visibility   = 'hidden';
-  document.getElementById('edit-tour-btn').style.visibility = 'hidden';
+  document.getElementById('manage-btn').style.visibility   = 'hidden';
   document.getElementById('publish-btn').style.visibility  = 'hidden';
   document.getElementById('view-all-btn').style.display  = 'none';
   document.getElementById('stage-list').innerHTML = '';
@@ -814,14 +891,33 @@ async function onTourSelect(id) {
     return;
   }
 
+  // A private tour is only viewable by its creator — reset any peer view to self
+  // before fetching so the owner sees their own data.
+  const summary = _toursById[String(id)];
+  if(summary && summary.shared === false && !_isViewingSelf()) {
+    tourMatchUserId = _currentUserId;
+    document.getElementById('tour-user-selector').value = String(_currentUserId);
+  }
+
+  // Preferred attempt: last-selected for THIS tour when viewing our own data.
+  const wantAttempt = _isViewingSelf() ? _attemptSelMap[String(id)] : null;
+
   try {
-    const tourUrl = tourMatchUserId ? `/tours/${id}?match_user_id=${tourMatchUserId}` : `/tours/${id}`;
-    tourInfo   = await fetch(tourUrl).then(r=>r.json());
+    const qs = new URLSearchParams();
+    if(tourMatchUserId) qs.set('match_user_id', tourMatchUserId);
+    if(wantAttempt)     qs.set('attempt_id', wantAttempt);
+    const q = qs.toString();
+    tourInfo   = await fetch(`/tours/${id}${q ? '?' + q : ''}`).then(r=>r.json());
     tourStages = tourInfo.stages || [];
+    tourAttempts     = tourInfo.attempts || [];
+    currentAttemptId = tourInfo.attempt_id || null;
+    if(_isViewingSelf() && currentAttemptId) _rememberAttemptSel(id, currentAttemptId);
   } catch(e) { console.error('tour fetch',e); return; }
 
-  document.getElementById('delete-btn').style.visibility   = tourInfo.is_mine ? 'visible' : 'hidden';
-  document.getElementById('edit-tour-btn').style.visibility = tourInfo.is_mine ? 'visible' : 'hidden';
+  // Rebuild the user-selector scope for this tour (private → creator only).
+  _applyUserSelectorScope();
+
+  document.getElementById('manage-btn').style.visibility   = 'visible';
   document.getElementById('publish-btn').style.visibility  = 'visible';
   const vab = document.getElementById('view-all-btn');
   vab.style.display  = '';
@@ -839,22 +935,29 @@ async function onTourSelect(id) {
   if (TourNav.isPhone()) { _setTourMobTitle(); TourNav.showStage(false); }
 }
 
-function confirmDelete() {
+// Cascading delete safety workflow (creator only). Warns when other users are
+// still subscribed (Case A) vs. a plain confirm when only the creator is (Case B).
+async function deleteTourFromManage() {
   if(!tourInfo?.is_mine) return;
-  document.getElementById('tour-delete-msg').textContent =
-    `Delete tour "${tourInfo.title}"? This cannot be undone.`;
+  let others = 0;
+  try {
+    others = (await fetch(`/tours/${tourInfo.id}/subscriber-count`).then(r=>r.json())).others || 0;
+  } catch(e) {}
+  document.getElementById('tour-delete-msg').textContent = others > 0
+    ? `${others} other ${others === 1 ? 'user is' : 'users are'} still subscribed to this tour. Are you sure you want to delete this tour?`
+    : `Are you sure you want to delete "${tourInfo.title}"? This cannot be undone.`;
   const modal = document.getElementById('tour-delete-modal');
   modal.style.display = 'flex';
   document.getElementById('tour-delete-confirm-btn').onclick = async () => {
     closeTourDeleteModal();
+    closeManageModal();
     await fetch(`/tours/${tourInfo.id}`, { method:'DELETE' });
     _saveLastTour(null);
-    tourInfo=null; tourStages=[]; selectedId=null;
+    tourInfo=null; tourStages=[]; selectedId=null; tourAttempts=[]; currentAttemptId=null;
     routeGroup && routeGroup.clearLayers();
     document.getElementById('tour-selector').value = '';
     document.getElementById('stage-list').innerHTML = '';
-    document.getElementById('delete-btn').style.visibility   = 'hidden';
-    document.getElementById('edit-tour-btn').style.visibility = 'hidden';
+    document.getElementById('manage-btn').style.visibility   = 'hidden';
     document.getElementById('publish-btn').style.visibility  = 'hidden';
     document.getElementById('view-all-btn').style.display  = 'none';
     document.getElementById('main-empty').style.display    = 'flex';
@@ -864,6 +967,180 @@ function confirmDelete() {
 }
 function closeTourDeleteModal() {
   document.getElementById('tour-delete-modal').style.display = 'none';
+}
+
+// ── Attempts + Manage modal ───────────────────────────────────────────────────
+function _rememberAttemptSel(tourId, attemptId) {
+  _attemptSelMap[String(tourId)] = attemptId;
+  fetch('/api/settings/ui-prefs', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({prefs: {tour_attempt_sel: _attemptSelMap}}),
+  }).catch(()=>{});
+}
+
+function _attemptLabel(a) {
+  return a.end_date ? `${a.start_date} → ${a.end_date}` : `${a.start_date} → (open)`;
+}
+
+// Reload the current tour for the currently-selected attempt and re-render.
+async function _reloadForAttempt() {
+  if(!tourInfo) return;
+  const qs = new URLSearchParams();
+  if(tourMatchUserId) qs.set('match_user_id', tourMatchUserId);
+  if(currentAttemptId) qs.set('attempt_id', currentAttemptId);
+  const q = qs.toString();
+  tourInfo = await fetch(`/tours/${tourInfo.id}${q ? '?' + q : ''}`).then(r=>r.json());
+  tourStages       = tourInfo.stages || [];
+  tourAttempts     = tourInfo.attempts || [];
+  currentAttemptId = tourInfo.attempt_id || null;
+  if(_isViewingSelf() && currentAttemptId) _rememberAttemptSel(tourInfo.id, currentAttemptId);
+  buildStageColHead();
+  renderStageList();
+  await drawRoutes(null);
+  renderStageList();
+  renderDetail(null);
+}
+
+function openManageModal() {
+  if(!tourInfo) return;
+  document.getElementById('manage-status').textContent = '';
+  _renderManage();
+  document.getElementById('manage-modal').style.display = 'flex';
+}
+function closeManageModal() {
+  document.getElementById('manage-modal').style.display = 'none';
+}
+
+function _renderManage() {
+  const readOnly = !_isViewingSelf();
+  const viewedName = tourMatchUserId && _tourUserMap[tourMatchUserId]
+    ? _tourUserMap[tourMatchUserId].username : 'you';
+  document.getElementById('manage-title').textContent =
+    readOnly ? `Attempts — ${viewedName}` : 'Manage Tour';
+
+  // Attempts dropdown
+  const sel = document.getElementById('manage-attempt-select');
+  sel.innerHTML = '';
+  tourAttempts.forEach(a => {
+    const o = document.createElement('option');
+    o.value = a.id; o.textContent = _attemptLabel(a);
+    sel.appendChild(o);
+  });
+  const hasAttempts = tourAttempts.length > 0;
+  sel.style.display = hasAttempts ? '' : 'none';
+  if(hasAttempts && currentAttemptId) sel.value = String(currentAttemptId);
+
+  document.getElementById('manage-unsub-note').style.display = hasAttempts ? 'none' : '';
+
+  // Edit-attempt button + primary Subscribe/Add button (hidden read-only)
+  const editBtn = document.getElementById('manage-edit-attempt-btn');
+  const subBtn  = document.getElementById('manage-subscribe-btn');
+  editBtn.style.display = (!readOnly && hasAttempts) ? '' : 'none';
+  subBtn.style.display  = readOnly ? 'none' : '';
+  subBtn.textContent    = hasAttempts ? 'Add Attempt…' : 'Subscribe…';
+
+  // Creator-only block
+  const creator = document.getElementById('manage-creator');
+  if(tourInfo.is_mine && !readOnly) {
+    creator.style.display = '';
+    document.getElementById('manage-public-cb').checked = tourInfo.shared !== false;
+  } else {
+    creator.style.display = 'none';
+  }
+}
+
+async function onManageAttemptChange(val) {
+  currentAttemptId = val ? parseInt(val) : null;
+  await _reloadForAttempt();
+  _renderManage();
+}
+
+async function onManagePublicToggle(isPublic) {
+  const stat = document.getElementById('manage-status');
+  try {
+    const r = await fetch(`/tours/${tourInfo.id}/visibility`, {
+      method:'PATCH', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({public: !!isPublic}),
+    });
+    if(!r.ok) throw new Error();
+    tourInfo.shared = !!isPublic;
+    stat.textContent = isPublic ? 'Tour is now public.' : 'Tour is now private.';
+  } catch(e) {
+    stat.textContent = 'Could not change visibility.';
+    document.getElementById('manage-public-cb').checked = tourInfo.shared !== false;
+  }
+}
+
+function editStagesFromManage() {
+  closeManageModal();
+  openEditModal();
+}
+
+// Attempt add/edit sub-modal
+let _attemptMode = 'add';   // 'add' | 'edit'
+function openAttemptModal(mode) {
+  _attemptMode = mode;
+  const startI = document.getElementById('attempt-start');
+  const endI   = document.getElementById('attempt-end');
+  document.getElementById('attempt-status').textContent = '';
+  document.getElementById('attempt-modal-title').textContent =
+    mode === 'edit' ? 'Edit Attempt' : (tourAttempts.length ? 'Add Attempt' : 'Subscribe');
+  document.getElementById('attempt-delete-btn').style.display = mode === 'edit' ? '' : 'none';
+  if(mode === 'edit') {
+    const a = tourAttempts.find(x => x.id === currentAttemptId);
+    startI.value = a ? a.start_date : '';
+    endI.value   = a && a.end_date ? a.end_date : '';
+  } else {
+    startI.value = ''; endI.value = '';
+  }
+  document.getElementById('attempt-modal').style.display = 'flex';
+}
+function closeAttemptModal() {
+  document.getElementById('attempt-modal').style.display = 'none';
+}
+
+async function saveAttempt() {
+  const stat = document.getElementById('attempt-status');
+  const sd = document.getElementById('attempt-start').value;
+  const ed = document.getElementById('attempt-end').value;
+  if(!sd) { stat.textContent = 'Start date is required.'; return; }
+  if(ed && ed < sd) { stat.textContent = 'End date must be on or after start date.'; return; }
+
+  const form = new FormData();
+  form.append('start_date', sd);
+  form.append('end_date', ed);
+  const editing = _attemptMode === 'edit';
+  const url = editing
+    ? `/tours/${tourInfo.id}/attempts/${currentAttemptId}`
+    : `/tours/${tourInfo.id}/attempts`;
+  try {
+    const r = await fetch(url, { method: editing ? 'PUT' : 'POST', body: form });
+    if(!r.ok) {
+      const err = await r.json().catch(()=>({}));
+      stat.textContent = (err.detail || 'Could not save attempt.');
+      return;
+    }
+    const body = await r.json().catch(()=>({}));
+    if(!editing && body.id) currentAttemptId = body.id;   // select the new attempt
+    closeAttemptModal();
+    await _reloadForAttempt();
+    _renderManage();
+  } catch(e) { stat.textContent = 'Network error.'; }
+}
+
+async function deleteAttempt() {
+  if(_attemptMode !== 'edit' || !currentAttemptId) return;
+  if(!confirm('Delete this attempt? This cannot be undone.')) return;
+  try {
+    await fetch(`/tours/${tourInfo.id}/attempts/${currentAttemptId}`, { method:'DELETE' });
+    if(_attemptSelMap[String(tourInfo.id)] === currentAttemptId) {
+      delete _attemptSelMap[String(tourInfo.id)];
+    }
+    currentAttemptId = null;
+    closeAttemptModal();
+    await _reloadForAttempt();
+    _renderManage();
+  } catch(e) {}
 }
 
 // ── Stage table column header, picker, and row rendering ─────────────────────
@@ -1296,10 +1573,13 @@ window.renderStageForecastTab = function (el) {
 async function drawRoutes(activeId) {
   if(!tourMap || !routeGroup || !tourInfo) return;
   try {
-    const _muParam = tourMatchUserId ? `?match_user_id=${tourMatchUserId}` : '';
+    const _apQs = new URLSearchParams();
+    if(tourMatchUserId)  _apQs.set('match_user_id', tourMatchUserId);
+    if(currentAttemptId) _apQs.set('attempt_id', currentAttemptId);
+    const _apStr = _apQs.toString();
     const [byStage, actPts] = await Promise.all([
       fetch(`/tours/${tourInfo.id}/points`).then(r=>r.json()),
-      fetch(`/tours/${tourInfo.id}/activity-points${_muParam}`).then(r=>r.json()).catch(()=>({})),
+      fetch(`/tours/${tourInfo.id}/activity-points${_apStr ? '?' + _apStr : ''}`).then(r=>r.json()).catch(()=>({})),
     ]);
     _tourPointsCache = {...byStage};
     Object.entries(actPts).forEach(([sid, pts]) => { if(pts?.length) _tourPointsCache[sid] = pts; });
@@ -1711,7 +1991,12 @@ async function renderDetail(activeId) {
     TourStageDetail.estimatedRoute(el, {
       stage, stages: tourStages, pts: _tourPointsCache[String(stage.id)],
       gpxHref: `/tours/stages/${stage.id}/export/gpx`,
-      forecastEndpoint: `/tours/${tourInfo.id}/stages/${stage.id}/forecast`,
+      forecastEndpoint: `/tours/${tourInfo.id}/stages/${stage.id}/forecast` + (() => {
+        const p = new URLSearchParams();
+        if(tourMatchUserId)  p.set('match_user_id', tourMatchUserId);
+        if(currentAttemptId) p.set('attempt_id', currentAttemptId);
+        const s = p.toString(); return s ? '?' + s : '';
+      })(),
       renderTrajectory: _renderTrajectory,
       afterForecastHtml: `<div class="mob-view-tour-wrap"><button class="mob-view-tour-btn" onclick="mobPortraitBack()">View Entire Tour</button></div>`,
     });
@@ -1764,7 +2049,8 @@ async function renderDetail(activeId) {
     if(_nextStage && _nextStage.id === stage.id) {
       const _isOwner       = !tourMatchUserId || tourMatchUserId === _currentUserId;
       const _stageIdForAdvice = stage.id;
-      const muParam        = tourMatchUserId ? `&match_user_id=${tourMatchUserId}` : '';
+      const muParam        = (tourMatchUserId ? `&match_user_id=${tourMatchUserId}` : '')
+                             + (currentAttemptId ? `&attempt_id=${currentAttemptId}` : '');
 
       function _loadStageAiAdvice(force) {
         const txt = document.getElementById('stage-ai-advice-text');
@@ -2102,9 +2388,7 @@ function _openDefine() {
   document.getElementById('modal-title').textContent   = 'Define New Tour';
   document.getElementById('submit-btn').textContent    = 'OK';
   document.getElementById('title-input').value = '';
-  document.getElementById('start-input').value = '';
-  document.getElementById('end-input').value   = '';
-  document.getElementById('shared-input').checked = true;
+  document.getElementById('shared-input').checked = false;
   document.getElementById('modal-status').textContent = '';
   document.getElementById('submit-btn').disabled = false;
   renderModalStages();
@@ -2120,8 +2404,6 @@ function _openEdit() {
   document.getElementById('modal-title').textContent   = 'Edit Tour';
   document.getElementById('submit-btn').textContent    = 'Save';
   document.getElementById('title-input').value = tourInfo.title;
-  document.getElementById('start-input').value = tourInfo.start_date;
-  document.getElementById('end-input').value   = tourInfo.end_date;
   document.getElementById('shared-input').checked = tourInfo.shared !== false;
   document.getElementById('modal-status').textContent = '';
   document.getElementById('submit-btn').disabled = false;
@@ -2271,13 +2553,47 @@ function removeModalStage(idx) {
   renderModalStages();
 }
 
-function addFilesToModal(fileList) {
+// Read a file's full bytes, or null if it can't be read. iCloud Drive files
+// picked/dragged on iPad can be dataless placeholders: the File carries a name
+// but no bytes, so iPad Safari serializes an empty multipart body at upload time
+// and the server rejects every field as missing. A read can also fault-in an
+// on-demand iCloud file a beat late, so we retry once. We accept the read only
+// if it returns non-empty bytes matching the File's reported size (a short read
+// means the placeholder still isn't fully downloaded).
+async function _readGpxBytes(f) {
+  for(let attempt = 0; attempt < 2; attempt++) {
+    if(attempt) await new Promise(r => setTimeout(r, 500));
+    let buf;
+    try { buf = await f.arrayBuffer(); } catch(_) { buf = null; }
+    if(buf && buf.byteLength > 0 && (!f.size || buf.byteLength >= f.size)) return buf;
+  }
+  return null;
+}
+
+async function addFilesToModal(fileList) {
   const files = [...fileList].filter(f => f.name.toLowerCase().endsWith('.gpx'));
   if(!files.length) return;
   files.sort((a,b) => a.name.localeCompare(b.name));
-  files.forEach(f => modalStages.push({ type:'new', name:f.name, file:f }));
+
+  // Read (and materialize) all files concurrently so the retry delay is paid
+  // once overall, not once per placeholder. Promise.all preserves order.
+  const results = await Promise.all(files.map(async f => ({ f, buf: await _readGpxBytes(f) })));
+
+  const failed = [];
+  for(const { f, buf } of results) {
+    if(!buf) { failed.push(f.name); continue; }
+    const copy = new File([buf], f.name, { type: f.type || 'application/gpx+xml' });
+    modalStages.push({ type:'new', name:f.name, file:copy });
+  }
   renderModalStages();
   document.getElementById('gpx-input').value = '';
+
+  if(failed.length) {
+    alert('Couldn’t read ' + failed.length + ' file' + (failed.length > 1 ? 's' : '') +
+      ' (' + failed.join(', ') + ').\n\n' +
+      'If they live in iCloud Drive, open the Files app and download them to this ' +
+      'device first (tap the file so the cloud ⤓ icon clears), then add them again.');
+  }
 }
 
 // ── Submit (create or update) ─────────────────────────────────────────────────
@@ -2326,14 +2642,9 @@ function _tourProgressReset() {
 
 async function submitTour() {
   const title = document.getElementById('title-input').value.trim();
-  const sd    = document.getElementById('start-input').value;
-  const ed    = document.getElementById('end-input').value;
   const stat  = document.getElementById('modal-status');
 
   if(!title)              { stat.textContent='Title is required.'; return; }
-  if(!sd)                 { stat.textContent='Start date is required.'; return; }
-  if(!ed)                 { stat.textContent='End date is required.'; return; }
-  if(ed < sd)             { stat.textContent='End date must be on or after start date.'; return; }
   if(!modalStages.length) { stat.textContent='At least one stage is required.'; return; }
 
   const newStages = modalStages.filter(s => s.type === 'new');
@@ -2356,43 +2667,83 @@ async function submitTour() {
     document.getElementById('submit-btn').disabled = false;
   };
 
-  try {
-    let method, url;
-    const form = new FormData();
-    form.append('title', title);
-    form.append('start_date', sd);
-    form.append('end_date', ed);
-    form.append('shared', document.getElementById('shared-input').checked ? '1' : '0');
-
-    if(modalMode === 'define') {
-      // POST — files passed in current modal order
-      method = 'POST'; url = '/tours';
-      modalStages.forEach(s => form.append('files', s.file));
+  // Turn a failed response into a readable message (FastAPI 422 detail is an
+  // array of {loc, msg} objects; anything else is a plain string).
+  const errText = async (resp) => {
+    const err = await resp.json().catch(()=>({}));
+    const fallback = modalMode === 'define' ? 'Error creating tour.' : 'Error saving tour.';
+    let msg;
+    if(Array.isArray(err.detail)) {
+      msg = err.detail
+        .map(e => (e && e.msg) ? `${(e.loc || []).slice(1).join('.') || 'field'}: ${e.msg}` : String(e))
+        .join('; ');
     } else {
-      // PUT — send stage_order + new files
-      let newIdx = 0;
-      const stageOrder = modalStages.map(s =>
-        s.type === 'existing'
-          ? { type:'existing', id:s.id }
-          : { type:'new', idx:newIdx++ }
-      );
-      method = 'PUT'; url = `/tours/${tourInfo.id}`;
-      form.append('stage_order', JSON.stringify(stageOrder));
-      newStages.forEach(s => form.append('files', s.file));
+      msg = err.detail;
     }
+    return `${msg || fallback} (${resp.status})`;
+  };
 
-    const resp = await uploadTourForm(method, url, form, onProgress);
-    if(!resp.ok) {
-      const err = await resp.json().catch(()=>({}));
-      onFail(err.detail || (modalMode === 'define' ? 'Error creating tour.' : 'Error saving tour.'));
+  const shared = document.getElementById('shared-input').checked ? '1' : '0';
+
+  try {
+    if(modalMode === 'define') {
+      // Batched create: iPad Safari can fail to build one giant multipart body,
+      // so create the tour with the first batch of files, then append the rest
+      // in chunks. Any batch failure rolls back the whole (partial) tour.
+      const BATCH = 5;
+      const files = modalStages.map(s => s.file);
+      const total = files.length;
+      const batchProgress = (done, size) => (frac, processing) =>
+        onProgress((done + frac * size) / total, processing);
+
+      const first = files.slice(0, BATCH);
+      const form0 = new FormData();
+      form0.append('title', title);
+      form0.append('shared', shared);
+      first.forEach(f => form0.append('files', f));
+      let resp = await uploadTourForm('POST', '/tours', form0, batchProgress(0, first.length));
+      if(!resp.ok) { onFail(await errText(resp)); return; }
+      const tourId = (await resp.json()).id;
+
+      for(let i = BATCH; i < total; i += BATCH) {
+        const chunk = files.slice(i, i + BATCH);
+        const form = new FormData();
+        chunk.forEach(f => form.append('files', f));
+        resp = await uploadTourForm('POST', `/tours/${tourId}/stages`, form, batchProgress(i, chunk.length));
+        if(!resp.ok) {
+          const msg = await errText(resp);
+          await fetch(`/tours/${tourId}`, { method:'DELETE' }).catch(()=>{});
+          onFail(msg);
+          return;
+        }
+      }
+
+      closeModal();
+      await loadTours();
+      document.getElementById('tour-selector').value = tourId;
+      await onTourSelect(tourId);
       return;
     }
-    const data = await resp.json();
-    const selId = modalMode === 'define' ? data.id : tourInfo.id;
+
+    // Edit mode — single PUT with stage_order + any new files.
+    let newIdx = 0;
+    const stageOrder = modalStages.map(s =>
+      s.type === 'existing'
+        ? { type:'existing', id:s.id }
+        : { type:'new', idx:newIdx++ }
+    );
+    const form = new FormData();
+    form.append('title', title);
+    form.append('shared', shared);
+    form.append('stage_order', JSON.stringify(stageOrder));
+    newStages.forEach(s => form.append('files', s.file));
+
+    const resp = await uploadTourForm('PUT', `/tours/${tourInfo.id}`, form, onProgress);
+    if(!resp.ok) { onFail(await errText(resp)); return; }
     closeModal();
     await loadTours();
-    document.getElementById('tour-selector').value = selId;
-    await onTourSelect(selId);
+    document.getElementById('tour-selector').value = tourInfo.id;
+    await onTourSelect(tourInfo.id);
   } catch(e) {
     onFail('Network error.');
   }
@@ -2439,6 +2790,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const prefs = await fetch('/api/settings/ui-prefs').then(r=>r.json());
     // Restore AI coach model preference
     if(prefs['ascent-coach-model']) tourCoachModel = prefs['ascent-coach-model'];
+    // Restore per-tour last-selected attempt map
+    if(prefs.tour_attempt_sel && typeof prefs.tour_attempt_sel === 'object') {
+      _attemptSelMap = prefs.tour_attempt_sel;
+    }
     // Restore selected user for activity matching
     if(prefs.tour_match_user_id) {
       const uSel = document.getElementById('tour-user-selector');
@@ -2467,13 +2822,36 @@ function openPublishModal() {
   const urlInput = document.getElementById('publish-url');
   const status   = document.getElementById('publish-status');
   status.textContent = '';
+
+  // You can only share your own attempts.
+  const myAttempts = _isViewingSelf() ? tourAttempts : [];
   if(tourInfo.share_token) {
     urlInput.value = `${location.origin}/tours/share/${tourInfo.share_token}`;
     unpub.style.display = 'none';
     pub.style.display   = '';
+  } else if(!myAttempts.length) {
+    unpub.style.display = '';
+    pub.style.display   = 'none';
+    document.getElementById('publish-attempt-row').style.display = 'none';
+    status.textContent = 'Subscribe to this tour before sharing it.';
   } else {
     unpub.style.display = '';
     pub.style.display   = 'none';
+    // Offer an attempt picker only when there's more than one.
+    const row = document.getElementById('publish-attempt-row');
+    const sel = document.getElementById('publish-attempt-select');
+    if(myAttempts.length > 1) {
+      sel.innerHTML = '';
+      myAttempts.forEach(a => {
+        const o = document.createElement('option');
+        o.value = a.id; o.textContent = _attemptLabel(a);
+        sel.appendChild(o);
+      });
+      sel.value = String(currentAttemptId || myAttempts[myAttempts.length - 1].id);
+      row.style.display = '';
+    } else {
+      row.style.display = 'none';
+    }
   }
   modal.style.display = 'flex';
 }
@@ -2483,8 +2861,22 @@ function closePublishModal() {
 async function doPublish() {
   const status = document.getElementById('publish-status');
   status.textContent = 'Generating…';
+  // Which attempt to publish: the picker (if shown) else the selected attempt.
+  const row = document.getElementById('publish-attempt-row');
+  const attemptId = (row && row.style.display !== 'none')
+    ? parseInt(document.getElementById('publish-attempt-select').value)
+    : currentAttemptId;
   try {
-    const d = await fetch(`/tours/${tourInfo.id}/publish`, {method:'POST'}).then(r=>r.json());
+    const r = await fetch(`/tours/${tourInfo.id}/publish`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({attempt_id: attemptId || null}),
+    });
+    if(!r.ok) {
+      const err = await r.json().catch(()=>({}));
+      status.textContent = err.detail || 'Error generating link.';
+      return;
+    }
+    const d = await r.json();
     tourInfo.share_token = d.token;
     document.getElementById('publish-url').value = `${location.origin}/tours/share/${d.token}`;
     document.getElementById('publish-unpublished').style.display = 'none';
