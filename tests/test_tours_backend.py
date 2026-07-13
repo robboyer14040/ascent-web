@@ -175,6 +175,47 @@ def test_edit_tour_reorder_only_no_files(authed_client):
     assert r2.status_code == 200, r2.text
 
 
+def test_add_tour_stages_appends_in_sequence(authed_client):
+    """POST /tours/{id}/stages appends new stages, continuing stage_num.
+
+    Backs the batched uploader: large tours are created with a first batch then
+    grown in chunks so iPad Safari never has to build one giant multipart body.
+    """
+    c = authed_client
+    r = c.post(
+        "/tours",
+        data={"title": "T", "start_date": "2026-07-01", "end_date": "2026-07-26", "shared": "1"},
+        files=[_gpx_file("1.gpx"), _gpx_file("2.gpx")],
+    )
+    assert r.status_code == 201, r.text
+    tid = r.json()["id"]
+
+    r2 = c.post(f"/tours/{tid}/stages", files=[_gpx_file("3.gpx"), _gpx_file("4.gpx")])
+    assert r2.status_code == 201, r2.text
+    assert r2.json()["added"] == 2
+
+    tour = c.get(f"/tours/{tid}").json()
+    nums = [s["stage_num"] for s in tour["stages"]]
+    assert nums == [1, 2, 3, 4]
+
+
+def test_add_tour_stages_rejects_non_creator(authed_client, make_user):
+    """Only the tour creator may append stages."""
+    from app.auth import create_session_token, SESSION_COOKIE
+    c = authed_client
+    r = c.post(
+        "/tours",
+        data={"title": "T", "start_date": "2026-07-01", "end_date": "2026-07-26", "shared": "1"},
+        files=[_gpx_file("1.gpx")],
+    )
+    tid = r.json()["id"]
+
+    other = make_user()
+    c.cookies.set(SESSION_COOKIE, create_session_token(other))
+    r2 = c.post(f"/tours/{tid}/stages", files=[_gpx_file("2.gpx")])
+    assert r2.status_code == 403, r2.text
+
+
 def test_parse_gpx_route_invalid_xml():
     with pytest.raises(ValueError):
         tours._parse_gpx_route(b"<gpx><unclosed>", "x.gpx")
@@ -302,3 +343,248 @@ def test_global_stage_matching_no_activities_all_none(con):
     _make_activities_table(con)
     result = tours._global_stage_matching(con, 1, "2026-07-01", "2026-07-10", ONE_STAGE)
     assert result == {100: None}
+
+
+# ── Attempt window (Section 4 matching bounds) ────────────────────────────────
+
+def test_attempt_window_explicit_end():
+    a = {"id": 1, "start_date": "2026-07-01", "end_date": "2026-07-10"}
+    assert tours._attempt_window([a], a) == ("2026-07-01", "2026-07-10")
+
+
+def test_attempt_window_open_with_subsequent_caps_day_before():
+    a = {"id": 1, "start_date": "2026-07-01", "end_date": None}
+    b = {"id": 2, "start_date": "2026-08-01", "end_date": None}
+    assert tours._attempt_window([a, b], a) == ("2026-07-01", "2026-07-31")
+
+
+def test_attempt_window_open_no_subsequent_is_open_start():
+    a = {"id": 1, "start_date": "2026-07-01", "end_date": None}
+    assert tours._attempt_window([a], a) == ("1900-01-01", "2026-07-01")
+
+
+# ── Forecast stage-date estimate (attempt-anchored) ──────────────────────────
+
+def test_estimate_stage_date_explicit_end_interpolates():
+    a = {"id": 1, "start_date": "2026-07-01", "end_date": "2026-07-11"}
+    # 6 stages over 10 days -> stage 4 lands 6 days in (round(3*10/5)).
+    assert tours._estimate_stage_date(a, [a], 4, 6).isoformat() == "2026-07-07"
+
+
+def test_estimate_stage_date_open_with_subsequent_caps_window():
+    a = {"id": 1, "start_date": "2026-07-01", "end_date": None}
+    b = {"id": 2, "start_date": "2026-07-11", "end_date": None}
+    # Capped end is 2026-07-10 -> 9-day window; stage 2 of 3 = +4 days (round(1*9/2)=4).
+    assert tours._estimate_stage_date(a, [a, b], 2, 3).isoformat() == "2026-07-05"
+
+
+def test_estimate_stage_date_open_no_subsequent_one_per_day():
+    a = {"id": 1, "start_date": "2026-07-01", "end_date": None}
+    assert tours._estimate_stage_date(a, [a], 3, 10).isoformat() == "2026-07-03"
+
+
+# ── Overlap-resolution engine (_place_attempt, Rules 1–4) ─────────────────────
+
+def test_place_attempt_rule1_intersect_reject():
+    others = [{"id": 1, "start_date": "2026-07-01", "end_date": "2026-07-10"}]
+    err, cap = tours._place_attempt(others, "2026-07-05", None)
+    assert err is not None and cap is None
+
+
+def test_place_attempt_duplicate_start_reject():
+    others = [{"id": 1, "start_date": "2026-07-01", "end_date": "2026-07-10"}]
+    err, cap = tours._place_attempt(others, "2026-07-01", None)
+    assert err is not None and cap is None
+
+
+def test_place_attempt_rule2_open_prev_auto_cap():
+    others = [{"id": 1, "start_date": "2026-07-01", "end_date": None}]
+    err, cap = tours._place_attempt(others, "2026-08-01", None)
+    assert err is None
+    assert cap == (1, "2026-07-31")
+
+
+def test_place_attempt_rule3_historical_before_existing_ok():
+    others = [{"id": 2, "start_date": "2026-08-01", "end_date": "2026-08-10"}]
+    err, cap = tours._place_attempt(others, "2026-07-01", None)
+    assert err is None and cap is None
+
+
+def test_place_attempt_rule4_future_collision_reject():
+    others = [{"id": 2, "start_date": "2026-08-01", "end_date": None}]
+    err, cap = tours._place_attempt(others, "2026-07-01", "2026-08-01")
+    assert err is not None and cap is None
+
+
+def test_place_attempt_end_before_start_reject():
+    err, cap = tours._place_attempt([], "2026-07-10", "2026-07-01")
+    assert err is not None and cap is None
+
+
+# ── Attempt CRUD + subscription HTTP endpoints ────────────────────────────────
+
+def _make_tour(client):
+    r = client.post("/tours", data={"title": "T", "shared": "1"},
+                    files=[_gpx_file("a.gpx")])
+    assert r.status_code == 201, r.text
+    return r.json()["id"]
+
+
+def test_subscribe_then_add_attempt_autocaps_previous(authed_client):
+    c = authed_client
+    tid = _make_tour(c)
+
+    # Unsubscribed: get_tour reports no attempts.
+    info = c.get(f"/tours/{tid}").json()
+    assert info["attempts"] == [] and info["attempt_id"] is None
+
+    # Subscribe with an open-ended attempt.
+    r = c.post(f"/tours/{tid}/attempts", data={"start_date": "2026-07-01"})
+    assert r.status_code == 201, r.text
+
+    # Add a later attempt -> the open one is auto-capped the day before.
+    r2 = c.post(f"/tours/{tid}/attempts", data={"start_date": "2026-08-01"})
+    assert r2.status_code == 201, r2.text
+
+    attempts = c.get(f"/tours/{tid}/attempts").json()["attempts"]
+    assert [a["start_date"] for a in attempts] == ["2026-07-01", "2026-08-01"]
+    assert attempts[0]["end_date"] == "2026-07-31"
+
+
+def test_add_attempt_intersect_rejected(authed_client):
+    c = authed_client
+    tid = _make_tour(c)
+    c.post(f"/tours/{tid}/attempts", data={"start_date": "2026-07-01", "end_date": "2026-07-10"})
+    r = c.post(f"/tours/{tid}/attempts", data={"start_date": "2026-07-05"})
+    assert r.status_code == 400
+
+
+def test_edit_and_delete_attempt(authed_client):
+    c = authed_client
+    tid = _make_tour(c)
+    aid = c.post(f"/tours/{tid}/attempts",
+                 data={"start_date": "2026-07-01", "end_date": "2026-07-10"}).json()["id"]
+
+    r = c.put(f"/tours/{tid}/attempts/{aid}",
+              data={"start_date": "2026-07-02", "end_date": "2026-07-12"})
+    assert r.status_code == 200, r.text
+    assert c.get(f"/tours/{tid}/attempts").json()["attempts"][0]["start_date"] == "2026-07-02"
+
+    assert c.delete(f"/tours/{tid}/attempts/{aid}").status_code == 200
+    assert c.get(f"/tours/{tid}/attempts").json()["attempts"] == []
+
+
+def test_subscriber_count_counts_other_users(authed_client, make_user, test_db):
+    from app.auth import create_session_token, SESSION_COOKIE
+    c = authed_client
+    tid = _make_tour(c)
+    c.post(f"/tours/{tid}/attempts", data={"start_date": "2026-07-01"})
+    assert c.get(f"/tours/{tid}/subscriber-count").json()["others"] == 0
+
+    # A second user subscribes -> creator sees one other subscriber.
+    other = make_user()
+    from starlette.testclient import TestClient
+    import app.main as main_mod
+    oc = TestClient(main_mod.app)
+    oc.cookies.set(SESSION_COOKIE, create_session_token(other))
+    oc.post(f"/tours/{tid}/attempts", data={"start_date": "2026-07-05"})
+    assert c.get(f"/tours/{tid}/subscriber-count").json()["others"] == 1
+
+
+def test_private_tour_hidden_from_peer_and_visibility_toggle(authed_client, make_user):
+    from app.auth import create_session_token, SESSION_COOKIE
+    from starlette.testclient import TestClient
+    import app.main as main_mod
+    c = authed_client
+    # Private tour.
+    r = c.post("/tours", data={"title": "P", "shared": "0"}, files=[_gpx_file("a.gpx")])
+    tid = r.json()["id"]
+
+    other = make_user()
+    oc = TestClient(main_mod.app)
+    oc.cookies.set(SESSION_COOKIE, create_session_token(other))
+    # Peer cannot see a private tour.
+    assert oc.get(f"/tours/{tid}").status_code == 404
+    # Creator flips it public.
+    assert c.patch(f"/tours/{tid}/visibility", json={"public": True}).status_code == 200
+    assert oc.get(f"/tours/{tid}").status_code == 200
+    # Peer cannot change visibility.
+    assert oc.patch(f"/tours/{tid}/visibility", json={"public": False}).status_code == 403
+
+
+def test_publish_targets_attempt_and_share_uses_its_window(authed_client):
+    c = authed_client
+    tid = _make_tour(c)
+    aid = c.post(f"/tours/{tid}/attempts",
+                 data={"start_date": "2026-07-01", "end_date": "2026-07-10"}).json()["id"]
+
+    pub = c.post(f"/tours/{tid}/publish", json={"attempt_id": aid}).json()
+    assert pub["attempt_id"] == aid and pub["token"]
+
+    data = c.get(f"/tours/share/{pub['token']}/data").json()
+    # The public page's window reflects the shared attempt, not any tour-level date.
+    assert data["start_date"] == "2026-07-01"
+    assert data["end_date"] == "2026-07-10"
+    assert len(data["stages"]) == 1
+
+
+def test_legacy_tour_migrates_to_attempts(authed_client, make_user, add_activity, test_db):
+    creator = authed_client.user_id
+    other = make_user()
+    # `other` has an activity inside the legacy window; creator has none.
+    add_activity(user_id=other,
+                 creation_time_s=int(datetime(2026, 7, 3, 12, tzinfo=timezone.utc).timestamp()))
+
+    con = sqlite3.connect(test_db.path)
+    tours._ensure_tables(con)
+    con.execute(
+        "INSERT INTO tours (created_by, title, start_date, end_date, created_at, shared) "
+        "VALUES (?,?,?,?,?,0)",
+        (creator, "Legacy", "2026-07-01", "2026-07-10", 0),
+    )
+    tid = con.execute("SELECT id FROM tours WHERE title='Legacy'").fetchone()[0]
+    con.commit()
+    con.close()
+
+    # Re-opening runs the one-time migration inside _ensure_tables.
+    con2 = sqlite3.connect(test_db.path)
+    tours._ensure_tables(con2)
+    shared = con2.execute("SELECT shared FROM tours WHERE id=?", (tid,)).fetchone()[0]
+    users = {r[0] for r in con2.execute(
+        "SELECT user_id FROM tour_attempts WHERE tour_id=?", (tid,)).fetchall()}
+    # Idempotent: a second pass must not duplicate attempts.
+    tours._ensure_tables(con2)
+    n = con2.execute("SELECT COUNT(*) FROM tour_attempts WHERE tour_id=?", (tid,)).fetchone()[0]
+    con2.close()
+
+    assert shared == 1                       # legacy tours become public
+    assert creator in users and other in users
+    assert n == len(users)                   # no duplication on re-run
+
+
+def test_publish_without_subscription_rejected(authed_client):
+    c = authed_client
+    tid = _make_tour(c)
+    r = c.post(f"/tours/{tid}/publish", json={})
+    assert r.status_code == 400
+
+
+def test_forecast_none_when_unsubscribed(authed_client):
+    # No attempt -> no window -> no forecast (and no outbound network call).
+    c = authed_client
+    tid = _make_tour(c)
+    sid = c.get(f"/tours/{tid}").json()["stages"][0]["id"]
+    body = c.get(f"/tours/{tid}/stages/{sid}/forecast").json()
+    assert body["forecast"] is None and body["out_of_range"] is False
+
+
+def test_unsubscribed_user_gets_no_completions(authed_client, add_activity):
+    c = authed_client
+    uid = c.user_id
+    # An activity that WOULD match, but the user has no attempt -> no matching.
+    add_activity(user_id=uid, distance_mi=10.0, creation_time_s=_ts(2026, 7, 3),
+                 start_lat=40.0, start_lon=-105.0,
+                 points=[(40.0, -105.0), (40.03, -105.0)])
+    tid = _make_tour(c)
+    info = c.get(f"/tours/{tid}").json()
+    assert all(s["completion"] is None for s in info["stages"])
