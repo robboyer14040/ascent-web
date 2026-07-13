@@ -153,6 +153,11 @@ html.mob-embedded body.mob-stage-view #stage-detail { padding-bottom:12px!import
 #modal-drop-zone{border:2px dashed var(--border2);border-radius:7px;padding:12px;text-align:center;font-size:12px;color:var(--muted);cursor:pointer;margin-top:6px;transition:border-color .15s,color .15s}
 #modal-drop-zone:hover,#modal-drop-zone.drag-active{border-color:var(--accent);color:var(--text)}
 #modal-status{font-size:12px;color:var(--muted)}
+#modal-progress{display:none;height:5px;background:var(--surface2);border-radius:3px;margin:0 20px;overflow:hidden;flex-shrink:0}
+#modal-progress.active{display:block}
+#modal-progress-fill{height:100%;width:0;background:var(--accent);border-radius:3px;transition:width .12s ease}
+#modal-progress-fill.indeterminate{width:40%!important;border-radius:3px;animation:mp-indet 1.1s ease-in-out infinite}
+@keyframes mp-indet{0%{margin-left:-40%}100%{margin-left:100%}}
 
 /* ── Activity title bar (INFO-pane style) ── */
 .act-title-bar{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px}
@@ -315,6 +320,7 @@ html.mob-embedded body.mob-stage-view #stage-detail { padding-bottom:12px!import
         <input type="file" id="gpx-input" accept=".gpx" multiple style="display:none">
       </div>
     </div>
+    <div id="modal-progress"><div id="modal-progress-fill"></div></div>
     <div class="modal-foot">
       <button class="sb-btn primary" id="submit-btn" onclick="submitTour()">OK</button>
       <button class="sb-btn" onclick="closeModal()">Cancel</button>
@@ -2125,6 +2131,7 @@ function _openEdit() {
 
 function closeModal() {
   document.getElementById('tour-modal').classList.remove('open');
+  _tourProgressReset();
 }
 
 // ── Modal stage list rendering + drag-to-reorder ──────────────────────────────
@@ -2274,6 +2281,49 @@ function addFilesToModal(fileList) {
 }
 
 // ── Submit (create or update) ─────────────────────────────────────────────────
+// XHR upload with progress. onProgress(frac) fires 0→1 as bytes upload;
+// on completion of the upload body it flips to the indeterminate "processing"
+// state while the server parses GPX + writes the DB. Resolves a fetch-like object.
+function uploadTourForm(method, url, form, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open(method, url);
+    xhr.upload.addEventListener('progress', e => {
+      if(e.lengthComputable) onProgress(e.loaded / e.total, false);
+    });
+    xhr.upload.addEventListener('load', () => onProgress(1, true));
+    xhr.addEventListener('load', () => resolve({
+      ok: xhr.status >= 200 && xhr.status < 300,
+      status: xhr.status,
+      json: () => { try { return Promise.resolve(JSON.parse(xhr.responseText)); }
+                    catch(e){ return Promise.resolve({}); } },
+    }));
+    xhr.addEventListener('error', () => reject(new Error('Network error')));
+    xhr.addEventListener('abort',  () => reject(new Error('Upload aborted')));
+    xhr.send(form);
+  });
+}
+
+function _tourProgress(frac, processing) {
+  const bar  = document.getElementById('modal-progress');
+  const fill = document.getElementById('modal-progress-fill');
+  bar.classList.add('active');
+  if(processing) {
+    fill.classList.add('indeterminate');
+  } else {
+    fill.classList.remove('indeterminate');
+    fill.style.width = Math.round(frac * 100) + '%';
+  }
+}
+
+function _tourProgressReset() {
+  const bar  = document.getElementById('modal-progress');
+  const fill = document.getElementById('modal-progress-fill');
+  bar.classList.remove('active');
+  fill.classList.remove('indeterminate');
+  fill.style.width = '0';
+}
+
 async function submitTour() {
   const title = document.getElementById('title-input').value.trim();
   const sd    = document.getElementById('start-input').value;
@@ -2291,33 +2341,33 @@ async function submitTour() {
     stat.textContent = 'Add at least one GPX file.'; return;
   }
 
-  stat.textContent = modalMode === 'define' ? 'Creating…' : 'Saving…';
   document.getElementById('submit-btn').disabled = true;
+  _tourProgress(0, false);
+  const onProgress = (frac, processing) => {
+    _tourProgress(frac, processing);
+    stat.textContent = processing
+      ? (modalMode === 'define' ? 'Creating…' : 'Saving…')
+      : 'Uploading… ' + Math.round(frac * 100) + '%';
+  };
+
+  const onFail = msg => {
+    stat.textContent = msg;
+    _tourProgressReset();
+    document.getElementById('submit-btn').disabled = false;
+  };
 
   try {
+    let method, url;
+    const form = new FormData();
+    form.append('title', title);
+    form.append('start_date', sd);
+    form.append('end_date', ed);
+    form.append('shared', document.getElementById('shared-input').checked ? '1' : '0');
+
     if(modalMode === 'define') {
       // POST — files passed in current modal order
-      const form = new FormData();
-      form.append('title', title);
-      form.append('start_date', sd);
-      form.append('end_date', ed);
-      form.append('shared', document.getElementById('shared-input').checked ? '1' : '0');
-      // Append files in the order they appear in modalStages
+      method = 'POST'; url = '/tours';
       modalStages.forEach(s => form.append('files', s.file));
-
-      const resp = await fetch('/tours', { method:'POST', body:form });
-      if(!resp.ok) {
-        const err = await resp.json().catch(()=>({}));
-        stat.textContent = err.detail || 'Error creating tour.';
-        document.getElementById('submit-btn').disabled = false;
-        return;
-      }
-      const data = await resp.json();
-      closeModal();
-      await loadTours();
-      document.getElementById('tour-selector').value = data.id;
-      await onTourSelect(data.id);
-
     } else {
       // PUT — send stage_order + new files
       let newIdx = 0;
@@ -2326,29 +2376,25 @@ async function submitTour() {
           ? { type:'existing', id:s.id }
           : { type:'new', idx:newIdx++ }
       );
-      const form = new FormData();
-      form.append('title', title);
-      form.append('start_date', sd);
-      form.append('end_date', ed);
-      form.append('shared', document.getElementById('shared-input').checked ? '1' : '0');
+      method = 'PUT'; url = `/tours/${tourInfo.id}`;
       form.append('stage_order', JSON.stringify(stageOrder));
       newStages.forEach(s => form.append('files', s.file));
-
-      const resp = await fetch(`/tours/${tourInfo.id}`, { method:'PUT', body:form });
-      if(!resp.ok) {
-        const err = await resp.json().catch(()=>({}));
-        stat.textContent = err.detail || 'Error saving tour.';
-        document.getElementById('submit-btn').disabled = false;
-        return;
-      }
-      closeModal();
-      await loadTours();
-      document.getElementById('tour-selector').value = tourInfo.id;
-      await onTourSelect(tourInfo.id);
     }
+
+    const resp = await uploadTourForm(method, url, form, onProgress);
+    if(!resp.ok) {
+      const err = await resp.json().catch(()=>({}));
+      onFail(err.detail || (modalMode === 'define' ? 'Error creating tour.' : 'Error saving tour.'));
+      return;
+    }
+    const data = await resp.json();
+    const selId = modalMode === 'define' ? data.id : tourInfo.id;
+    closeModal();
+    await loadTours();
+    document.getElementById('tour-selector').value = selId;
+    await onTourSelect(selId);
   } catch(e) {
-    stat.textContent = 'Network error.';
-    document.getElementById('submit-btn').disabled = false;
+    onFail('Network error.');
   }
 }
 

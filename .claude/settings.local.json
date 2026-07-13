@@ -106,7 +106,16 @@
       "Bash(awk '/<style>/{f=1}f{print NR\": \"$0}/<\\\\/style>/{f=0}' app/templates/tour.html)",
       "Bash(awk '/const U = \\\\{/{f=1} f{print} /^};/{if\\(f\\){f=0}}' app/templates/tour.html)",
       "Bash(awk '/const U = \\\\{/{f=1} f{print} /^};/{if\\(f\\){f=0}}' app/templates/tour_share.html)",
-      "Bash(/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Resources/jsc -e \"var localStorage={_d:{},getItem:function\\(k\\){return this._d[k]===undefined?null:this._d[k]},setItem:function\\(k,v\\){this._d[k]=v}}; var WeakMap=this.WeakMap; load\\('app/static/map_utils.js'\\); print\\('default='+MapUtils.photosEnabled\\(\\)\\); MapUtils.setPhotosEnabled\\(false\\); print\\('afterOff='+MapUtils.photosEnabled\\(\\)\\); MapUtils.setPhotosEnabled\\(true\\); print\\('afterOn='+MapUtils.photosEnabled\\(\\)\\)\")"
+      "Bash(/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Resources/jsc -e \"var localStorage={_d:{},getItem:function\\(k\\){return this._d[k]===undefined?null:this._d[k]},setItem:function\\(k,v\\){this._d[k]=v}}; var WeakMap=this.WeakMap; load\\('app/static/map_utils.js'\\); print\\('default='+MapUtils.photosEnabled\\(\\)\\); MapUtils.setPhotosEnabled\\(false\\); print\\('afterOff='+MapUtils.photosEnabled\\(\\)\\); MapUtils.setPhotosEnabled\\(true\\); print\\('afterOn='+MapUtils.photosEnabled\\(\\)\\)\")",
+      "Read(//Users/rob/Downloads/tdf 2026/**)",
+      "Bash(ASCENT_DB_PATH=/tmp/repro.ascentdb SECRET_KEY=testkey venv_arm64/bin/python -m uvicorn app.main:app --port 8199 --log-level info)",
+      "Bash(echo \"started pid $!\")",
+      "Bash(break)",
+      "Bash(pkill -f \"uvicorn app.main:app --port 8199\")",
+      "Bash(ASCENT_DB_PATH=/tmp/repro.ascentdb SECRET_KEY=testkey venv_arm64/bin/python -m uvicorn app.main:app --port 8199 --log-level warning)",
+      "Bash(/Users/rob/projects/ascent-web/venv_arm64/bin/python -c ' *)",
+      "Bash(pkill -f \"8199\")",
+      "Bash(rm -f /tmp/repro.ascentdb* /tmp/cj.txt /tmp/get.json /tmp/put*.json)"
     ]
   }
 }
