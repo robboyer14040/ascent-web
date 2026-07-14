@@ -125,3 +125,42 @@ function _altStageIds(stages, cache) {
     for (const s of grp.slice(1)) alt.add(String(s.id));
   return alt;
 }
+
+// Stage numbering: when ONE naming scheme matches EVERY stage name in the tour,
+// the number embedded in the name is the stage number shown everywhere (map
+// badges, titles, nav, AI summaries); otherwise we fall back to list order
+// (stage_num). Schemes, tried in order: (1) a leading number ("3 Alpe d'Huez");
+// (2) a "Stage N" reference anywhere ("Stage 3"); (3) the SAME 1-4 letter code +
+// a number at the start of every name ("CdP 1", "TdF15" — mixed codes don't
+// qualify). Mirrors _stage_display_num() in tours.py — keep the two in sync.
+const _LEADING_NUM_RE = /^\s*(\d+)/;
+const _STAGE_WORD_RE  = /\bstage\s*(\d+)/i;
+const _CODE_PREFIX_RE = /^\s*([A-Za-z]{1,4})\s*(\d+)/;
+
+// scheme: every name matches `pat`; number is capture group 1. Returns a
+// stage_num→number map, or null if any name fails to match.
+function _mapByRegex(stages, pat) {
+  const ms = stages.map(s => pat.exec(s.name || ''));
+  if (!ms.every(Boolean)) return null;
+  const map = {};
+  stages.forEach((s, i) => { map[s.stage_num] = parseInt(ms[i][1], 10); });
+  return map;
+}
+// scheme: every name starts with the SAME 1-4 letter code + a number.
+function _mapByCodePrefix(stages) {
+  const ms = stages.map(s => _CODE_PREFIX_RE.exec(s.name || ''));
+  if (!ms.every(Boolean)) return null;
+  if (new Set(ms.map(m => m[1].toLowerCase())).size !== 1) return null;
+  const map = {};
+  stages.forEach((s, i) => { map[s.stage_num] = parseInt(ms[i][2], 10); });
+  return map;
+}
+function stageDisplayNum(stage, stages, fallback) {
+  if (Array.isArray(stages) && stages.length) {
+    const map = _mapByRegex(stages, _LEADING_NUM_RE)
+             || _mapByRegex(stages, _STAGE_WORD_RE)
+             || _mapByCodePrefix(stages);
+    if (map && map[stage.stage_num] != null) return map[stage.stage_num];
+  }
+  return fallback != null ? fallback : stage.stage_num;
+}

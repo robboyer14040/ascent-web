@@ -343,7 +343,7 @@ function _setTourMobTitle() {
   const el = document.getElementById('mob-tour-title');
   if (!el) return;
   const s = selectedId ? (tourInfo?.stages||[]).find(s => String(s.id) === String(selectedId)) : null;
-  el.textContent = s ? `Stage ${s.stage_num}: ${s.name}` : (tourInfo?.title || '{{ tour_title }}');
+  el.textContent = s ? `Stage ${stageDisplayNum(s, tourInfo?.stages)}: ${s.name}` : (tourInfo?.title || '{{ tour_title }}');
 }
 
 // ── Mobile nested-nav hooks (shared controller in tour_mob_nav.js) ──────────────

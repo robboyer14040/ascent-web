@@ -1,11 +1,13 @@
 /* list.css — single source of truth for list-row vertical spacing.
-   Both scrolling lists share one vertical rhythm from --list-row-h:
+   Every scrolling list shares one vertical rhythm from --list-row-h:
      • Activities list (.act-row, main.html)  — fixed height; the virtual
        scroller in main.js reads this same value as ROW_H, so keep them tied.
-     • Tour stage list (.stage-item, tour.html / tour_share.html) — min-height,
-       so a two-line stage row is never clipped.
+     • Tour stage table (.stage-row, tour.html desktop) — fixed height.
+     • Shared/phone stage list (.stage-item, tour_share.html / phone) —
+       min-height, so a two-line stage row is never clipped.
    Change the number here to restyle the spacing of every list at once. */
-:root{ --list-row-h:34px; }
+:root{ --list-row-h:26px; }
 
 .act-row{ height:var(--list-row-h); }
+.stage-row{ height:var(--list-row-h); }
 .stage-item{ min-height:var(--list-row-h); }

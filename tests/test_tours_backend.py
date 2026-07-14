@@ -588,3 +588,242 @@ def test_unsubscribed_user_gets_no_completions(authed_client, add_activity):
     tid = _make_tour(c)
     info = c.get(f"/tours/{tid}").json()
     assert all(s["completion"] is None for s in info["stages"])
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Visibility, Manage-modal control contract, Delete Tour, cross-user attempt
+# permissions, and date-ordered stage matching.
+#
+# `_make_tour` (above) creates a PUBLIC tour (shared=1). Helpers below add a
+# private variant and a peer TestClient (a second logged-in "browser").
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _client_for(uid):
+    """A fresh TestClient carrying `uid`'s session cookie — a distinct browser."""
+    from starlette.testclient import TestClient
+    from app.auth import create_session_token, SESSION_COOKIE
+    import app.main as main_mod
+    c = TestClient(main_mod.app)
+    c.cookies.set(SESSION_COOKIE, create_session_token(uid))
+    return c
+
+
+def _private_tour(client, title="Priv"):
+    r = client.post("/tours", data={"title": title, "shared": "0"},
+                    files=[_gpx_file("a.gpx")])
+    assert r.status_code == 201, r.text
+    return r.json()["id"]
+
+
+# ── Public / Private visibility ───────────────────────────────────────────────
+
+def test_public_tour_visible_to_peer_in_listing_and_detail(authed_client, make_user):
+    """A public tour shows up in a peer's list (as not theirs) and is readable."""
+    c = authed_client
+    tid = _make_tour(c)                      # public
+
+    peer = _client_for(make_user())
+    listing = peer.get("/tours").json()
+    entry = next((t for t in listing if t["id"] == tid), None)
+    assert entry is not None
+    assert entry["is_mine"] is False and entry["shared"] is True
+
+    detail = peer.get(f"/tours/{tid}")
+    assert detail.status_code == 200
+    assert detail.json()["is_mine"] is False
+
+
+def test_private_tour_excluded_from_peer_listing_and_detail(authed_client, make_user):
+    """A private tour is hidden from peers in BOTH the list and detail, while the
+    creator still sees their own."""
+    c = authed_client
+    tid = _private_tour(c)
+
+    peer = _client_for(make_user())
+    assert tid not in {t["id"] for t in peer.get("/tours").json()}
+    assert peer.get(f"/tours/{tid}").status_code == 404
+
+    assert tid in {t["id"] for t in c.get("/tours").json()}
+
+
+def test_visibility_toggle_flips_peer_access(authed_client, make_user):
+    """Flipping shared on/off adds/removes the tour from a peer's world."""
+    c = authed_client
+    tid = _private_tour(c)
+    peer = _client_for(make_user())
+    assert peer.get(f"/tours/{tid}").status_code == 404
+
+    assert c.patch(f"/tours/{tid}/visibility", json={"public": True}).status_code == 200
+    assert peer.get(f"/tours/{tid}").status_code == 200
+    assert tid in {t["id"] for t in peer.get("/tours").json()}
+
+    assert c.patch(f"/tours/{tid}/visibility", json={"public": False}).status_code == 200
+    assert peer.get(f"/tours/{tid}").status_code == 404
+
+
+# ── Manage-modal control contract ─────────────────────────────────────────────
+# The modal's control states are driven entirely by data the backend returns:
+#   • is_mine  → the creator-only block (Public toggle / Edit Stages / Delete Tour)
+#   • attempts → Subscribe… (empty) vs Add Attempt… + edit/delete-attempt controls
+#   • read_only (list_tour_attempts) → a peer's attempts are view-only
+# These tests pin those contracts rather than the DOM the JS builds from them.
+
+def test_manage_creator_block_only_for_creator(authed_client, make_user):
+    c = authed_client
+    tid = _make_tour(c)
+    assert c.get(f"/tours/{tid}").json()["is_mine"] is True        # creator block shown
+
+    peer = _client_for(make_user())
+    assert peer.get(f"/tours/{tid}").json()["is_mine"] is False    # creator block hidden
+
+
+def test_manage_subscribe_vs_add_attempt_state(authed_client):
+    c = authed_client
+    tid = _make_tour(c)
+    info = c.get(f"/tours/{tid}").json()
+    assert info["attempts"] == [] and info["attempt_id"] is None   # → "Subscribe…"
+
+    c.post(f"/tours/{tid}/attempts", data={"start_date": "2026-07-01"})
+    info2 = c.get(f"/tours/{tid}").json()
+    assert len(info2["attempts"]) == 1 and info2["attempt_id"] is not None  # → "Add Attempt…"
+
+
+def test_manage_peer_attempts_are_read_only(authed_client, make_user):
+    c = authed_client
+    tid = _make_tour(c)
+    c.post(f"/tours/{tid}/attempts", data={"start_date": "2026-07-01"})
+    creator = c.user_id
+
+    # Creator viewing their own attempts: editable.
+    assert c.get(f"/tours/{tid}/attempts").json()["read_only"] is False
+
+    # Peer browsing the creator's attempts on a public tour: read-only.
+    peer = _client_for(make_user())
+    r = peer.get(f"/tours/{tid}/attempts", params={"user_id": creator})
+    assert r.status_code == 200 and r.json()["read_only"] is True
+
+
+def test_peer_cannot_toggle_visibility(authed_client, make_user):
+    """The Public toggle is creator-only; a peer PATCH is rejected."""
+    c = authed_client
+    tid = _make_tour(c)
+    peer = _client_for(make_user())
+    assert peer.patch(f"/tours/{tid}/visibility", json={"public": False}).status_code == 403
+    assert c.get(f"/tours/{tid}").json()["shared"] is True   # unchanged
+
+
+# ── Cross-user attempt permissions ────────────────────────────────────────────
+
+def test_delete_attempt_rejects_other_users_attempt(authed_client, make_user):
+    c = authed_client
+    tid = _make_tour(c)
+    aid = c.post(f"/tours/{tid}/attempts", data={"start_date": "2026-07-01"}).json()["id"]
+
+    peer = _client_for(make_user())
+    assert peer.delete(f"/tours/{tid}/attempts/{aid}").status_code == 403
+    assert len(c.get(f"/tours/{tid}/attempts").json()["attempts"]) == 1   # survives
+
+
+def test_edit_attempt_rejects_other_users_attempt(authed_client, make_user):
+    c = authed_client
+    tid = _make_tour(c)
+    aid = c.post(f"/tours/{tid}/attempts", data={"start_date": "2026-07-01"}).json()["id"]
+
+    peer = _client_for(make_user())
+    r = peer.put(f"/tours/{tid}/attempts/{aid}", data={"start_date": "2026-07-02"})
+    assert r.status_code == 403
+
+
+def test_peer_cannot_subscribe_to_private_tour(authed_client, make_user):
+    c = authed_client
+    tid = _private_tour(c)
+    peer = _client_for(make_user())
+    # Private tour is invisible → subscribing (adding an attempt) 404s.
+    assert peer.post(f"/tours/{tid}/attempts",
+                     data={"start_date": "2026-07-01"}).status_code == 404
+
+
+# ── Delete Tour (private + public cascade) ────────────────────────────────────
+
+def test_delete_private_tour(authed_client):
+    c = authed_client
+    tid = _private_tour(c)
+    assert c.delete(f"/tours/{tid}").status_code == 200
+    assert c.get(f"/tours/{tid}").status_code == 404
+
+
+def test_delete_tour_rejected_for_non_creator(authed_client, make_user):
+    c = authed_client
+    tid = _make_tour(c)                      # public
+    peer = _client_for(make_user())
+    assert peer.delete(f"/tours/{tid}").status_code == 403
+    assert c.get(f"/tours/{tid}").status_code == 200   # survives
+
+
+def test_delete_public_tour_cascades_attempts_and_shares(authed_client, make_user, test_db):
+    """Deleting a public tour removes every user's attempts and all share links
+    (the cascading 'Delete Tour…' case with subscribers + a published share)."""
+    c = authed_client
+    tid = _make_tour(c)                      # public
+    aid = c.post(f"/tours/{tid}/attempts",
+                 data={"start_date": "2026-07-01", "end_date": "2026-07-10"}).json()["id"]
+    token = c.post(f"/tours/{tid}/publish", json={"attempt_id": aid}).json()["token"]
+
+    peer = _client_for(make_user())
+    peer.post(f"/tours/{tid}/attempts", data={"start_date": "2026-07-05"})
+
+    assert c.delete(f"/tours/{tid}").status_code == 200
+
+    assert c.get(f"/tours/{tid}").status_code == 404          # gone for creator
+    assert peer.get(f"/tours/{tid}").status_code == 404       # gone for peer
+    assert c.get(f"/tours/share/{token}/data").status_code == 404   # share link dead
+
+    con = sqlite3.connect(test_db.path)
+    left = con.execute("SELECT COUNT(*) FROM tour_attempts WHERE tour_id=?", (tid,)).fetchone()[0]
+    con.close()
+    assert left == 0                                          # all subscribers' attempts removed
+
+
+# ── Stage matching with fake activities on unique dates ───────────────────────
+
+def _spread_stage(sid, num, dist=50.0, lat=40.0, lon=-105.0):
+    return {"id": sid, "stage_num": num, "name": f"S{num}",
+            "distance_mi": dist, "start_lat": lat, "start_lon": lon}
+
+
+def test_matching_assigns_activities_in_date_order(con):
+    """Three stages identical in start-point and distance are distinguishable
+    only by date. With three activities on unique days the date-order score must
+    pair earliest activity → stage 1, next → stage 2, latest → stage 3."""
+    _make_activities_table(con)
+    _insert_activity(con, 71, _ts(2026, 7, 2), 50.0, 40.0, -105.0)
+    _insert_activity(con, 72, _ts(2026, 7, 4), 50.0, 40.0, -105.0)
+    _insert_activity(con, 73, _ts(2026, 7, 6), 50.0, 40.0, -105.0)
+    stages = [_spread_stage(201, 1), _spread_stage(202, 2), _spread_stage(203, 3)]
+
+    result = tours._global_stage_matching(con, 1, "2026-07-01", "2026-07-10", stages)
+    assert result[201]["activity_id"] == 71 and result[201]["date"] == "2026-07-02"
+    assert result[202]["activity_id"] == 72 and result[202]["date"] == "2026-07-04"
+    assert result[203]["activity_id"] == 73 and result[203]["date"] == "2026-07-06"
+
+
+def test_matching_one_long_activity_covers_two_stages(con):
+    """A single activity whose distance ≈ the sum of two consecutive stages
+    matches both (multi-stage grouping)."""
+    _make_activities_table(con)
+    _insert_activity(con, 80, _ts(2026, 7, 3), 60.0, 40.0, -105.0)
+    stages = [_spread_stage(301, 1, dist=30.0), _spread_stage(302, 2, dist=30.0)]
+
+    result = tours._global_stage_matching(con, 1, "2026-07-01", "2026-07-10", stages)
+    assert result[301] is not None and result[302] is not None
+    assert result[301]["activity_id"] == result[302]["activity_id"] == 80
+
+
+def test_matching_scopes_activities_to_owner(con):
+    """Matching only considers the given user's own activities — another user's
+    perfectly-matching activity is ignored (multi-tenancy at the matching layer)."""
+    _make_activities_table(con)
+    _insert_activity(con, 90, _ts(2026, 7, 3), 50.0, 40.0, -105.0, user_id=2)
+    result = tours._global_stage_matching(con, 1, "2026-07-01", "2026-07-10",
+                                          [_spread_stage(400, 1)])
+    assert result[400] is None

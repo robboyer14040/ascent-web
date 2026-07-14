@@ -576,6 +576,46 @@ def _stage_segment_groups(con, stages: list) -> list:
     return groups
 
 
+import re as _re
+
+_LEADING_NUM_RE = _re.compile(r"^\s*(\d+)")               # "3 Alpe d'Huez"
+_STAGE_WORD_RE  = _re.compile(r"\bstage\s*(\d+)", _re.I)  # "Stage 3" / "stage 3"
+_CODE_PREFIX_RE = _re.compile(r"^\s*([A-Za-z]{1,4})\s*(\d+)")  # "CdP 3", "TdF15"
+
+
+def _stage_display_num(stages: list) -> Callable[[int], int]:
+    """Return a fn mapping a stage's stage_num to the number to *display* for it.
+    When one naming scheme matches EVERY stage name the embedded number is used;
+    otherwise it falls back to list order (stage_num). Schemes, tried in order:
+      1. a leading number ("3 Alpe d'Huez");
+      2. a "Stage N" reference anywhere ("Stage 3");
+      3. the SAME 1-4 letter code + a number at the start of every name
+         ("CdP 1", "CdP 2" → 1, 2; mixed codes don't qualify).
+    Keeps AI-summary/advice stage references aligned with the tour pages, which
+    apply the same rule client-side (see tour_stage.js — keep the two in sync)."""
+    def _by_regex(pat):
+        ms = [pat.search(s.get("name") or "") for s in stages]
+        if not (stages and all(ms)):
+            return None
+        return {s["stage_num"]: int(m.group(1)) for s, m in zip(stages, ms)}
+
+    def _by_code_prefix():
+        ms = [_CODE_PREFIX_RE.match(s.get("name") or "") for s in stages]
+        if not (stages and all(ms)):
+            return None
+        if len({m.group(1).lower() for m in ms}) != 1:   # code must be identical
+            return None
+        return {s["stage_num"]: int(m.group(2)) for s, m in zip(stages, ms)}
+
+    for scheme in (lambda: _by_regex(_LEADING_NUM_RE),
+                   lambda: _by_regex(_STAGE_WORD_RE),
+                   _by_code_prefix):
+        parsed = scheme()
+        if parsed is not None:
+            return lambda n, _p=parsed: _p.get(n, n)
+    return lambda n: n
+
+
 def _collapse_alternate_stages(con, stages: list, prefer_id: Optional[int] = None) -> list:
     """Collapse each same-segment group of stages down to a single representative,
     so alternate routes count once. The representative is the first (original)
@@ -1565,6 +1605,7 @@ async def get_tour_ai_summary(tour_id: int, request: Request, model: Optional[st
             "distance_mi": r[3], "climb_ft": r[4],
             "start_lat": r[5], "start_lon": r[6],
         } for r in stage_rows]
+        disp = _stage_display_num(stages)
         # Exclude alternative routes (adjacent stages sharing both endpoints) so
         # the summary counts one route per segment, matching the tour pages.
         stages = _collapse_alternate_stages(con, stages)
@@ -1580,7 +1621,7 @@ async def get_tour_ai_summary(tour_id: int, request: Request, model: Optional[st
     avg_climb   = total_climb / len(stages)
 
     stage_lines = [
-        f"  Stage {s['stage_num']}: {s['name']} — {s['distance_mi']:.1f}mi, {s['climb_ft']:.0f}ft climb"
+        f"  Stage {disp(s['stage_num'])}: {s['name']} — {s['distance_mi']:.1f}mi, {s['climb_ft']:.0f}ft climb"
         for s in stages
     ]
 
@@ -1714,6 +1755,7 @@ async def get_stage_ai_advice(
         for r in all_stage_rows
     ]
     target = next(s for s in stages if s["id"] == target_row[0])
+    disp = _stage_display_num(stages)
     con2 = sqlite3.connect(db.path, timeout=15)
     try:
         completions, _, _ = _completions_for_user(con2, tour_id, actual_uid, stages, attempt_id)
@@ -1735,7 +1777,7 @@ async def get_stage_ai_advice(
             clb   = round(comp.get("climb_ft") or 0)
             done_str = f" [DONE: {comp['distance_mi']:.1f}mi, {clb}ft climb, {dur_h}h]"
         stage_lines.append(
-            f"  Stage {s['stage_num']}: {s['name']} — {s['distance_mi']:.1f}mi, {s['climb_ft']:.0f}ft climb{done_str}{marker}"
+            f"  Stage {disp(s['stage_num'])}: {s['name']} — {s['distance_mi']:.1f}mi, {s['climb_ft']:.0f}ft climb{done_str}{marker}"
         )
 
     # Stages after the target — advice must account for what's still to come.
@@ -1744,7 +1786,7 @@ async def get_stage_ai_advice(
         upcoming_block = (
             "\n\nStages that come AFTER this one (plan energy and recovery accordingly):\n"
             + "\n".join(
-                f"  Stage {s['stage_num']}: {s['name']} — {s['distance_mi']:.1f}mi, {s['climb_ft']:.0f}ft climb"
+                f"  Stage {disp(s['stage_num'])}: {s['name']} — {s['distance_mi']:.1f}mi, {s['climb_ft']:.0f}ft climb"
                 for s in upcoming
             )
         )
@@ -1763,7 +1805,7 @@ async def get_stage_ai_advice(
         f"Progress: {n_done} of {len(stat_stages)} stages completed"
         f"{profile_section}{analysis_section}\n"
         "All stages:\n" + "\n".join(stage_lines) + "\n\n"
-        f"The athlete is preparing for Stage {target['stage_num']}: {target['name']} "
+        f"The athlete is preparing for Stage {disp(target['stage_num'])}: {target['name']} "
         f"({target['distance_mi']:.1f}mi, {target['climb_ft']:.0f}ft climb)."
         + upcoming_block + "\n\n"
         "Provide 3-6 sentences of specific, actionable coach advice for this UPCOMING stage.\n"
@@ -1864,6 +1906,7 @@ async def get_stage_ai_summary(
             "distance_mi": r[3], "climb_ft": r[4],
             "start_lat": r[5], "start_lon": r[6],
         } for r in all_stage_rows]
+        disp = _stage_display_num(all_stages)
         # Exclude alternative routes so counts/totals reflect one route per
         # segment; keep THIS stage even if it is itself an alternate.
         stages = _collapse_alternate_stages(con, all_stages, prefer_id=stage_id)
@@ -1878,7 +1921,7 @@ async def get_stage_ai_summary(
     avg_climb    = total_climb / total_stages if total_stages else 0
 
     stage_lines = [
-        f"  Stage {s['stage_num']}: {s['name']} — {s['distance_mi']:.1f}mi, {s['climb_ft']:.0f}ft climb"
+        f"  Stage {disp(s['stage_num'])}: {s['name']} — {s['distance_mi']:.1f}mi, {s['climb_ft']:.0f}ft climb"
         + (" ← THIS STAGE" if s["id"] == stage_id else "")
         for s in stages
     ]
@@ -1888,7 +1931,7 @@ async def get_stage_ai_summary(
         f"Total: {total_stages} stages, {total_dist:.1f}mi, {total_climb:.0f}ft climb\n"
         f"Average per stage: {avg_dist:.1f}mi, {avg_climb:.0f}ft climb\n\n"
         "All stages:\n" + "\n".join(stage_lines) + "\n\n"
-        f"Describe Stage {stage_num}: {stage_name} ({dist_mi:.1f}mi, {climb_ft:.0f}ft climb) "
+        f"Describe Stage {disp(stage_num)}: {stage_name} ({dist_mi:.1f}mi, {climb_ft:.0f}ft climb) "
         "in the context of the overall tour. "
         "In 2-3 sentences: characterize what kind of stage it is (e.g. short/long, flat/hilly, "
         "hard/moderate relative to the tour average), and where it sits in the tour arc "

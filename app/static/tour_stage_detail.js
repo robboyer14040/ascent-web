@@ -54,8 +54,8 @@ const TourStageDetail = {
       `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Total Ascent</div><div class="sc-val">${U.climbS(totalClimb)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${altC(totalClimb)}</div><div class="sc-sub">${U.climbS(doneClimb)} done (${pctC}%)</div></div>` +
       `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Avg Dist</div><div class="sc-val">${U.distS(avgDist)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${alt(avgDist)}</div><div class="sc-sub">per stage</div></div>` +
       `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Avg Ascent</div><div class="sc-val">${U.climbS(avgClimb)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${altC(avgClimb)}</div><div class="sc-sub">per stage</div></div>` +
-      `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Max Stage Dist</div><div class="sc-val">${U.distS(maxDist)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${alt(maxDist)}</div><div class="sc-sub">Stage ${maxDistIdx + 1}</div></div>` +
-      `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Max Ascent</div><div class="sc-val">${U.climbS(maxClimb)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${altC(maxClimb)}</div><div class="sc-sub">Stage ${maxClimbIdx + 1}</div></div>`;
+      `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Max Stage Dist</div><div class="sc-val">${U.distS(maxDist)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${alt(maxDist)}</div><div class="sc-sub">Stage ${stageDisplayNum(stages[maxDistIdx], stages)}</div></div>` +
+      `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Max Ascent</div><div class="sc-val">${U.climbS(maxClimb)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${altC(maxClimb)}</div><div class="sc-sub">Stage ${stageDisplayNum(stages[maxClimbIdx], stages)}</div></div>`;
     let html = `<div class="stats-grid" style="grid-template-columns:repeat(7,1fr);margin-bottom:14px">${chips}</div>`;
     const first = stages[0], last = stages[stages.length - 1];
     const lastDone = done.length ? done[done.length - 1] : null;
@@ -91,7 +91,7 @@ const TourStageDetail = {
     const prev = i > 0 ? stages[i - 1] : null;
     const next = (i >= 0 && i < stages.length - 1) ? stages[i + 1] : null;
     const btn = (s, arrow) => s
-      ? `<button onclick="selectStage('${s.id}')" title="Stage ${s.stage_num}" style="background:none;border:1px solid var(--border2);border-radius:4px;width:26px;height:24px;font-size:13px;color:var(--text);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${arrow}</button>`
+      ? `<button onclick="selectStage('${s.id}')" title="Stage ${stageDisplayNum(s, stages)}" style="background:none;border:1px solid var(--border2);border-radius:4px;width:26px;height:24px;font-size:13px;color:var(--text);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${arrow}</button>`
       : `<button disabled style="background:none;border:1px solid var(--border2);border-radius:4px;width:26px;height:24px;font-size:13px;color:var(--muted);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;opacity:.3">${arrow}</button>`;
     return `<div style="display:flex;gap:4px;margin-right:4px;flex-shrink:0">${btn(prev, '←')}${btn(next, '→')}</div>`;
   },
@@ -100,7 +100,7 @@ const TourStageDetail = {
   // (Tour_share uses it for completed stages too; Tours builds a custom avatar
   // header for completed stages and calls stageNav() directly).
   stageHeader(stage, stages) {
-    return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><div style="font-size:15px;font-weight:600;line-height:1.3;flex:1">Stage ${stage.stage_num}: ${esc(stage.name)}</div>${this.stageNav(stage, stages)}</div>`;
+    return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><div style="font-size:15px;font-weight:600;line-height:1.3;flex:1">Stage ${stageDisplayNum(stage, stages)}: ${esc(stage.name)}</div>${this.stageNav(stage, stages)}</div>`;
   },
 
   // Uncompleted-stage detail: header + estimated-route chips + trajectory/GPX/forecast.
@@ -195,7 +195,7 @@ const TourStageDetail = {
       // One numbered circle per segment group (alternates excluded from numbering).
       _dedupeStatStages(stages, pointsCache).forEach((s, i) => {
         if (s.start_lat == null || s.start_lon == null) return;
-        const icon = L.divIcon({ className: '', html: `<div style="width:16px;height:16px;border-radius:50%;background:#fff;border:1.5px solid #000;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:#000;font-family:-apple-system,sans-serif;line-height:1;box-sizing:border-box">${i + 1}</div>`, iconSize: [16, 16], iconAnchor: [8, 8] });
+        const icon = L.divIcon({ className: '', html: `<div style="width:16px;height:16px;border-radius:50%;background:#fff;border:1.5px solid #000;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:#000;font-family:-apple-system,sans-serif;line-height:1;box-sizing:border-box">${stageDisplayNum(s, stages, i + 1)}</div>`, iconSize: [16, 16], iconAnchor: [8, 8] });
         L.marker([s.start_lat, s.start_lon], { icon, zIndexOffset: 150, interactive: false }).addTo(routeGroup);
       });
       const last = stages[stages.length - 1], lastPts = last ? pointsCache[String(last.id)] : null;

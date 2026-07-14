@@ -78,7 +78,7 @@ html.mob-embedded body.mob-stage-view #stage-detail { padding-bottom:12px!import
 .stch-sep::before{content:'';width:4px;height:calc(100% - 10px);background:var(--border2);border-radius:2px;pointer-events:none;transition:background .12s}
 .stch-sep:hover::before,.stch-sep.resizing::before{background:var(--accent)}
 .sort-arr{color:var(--accent);font-size:10px}
-.stage-row{display:grid;grid-template-columns:var(--stage-cols);border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer;align-items:center;height:26px;min-width:var(--stage-min-w,0)}
+.stage-row{display:grid;grid-template-columns:var(--stage-cols);border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer;align-items:center;min-width:var(--stage-min-w,0)}  /* row height: list.css --list-row-h */
 .stage-row:hover{background:rgba(255,255,255,.04)}
 .stage-row.active{background:rgba(249,115,22,.1);border-left:3px solid var(--accent)}
 .st-cell{padding:0 4px;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--muted)}
@@ -1477,7 +1477,7 @@ function _setTourMobTitle() {
   const el = document.getElementById('tour-mob-title');
   if (!el) return;
   const s = selectedId ? tourStages.find(s => String(s.id) === String(selectedId)) : null;
-  el.textContent = s ? `Stage ${s.stage_num}: ${s.name}` : (tourInfo?.title || 'Tour');
+  el.textContent = s ? `Stage ${stageDisplayNum(s, tourStages)}: ${s.name}` : (tourInfo?.title || 'Tour');
 }
 
 // ── Back from a selected stage → tour level (used by the mobile nav Back button) ──
@@ -1791,7 +1791,7 @@ function openGradesModal() {
   const stage   = tourStages.find(s=>String(s.id)===String(selectedId));
   const titleEl = document.getElementById('grades-modal-title');
   if(titleEl) titleEl.textContent = stage
-    ? `Stage ${stage.stage_num}: ${stage.name} — Gradient Profile`
+    ? `Stage ${stageDisplayNum(stage, tourStages)}: ${stage.name} — Gradient Profile`
     : 'Gradient Profile';
   const modal = document.getElementById('grades-modal');
   modal.style.display = 'flex';
@@ -2119,7 +2119,7 @@ async function renderDetail(activeId) {
     el.innerHTML =
       `<div style="display:flex;align-items:center;gap:9px;margin-bottom:8px">
         ${_avHtml}
-        <div style="flex:1;font-size:15px;font-weight:600;line-height:1.3;min-width:0">Stage ${stage.stage_num}: ${esc(stage.name)}</div>
+        <div style="flex:1;font-size:15px;font-weight:600;line-height:1.3;min-width:0">Stage ${stageDisplayNum(stage, tourStages)}: ${esc(stage.name)}</div>
         ${TourStageDetail.stageNav(stage, tourStages)}
       </div>` +
       `<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
