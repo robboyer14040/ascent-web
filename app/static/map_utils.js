@@ -123,6 +123,21 @@ const MapUtils = {
     map.panInside(latLng, { padding: [pad, pad], animate: false });
   },
 
+  /**
+   * Zoom/pan the map to frame a selected region, keeping a fixed pixel margin
+   * around it. Shared by the Activity and Tour elevation-profile region selection,
+   * so both zoom identically when a range is dragged on the elevation strip.
+   * @param {L.Map} map
+   * @param {Array<[number, number]>} latLngs - [lat, lon] pairs of the selected region
+   * @param {number} margin - min pixels between the region and every map edge
+   */
+  fitRegion(map, latLngs, margin = 100) {
+    if (!map || !latLngs || latLngs.length < 2) return;
+    const bounds = L.latLngBounds(latLngs);
+    if (!bounds.isValid()) return;
+    map.fitBounds(bounds, { padding: [margin, margin] });
+  },
+
   /** Remove all photo markers previously placed on this map instance. */
   clearPhotoMarkers(map) {
     if (!map) return;

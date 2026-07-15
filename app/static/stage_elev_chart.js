@@ -196,7 +196,9 @@ function stageElevInteraction(opts) {
   chartDot.style.boxShadow    = '0 1px 3px rgba(0,0,0,.6)';
   chartDot.style.transform    = 'translate(-50%,-50%)';
   chartDot.style.zIndex       = '6';
-  if (!chartDot.style.display) chartDot.style.display = 'none';
+  // Hidden until first hover; reset on each stage draw so a puck left showing (it now
+  // persists after mouseleave — see hideHover) doesn't linger onto the next stage.
+  chartDot.style.display = 'none';
   // Hide legacy elements if still in DOM
   const _oldHud = document.getElementById('stage-elev-hud');
   const _oldSel = document.getElementById('stage-elev-sel');
@@ -569,7 +571,7 @@ function stageElevInteraction(opts) {
     hudActive:   () => hudOn,
     hover:       clientX => _trackPosOnly(clientX),
     showHud:     clientX => _showHud(clientX),
-    hideHover:   () => { _hideHud(); chartDot.style.display = 'none'; },
+    hideHover:   () => { _hideHud(); },   // leave the puck (chart + map dot) at its last location
     onDragStart: () => _hideHud(),
     applySelection: (lo, hi) => _applySel(lo, hi),
     clearSelection: () => _clearSel(),

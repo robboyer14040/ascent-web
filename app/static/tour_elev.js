@@ -23,6 +23,7 @@ let _elevActData = null; // per-point chart data for completed stages (null unle
 let _elevSettingsOpen = false;
 let _mobElevCollapsed = false;
 let _mobInfoCollapsed = false;
+let _elevZoomedToRegion = false; // true while the map is zoomed to an elevation-strip selection
 
 // ── Strip height persistence + vertical resize ────────────────────────────────
 const _ELEV_H_KEY = 'ascent-stage-elev-h';
@@ -189,6 +190,18 @@ function drawStageElevation(pts) {
     getMap:      () => getStageMap(),
     getMapDot:   () => _elevHoverDot,
     setMapDot:   m  => { _elevHoverDot = m; },
+    onSelection: (lo, hi) => {
+      const map = getStageMap();
+      if (map && _elevRawPts) {
+        MapUtils.fitRegion(map, _elevRawPts.slice(lo, hi + 1).map(p => [p[0], p[1]]));
+        _elevZoomedToRegion = true;
+      }
+    },
+    onClear: () => {
+      // Only re-fit the stage when we had actually zoomed to a selection, so
+      // routine clears (stage switch, HUD toggle) don't fight the stage fit.
+      if (_elevZoomedToRegion) { _elevZoomedToRegion = false; window.refitTourMap?.(); }
+    },
   });
 }
 function hideStageElevation() {

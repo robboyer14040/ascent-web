@@ -634,6 +634,16 @@ async function drawElevation(data, version) {
     return (dAlt / dDist) * 100;
   }
 
+  // Park the animation at the hovered data index so the transport slider, timecode and
+  // current-location stats track the puck — and playback resumes from here. Skipped while
+  // playing so a stray hover doesn't yank an in-progress animation. idx is a fractional
+  // elevChartData index; elevChartData and anim.pts are the same array, so it maps directly.
+  function _seekAnimToHover(idx) {
+    if (!anim.pts || !anim.pts.time || !anim.pts.time.length || anim.playing) return;
+    anim.idx = Math.max(0, Math.min(anim.pts.time.length - 1, Math.round(idx)));
+    animUpdateUI(anim.idx);
+  }
+
   // Move chart dot + map dot to the x-position without showing the HUD panel or crosshair.
   function _moveDots(clientX) {
     const wrap = document.getElementById('elev-canvas-area') || document.getElementById('chart-wrap');
@@ -686,6 +696,8 @@ async function drawElevation(data, version) {
         MapUtils.keepPointVisible(leafMap, ll);
       }
     }
+
+    _seekAnimToHover(idx);
   }
 
   function showHudAt(clientX) {
@@ -799,6 +811,7 @@ async function drawElevation(data, version) {
     }, rowColor);
 
     elevHudRender(panel, rows, px, rect.width);
+    _seekAnimToHover(idx);
   }
 
   // Expose the hover helpers so the shared interaction module (wired from the range-
@@ -873,6 +886,7 @@ async function drawElevation(data, version) {
         splitsState._elevSelMapLayer = L.polyline(lls, {
           color: '#4ade80', weight: 5, opacity: 0.85
         }).addTo(leafMap);
+        MapUtils.fitRegion(leafMap, lls);
       }
     }
   }
@@ -956,6 +970,8 @@ async function drawElevation(data, version) {
     if (splitsState._elevSelMapLayer && leafMap) {
       leafMap.removeLayer(splitsState._elevSelMapLayer);
       splitsState._elevSelMapLayer = null;
+      // We had zoomed the map to the selection — restore the full-route view.
+      if (typeof refitMap === 'function') refitMap();
     }
     const sel = document.getElementById('seg-selector');
     if (sel) sel.value = '';
