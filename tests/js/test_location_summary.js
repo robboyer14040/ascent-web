@@ -129,6 +129,32 @@ test('pickPlace disambiguates same-named places by the clicked coordinate', func
   eq(T.pickPlace(sanJose, 'San Jose', { lat: 9.93, lon: -84.08 }), 'San José, Costa Rica');
 });
 
+// ── pickPlace: reject a same-named place 1000s of km from the clicked point ────
+test('pickPlace returns null when the nearest place is beyond MAX_NEAR_KM', function () {
+  // "Quesada" on a ride in Jaén, Spain once resolved to "Quesada, San Carlos"
+  // in Costa Rica (~8000 km away) because it was the only result with coords.
+  var pages = _pages([
+    ['Quesada, San Carlos', 'District in San Carlos canton, Costa Rica', { coord: [10.32, -84.42] }],
+  ]);
+  var jaen = { lat: 37.85, lon: -3.4 };
+  eq(T.pickPlace(pages, 'Quesada', jaen), null, 'far Costa Rica place rejected');
+  // With the real Spanish town in the result set, proximity picks it.
+  pages = _pages([
+    ['Quesada, San Carlos', 'District in San Carlos canton, Costa Rica', { coord: [10.32, -84.42] }],
+    ['Quesada, Spain', 'Municipality in Andalusia, Spain', { coord: [37.85, -3.07] }],
+  ]);
+  eq(T.pickPlace(pages, 'Quesada', jaen), 'Quesada, Spain');
+});
+
+test('pickPlace rejects an exact title match that sits far from the clicked point', function () {
+  // Clicking "Paris" on a ride near Paris, Texas must not open Paris, France.
+  var pages = _pages([
+    ['Paris', 'Capital of France', { coord: [48.85, 2.35] }],
+    ['Paris, Texas', 'City in Texas, United States', { coord: [33.66, -95.55] }],
+  ]);
+  eq(T.pickPlace(pages, 'Paris', { lat: 33.66, lon: -95.55 }), 'Paris, Texas');
+});
+
 // ── pickPlace: exact title beats a higher-ranked but wrong article ────────────
 test('pickPlace prefers an exact title match over a higher-ranked place', function () {
   // "Dimos Epidaurus, Greece" once resolved to "Athens" (ranked first).
@@ -150,6 +176,14 @@ test('linkifyNames attaches a proximity hint to every link when given', function
   var html = LS.linkifyNames('Santa Cruz', { lat: 36.97, lon: -122.03 });
   ok(html.indexOf('data-loc-lat="36.97"') !== -1, 'lat hint present');
   ok(html.indexOf('data-loc-lon="-122.03"') !== -1, 'lon hint present');
+});
+
+test('linkifyNames flags its shared midpoint hint as coarse; linkifyList does not', function () {
+  ok(LS.linkifyNames('Quesada', { lat: 37.85, lon: -3.4 }).indexOf('data-loc-coarse="1"') !== -1,
+     'trajectory links carry the coarse flag');
+  ok(LS.linkifyList([{ label: 'Quesada', name: 'Quesada', lat: 37.85, lon: -3.4 }])
+       .indexOf('data-loc-coarse') === -1,
+     'per-point links are precise, no coarse flag');
 });
 
 test('linkifyList carries per-place coordinates and de-dupes by name', function () {

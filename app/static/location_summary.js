@@ -55,6 +55,21 @@ window.LocationSummary = (function () {
   // A leading 4-digit year almost always means an event/edition article.
   const YEAR_TITLE = /\b(1[6-9]\d\d|20\d\d)\b/;
 
+  // The place names come from GPS points on the ride, so the real article is
+  // always close to the clicked point. A coordinate-bearing candidate farther
+  // than this from the proximity hint is a same-named place on another
+  // continent (e.g. "Quesada, Spain" vs "Quesada, Costa Rica") and is rejected
+  // so the modal shows an honest "no summary" instead of a place 1000s of km
+  // away. Generous enough to cover a long ride's spread around its midpoint hint.
+  const MAX_NEAR_KM = 300;
+
+  // Approximate great-circle distance in km (equirectangular; fine at this scale).
+  function kmApart(a, b) {
+    const dLat = (a.lat - b.lat) * 111;
+    const dLon = (a.lon - b.lon) * 111 * Math.cos((a.lat + b.lat) * Math.PI / 360);
+    return Math.hypot(dLat, dLon);
+  }
+
   // From a result set, choose the article that best represents the clicked
   // place. An exact title match to `prefer` wins; otherwise, among the
   // place-type results, the one nearest `near` ({lat,lon}) when given, else the
@@ -77,24 +92,30 @@ window.LocationSummary = (function () {
       });
     const isBad   = c => c.disambig || NON_PLACE_DESC.test(c.desc) || YEAR_TITLE.test(c.title);
     const isPlace = c => PLACE_DESC.test(c.desc);
+    // With a proximity hint, a coordinate-bearing candidate beyond MAX_NEAR_KM
+    // is a same-named place elsewhere on Earth — never the one that was clicked.
+    const hasNear = !!(near && near.lat != null);
+    const tooFar  = c => hasNear && c.lat != null && kmApart(c, near) > MAX_NEAR_KM;
     // An exact title match wins — but only if it actually looks like a place, so
     // an empty-description redirect ("San Jose" → the disambiguation page) is
-    // skipped in favour of the real settlement ("San Jose, California").
+    // skipped in favour of the real settlement ("San Jose, California"). A match
+    // that sits far from the clicked point is a same-named place elsewhere.
     if (prefer) {
       const pl = prefer.trim().toLowerCase();
       const exact = cands.find(c => c.title.toLowerCase() === pl && !isBad(c)
-        && (isPlace(c) || c.lat != null));
+        && (isPlace(c) || c.lat != null) && !tooFar(c));
       if (exact) return exact.title;
     }
     const places = cands.filter(c => isPlace(c) && !isBad(c));
     if (!places.length) return null;
-    // Disambiguate same-named places by proximity to the clicked location.
-    if (near && near.lat != null) {
+    // Disambiguate same-named places by proximity to the clicked location. The
+    // nearest place still has to be within MAX_NEAR_KM — otherwise the real
+    // place simply isn't in the result set and we return null (honest miss).
+    if (hasNear) {
       const withCoord = places.filter(c => c.lat != null);
       if (withCoord.length) {
-        const d2 = c => (c.lat - near.lat) ** 2 + (c.lon - near.lon) ** 2;
-        withCoord.sort((a, b) => d2(a) - d2(b));
-        return withCoord[0].title;
+        withCoord.sort((a, b) => kmApart(a, near) - kmApart(b, near));
+        return kmApart(withCoord[0], near) <= MAX_NEAR_KM ? withCoord[0].title : null;
       }
     }
     return places[0].title;
@@ -169,8 +190,11 @@ window.LocationSummary = (function () {
         if (t) return t;
       }
     }
-    // Coordinates → nearest place-type article.
-    if (hasCoord) {
+    // Coordinates → nearest place-type article. Skipped for a coarse hint (a
+    // shared ride-midpoint from a trajectory string): geosearching it would
+    // surface some place near the middle of the ride, not the clicked one, so
+    // an unresolved name honestly reports "no summary" instead.
+    if (hasCoord && !opts.coarse) {
       const t = await geosearchTitle(opts.lat, opts.lon);
       if (t) return t;
     }
@@ -315,6 +339,7 @@ window.LocationSummary = (function () {
     const attrs = [`class="loc-link"`, `data-loc-name="${esc(name)}"`];
     if (opts.lat != null) attrs.push(`data-loc-lat="${esc(opts.lat)}"`);
     if (opts.lon != null) attrs.push(`data-loc-lon="${esc(opts.lon)}"`);
+    if (opts.coarse) attrs.push(`data-loc-coarse="1"`);
     return `<a ${attrs.join(' ')}>${esc(label)}</a>`;
   }
 
@@ -334,13 +359,15 @@ window.LocationSummary = (function () {
 
   // Linkify an "A → B → C" trajectory string, one link per distinct place name.
   // An optional `near` ({lat,lon}) is attached to every link as a proximity
-  // hint so same-named places resolve to the right region.
+  // hint so same-named places resolve to the right region. It is a single
+  // ride-midpoint shared by every name, so it is flagged `coarse`: good enough
+  // to disambiguate a region, but not a per-place coordinate to geosearch from.
   function linkifyNames(text, near) {
     if (!text) return '';
     const items = String(text).split(SEP)
       .map(p => p.trim())
       .filter(Boolean)
-      .map(p => ({ label: p, name: p,
+      .map(p => ({ label: p, name: p, coarse: !!near,
                    lat: near ? near.lat : null, lon: near ? near.lon : null }));
     return linkifyList(items);
   }
@@ -354,6 +381,7 @@ window.LocationSummary = (function () {
       label: a.textContent,
       lat: a.dataset.locLat != null ? parseFloat(a.dataset.locLat) : null,
       lon: a.dataset.locLon != null ? parseFloat(a.dataset.locLon) : null,
+      coarse: a.dataset.locCoarse === '1',
     });
   });
 
