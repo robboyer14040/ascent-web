@@ -371,6 +371,14 @@ window.renderStagePhotosTab = function (el) {
   TourStageDetail.photosTab(el, { activityId: actId, lightboxName: 'openShareLightbox',
     setMedia: m => { _shareLbMedia = m; } });
 };
+// Phone level-1 "Photos" tab — all stages' photos/videos in one grid (view-only).
+window.renderTourPhotosTab = function (el) {
+  TourStageDetail.allPhotos(el, {
+    stages: tourInfo?.stages || [],
+    captionEdit: false,
+    setMedia: m => { _shareLbMedia = m; },
+  });
+};
 window.renderStageForecastTab = function (el) {
   const stage = _curShareStage();
   TourStageDetail.forecastTab(el, { stage,
@@ -433,11 +441,16 @@ function _stageGroupIds(id) {
 // ── Detail pane ───────────────────────────────────────────────────────────────
 async function renderDetail(activeId) {
   const el=document.getElementById('stage-detail'), stages=tourInfo?.stages||[];
+  el.classList.remove('tour-ov-split');   // cleared here; overview() re-adds it for the whole-tour split
 
   if(!activeId) {
     hideStageElevation();
     TourStageDetail.overview(el, {
       stages: tourInfo?.stages || [], pointsCache, cacheId: TOKEN,
+      photos: TourNav.isPhone() ? null : {
+        captionEdit: false,
+        setMedia: m => { _shareLbMedia = m; },
+      },
       renderAi: (elx) => {
         if(tourInfo.ai_summary) elx.insertAdjacentHTML('beforeend', `<div class="ai-card"><div class="ai-card-label">AI Tour Summary</div><div class="ai-card-body">${esc(tourInfo.ai_summary)}</div></div>`);
       }

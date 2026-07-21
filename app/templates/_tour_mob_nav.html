@@ -21,6 +21,10 @@
     <span class="tmob-btn-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="8"/><polyline points="11 11 12 11 12 16 13 16"/></svg></span>
     <span>Info</span>
   </button>
+  <button class="tmob-btn" data-l1="allphotos" onclick="tourNavL1('allphotos')">
+    <span class="tmob-btn-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span>
+    <span>Photos</span>
+  </button>
   {# ── Level 2 (a stage is selected) ── #}
   <button class="tmob-btn active" data-l2="map" onclick="tourNavL2('map')">
     <span class="tmob-btn-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg></span>
@@ -41,9 +45,10 @@
 </div>
 
 <div id="tour-panels">
-  <div id="tour-panel-route"    class="tour-panel active"></div>
-  <div id="tour-panel-stages"   class="tour-panel"></div>
-  <div id="tour-panel-info"     class="tour-panel"></div>
+  <div id="tour-panel-route"     class="tour-panel active"></div>
+  <div id="tour-panel-stages"    class="tour-panel"></div>
+  <div id="tour-panel-info"      class="tour-panel"></div>
+  <div id="tour-panel-allphotos" class="tour-panel"></div>
   <div id="tour-panel-map"      class="tour-panel"></div>
   <div id="tour-panel-analysis" class="tour-panel"></div>
   <div id="tour-panel-photos"   class="tour-panel"></div>

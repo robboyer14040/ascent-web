@@ -58,7 +58,7 @@
   .tour-panel{flex:1;min-height:0;overflow:hidden;flex-direction:column}
   .tour-panel.active{display:flex}
   /* Scrollable content panels */
-  #tour-panel-info,#tour-panel-analysis,#tour-panel-photos,#tour-panel-forecast{
+  #tour-panel-info,#tour-panel-allphotos,#tour-panel-analysis,#tour-panel-photos,#tour-panel-forecast{
     overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;
     padding:12px 12px calc(12px + env(safe-area-inset-bottom,0px));
   }

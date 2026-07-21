@@ -78,7 +78,7 @@ const TourNav = (function () {
   // One-time reparent of shared elements into their home panels.
   function _wire() {
     if (_ready) return;
-    const panels = ['route', 'stages', 'info', 'map', 'analysis', 'photos', 'forecast']
+    const panels = ['route', 'stages', 'info', 'allphotos', 'map', 'analysis', 'photos', 'forecast']
       .reduce((o, k) => (o[k] = $('tour-panel-' + k), o), {});
     if (!panels.route) return;
 
@@ -86,6 +86,11 @@ const TourNav = (function () {
     if (!$('stage-photos-body')) {
       const p = document.createElement('div'); p.id = 'stage-photos-body';
       panels.photos.appendChild(p);
+    }
+    // All-stages Photos body (level-1 overview tab).
+    if (!$('tour-allphotos-body')) {
+      const a = document.createElement('div'); a.id = 'tour-allphotos-body';
+      panels.allphotos.appendChild(a);
     }
     if (!$('stage-forecast-body')) {
       const f = document.createElement('div'); f.id = 'stage-forecast-body';
@@ -153,6 +158,11 @@ const TourNav = (function () {
     _setActiveBtn('data-l1', tab);
     if (tab === 'route') move($('map'), $('tour-panel-route'));
     if (tab === 'info')  move($('stage-detail'), $('tour-panel-info'));
+    // All-stages photos: re-render on each open so it always reflects the current tour.
+    if (tab === 'allphotos') {
+      const body = $('tour-allphotos-body');
+      if (body && typeof window.renderTourPhotosTab === 'function') window.renderTourPhotosTab(body);
+    }
     _setActivePanel(tab);
     if (tab === 'route') _refitMap();
   }

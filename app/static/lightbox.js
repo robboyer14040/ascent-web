@@ -188,15 +188,19 @@ const Lightbox = (() => {
   }
 
   // Render a thumbnail grid of `media` into `el`. onThumb(idx) fires on tap.
-  function renderGrid(el, media, onThumb) {
+  // opts (optional): { colW, thumbH } override the default 3-column / 96px sizing —
+  // e.g. { colW:'110px', thumbH:110 } for a denser, fixed-size wrapping grid.
+  function renderGrid(el, media, onThumb, opts = {}) {
+    const colW = opts.colW || 'calc(33.33% - 4px)';
+    const thumbH = opts.thumbH || 96;
     const esc = s => { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; };
     let html = '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:flex-start">';
     media.forEach((m, i) => {
       const cap = m.caption ? `<div style="font-size:10px;color:var(--muted);margin-top:3px;line-height:1.3;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-word">${esc(m.caption)}</div>` : '';
       if (m.type === 'image') {
-        html += `<div style="flex-shrink:0;width:calc(33.33% - 4px)"><img src="${m.url}" loading="lazy" data-lb-idx="${i}" style="height:96px;width:100%;object-fit:cover;border-radius:5px;cursor:pointer;display:block">${cap}</div>`;
+        html += `<div style="flex-shrink:0;width:${colW}"><img src="${m.url}" loading="lazy" data-lb-idx="${i}" style="height:${thumbH}px;width:100%;object-fit:cover;border-radius:5px;cursor:pointer;display:block">${cap}</div>`;
       } else {
-        html += `<div style="flex-shrink:0;width:calc(33.33% - 4px)"><div data-lb-idx="${i}" style="position:relative;height:96px;border-radius:5px;overflow:hidden;cursor:pointer;background:#000"><video src="${m.hls_url || m.url}" muted preload="metadata" playsinline style="width:100%;height:100%;object-fit:cover;pointer-events:none" onloadedmetadata="this.currentTime=0.1"></video><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none"><div style="width:28px;height:28px;border-radius:50%;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center"><span style="font-size:13px;margin-left:2px">▶</span></div></div></div>${cap}</div>`;
+        html += `<div style="flex-shrink:0;width:${colW}"><div data-lb-idx="${i}" style="position:relative;height:${thumbH}px;border-radius:5px;overflow:hidden;cursor:pointer;background:#000"><video src="${m.hls_url || m.url}" muted preload="metadata" playsinline style="width:100%;height:100%;object-fit:cover;pointer-events:none" onloadedmetadata="this.currentTime=0.1"></video><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none"><div style="width:28px;height:28px;border-radius:50%;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center"><span style="font-size:13px;margin-left:2px">▶</span></div></div></div>${cap}</div>`;
       }
     });
     html += '</div>';

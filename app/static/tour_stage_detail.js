@@ -3,6 +3,39 @@
 // both pages; per-page differences (data endpoints, lightbox fn) come in via ctx.
 //
 // Requires these globals (present on both pages): U (units), esc (HTML escape).
+
+// ── Overview photo-split state (non-phone whole-tour view) ────────────────────
+// The divider under the AI Summary drags the top (info+AI) pane's height; the
+// photo grid below takes the rest. The chosen height persists per browser.
+let _tourOvTopH = (() => {
+  try { const v = parseFloat(localStorage.getItem('ascent-tour-ov-split')); return isFinite(v) ? v : null; }
+  catch (e) { return null; }
+})();
+let _ovDrag = null;          // { el, top, divider, startY, startH } while dragging
+let _ovGlobalWired = false;  // document-level drag listeners attached once
+function _ovWireGlobal() {
+  if (_ovGlobalWired) return;
+  _ovGlobalWired = true;
+  const move = y => {
+    if (!_ovDrag) return;
+    const { el, top, startY, startH } = _ovDrag;
+    const h = Math.max(60, Math.min(el.clientHeight - 80, startH + (y - startY)));
+    top.style.flex = `0 0 ${h}px`;
+    _tourOvTopH = h;
+  };
+  const end = () => {
+    if (!_ovDrag) return;
+    _ovDrag.divider.classList.remove('dragging');
+    document.body.style.cursor = '';
+    _ovDrag = null;
+    try { localStorage.setItem('ascent-tour-ov-split', String(_tourOvTopH)); } catch (e) {}
+  };
+  document.addEventListener('mousemove', e => move(e.clientY));
+  document.addEventListener('mouseup', end);
+  document.addEventListener('touchmove', e => { if (_ovDrag) { move(e.touches[0].clientY); e.preventDefault(); } }, { passive: false });
+  document.addEventListener('touchend', end);
+}
+
 const TourStageDetail = {
 
   // Mobile Analysis tab: move the activity stat chips into a collapsed "Performance"
@@ -33,7 +66,7 @@ const TourStageDetail = {
   // in via ctx.renderAi.
   overview(el, ctx) {
     const stages = ctx.stages || [];
-    if (!stages.length) { el.innerHTML = ''; return; }
+    if (!stages.length) { el.classList.remove('tour-ov-split'); el.innerHTML = ''; return; }
     const statStages = _dedupeStatStages(stages, ctx.pointsCache);
     const done       = statStages.filter(s => s.completion);
     const totalDist  = statStages.reduce((s, x) => s + (x.distance_mi || 0), 0);
@@ -66,7 +99,22 @@ const TourStageDetail = {
     if (lastPt) html += `<div style="font-size:12px"><span style="color:var(--muted);margin-right:6px">End:</span><span id="ov-end-loc">Loading…</span></div>`;
     if (lastDone && lastDone.start_lat != null) html += `<div style="font-size:12px"><span style="color:var(--muted);margin-right:6px">Last completed:</span><span id="ov-last-loc">Loading…</span></div>`;
     html += `</div>`;
-    el.innerHTML = html;
+    // A completed stage with an activity → show the draggable divider + photo grid
+    // (non-phone whole-tour view only; ctx.photos is null on phones).
+    const usePhotos = !!ctx.photos && stages.some(s => s.completion && s.completion.activity_id);
+    let topEl;
+    if (usePhotos) {
+      el.classList.add('tour-ov-split');
+      el.innerHTML =
+        `<div class="tour-ov-top">${html}</div>` +
+        `<div class="tour-ov-divider" title="Drag to resize photos"></div>` +
+        `<div class="tour-ov-photos"><div class="tour-ov-photos-label">Photos</div><div class="tour-ov-photos-grid"></div></div>`;
+      topEl = el.querySelector('.tour-ov-top');
+    } else {
+      el.classList.remove('tour-ov-split');
+      el.innerHTML = html;
+      topEl = el;
+    }
     const cid = ctx.cacheId;
     const geocacheFill = (lat, lon, elId, cacheKey) => {
       const ls = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
@@ -81,7 +129,92 @@ const TourStageDetail = {
     if (first?.start_lat != null) geocacheFill(first.start_lat, first.start_lon, 'ov-start-loc', `tour-ov-start-${cid}`);
     if (lastPt) geocacheFill(lastPt[0], lastPt[1], 'ov-end-loc', `tour-ov-endpt-${cid}`);
     if (lastDone?.start_lat != null) geocacheFill(lastDone.start_lat, lastDone.start_lon, 'ov-last-loc', `tour-ov-last-${lastDone.id}`);
-    if (ctx.renderAi) ctx.renderAi(el);
+    if (ctx.renderAi) ctx.renderAi(topEl);
+    if (usePhotos) { this._ovApplySplit(el); this._ovInitDivider(el); this._ovLoadPhotos(el, ctx); }
+  },
+
+  // ── Overview photo split: apply saved/default top-pane height ────────────────
+  _ovApplySplit(el) {
+    const top = el.querySelector('.tour-ov-top');
+    if (!top) return;
+    const ch = el.clientHeight || 500;
+    let h = _tourOvTopH != null ? _tourOvTopH : Math.round(ch * 0.52);
+    h = Math.max(60, Math.min(ch - 80, h));
+    top.style.flex = `0 0 ${h}px`;
+  },
+
+  // Wire the divider drag (mouse + touch). Document-level move/up handlers are
+  // attached once globally; the divider only records the drag start.
+  _ovInitDivider(el) {
+    _ovWireGlobal();
+    const divider = el.querySelector('.tour-ov-divider');
+    const top = el.querySelector('.tour-ov-top');
+    if (!divider || !top) return;
+    const start = y => {
+      _ovDrag = { el, top, divider, startY: y, startH: top.getBoundingClientRect().height };
+      divider.classList.add('dragging');
+      document.body.style.cursor = 'row-resize';
+    };
+    divider.addEventListener('mousedown', e => { start(e.clientY); e.preventDefault(); });
+    divider.addEventListener('touchstart', e => { start(e.touches[0].clientY); e.preventDefault(); }, { passive: false });
+  },
+
+  // Collect every completed stage's activity media (de-duped, in stage order) into
+  // one combined list. Returns a Promise<media[]>. Shared by the desktop split and
+  // the phone all-stages Photos tab.
+  _collectStageMedia(stages) {
+    const seen = new Set(), actIds = [];
+    (stages || []).forEach(s => {
+      const id = s.completion && s.completion.activity_id;
+      if (id && !seen.has(id)) { seen.add(id); actIds.push(id); }
+    });
+    return Promise.all(actIds.map(id => Lightbox.fetchMedia(id)))
+      .then(lists => { const media = []; lists.forEach(l => l.forEach(m => media.push(m))); return media; });
+  },
+
+  // Open the shared Lightbox over `media`; after a caption save, re-render the grid
+  // in place (same sizing) so its caption text updates. p: { captionEdit, onCaptionSave? }.
+  _openPhotoGrid(media, idx, p, gridEl, gridOpts) {
+    Lightbox.open(media, idx, {
+      download: true,
+      captionEdit: !!p.captionEdit,
+      onCaptionSave: p.onCaptionSave
+        ? async (item, caption) => {
+            await p.onCaptionSave(item, caption);
+            item.caption = caption || undefined;
+            Lightbox.renderGrid(gridEl, media, i => this._openPhotoGrid(media, i, p, gridEl, gridOpts), gridOpts);
+          }
+        : undefined,
+    });
+  },
+
+  // Desktop whole-tour split: fill the photo grid below the divider. ctx.photos:
+  // { captionEdit, onCaptionSave?, setMedia? }.
+  _ovLoadPhotos(el, ctx) {
+    const gridEl = el.querySelector('.tour-ov-photos-grid');
+    const labelEl = el.querySelector('.tour-ov-photos-label');
+    if (!gridEl) return;
+    gridEl.innerHTML = '<div class="tour-ov-photos-empty">Loading photos…</div>';
+    this._collectStageMedia(ctx.stages).then(media => {
+      if (ctx.photos.setMedia) ctx.photos.setMedia(media);
+      if (!media.length) { gridEl.innerHTML = '<div class="tour-ov-photos-empty">No photos yet.</div>'; return; }
+      if (labelEl) labelEl.textContent = `Photos · ${media.length}`;
+      const opts = { colW: '110px', thumbH: 110 };
+      Lightbox.renderGrid(gridEl, media, i => this._openPhotoGrid(media, i, ctx.photos, gridEl, opts), opts);
+    }).catch(() => { gridEl.innerHTML = '<div class="tour-ov-photos-empty">Failed to load photos.</div>'; });
+  },
+
+  // Phone all-stages Photos tab (level-1 overview). Renders every stage's photos/videos
+  // into `el` as a thumbnail grid — identical grid + lightbox to the per-stage Photos
+  // tab (default 3-column sizing). ctx: { stages, captionEdit, onCaptionSave?, setMedia? }.
+  allPhotos(el, ctx) {
+    el.innerHTML = '<div class="tour-tab-empty">Loading photos…</div>';
+    this._collectStageMedia(ctx.stages).then(media => {
+      if (ctx.setMedia) ctx.setMedia(media);
+      if (!media.length) { el.innerHTML = '<div class="tour-tab-empty">No photos yet.</div>'; return; }
+      el.innerHTML = '';
+      Lightbox.renderGrid(el, media, i => this._openPhotoGrid(media, i, ctx, el, {}));
+    }).catch(() => { el.innerHTML = '<div class="tour-tab-empty">Failed to load photos.</div>'; });
   },
 
   // Prev/next stage nav buttons (the small ←/→ pair). Shared by both pages.

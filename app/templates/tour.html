@@ -1507,6 +1507,18 @@ window.renderStagePhotosTab = function (el) {
   TourStageDetail.photosTab(el, { activityId: actId, lightboxName: 'openTourLightbox',
     setMedia: m => { _tourLbMedia = m; _tourLbActId = actId; } });
 };
+// Phone level-1 "Photos" tab — all stages' photos/videos in one grid.
+window.renderTourPhotosTab = function (el) {
+  const isOwner = !tourMatchUserId || tourMatchUserId === _currentUserId;
+  TourStageDetail.allPhotos(el, {
+    stages: tourStages,
+    captionEdit: isOwner,
+    setMedia: m => { _tourLbMedia = m; _tourLbActId = null; },
+    onCaptionSave: isOwner
+      ? async (item, caption) => { await _saveCaption(item.url, caption, !!item.user_upload); }
+      : undefined,
+  });
+};
 window.renderStageForecastTab = function (el) {
   const stage = _curStage();
   TourStageDetail.forecastTab(el, { stage,
@@ -1903,11 +1915,20 @@ async function geocodeAlongRoute(pts) {
 // ── Detail panel ──────────────────────────────────────────────────────────────
 async function renderDetail(activeId) {
   const el = document.getElementById('stage-detail');
+  el.classList.remove('tour-ov-split');   // cleared here; overview() re-adds it for the whole-tour split
 
   if(!activeId) {
     hideStageElevation();
+    const _ovIsOwner = !tourMatchUserId || tourMatchUserId === _currentUserId;
     TourStageDetail.overview(el, {
       stages: tourStages, pointsCache: _tourPointsCache, cacheId: tourInfo.id,
+      photos: TourNav.isPhone() ? null : {
+        captionEdit: _ovIsOwner,
+        setMedia: m => { _tourLbMedia = m; _tourLbActId = null; },
+        onCaptionSave: _ovIsOwner
+          ? async (item, caption) => { await _saveCaption(item.url, caption, !!item.user_upload); }
+          : undefined,
+      },
       renderAi: (elx) => {
         // AI Tour Summary — show when the tour is not fully completed OR its end date passed.
         const today = new Date().toISOString().slice(0,10);
