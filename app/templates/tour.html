@@ -150,6 +150,7 @@ html.mob-embedded body.mob-stage-view #stage-detail { padding-bottom:12px!import
 .ms-done{font-size:11px;color:#22c55e;flex-shrink:0}
 .ms-remove{color:var(--muted2);font-size:14px;flex-shrink:0;padding:0 2px;line-height:1}
 .ms-remove:hover{color:#ef4444}
+.ms-alt{font-size:10px;flex-shrink:0;padding:1px 2px;border-radius:3px;border:1px solid var(--border);background:var(--surface2);color:var(--muted);max-width:96px}
 #modal-drop-zone{border:2px dashed var(--border2);border-radius:7px;padding:12px;text-align:center;font-size:12px;color:var(--muted);cursor:pointer;margin-top:6px;transition:border-color .15s,color .15s}
 #modal-drop-zone:hover,#modal-drop-zone.drag-active{border-color:var(--accent);color:var(--text)}
 #modal-status{font-size:12px;color:var(--muted)}
@@ -2421,6 +2422,7 @@ function _openEdit() {
   // Pre-populate from current tourStages (already in DB order)
   modalStages = tourStages.map(s => ({
     type: 'existing', id: s.id, name: s.name, completion: s.completion,
+    alt_override: s.alt_override ?? null,
   }));
   document.getElementById('modal-title').textContent   = 'Edit Tour';
   document.getElementById('submit-btn').textContent    = 'Save';
@@ -2455,11 +2457,27 @@ function renderModalStages() {
       ? `<span class="ms-badge">new</span>`
       : (s.completion ? `<span class="ms-done">✓</span>` : '');
 
+    // Alternate-route override: Auto (geometry heuristic) / Not alt / Alternate.
+    // The Auto label notes when the heuristic currently treats this stage as an
+    // alternate, so the creator can see which ones to correct.
+    const ov = s.alt_override;
+    const autoAlt = s.type === 'existing' && _stageAltIds.has(String(s.id));
+    const opt = (v, label) =>
+      `<option value="${v}"${String(ov ?? '') === v ? ' selected' : ''}>${label}</option>`;
+    const altSel =
+      `<select class="ms-alt" draggable="false" title="Is this an alternate route?"
+               onmousedown="event.stopPropagation()" onchange="_setModalAlt(${idx}, this.value)">
+         ${opt('',  autoAlt ? 'Auto · alt' : 'Auto')}
+         ${opt('0', 'Not alt')}
+         ${opt('1', 'Alternate')}
+       </select>`;
+
     item.innerHTML = `
       <span class="ms-drag" title="Drag to reorder">⠿</span>
       <span class="ms-num">${idx+1}</span>
       <span class="ms-name" title="${esc(s.name)}">${esc(s.name)}</span>
       ${badge}
+      ${altSel}
       <button class="ms-remove" title="Remove" onclick="removeModalStage(${idx})">×</button>`;
 
     _attachModalDrag(item);
@@ -2567,6 +2585,10 @@ function _mTouchEnd(e) {
     renderModalStages();
   }
   _mTouchSrc=null;
+}
+
+function _setModalAlt(idx, val) {
+  modalStages[idx].alt_override = val === '' ? null : parseInt(val, 10);
 }
 
 function removeModalStage(idx) {
@@ -2750,8 +2772,8 @@ async function submitTour() {
     let newIdx = 0;
     const stageOrder = modalStages.map(s =>
       s.type === 'existing'
-        ? { type:'existing', id:s.id }
-        : { type:'new', idx:newIdx++ }
+        ? { type:'existing', id:s.id, alt_override:s.alt_override ?? null }
+        : { type:'new', idx:newIdx++, alt_override:s.alt_override ?? null }
     );
     const form = new FormData();
     form.append('title', title);

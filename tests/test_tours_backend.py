@@ -272,6 +272,38 @@ def test_segment_groups_and_collapse(con):
     assert [s["id"] for s in reps_pref] == [3, 2]
 
 
+def test_segment_overlap_requires_shared_path(con):
+    # A and C share start+end but C detours far away in between (<50% overlap):
+    # sharing endpoints alone is no longer enough to call C an alternate.
+    line_a = [(40.0 + 0.001 * i, -105.0) for i in range(20)]
+    line_c = [line_a[0]] + [(40.0 + 0.001 * i, -105.0 + 0.03) for i in range(1, 19)] + [line_a[-1]]
+    _insert_points(con, 1, line_a)
+    _insert_points(con, 2, line_c)
+    stages = [_stage(1, line_a), _stage(2, line_c)]
+
+    groups = tours._stage_segment_groups(con, stages)
+    assert [[s["id"] for s in g] for g in groups] == [[1], [2]]
+
+
+def test_alt_override_forces_classification(con):
+    line = [(40.0 + 0.001 * i, -105.0) for i in range(20)]
+    far  = [(41.0 + 0.001 * i, -106.0) for i in range(20)]
+    _insert_points(con, 1, line)
+    _insert_points(con, 2, line)   # identical geometry → would auto-group with 1
+    _insert_points(con, 3, far)    # unrelated geometry
+    con.executemany(
+        "INSERT INTO tour_stages (id, tour_id, stage_num, name, alt_override) VALUES (?,?,?,?,?)",
+        [(1, 1, 1, "A", None), (2, 1, 2, "B", 0), (3, 1, 3, "C", 1)],
+    )
+    con.commit()
+    stages = [_stage(1, line), _stage(2, line), _stage(3, far)]
+
+    groups = tours._stage_segment_groups(con, stages)
+    # 2 is forced standalone (override 0) despite identical geometry;
+    # 3 is forced into 2's group (override 1) despite unrelated geometry.
+    assert [[s["id"] for s in g] for g in groups] == [[1], [2, 3]]
+
+
 def _make_activities_table(con):
     con.execute("""
         CREATE TABLE activities (
@@ -827,3 +859,53 @@ def test_matching_scopes_activities_to_owner(con):
     result = tours._global_stage_matching(con, 1, "2026-07-01", "2026-07-10",
                                           [_spread_stage(400, 1)])
     assert result[400] is None
+
+
+# ── Define As Tour: build a tour from existing activities ─────────────────────
+
+def test_create_tour_from_activities(authed_client, add_activity):
+    """POST /tours/from-activities creates stages from activities in the given
+    order, derives distance/climb/route from each activity's GPS track, and the
+    new tour shows uncompleted stages (no completion until an attempt exists)."""
+    c = authed_client
+    a1 = add_activity(user_id=c.user_id, name="Alpe Climb", distance_mi=8.0,
+                      points=[(45.0, 6.0, 100), (45.01, 6.01, 5000), (45.02, 6.02, 9000)])
+    a2 = add_activity(user_id=c.user_id, name="Valley Spin", distance_mi=20.0,
+                      points=[(46.0, 7.0, 200), (46.05, 7.05, 300)])
+
+    r = c.post("/tours/from-activities", data={
+        "title": "My Week", "shared": "1",
+        "activity_ids": json.dumps([a2, a1]),   # order preserved (a2 first)
+    })
+    assert r.status_code == 201, r.text
+    tid = r.json()["id"]
+
+    tour = c.get(f"/tours/{tid}").json()
+    assert tour["title"] == "My Week"
+    assert tour["shared"] is True
+    stages = tour["stages"]
+    assert [s["name"] for s in stages] == ["Valley Spin", "Alpe Climb"]
+    assert [s["stage_num"] for s in stages] == [1, 2]
+    # Uncompleted — no attempt/tracking window created yet.
+    assert all(s["completion"] is None for s in stages)
+    # Distance/climb derived from the track (climb only on the ascending one).
+    assert stages[0]["distance_mi"] > 0
+    assert stages[1]["climb_ft"] > 0
+
+
+def test_create_tour_from_activities_requires_activities(authed_client):
+    c = authed_client
+    r = c.post("/tours/from-activities",
+               data={"title": "Empty", "activity_ids": json.dumps([])})
+    assert r.status_code == 400
+
+
+def test_create_tour_from_activities_rejects_other_users_activity(authed_client, add_activity, make_user):
+    """An activity id belonging to someone else can't be pulled into a tour."""
+    c = authed_client
+    other = make_user()
+    a = add_activity(user_id=other, name="Not Yours", distance_mi=5.0,
+                     points=[(45.0, 6.0, 100), (45.01, 6.01, 200)])
+    r = c.post("/tours/from-activities",
+               data={"title": "Sneaky", "activity_ids": json.dumps([a])})
+    assert r.status_code == 404

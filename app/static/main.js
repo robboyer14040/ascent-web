@@ -331,7 +331,7 @@ function renderVirtualList() {
       const selClass  = isSel ? ' selected' : (isMulti ? ' multi-sel' : '');
       const cols = getActiveCols();
       const colsT = currentCOLS();
-      html += `<div class="act-row${selClass}" data-id="${a.id}" style="--cols:${colsT}">
+      html += `<div class="act-row${selClass}" data-id="${a.id}" draggable="true" style="--cols:${colsT}">
         ${cols.map(col => `<div class="ac ${col.align==='right'?'ac-num':'ac-date'}" style="${col.id==='name'?'min-width:0':''}">${col.render(a)}</div>`).join('')}
       </div>`;
     }

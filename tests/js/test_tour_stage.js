@@ -60,3 +60,30 @@ test('_altStageIds returns the later alternates as a Set of string ids', functio
   ok(alt.has('3'), 'stage 3 should be flagged as the alternate');
   ok(!alt.has('1'), 'stage 1 is the original, not an alternate');
 });
+
+// Shares start+end but detours far away in between (<50% overlap) → separate.
+var LINE_A2 = _line(40.0, -105.0);
+var LINE_C2 = [LINE_A2[0]];
+for (var _i = 1; _i < 19; _i++) LINE_C2.push([40.0 + 0.001 * _i, -105.0 + 0.03, 0]);
+LINE_C2.push(LINE_A2[LINE_A2.length - 1]);
+
+test('_stageSegmentGroups keeps endpoint-only routes separate (needs >=50% overlap)', function () {
+  var stages = [_stage(1, LINE_A2), _stage(2, LINE_C2)];
+  var cache  = { '1': LINE_A2, '2': LINE_C2 };
+  var groups = _stageSegmentGroups(stages, cache).map(function (g) {
+    return g.map(function (s) { return s.id; });
+  });
+  eq(groups, [[1], [2]]);
+});
+
+test('alt_override forces the alternate classification', function () {
+  var a = _line(40.0, -105.0), b = _line(41.0, -106.0);
+  var s1 = _stage(1, a), s2 = _stage(2, a), s3 = _stage(3, b);
+  s2.alt_override = 0;   // identical geometry to 1, but forced standalone
+  s3.alt_override = 1;   // unrelated geometry, but forced into 2's group
+  var cache = { '1': a, '2': a, '3': b };
+  var groups = _stageSegmentGroups([s1, s2, s3], cache).map(function (g) {
+    return g.map(function (s) { return s.id; });
+  });
+  eq(groups, [[1], [2, 3]]);
+});

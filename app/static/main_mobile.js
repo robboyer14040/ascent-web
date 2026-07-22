@@ -308,12 +308,18 @@ function _updateSelectBar() {
 function _updateMultiActions() {
   const n   = state.selectedIds.size;
   const btn = document.getElementById('bulk-gpx-btn');
-  if (!btn) return;
-  if (n >= 2) {
-    btn.style.display = '';
-    document.getElementById('bulk-gpx-count').textContent = n;
-  } else {
-    btn.style.display = 'none';
+  if (btn) {
+    if (n >= 2) {
+      btn.style.display = '';
+      document.getElementById('bulk-gpx-count').textContent = n;
+    } else {
+      btn.style.display = 'none';
+    }
+  }
+  // "Define As Tour…" — shown on non-phone whenever any activity exists.
+  const dtBtn = document.getElementById('define-tour-btn');
+  if (dtBtn) {
+    dtBtn.style.display = (!_isPhoneLayout() && state.all.length >= 1) ? '' : 'none';
   }
 }
 

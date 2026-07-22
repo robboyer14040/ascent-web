@@ -77,14 +77,19 @@ async function reverseGeocode(lat, lon) {
 }
 
 // ── Alternate-route grouping ──────────────────────────────────────────────────
-// Group adjacent stages that share BOTH their start and end location — i.e.
-// alternate versions of the same segment. Returns an array of groups (each a
-// list of stages, in order); most groups hold a single stage. Start comes from
-// start_lat/lon, end from `cache` ({stageId: [[lat,lon,alt],...]}).
+// Group adjacent stages that share BOTH their start and end location AND retrace
+// at least half of one another — i.e. alternate versions of the same segment.
+// Returns an array of groups (each a list of stages, in order); most groups hold
+// a single stage. Start comes from start_lat/lon, end + full path from `cache`
+// ({stageId: [[lat,lon,alt],...]}). A stage's `alt_override` forces the call:
+// 0 = always its own segment, 1 = always an alternate of the preceding stage.
+// Mirrors the backend `_stage_segment_groups` — keep the two in sync.
 function _stageSegmentGroups(stages, cache) {
-  const WIN = 15;   // points at each end to scan for convergence
-  const firstPts = s => { const p = cache[String(s.id)]; return (p && p.length) ? p.slice(0, WIN) : []; };
-  const lastPts  = s => { const p = cache[String(s.id)]; return (p && p.length) ? p.slice(-WIN) : []; };
+  const WIN = 15;          // points at each end to scan for convergence
+  const OVERLAP_MIN = 0.5; // alternate must retrace >= this fraction of the original
+  const allPts   = s => cache[String(s.id)] || [];
+  const firstPts = s => allPts(s).slice(0, WIN);
+  const lastPts  = s => allPts(s).slice(-WIN);
   const startPt = s => (s.start_lat != null && s.start_lon != null) ? [s.start_lat, s.start_lon] : (firstPts(s)[0] || null);
   const endPt   = s => { const lp = lastPts(s); return lp.length ? lp[lp.length - 1] : null; };
   const near = (a, b) => {
@@ -94,19 +99,43 @@ function _stageSegmentGroups(stages, cache) {
     return Math.hypot(dLat, dLon) < 150;   // metres
   };
   const nearAny = (pt, arr) => !!pt && arr.some(q => near(pt, q));
+  // Cap the pairwise overlap work by sampling to ~150 points, like the backend.
+  const sample = arr => {
+    const step = Math.max(1, Math.floor(arr.length / 150));
+    const out = [];
+    for (let i = 0; i < arr.length; i += step) out.push(arr[i]);
+    return out;
+  };
+  const overlapFrac = (orig, cand) => {   // fraction of orig's points that lie on cand
+    const o = sample(allPts(orig)), c = sample(allPts(cand));
+    if (!o.length || !c.length) return 0;
+    let covered = 0;
+    for (const p of o) if (nearAny(p, c)) covered++;
+    return covered / o.length;
+  };
   // Alternate routes may diverge briefly at the start/finish before rejoining
   // the shared path, so match a terminal point against a window of the other
   // route's early/late points rather than comparing single endpoints.
   const startsMatch = (a, b) => nearAny(startPt(a), firstPts(b)) || nearAny(startPt(b), firstPts(a));
   const endsMatch   = (a, b) => nearAny(endPt(a),  lastPts(b))  || nearAny(endPt(b),  lastPts(a));
-  const sameSeg = (a, b) => startsMatch(a, b) && endsMatch(a, b);
-  // Anchor each group on the first occurrence of its [start, end]; a later
-  // stage matching that anchor is an alternate route.
+  // a is the later candidate, b the anchor (original): the alternate must
+  // retrace at least half of the original.
+  const sameSeg = (a, b) => startsMatch(a, b) && endsMatch(a, b) && overlapFrac(b, a) >= OVERLAP_MIN;
+  // Anchor each group on the first occurrence of its [start, end]; a later stage
+  // matching that anchor (and retracing it) is an alternate. `alt_override`
+  // forces it: 0 → own group, 1 → join the previous stage's group.
   const groups = [];
+  const groupOf = new Map();
+  let prev = null;
   for (const s of stages) {
-    const g = groups.find(g => sameSeg(s, g[0]));
+    let g;
+    if (s.alt_override === 0) g = null;
+    else if (s.alt_override === 1 && prev) g = groupOf.get(String(prev.id));
+    else g = groups.find(g => sameSeg(s, g[0]));
     if (g) g.push(s);
-    else groups.push([s]);
+    else { g = [s]; groups.push(g); }
+    groupOf.set(String(s.id), g);
+    prev = s;
   }
   return groups;
 }

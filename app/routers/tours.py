@@ -152,6 +152,13 @@ def _ensure_tables(con):
             start_lon   REAL
         )
     """)
+    # Per-stage alternate-route override: NULL = auto (geometry heuristic),
+    # 0 = force standalone (never an alternate), 1 = force alternate of the
+    # preceding stage. Added after the fact for DBs that pre-date it.
+    try:
+        con.execute("ALTER TABLE tour_stages ADD COLUMN alt_override INTEGER")
+    except Exception:
+        pass
     con.execute(
         "CREATE INDEX IF NOT EXISTS idx_tour_stages_tour ON tour_stages(tour_id)"
     )
@@ -290,7 +297,15 @@ def _parse_gpx_route(data: bytes, filename: str) -> dict:
     if not raw:
         raise ValueError("No valid track points found")
 
-    # Compute distance and climb (exponentially smoothed altitude to suppress noise)
+    return {"name": name, **_compute_route_stats(raw)}
+
+
+def _compute_route_stats(raw: list) -> dict:
+    """Reduce a list of (lat, lon, alt_m) track points to a stage's route stats:
+    {distance_mi, climb_ft, start_lat, start_lon, points}. Altitude is
+    exponentially smoothed to suppress noise; points are downsampled to ≤800 and
+    stored with altitude in feet (matching the DB convention). Assumes raw is
+    non-empty."""
     cum_dist_mi  = 0.0
     climb_ft     = 0.0
     smooth_alt   = None
@@ -314,7 +329,6 @@ def _parse_gpx_route(data: bytes, filename: str) -> dict:
         pts.append(raw[-1])
 
     return {
-        "name":        name,
         "distance_mi": cum_dist_mi,
         "climb_ft":    climb_ft,
         "start_lat":   raw[0][0],
@@ -514,12 +528,22 @@ def _stage_segment_groups(con, stages: list) -> list:
     single first/last point we match a terminal point against a small WINDOW of
     the other route's early/late points — the tracks converge, so this matches
     even when the recorded start points are a couple hundred metres apart.
+    Sharing endpoints alone isn't enough, though: an alternate must also RETRACE
+    at least half of the original (>= 50% of the anchor's points lie on the
+    candidate), so two genuinely different stages that merely begin and end near
+    the same place stay separate.
     `stages` is a list of dicts (in stage order) each with id, distance_mi,
     start_lat, start_lon.
+
+    A stage's stored `alt_override` forces the call regardless of geometry:
+    0 = always its own segment, 1 = always an alternate of the preceding stage.
     """
     _WIN = 15   # points at each end to scan for convergence
+    _OVERLAP_MIN = 0.5  # alternate must retrace >= this fraction of the original
     _fcache: dict = {}
     _lcache: dict = {}
+    _acache: dict = {}
+    _ocache: dict = {}
 
     def _first_pts(sid):
         if sid not in _fcache:
@@ -538,6 +562,25 @@ def _stage_segment_groups(con, stages: list) -> list:
             ).fetchall()
             _lcache[sid] = [(r[0], r[1]) for r in rows]
         return _lcache[sid]
+
+    def _all_pts(sid):
+        if sid not in _acache:
+            rows = con.execute(
+                "SELECT lat, lon FROM tour_stage_points WHERE stage_id=? ORDER BY seq ASC",
+                (sid,),
+            ).fetchall()
+            pts = [(r[0], r[1]) for r in rows]
+            step = max(1, len(pts) // 150)   # cap the pairwise work
+            _acache[sid] = pts[::step]
+        return _acache[sid]
+
+    def _override(sid):
+        if sid not in _ocache:
+            r = con.execute(
+                "SELECT alt_override FROM tour_stages WHERE id=?", (sid,)
+            ).fetchone()
+            _ocache[sid] = r[0] if r else None
+        return _ocache[sid]
 
     def _start_pt(s):
         if s.get("start_lat") is not None and s.get("start_lon") is not None:
@@ -559,20 +602,44 @@ def _stage_segment_groups(con, stages: list) -> list:
     def _near_any(pt, arr):
         return pt is not None and any(_near(pt, q) for q in arr)
 
+    def _overlap_frac(orig_sid, cand_sid):
+        """Fraction of the ORIGINAL route's points that lie on (near) the candidate."""
+        orig, cand = _all_pts(orig_sid), _all_pts(cand_sid)
+        if not orig or not cand:
+            return 0.0
+        return sum(1 for p in orig if _near_any(p, cand)) / len(orig)
+
     def _same_seg(a, b):
         starts = _near_any(_start_pt(a), _first_pts(b["id"])) or _near_any(_start_pt(b), _first_pts(a["id"]))
         ends   = _near_any(_end_pt(a["id"]), _last_pts(b["id"])) or _near_any(_end_pt(b["id"]), _last_pts(a["id"]))
-        return starts and ends
+        if not (starts and ends):
+            return False
+        # a is the later candidate, b the group anchor (original); the alternate
+        # (a) must retrace at least half of the original (b).
+        return _overlap_frac(b["id"], a["id"]) >= _OVERLAP_MIN
 
     # Anchor each group on the first occurrence of its [start, end]; a later
-    # stage matching that anchor is an alternate route.
+    # stage matching that anchor (and retracing it) is an alternate route.
+    # `alt_override` forces the call: 0 → own group, 1 → join the previous
+    # stage's group.
     groups: list = []
+    group_of: dict = {}
+    prev = None
     for s in stages:
-        grp = next((g for g in groups if _same_seg(s, g[0])), None)
+        ov = _override(s["id"])
+        if ov == 0:
+            grp = None
+        elif ov == 1 and prev is not None:
+            grp = group_of.get(prev["id"])
+        else:
+            grp = next((g for g in groups if _same_seg(s, g[0])), None)
         if grp is not None:
             grp.append(s)
         else:
-            groups.append([s])
+            grp = [s]
+            groups.append(grp)
+        group_of[s["id"]] = grp
+        prev = s
     return groups
 
 
@@ -880,6 +947,112 @@ async def create_tour(
         con.close()
 
 
+def _activity_to_stage(con, uid: int, activity_id: int) -> dict:
+    """Build a tour-stage dict from an existing activity's GPS track. The stage
+    name is the activity's title; distance/climb/route come from its points (same
+    computation as a GPX-derived stage). Activities without a usable track fall
+    back to their stored distance and totalClimb, with no route points."""
+    row = con.execute(
+        "SELECT name, local_name, distance_mi, start_lat, start_lon, attributes_json "
+        "FROM activities WHERE id=? AND user_id=?",
+        (activity_id, uid),
+    ).fetchone()
+    if not row:
+        raise HTTPException(404, f"Activity {activity_id} not found")
+    name_col, local_name, distance_mi, start_lat, start_lon, attrs_json = row
+    attrs = parse_attrs(attrs_json)
+    name = (local_name or attrs.get("name") or name_col or "Stage").strip() or "Stage"
+
+    rows = con.execute(
+        f"SELECT latitude_e7, longitude_e7, orig_altitude_cm "
+        f"FROM points WHERE track_id=? AND {_VALID_GPS} "
+        f"ORDER BY wall_clock_delta_s ASC, active_time_delta_s ASC",
+        (activity_id,),
+    ).fetchall()
+    raw = [(r[0], r[1], (r[2] or 0) / 100.0) for r in rows]  # orig_altitude_cm → m
+
+    if len(raw) >= 2:
+        return {"name": name, **_compute_route_stats(raw)}
+
+    # No usable GPS track — keep the stage but carry only stored stats.
+    return {
+        "name":        name,
+        "distance_mi": float(distance_mi or 0.0),
+        "climb_ft":    _fa(attrs, "totalClimb") or 0.0,
+        "start_lat":   start_lat,
+        "start_lon":   start_lon,
+        "points":      [],
+    }
+
+
+@router.post("/tours/from-activities")
+async def create_tour_from_activities(
+    request:      Request,
+    title:        str = Form(...),
+    shared:       int = Form(default=0),
+    activity_ids: str = Form(...),
+):
+    """Create a tour whose stages are existing activities, in the given order.
+    Stages are stored as uncompleted routes (derived from each activity's GPS
+    track); per-user completion still comes from the normal attempt/matching
+    flow once a tracking window is created via Manage."""
+    uid = require_user(request)
+
+    if not title.strip():
+        raise HTTPException(400, "Title is required")
+    try:
+        ids = json.loads(activity_ids)
+    except (ValueError, TypeError):
+        raise HTTPException(400, "Invalid activity_ids")
+    if not isinstance(ids, list) or not ids:
+        raise HTTPException(400, "At least one activity is required")
+    try:
+        ids = [int(i) for i in ids]
+    except (ValueError, TypeError):
+        raise HTTPException(400, "Invalid activity_ids")
+
+    con = sqlite3.connect(db_getter().path, timeout=30)
+    try:
+        con.execute("PRAGMA journal_mode=WAL")
+        con.execute("PRAGMA foreign_keys=ON")
+        _ensure_tables(con)
+
+        stages = [_activity_to_stage(con, uid, aid) for aid in ids]
+
+        cur = con.execute(
+            "INSERT INTO tours (created_by, title, start_date, end_date, created_at, shared) "
+            "VALUES (?,?,?,?,?,?)",
+            (uid, title.strip(), "", "", int(_time.time()), shared),
+        )
+        tour_id = cur.lastrowid
+
+        for i, s in enumerate(stages):
+            cur2 = con.execute(
+                "INSERT INTO tour_stages "
+                "(tour_id, stage_num, name, distance_mi, climb_ft, start_lat, start_lon) "
+                "VALUES (?,?,?,?,?,?,?)",
+                (tour_id, i + 1, s["name"],
+                 s["distance_mi"], s["climb_ft"],
+                 s["start_lat"], s["start_lon"]),
+            )
+            stage_id = cur2.lastrowid
+            if s["points"]:
+                con.executemany(
+                    "INSERT INTO tour_stage_points (stage_id, seq, lat, lon, alt_ft) "
+                    "VALUES (?,?,?,?,?)",
+                    [(stage_id, seq, lat, lon, alt_ft)
+                     for seq, (lat, lon, alt_ft) in enumerate(s["points"])],
+                )
+
+        con.commit()
+        return JSONResponse({"id": tour_id, "title": title.strip()}, status_code=201)
+    except Exception:
+        con.rollback()
+        raise
+    finally:
+        con.close()
+
+
 @router.post("/tours/{tour_id}/stages")
 async def add_tour_stages(
     tour_id: int,
@@ -985,20 +1158,21 @@ async def get_tour(tour_id: int, request: Request,
         }
 
         stage_rows = con.execute(
-            "SELECT id, stage_num, name, distance_mi, climb_ft, start_lat, start_lon "
+            "SELECT id, stage_num, name, distance_mi, climb_ft, start_lat, start_lon, alt_override "
             "FROM tour_stages WHERE tour_id=? ORDER BY stage_num",
             (tour_id,),
         ).fetchall()
 
         stages = [{
-            "id":          sr[0],
-            "stage_num":   sr[1],
-            "name":        sr[2],
-            "distance_mi": sr[3],
-            "climb_ft":    sr[4],
-            "start_lat":   sr[5],
-            "start_lon":   sr[6],
-            "completion":  None,
+            "id":           sr[0],
+            "stage_num":    sr[1],
+            "name":         sr[2],
+            "distance_mi":  sr[3],
+            "climb_ft":     sr[4],
+            "start_lat":    sr[5],
+            "start_lon":    sr[6],
+            "alt_override": sr[7],
+            "completion":   None,
         } for sr in stage_rows]
 
         match_uid = match_user_id if match_user_id is not None else uid
@@ -1406,13 +1580,18 @@ async def update_tour(
             if sid not in keep_ids:
                 con.execute("DELETE FROM tour_stages WHERE id=?", (sid,))
 
+        # Normalise the per-stage alternate-route override to NULL / 0 / 1.
+        def _alt_ov(item):
+            v = item.get("alt_override")
+            return v if v in (0, 1) else None
+
         # Apply the new ordering: renumber existing stages, insert new ones
         for pos, item in enumerate(order):
             stage_num = pos + 1
             if item.get("type") == "existing":
                 con.execute(
-                    "UPDATE tour_stages SET stage_num=? WHERE id=? AND tour_id=?",
-                    (stage_num, int(item["id"]), tour_id),
+                    "UPDATE tour_stages SET stage_num=?, alt_override=? WHERE id=? AND tour_id=?",
+                    (stage_num, _alt_ov(item), int(item["id"]), tour_id),
                 )
             elif item.get("type") == "new":
                 idx = int(item.get("idx", 0))
@@ -1421,11 +1600,11 @@ async def update_tour(
                 s = new_stages[idx]
                 cur = con.execute(
                     "INSERT INTO tour_stages "
-                    "(tour_id, stage_num, name, distance_mi, climb_ft, start_lat, start_lon) "
-                    "VALUES (?,?,?,?,?,?,?)",
+                    "(tour_id, stage_num, name, distance_mi, climb_ft, start_lat, start_lon, alt_override) "
+                    "VALUES (?,?,?,?,?,?,?,?)",
                     (tour_id, stage_num, s["name"],
                      s["distance_mi"], s["climb_ft"],
-                     s["start_lat"], s["start_lon"]),
+                     s["start_lat"], s["start_lon"], _alt_ov(item)),
                 )
                 stage_id = cur.lastrowid
                 con.executemany(
@@ -2090,19 +2269,20 @@ async def tour_share_data(token: str):
         tour_id, title, share_uid, share_attempt_id, ai_summary = tour_row
 
         stage_rows = con.execute(
-            "SELECT id, stage_num, name, distance_mi, climb_ft, start_lat, start_lon "
+            "SELECT id, stage_num, name, distance_mi, climb_ft, start_lat, start_lon, alt_override "
             "FROM tour_stages WHERE tour_id=? ORDER BY stage_num",
             (tour_id,),
         ).fetchall()
         stages = [{
-            "id":          sr[0],
-            "stage_num":   sr[1],
-            "name":        sr[2],
-            "distance_mi": sr[3],
-            "climb_ft":    sr[4],
-            "start_lat":   sr[5],
-            "start_lon":   sr[6],
-            "completion":  None,
+            "id":           sr[0],
+            "stage_num":    sr[1],
+            "name":         sr[2],
+            "distance_mi":  sr[3],
+            "climb_ft":     sr[4],
+            "start_lat":    sr[5],
+            "start_lon":    sr[6],
+            "alt_override": sr[7],
+            "completion":   None,
         } for sr in stage_rows]
 
         completions, _, _ = _completions_for_user(con, tour_id, share_uid, stages, share_attempt_id)
