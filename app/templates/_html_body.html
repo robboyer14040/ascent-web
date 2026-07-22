@@ -10,13 +10,17 @@
       </div>
       <select id="typeFilter"><option value="">All types</option></select>
       <select id="yearFilter"><option value="">All years</option></select>
-      <span class="tb-count" id="actCount"></span>
       <button class="tb-btn" id="bulk-gpx-btn" onclick="downloadSelectedGPX()" title="Download selected activities as GPX files" style="display:none">↓ GPX (<span id="bulk-gpx-count">0</span>)</button>
       <button class="tb-btn" id="import-btn" onclick="openImportModal()" title="Import GPX or FIT files">↑ Import</button>
       <button class="tb-btn" id="define-tour-btn" onclick="openDefineTourModal()" title="Create a tour from your activities" style="display:none">＋ Define As Tour…</button>
       <button class="tb-btn" id="col-gear-btn" onclick="toggleColPicker(event)" title="Choose columns" style="padding:3px 7px;font-size:20px;line-height:1">⚙</button>
       <div id="col-picker"></div>
       <div class="mob-filter-break"></div>
+    </div>
+
+    <div id="count-bar">
+      <span class="tb-count" id="actCount"></span>
+      <span class="tb-count" id="selCount" style="display:none"></span>
     </div>
 
     <!-- Selection mode bar (touch multi-select) -->

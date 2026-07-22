@@ -27,11 +27,15 @@ function openDefineTourModal() {
   panel.style.top = '84px';
   panel.style.transform = 'translateX(-50%)';
   panel.classList.add('open');
+  // Freeze the list's horizontal touch-scroll so a sideways drag toward the
+  // panel isn't swallowed by the scroller (tablets — see touch-drag below).
+  document.getElementById('list-scroll').classList.add('dt-active');
   document.getElementById('dt-title-input').focus();
 }
 
 function closeDefineTourModal() {
   document.getElementById('def-tour-panel').classList.remove('open');
+  document.getElementById('list-scroll').classList.remove('dt-active');
 }
 
 function _dtRenderStages() {
@@ -141,6 +145,79 @@ document.addEventListener('dragend', () => { _dtDragActivityIds = null; });
     });
     _dtRenderStages();
   });
+})();
+
+// ── Touch drag (tablets) → the panel ──────────────────────────────────────────
+// Native HTML5 DnD never fires from touch, so on touch devices we run our own
+// finger-tracking drag from the activity rows into the panel. Active only while
+// the panel is open (list horizontal-scroll is frozen then, see open handler).
+// Mouse keeps using the native DnD path above. A drag begins only on clear
+// horizontal movement, so taps still select and a vertical swipe still scrolls
+// the list until a sideways drag is intended.
+(function initDtTouchDrag() {
+  const listEl = document.getElementById('act-list');
+  if (!listEl) return;
+
+  let ids = null, ghost = null, started = false, sx = 0, sy = 0;
+
+  const isOpen = () => document.getElementById('def-tour-panel').classList.contains('open');
+  const moveGhost = (x, y) => { ghost.style.left = x + 'px'; ghost.style.top = y + 'px'; };
+
+  listEl.addEventListener('touchstart', e => {
+    if (!isOpen() || e.touches.length !== 1) return;
+    const row = e.target.closest('.act-row');
+    if (!row) return;
+    const id = parseInt(row.dataset.id);
+    if (isNaN(id)) return;
+    const t = e.touches[0];
+    sx = t.clientX; sy = t.clientY;
+    ids = state.selectedIds.has(id) ? [...state.selectedIds] : [id];
+    started = false;
+  }, { passive: true });
+
+  listEl.addEventListener('touchmove', e => {
+    if (!ids) return;
+    const t = e.touches[0];
+    if (!t) return;
+    if (!started) {
+      const dx = t.clientX - sx, dy = t.clientY - sy;
+      // Require a clearly horizontal move before hijacking the gesture.
+      if (Math.abs(dx) < 8 || Math.abs(dx) < Math.abs(dy)) return;
+      started = true;
+      const label = ids.length > 1 ? `${ids.length} activities`
+        : ((state.all.find(x => x.id === ids[0]) || {}).name || 'activity');
+      ghost = document.createElement('div');
+      ghost.className = 'dt-drag-ghost';
+      ghost.textContent = label;
+      document.body.appendChild(ghost);
+    }
+    e.preventDefault();   // stop the list scrolling under the drag
+    moveGhost(t.clientX, t.clientY);
+    const zone = document.getElementById('dt-drop-zone');
+    const el = document.elementFromPoint(t.clientX, t.clientY);
+    zone.classList.toggle('drag-active', !!(el && document.getElementById('def-tour-panel').contains(el)));
+  }, { passive: false });
+
+  function finish(e) {
+    if (ids && started) {
+      const t = e.changedTouches && e.changedTouches[0];
+      const panel = document.getElementById('def-tour-panel');
+      const el = t && document.elementFromPoint(t.clientX, t.clientY);
+      if (el && panel.contains(el)) {   // dropped anywhere over the panel
+        ids.forEach(id => {
+          if (_dtStages.some(s => s.id === id)) return;
+          const a = state.all.find(x => x.id === id);
+          if (a) _dtStages.push({ id: a.id, name: a.name || '(unnamed)' });
+        });
+        _dtRenderStages();
+      }
+      document.getElementById('dt-drop-zone').classList.remove('drag-active');
+    }
+    if (ghost) { ghost.remove(); ghost = null; }
+    ids = null; started = false;
+  }
+  listEl.addEventListener('touchend', finish, { passive: true });
+  listEl.addEventListener('touchcancel', finish, { passive: true });
 })();
 
 // ── Drag the panel by its header (so it never blocks the rows you need) ────────

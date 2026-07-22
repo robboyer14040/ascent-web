@@ -82,6 +82,9 @@ input,select{font:inherit}
 #filter-bar{display:flex;gap:6px;padding:8px 10px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0;align-items:center;}
 #filter-bar select{background:var(--surface2);border:1px solid var(--border2);color:var(--text);border-radius:6px;padding:4px 8px;font-size:12px;}
 .mob-filter-break{display:none}
+#count-bar{display:flex;align-items:center;padding:5px 10px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0}
+#count-bar .tb-count{padding:0}
+#count-bar #actCount{padding-right:0}
 
 /* column headers */
 #col-head{
@@ -108,6 +111,7 @@ input,select{font:inherit}
 
 /* list — virtual scroll container */
 #list-scroll{flex:1;display:flex;flex-direction:column;overflow-x:scroll;overflow-y:hidden;min-height:0;scrollbar-width:none}
+#list-scroll.dt-active{overflow-x:hidden}  /* Define-As-Tour open: free the drag gesture */
 #list-scroll::-webkit-scrollbar{display:none}
 #act-list{flex:1;overflow-y:scroll;overflow-x:visible;position:relative;min-height:80px;scrollbar-width:none}
 #act-list::-webkit-scrollbar{display:none}
@@ -958,7 +962,6 @@ html.mob-embedded body { padding-bottom:0!important }
   #filter-bar #bulk-gpx-btn{order:15}
   #filter-bar .mob-filter-break{display:block!important;flex-basis:100%;height:0;order:19}
   #filter-bar .tb-search{order:20;flex:1 1 0;min-width:0;width:auto}
-  #filter-bar #actCount{order:21}
   .ac{font-size:13px}.ac-date{font-size:12px}.ac-num{font-size:13px}
   #select-mode-bar{padding:8px 12px!important}
 }
@@ -996,7 +999,6 @@ html.mob-embedded body { padding-bottom:0!important }
   #filter-bar #bulk-gpx-btn{order:15}
   #filter-bar .mob-filter-break{display:block!important;flex-basis:100%;height:0;order:19}
   #filter-bar .tb-search{order:20;flex:0 0 200px;width:200px}
-  #filter-bar #actCount{order:21}
 }
 
 /* ── Compare panel on phones ─────────────────────────────────────────────── */

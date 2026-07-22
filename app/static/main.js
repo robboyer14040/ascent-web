@@ -354,7 +354,12 @@ function renderVirtualList() {
   paint();
 
   document.getElementById('actCount').textContent =
-    acts.length === state.all.length ? `${acts.length} activities` : `${acts.length} of ${state.all.length}`;
+    acts.length === state.all.length ? `${acts.length} activities` : `${acts.length} of ${state.all.length} activities`;
+  const selN = state.selectedIds.size > 0 ? state.selectedIds.size
+             : (state.selectedId !== null ? 1 : 0);
+  const selEl = document.getElementById('selCount');
+  selEl.textContent = `, ${selN} selected`;
+  selEl.style.display = selN > 0 ? '' : 'none';
   _updateMultiActions();
 }
 
