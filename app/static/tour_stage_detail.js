@@ -4,6 +4,10 @@
 //
 // Requires these globals (present on both pages): U (units), esc (HTML escape).
 
+// Activity ids we've already auto-synced from Strava this session — so a re-render
+// after a sync (or a no-op sync) never re-triggers the auto-sync into a loop.
+const _autoSyncedActs = new Set();
+
 // ── Overview photo-split state (non-phone whole-tour view) ────────────────────
 // The divider under the AI Summary drags the top (info+AI) pane's height; the
 // photo grid below takes the rest. The chosen height persists per browser.
@@ -99,9 +103,11 @@ const TourStageDetail = {
     if (lastPt) html += `<div style="font-size:12px"><span style="color:var(--muted);margin-right:6px">End:</span><span id="ov-end-loc">Loading…</span></div>`;
     if (lastDone && lastDone.start_lat != null) html += `<div style="font-size:12px"><span style="color:var(--muted);margin-right:6px">Last completed:</span><span id="ov-last-loc">Loading…</span></div>`;
     html += `</div>`;
-    // A completed stage with an activity → show the draggable divider + photo grid
-    // (non-phone whole-tour view only; ctx.photos is null on phones).
-    const usePhotos = !!ctx.photos && stages.some(s => s.completion && s.completion.activity_id);
+    // Photo placement differs by layout:
+    //  • Split-pane share layout (#photos-body present) → the separate PHOTOS pane.
+    //  • tour.html owner layout → the in-panel tour-ov-split (info top / photos bottom).
+    const splitPane = !!document.getElementById('photos-body');
+    const usePhotos = !splitPane && !!ctx.photos && stages.some(s => s.completion && s.completion.activity_id);
     let topEl;
     if (usePhotos) {
       el.classList.add('tour-ov-split');
@@ -131,6 +137,13 @@ const TourStageDetail = {
     if (lastDone?.start_lat != null) geocacheFill(lastDone.start_lat, lastDone.start_lon, 'ov-last-loc', `tour-ov-last-${lastDone.id}`);
     if (ctx.renderAi) ctx.renderAi(topEl);
     if (usePhotos) { this._ovApplySplit(el); this._ovInitDivider(el); this._ovLoadPhotos(el, ctx); }
+    // Split-pane share layout: photos go to the separate PHOTOS pane (all-stage media);
+    // no elevation for the whole-tour overview, so hide the ANALYSIS pane.
+    if (splitPane) {
+      if (window.ShareLayout) ShareLayout.showAnalysis(false);
+      if (ctx.photos) this._collectStageMedia(stages).then(m => this.photosPane(m, ctx.photos));
+      else this.photosPane(null);
+    }
   },
 
   // ── Overview photo split: apply saved/default top-pane height ────────────────
@@ -415,5 +428,106 @@ const TourStageDetail = {
     }
     badge.textContent = `${U.distS(dist)} · ${U.climbS(climb)} climb`;
     badge.style.display = 'block';
+  },
+
+  // Render a completed activity's detail body — name (+ Strava / Sync buttons),
+  // date · weather · location, RPE, notes, AI Summary, stat chips and the photo
+  // strip — into `bodyEl`, then wire the async weather/location fill, photos and
+  // (optional) Strava re-sync. Shared verbatim by tour_share (a completed stage)
+  // and activity_share (a single activity); per-page bits arrive via ctx:
+  //   { weatherLocEndpoint,     // GET → {weather, locations, locations_points, region}
+  //     syncEndpoint,           // (optional) POST → re-sync from Strava; shows a Sync button
+  //     onSynced,               // (optional) async () => re-render after a successful sync
+  //     getMap,                 // () => Leaflet map (for photo markers)
+  //     setMedia,               // (media) => store the lightbox media list
+  //     analysis }              // (optional) run enhanceAnalysis() after (phone)
+  completedActivityBody(bodyEl, act, ctx) {
+    if (!bodyEl) return;
+    const _rpeLabels = ['', 'Easy', 'Easy+', 'Moderate', 'Moderate+', 'Medium', 'Hard', 'Hard+', 'Very Hard', 'Max-', 'Max'];
+    let rpeHtml = '';
+    if (act.perceived_exertion != null) {
+      const v = act.perceived_exertion;
+      rpeHtml = `<div style="font-size:11px;color:var(--muted);margin-bottom:6px">Effort: <span style="color:var(--text);font-weight:500">${_rpeLabels[v] || v}</span> <span style="color:var(--muted2)">(${v}/10)</span></div>`;
+    }
+    const stravaLink = act.strava_activity_id
+      ? `<a href="https://www.strava.com/activities/${act.strava_activity_id}" target="_blank" style="font-size:11px;font-weight:600;color:#fc4c02;border:1px solid rgba(252,76,2,.4);border-radius:4px;padding:3px 8px;text-decoration:none;line-height:1.4;flex-shrink:0">View on Strava ↗</a>`
+      : '';
+    const syncBtn = (ctx.syncEndpoint && act.strava_activity_id)
+      ? `<button id="share-sync-btn" style="font-size:11px;font-weight:600;color:var(--muted);border:1px solid var(--border2);border-radius:4px;padding:3px 8px;background:none;cursor:pointer;line-height:1.4;flex-shrink:0">↻ Sync</button>`
+      : '';
+
+    let aHtml = '';
+    aHtml += `<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:8px">
+      <div style="font-size:14px;font-weight:600;line-height:1.3">${esc(act.name || '(unnamed)')}</div>
+      <div style="display:flex;gap:6px;flex-shrink:0">${syncBtn}${stravaLink}</div>
+    </div>`;
+    const ts = act.start_time ? fmtDate(act.start_time) : '';
+    aHtml += `<div style="display:grid;grid-template-columns:auto 1fr;column-gap:20px;row-gap:3px;margin-bottom:7px;align-items:baseline">
+      <span style="font-size:11.5px;color:var(--muted)">${ts}</span>
+      <span id="share-wx" style="font-size:11px;color:var(--muted)"></span>
+      <span></span>
+      <span id="share-loc" style="font-size:11px;color:var(--muted)"></span>
+    </div>`;
+    aHtml += rpeHtml;
+    if (act.notes) aHtml += `<div class="act-notes">${esc(act.notes)}</div>`;
+    if (act.ai_summary) aHtml += `<div class="ai-card" style="margin-top:8px;margin-bottom:8px"><div class="ai-card-label">AI Summary</div><div class="ai-card-body">${esc(act.ai_summary)}</div></div>`;
+    aHtml += `<div class="stats-grid">${buildActivityStatChips(act, U, esc, fmtHMS)}</div>`;
+    bodyEl.innerHTML = aHtml;   // photos render into the separate PHOTOS pane (see photosPane)
+    if (ctx.analysis) this.enhanceAnalysis();
+
+    // Sync button → re-sync from Strava, then let the caller re-render.
+    const sBtn = bodyEl.querySelector('#share-sync-btn');
+    const runSync = async () => {
+      const btn = bodyEl.querySelector('#share-sync-btn');
+      if (btn) { btn.disabled = true; btn.textContent = '↻ Syncing…'; }
+      const restore = () => { const b = document.getElementById('share-sync-btn'); if (b) { b.disabled = false; b.textContent = '↻ Sync'; } };
+      try {
+        const r = await fetch(ctx.syncEndpoint, { method: 'POST' });
+        // A 200 that reports {ok:false} (no Strava / not connected) is a no-op — don't
+        // re-render, or the auto-sync below would fire again. Tour sync returns the
+        // activity JSON (no `ok` field) on success, so `ok !== false` passes through.
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok || j.ok === false) { restore(); return; }
+        if (ctx.onSynced) await ctx.onSynced();
+      } catch (e) { restore(); }
+    };
+    if (sBtn) sBtn.addEventListener('click', runSync);
+
+    // Async: weather + location.
+    fetch(ctx.weatherLocEndpoint).then(r => r.json()).then(d => {
+      const wx = document.getElementById('share-wx'), loc = document.getElementById('share-loc');
+      if (wx && d.weather?.description) { const w = d.weather, parts = [w.description]; if (w.avg_temp_f != null) parts.push(U.tempS(w.avg_temp_f)); if (w.avg_wind_kph != null) parts.push('Wind ' + U.windS(w.avg_wind_kph)); if (w.precip_mm > 0) parts.push(U.precipS(w.precip_mm)); wx.textContent = parts.join(' · '); }
+      if (loc && d.locations) loc.innerHTML = (d.locations_points && d.locations_points.length) ? LocationSummary.linkifyList(d.locations_points.map(p => ({ label: p.name, name: p.name, lat: p.lat, lon: p.lon }))) : LocationSummary.linkifyNames(d.locations, d.region);
+    }).catch(() => {});
+
+    // Auto-sync once per activity if the Strava description hasn't been pulled in yet.
+    if (ctx.syncEndpoint && act.strava_activity_id && !act.notes && !_autoSyncedActs.has(act.id)) {
+      _autoSyncedActs.add(act.id);
+      runSync();
+    }
+  },
+
+  // Render the PHOTOS pane (#photos-body) as a thumbnail grid and drop matching photo
+  // markers on the map, toggling the whole pane's visibility to match. Shared by the
+  // share pages' completed / overview views. `source` is an activity id (fetch its
+  // media), a ready media[] array (e.g. all-stage photos), or null/undefined to hide.
+  // ctx: { getMap, setMedia, captionEdit, onCaptionSave }.
+  photosPane(source, ctx = {}) {
+    const body = document.getElementById('photos-body');
+    const show = has => { if (window.ShareLayout) ShareLayout.showPhotos(has); };
+    const render = media => {
+      if (ctx.setMedia) ctx.setMedia(media);
+      if (!media || !media.length) { if (body) body.innerHTML = ''; show(false); return; }
+      show(true);
+      if (!body) return;
+      const map = ctx.getMap && ctx.getMap();
+      if (map && typeof MapUtils !== 'undefined') MapUtils.clearPhotoMarkers(map);
+      const open = i => Lightbox.open(media, i, { download: true, captionEdit: !!ctx.captionEdit, onCaptionSave: ctx.onCaptionSave });
+      Lightbox.renderGrid(body, media, open, { colW: '110px', thumbH: 110 });
+      if (map && typeof MapUtils !== 'undefined') MapUtils.placePhotoMarkers(map, media, open);
+    };
+    if (Array.isArray(source)) render(source);
+    else if (source != null) Lightbox.fetchMedia(source).then(render).catch(() => show(false));
+    else show(false);
   },
 };

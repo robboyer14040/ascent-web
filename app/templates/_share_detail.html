@@ -1,0 +1,58 @@
+{% from "_map_controls.html" import map_controls %}
+{# Shared split-pane detail layout for the share pages (tour_share.html completed/
+   planned/overview stage detail + activity_share.html). Tablet + desktop show the
+   INFO | MAP top region, then the ANALYSIS and PHOTOS panes; phones fall back to the
+   existing tab / stacked layout (tour_share reparents #map / #stage-detail /
+   #stage-elev-strip into TourNav panels; on phone #page is hidden entirely).
+   Wired by share_layout.js (ShareLayout) + tour_elev.js (elevation strip). #}
+
+<!-- ── Top region: INFO (left) | vertical divider | MAP (right) ─────────────── -->
+<div id="detail-top">
+  <div id="info-pane">
+    <div id="stage-detail"><div style="color:var(--muted);font-size:12px">Loading…</div></div>
+  </div>
+  <div id="info-map-divider" class="drag-handle drag-handle-v" title="Drag to resize info / map"></div>
+  <div id="map-col">
+    <div id="map">
+      {{ map_controls('setMapStyle', 'resetZoom', 'Re-center map') }}
+    </div>
+  </div>
+</div>
+
+<!-- Phone-only tour affordance (hidden on tablet/desktop; TourNav uses it on phones). -->
+<div id="mob-portrait-stats"></div>
+
+<!-- ── ANALYSIS pane (elevation strip) ──────────────────────────────────────── -->
+<div id="analysis-wrap">
+  <div id="analysis-titlebar" class="share-titlebar">
+    <span class="share-title-label">Analysis</span>
+    <button id="analysis-disclose" class="share-disclose" onclick="ShareLayout.toggle('analysis')" title="Collapse/expand analysis" onmousedown="event.stopPropagation()" ontouchstart="event.stopPropagation()"><span class="arr">▾</span></button>
+  </div>
+  <div id="stage-elev-strip">
+    <canvas id="stage-elev-canvas"></canvas>
+    <div id="stage-elev-xhair"></div>
+    <button id="stage-elev-hud-btn" onclick="_stageElevHudToggle()" title="Toggle hover HUD" onmousedown="event.stopPropagation()" ontouchstart="event.stopPropagation()">HUD</button>
+    <button id="stage-settings-btn" onclick="toggleStageSettings(event)" title="Chart settings" onmousedown="event.stopPropagation()" ontouchstart="event.stopPropagation()" style="position:absolute;top:4px;right:6px;z-index:15;font-size:26px;padding:2px 5px;line-height:1;background:rgba(0,0,0,.4);border:none;color:#ccc;border-radius:5px;cursor:pointer;user-select:none;-webkit-user-select:none">⚙</button>
+    <div id="stage-elev-help">Drag over a region to see stats for that region. Activate the HUD using the button at the top left to enable a heads-up display as you move the mouse over the profile.</div>
+  </div>
+  <!-- Phone-only elevation divider (TourNav places it in the Analysis panel). -->
+  <div id="elev-resize-handle" style="display:none"><span class="rh-section-lbl">Stage Info</span><button class="mob-disclose" id="mob-info-disclose" onclick="toggleMobInfo()" ontouchstart="event.stopPropagation()" onmousedown="event.stopPropagation()"><span class="mob-arr">▾</span></button></div>
+  <div id="stage-chart-settings" style="display:none;position:fixed;z-index:500;background:var(--surface);border:1px solid var(--border2);border-radius:8px;padding:10px 12px;box-shadow:0 4px 16px rgba(0,0,0,.5);min-width:150px">
+    <div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:6px">Overlays</div>
+    <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text);cursor:pointer;margin-bottom:6px">
+      <input type="checkbox" id="stage-peaks-cb" onchange="onStagePeaksCbChange(this)" checked style="accent-color:#f97316"> Peaks
+    </label>
+    <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text);cursor:pointer;margin-bottom:4px">
+      <input type="checkbox" id="stage-grade-cb" onchange="onStageGradeCbChange(this)" checked style="accent-color:#22c55e"> Gradient
+    </label>
+  </div>
+</div>
+
+<!-- ── PHOTOS pane (thumbnail grid) ─────────────────────────────────────────── -->
+<div id="photos-wrap">
+  <div id="photos-titlebar" class="share-titlebar">
+    <span class="share-title-label">Photos</span>
+    <button id="photos-disclose" class="share-disclose" onclick="ShareLayout.toggle('photos')" title="Collapse/expand photos" onmousedown="event.stopPropagation()" ontouchstart="event.stopPropagation()"><span class="arr">▾</span></button>
+  </div>
+  <div id="photos-body"></div>
+</div>

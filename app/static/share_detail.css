@@ -1,0 +1,64 @@
+/* share_detail.css — split-pane detail layout for the share pages
+   (tour_share.html + activity_share.html), tablet + desktop. The dividers and
+   disclosure triangles are copied from the Activities page (main.css) so they look
+   identical. On phones the tour page hides #page and TourNav takes over; the
+   activity page stacks (rules at the bottom). Loaded only by the two share pages. */
+
+/* ── Top region: INFO (left) | vertical divider | MAP (right) ─────────────────── */
+#detail-top{flex:1;display:flex;min-height:0;overflow:hidden}
+#info-pane{flex:0 0 50%;display:flex;flex-direction:column;overflow:hidden;min-width:140px}
+#map-col{flex:1;min-width:140px;position:relative;display:flex;overflow:hidden}
+#map-col #map{width:100%!important;height:100%!important;flex:1;background:#1a2030;position:relative}
+
+/* Vertical drag handle (col-resize) — from main.css .drag-handle / .drag-handle-v */
+.drag-handle{flex:none;height:5px;background:transparent;cursor:row-resize;position:relative;z-index:10;flex-shrink:0;border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+.drag-handle:hover,.drag-handle.dragging{background:#f97316;opacity:.7}
+.drag-handle::after{content:'';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:30px;height:2px;border-radius:1px;background:var(--muted2);pointer-events:none}
+.drag-handle-v{height:auto;width:5px;cursor:col-resize;border-top:none;border-bottom:none;border-left:1px solid var(--border);border-right:1px solid var(--border)}
+.drag-handle-v::after{width:2px;height:30px}
+
+/* ── Titlebar dividers (ANALYSIS / PHOTOS) — from main.css #analysis-titlebar ──── */
+.share-titlebar{flex:none;height:28px;display:flex;align-items:center;padding:0 6px 0 12px;background:var(--surface2);border-top:1px solid var(--border);border-bottom:1px solid var(--border);user-select:none;-webkit-user-select:none;cursor:row-resize;touch-action:none}
+.share-title-label{flex:1;font-size:10px;font-weight:700;letter-spacing:.08em;color:var(--text);text-transform:uppercase}
+.share-disclose{background:none;border:none;color:var(--text);font-size:14px;cursor:pointer;padding:0 8px;line-height:1;display:flex;align-items:center;height:28px;flex-shrink:0}
+.share-disclose .arr{display:inline-block;transform:scale(2.25);transform-origin:center;transition:transform .2s}
+.share-disclose.collapsed .arr{transform:scale(2.25) rotate(-90deg)}
+
+/* ── ANALYSIS pane (elevation strip fills it; titlebar drag resizes the wrap) ────
+   Hidden until a state that has elevation calls ShareLayout.showAnalysis(true). */
+#analysis-wrap{flex:none;height:190px;display:none;flex-direction:column;overflow:hidden;background:var(--bg);min-height:28px}
+#analysis-wrap.collapsed{height:28px!important}
+#analysis-wrap.collapsed #stage-elev-strip{display:none!important}
+#analysis-wrap #stage-elev-strip{flex:1 1 auto;height:auto!important;min-height:0}
+#analysis-wrap #elev-resize-handle{display:none!important}   /* desktop: titlebar drag handles resize */
+/* Phone-only elevation divider (TourNav moves it into the Analysis tab). */
+#elev-resize-handle{height:6px;background:var(--surface2);cursor:row-resize;flex-shrink:0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);position:relative}
+@media(pointer:coarse){ #elev-resize-handle{height:20px} }
+
+/* Elevation strip base — hidden until drawStageElevation() populates it. */
+#stage-elev-strip{display:none;position:relative;background:var(--bg);cursor:crosshair}
+#stage-elev-canvas{width:100%;height:100%;display:block}
+#stage-elev-xhair{display:none;position:absolute;pointer-events:none}
+
+/* ── PHOTOS pane (thumbnail grid) ─────────────────────────────────────────────── */
+#photos-wrap{flex:none;height:170px;display:none;flex-direction:column;overflow:hidden;background:var(--bg);min-height:28px;border-top:1px solid var(--border)}
+#photos-wrap.collapsed{height:28px!important}
+#photos-wrap.collapsed #photos-body{display:none!important}
+#photos-body{flex:1;overflow-y:auto;padding:10px 14px;min-height:0}
+#photos-body .tour-ov-photos-empty{font-size:12px;color:var(--muted);padding:6px 0}
+
+/* Hidden on tablet/desktop (phone-only tour affordance). */
+#mob-portrait-stats{display:none}
+
+/* ── Phone fallback ───────────────────────────────────────────────────────────
+   tour_share: `body.tour-mob-nav #page{display:none}` (tour_mob_nav.css) already
+   hides all of this and TourNav shows its tab panels — nothing to do here.
+   activity_share: no TourNav, so stack the panes vertically (no side-by-side). */
+@media (max-width:767px),(max-height:500px) and (orientation:landscape) and (pointer:coarse){
+  body:not(.tour-mob-nav) #main{overflow-y:auto}
+  body:not(.tour-mob-nav) #detail-top{flex-direction:column;flex:none}
+  body:not(.tour-mob-nav) #info-map-divider{display:none}
+  body:not(.tour-mob-nav) #map-col{order:0;flex:none;height:42vh;width:100%}
+  body:not(.tour-mob-nav) #info-pane{order:1;flex:none;min-height:160px}
+  body:not(.tour-mob-nav) #info-pane #stage-detail{overflow:visible}
+}

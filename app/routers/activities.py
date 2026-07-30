@@ -192,6 +192,17 @@ async def activity_share_data(token: str):
         "notes", "strava_activity_id", "points_count", "points_saved",
     ]
     activity = {k: act.get(k) for k in safe_fields}
+    # AI summary (cached only — same table the owner's activity detail / tour share read).
+    con = sqlite3.connect(db_getter().path, timeout=10)
+    try:
+        ai_row = con.execute(
+            "SELECT summary FROM activity_ai_summaries WHERE activity_id = ?", (activity_id,)
+        ).fetchone()
+    except sqlite3.OperationalError:
+        ai_row = None
+    finally:
+        con.close()
+    activity["ai_summary"] = ai_row[0] if ai_row else None
     return JSONResponse({"activity": activity, "display_name": display_name, "use_metric": use_metric})
 
 
@@ -214,6 +225,104 @@ async def activity_share_points(token: str):
     coords = (geo.get("geometry") or {}).get("coordinates") or []
     step = max(1, len(coords) // 1000)
     return JSONResponse({"coordinates": coords[::step]})
+
+
+_VALID_GPS_ACT = (
+    "latitude_e7 != 999.0 AND longitude_e7 != 999.0"
+    " AND latitude_e7 BETWEEN -90 AND 90"
+    " AND longitude_e7 BETWEEN -180 AND 180"
+    " AND NOT (latitude_e7 = 0.0 AND longitude_e7 = 0.0)"
+)
+
+
+@router.get("/activities/share/{token}/track")
+async def activity_share_track(token: str):
+    """Public endpoint — GPS track as [[lat, lon, alt], ...] (the same shape the
+    tour-share pages feed the shared elevation strip / route drawing)."""
+    con = sqlite3.connect(db_getter().path, timeout=15)
+    try:
+        _ensure_activity_shares_table(con)
+        row = con.execute(
+            "SELECT activity_id FROM activity_shares WHERE token = ?", (token,)
+        ).fetchone()
+        if not row:
+            raise HTTPException(404, "Share link not found or revoked")
+        activity_id = row[0]
+        rows = con.execute(
+            f"SELECT latitude_e7, longitude_e7, orig_altitude_cm "
+            f"FROM points WHERE track_id=? AND {_VALID_GPS_ACT} "
+            f"ORDER BY wall_clock_delta_s ASC, active_time_delta_s ASC",
+            (activity_id,),
+        ).fetchall()
+    finally:
+        con.close()
+    if not rows:
+        return JSONResponse({"points": []})
+    step = max(1, len(rows) // 800)
+    sampled = list(rows[::step])
+    if rows[-1] not in sampled:
+        sampled.append(rows[-1])
+    pts = [[lat, lon, round(float(alt or 0), 1)] for lat, lon, alt in sampled]
+    return JSONResponse({"points": pts})
+
+
+@router.post("/activities/share/{token}/sync")
+async def activity_share_sync(token: str):
+    """Public endpoint — re-sync the shared activity from Strava (pulls in the
+    description + photos). Mirrors the tour-share stage sync."""
+    import httpx
+    from app.strava_importer import apply_strava_update
+    from app.routers.photos import resolve_photos
+    from app.routers.strava import get_fresh_token as _gft
+
+    con = sqlite3.connect(db_getter().path, timeout=10)
+    try:
+        _ensure_activity_shares_table(con)
+        row = con.execute(
+            "SELECT activity_id, user_id FROM activity_shares WHERE token=?", (token,)
+        ).fetchone()
+        if not row:
+            raise HTTPException(404, "Share link not found or revoked")
+        activity_id, share_uid = row
+    finally:
+        con.close()
+
+    db = db_getter()
+    act = db.get_activity(activity_id)
+    if not act:
+        raise HTTPException(404, "Activity not found")
+    strava_id = act.get("strava_activity_id")
+    if not strava_id:
+        return JSONResponse({"ok": False, "reason": "no_strava"})
+
+    strava_token = await _gft(user_id=share_uid)
+    if not strava_token:
+        return JSONResponse({"ok": False, "reason": "not_connected"})
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.get(
+            f"https://www.strava.com/api/v3/activities/{strava_id}",
+            headers={"Authorization": f"Bearer {strava_token}"},
+            params={"include_all_efforts": "false"},
+        )
+        if resp.status_code != 200:
+            return JSONResponse({"ok": False, "reason": f"strava_{resp.status_code}"})
+        sa = resp.json()
+
+    con2 = sqlite3.connect(db_getter().path, timeout=30)
+    try:
+        apply_strava_update(con2, activity_id, sa)
+        con2.commit()
+    finally:
+        con2.close()
+
+    try:
+        await resolve_photos(activity_id, force=True)
+    except Exception:
+        pass
+
+    return JSONResponse({"ok": True})
+
 
 @router.get("/activities/{activity_id}/json")
 async def activity_json(activity_id: int, request: Request):

@@ -13,6 +13,7 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <link rel="stylesheet" href="/static/common.css?v={{ app_version }}">
 <link rel="stylesheet" href="/static/tour_stage.css?v={{ app_version }}">
+<link rel="stylesheet" href="/static/share_detail.css?v={{ app_version }}">
 <link rel="stylesheet" href="/static/tour_mob_nav.css?v={{ app_version }}">
 <link rel="stylesheet" href="/static/list.css?v={{ app_version }}">
 <style>
@@ -27,16 +28,9 @@
 #stage-list-wrap{flex:1;overflow-y:auto}
 #stage-list{padding:4px 0}
 .stage-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
-#resize-handle{height:6px;background:var(--surface2);cursor:row-resize;flex-shrink:0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);transition:background .1s;position:relative}
-#resize-handle:hover,#resize-handle.dragging{background:var(--accent);opacity:.5}
-#elev-resize-handle{height:6px;background:var(--surface2);cursor:row-resize;flex-shrink:0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);transition:background .1s;position:relative}
-@media(pointer:coarse){ #resize-handle{height:20px} #elev-resize-handle{height:20px}}
-#mob-portrait-stats{display:none;flex-shrink:0}
+/* Split-pane detail layout + elevation strip styles live in share_detail.css. */
 #mob-portrait-stats.stats-collapsed{display:none}
 #stats-toggle{display:none;position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#fff;padding:6px;line-height:1;font-size:20px;font-weight:700;z-index:1;text-shadow:0 1px 4px rgba(0,0,0,.6)}
-#stage-elev-strip{height:100px;flex-shrink:0;background:var(--bg);border-bottom:1px solid var(--border);position:relative;display:none;cursor:crosshair}
-#stage-elev-canvas{width:100%;height:100%;display:block}
-#stage-elev-xhair{display:none;position:absolute;pointer-events:none}
 
 /* ── Mobile chrome — the phone nested-nav + tab panels live in tour_mob_nav.css. ── */
 #mob-tour-header{display:none}
@@ -102,29 +96,7 @@
   </div>
 
   <div id="main">
-    <div id="map">
-      {{ map_controls('setMapStyle', 'resetZoom', 'Reset zoom') }}
-    </div>
-    <div id="resize-handle" title="Drag to resize map"><span class="rh-section-lbl">Elevation</span><button class="mob-disclose" id="mob-elev-disclose" onclick="toggleMobElev()" title="Collapse elevation chart" ontouchstart="event.stopPropagation()" onmousedown="event.stopPropagation()"><span class="mob-arr">▾</span></button></div>
-    <div id="mob-portrait-stats"></div>
-    <div id="stage-elev-strip">
-      <canvas id="stage-elev-canvas"></canvas>
-      <div id="stage-elev-xhair"></div>
-      <button id="stage-elev-hud-btn" onclick="_stageElevHudToggle()" title="Toggle hover HUD" onmousedown="event.stopPropagation()" ontouchstart="event.stopPropagation()">HUD</button>
-      <button id="stage-settings-btn" onclick="toggleStageSettings(event)" title="Chart settings" onmousedown="event.stopPropagation()" ontouchstart="event.stopPropagation()" style="position:absolute;top:4px;right:6px;z-index:15;font-size:26px;padding:2px 5px;line-height:1;background:rgba(0,0,0,.4);border:none;color:#ccc;border-radius:5px;cursor:pointer;user-select:none;-webkit-user-select:none">⚙</button>
-      <div id="stage-elev-help">Drag over a region to see stats for that region. Activate the HUD using the button at the top left to enable a heads-up display as you move the mouse over the profile.</div>
-    </div>
-    <div id="elev-resize-handle" style="display:none" title="Drag to resize elevation chart"><span class="rh-section-lbl">Stage Info</span><button class="mob-disclose" id="mob-info-disclose" onclick="toggleMobInfo()" title="Collapse stage info" ontouchstart="event.stopPropagation()" onmousedown="event.stopPropagation()"><span class="mob-arr">▾</span></button></div>
-    <div id="stage-chart-settings" style="display:none;position:fixed;z-index:500;background:var(--surface);border:1px solid var(--border2);border-radius:8px;padding:10px 12px;box-shadow:0 4px 16px rgba(0,0,0,.5);min-width:150px">
-      <div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:6px">Overlays</div>
-      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text);cursor:pointer;margin-bottom:6px">
-        <input type="checkbox" id="stage-peaks-cb" onchange="onStagePeaksCbChange(this)" checked style="accent-color:#f97316"> Peaks
-      </label>
-      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text);cursor:pointer;margin-bottom:4px">
-        <input type="checkbox" id="stage-grade-cb" onchange="onStageGradeCbChange(this)" checked style="accent-color:#22c55e"> Gradient
-      </label>
-    </div>
-    <div id="stage-detail"><div style="color:var(--muted);font-size:12px">Loading tour…</div></div>
+    {% include '_share_detail.html' %}
   </div>
 </div>
 
@@ -146,6 +118,7 @@
 <script src="/static/elev_gradient.js?v={{ app_version }}"></script>
 <script src="/static/stage_elev_chart.js?v={{ app_version }}"></script>
 <script src="/static/tour_elev.js?v={{ app_version }}"></script>
+<script src="/static/share_layout.js?v={{ app_version }}"></script>
 <script>window._UI_PREFS_INITIAL = { use_metric: {{ use_metric | tojson }} };window._WX_TILE_URL = {{ wx_tile_url | tojson | safe }};</script>
 <script src="/static/weather_forecast.js?v={{ app_version }}" defer></script>
 <script>
@@ -181,31 +154,8 @@ function initMap() {
     .observe(document.getElementById('map'));
 }
 
-// ── Resize handle ─────────────────────────────────────────────────────────────
-(function() {
-  const handle = document.getElementById('resize-handle');
-  let drag = false, startY = 0, startH = 0;
-  function startDrag(y) { drag=true; startY=y; startH=mapH; handle.classList.add('dragging'); document.body.style.cursor='row-resize'; }
-  function moveDrag(y)  {
-    if(!drag) return;
-    mapH = Math.max(80, Math.min(window.innerHeight - tourChromeH() - 80, startH + (y - startY)));
-    document.getElementById('map').style.height = mapH + 'px';
-    shareMap && shareMap.invalidateSize();
-    if (document.body.classList.contains('mob-stage-view') && isPortrait()) {
-      document.getElementById('stage-detail').style.top = _stageDetailTop();
-    } else { _syncStageListHeight(); }
-  }
-  function endDrag()    { if(!drag) return; drag=false; handle.classList.remove('dragging'); document.body.style.cursor=''; shareMap && shareMap.invalidateSize(); }
-  handle.addEventListener('mousedown', e => { startDrag(e.clientY); e.preventDefault(); });
-  document.addEventListener('mousemove', e => moveDrag(e.clientY));
-  document.addEventListener('mouseup', endDrag);
-  handle.addEventListener('touchstart', e => { startDrag(e.touches[0].clientY); e.preventDefault(); }, {passive:false});
-  handle.addEventListener('touchmove',  e => { moveDrag(e.touches[0].clientY); e.preventDefault(); }, {passive:false});
-  handle.addEventListener('touchend',   endDrag);
-})();
-
-
-
+// Desktop/tablet pane resizing (INFO|MAP divider, ANALYSIS/PHOTOS titlebars) is
+// handled by share_layout.js; the phone tab layout is handled by TourNav.
 
 
 // ── Mobile helpers ─────────────────────────────────────────────────────────────
@@ -281,31 +231,6 @@ function drawRoutes(selId) {
 function renderStageList() {
   TourStageDetail.stageList(document.getElementById('stage-list'),
     { stages: tourInfo?.stages || [], pointsCache });
-}
-
-// ── Strava sync for completed stage ───────────────────────────────────────────
-let _syncActId = null, _syncStageId = null;
-
-async function doShareSync() {
-  if(!_syncActId || !_syncStageId) return;
-  const btn = document.getElementById('share-sync-btn');
-  if(btn) { btn.disabled = true; btn.textContent = '↻ Syncing…'; }
-  try {
-    const r = await fetch(`/tours/share/${TOKEN}/activities/${_syncActId}/sync`, {method:'POST'});
-    if(!r.ok) {
-      if(btn) { btn.disabled=false; btn.textContent='↻ Sync'; }
-      return;
-    }
-    await renderDetail(_syncStageId);
-    const nb = document.getElementById('share-sync-btn');
-    if(nb) {
-      nb.textContent='✓ Synced'; nb.style.color='#30d158';
-      setTimeout(()=>{ nb.textContent='↻ Sync'; nb.style.color=''; }, 2500);
-    }
-  } catch(e) {
-    const b = document.getElementById('share-sync-btn');
-    if(b) { b.disabled=false; b.textContent='↻ Sync'; }
-  }
 }
 
 // ── Stage selection ───────────────────────────────────────────────────────────
@@ -470,6 +395,7 @@ async function renderDetail(activeId) {
     // ── Uncompleted stage ────────────────────────────────────────────────────
     const pts=pointsCache[String(stage.id)];
     drawStageElevation(pts);
+    if(!TourNav.isPhone()) { ShareLayout.showAnalysis(true); TourStageDetail.photosPane(null); }
 
     // Trajectory geocode (3 sample points) → fills #stage-loc-text
     const _renderTrajectory = pts => {
@@ -500,107 +426,29 @@ async function renderDetail(activeId) {
   } else {
     // ── Completed stage ──────────────────────────────────────────────────────
     drawStageElevation(pointsCache[String(activeId)]);
+    if(!TourNav.isPhone()) ShareLayout.showAnalysis(true);
     const c=stage.completion;
     el.innerHTML=stageHead+
       `<div style="font-size:11px;color:#22c55e;font-weight:500;margin-bottom:10px">✓ Completed ${c.date}</div>`+
       `<div id="act-detail-body" style="color:var(--muted);font-size:11px">Loading…</div>`;
 
-    if(!c.activity_id){_renderActFallback(c);return;}
+    if(!c.activity_id){ if(!TourNav.isPhone()) TourStageDetail.photosPane(null); _renderActFallback(c); return; }
 
     fetch(`/tours/share/${TOKEN}/activities/${c.activity_id}`)
       .then(r=>r.ok?r.json():Promise.reject())
       .then(act=>{
         const body=document.getElementById('act-detail-body'); if(!body) return;
-
-        // Register for sync
-        _syncActId=act.id; _syncStageId=activeId;
-
-
-        const _rpeLabels=['','Easy','Easy+','Moderate','Moderate+','Medium','Hard','Hard+','Very Hard','Max-','Max'];
-        let rpeHtml='';
-        if(act.perceived_exertion!=null){
-          const v=act.perceived_exertion;
-          rpeHtml=`<div style="font-size:11px;color:var(--muted);margin-bottom:6px">Effort: <span style="color:var(--text);font-weight:500">${_rpeLabels[v]||v}</span> <span style="color:var(--muted2)">(${v}/10)</span></div>`;
-        }
-
-        const stravaLink=act.strava_activity_id
-          ?`<a href="https://www.strava.com/activities/${act.strava_activity_id}" target="_blank" style="font-size:11px;font-weight:600;color:#fc4c02;border:1px solid rgba(252,76,2,.4);border-radius:4px;padding:3px 8px;text-decoration:none;line-height:1.4;flex-shrink:0">View on Strava ↗</a>`
-          :'';
-        const syncBtn=act.strava_activity_id
-          ?`<button id="share-sync-btn" onclick="doShareSync()" style="font-size:11px;font-weight:600;color:var(--muted);border:1px solid var(--border2);border-radius:4px;padding:3px 8px;background:none;cursor:pointer;line-height:1.4;flex-shrink:0">↻ Sync</button>`
-          :'';
-
-        let aHtml='';
-        aHtml+=`<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:8px">
-          <div style="font-size:14px;font-weight:600;line-height:1.3">${esc(act.name||'(unnamed)')}</div>
-          <div style="display:flex;gap:6px;flex-shrink:0">${syncBtn}${stravaLink}</div>
-        </div>`;
-        const ts=act.start_time?fmtDate(act.start_time):'';
-        aHtml+=`<div style="display:grid;grid-template-columns:auto 1fr;column-gap:20px;row-gap:3px;margin-bottom:7px;align-items:baseline">
-          <span style="font-size:11.5px;color:var(--muted)">${ts}</span>
-          <span id="share-wx" style="font-size:11px;color:var(--muted)"></span>
-          <span></span>
-          <span id="share-loc" style="font-size:11px;color:var(--muted)"></span>
-        </div>`;
-        aHtml+=rpeHtml;
-        if(act.notes) aHtml+=`<div class="act-notes">${esc(act.notes)}</div>`;
-        if(act.ai_summary) aHtml+=`<div class="ai-card" style="margin-top:8px;margin-bottom:8px"><div class="ai-card-label">AI Summary</div><div class="ai-card-body">${esc(act.ai_summary)}</div></div>`;
-        aHtml+=`<div class="stats-grid">${buildActivityStatChips(act, U, esc, fmtHMS)}</div>`;
-        aHtml+=`<div id="share-photos"></div>`;
-        body.innerHTML=aHtml;
-        if (TourNav.isPhone()) TourStageDetail.enhanceAnalysis();
-
-        // Async: weather + location
-        fetch(`/api/activities/${act.id}/weather-location`).then(r=>r.json()).then(d=>{
-          const wx=document.getElementById('share-wx'), loc=document.getElementById('share-loc');
-          if(wx&&d.weather?.description){const w=d.weather,parts=[w.description];if(w.avg_temp_f!=null)parts.push(U.tempS(w.avg_temp_f));if(w.avg_wind_kph!=null)parts.push('Wind '+U.windS(w.avg_wind_kph));if(w.precip_mm>0)parts.push(U.precipS(w.precip_mm));wx.textContent=parts.join(' · ');}
-          if(loc&&d.locations) loc.innerHTML=(d.locations_points&&d.locations_points.length)?LocationSummary.linkifyList(d.locations_points.map(p=>({label:p.name,name:p.name,lat:p.lat,lon:p.lon}))):LocationSummary.linkifyNames(d.locations,d.region);
-        }).catch(()=>{});
-
-        // Async: photos (flex-wrap, no autoplay)
-        loadSharePhotos(act.id);
-
+        TourStageDetail.completedActivityBody(body, act, {
+          weatherLocEndpoint: `/api/activities/${act.id}/weather-location`,
+          syncEndpoint: `/tours/share/${TOKEN}/activities/${act.id}/sync`,
+          onSynced: () => renderDetail(activeId),
+          analysis: TourNav.isPhone(),
+        });
+        // Photos → the separate PHOTOS pane (desktop/tablet; phone uses its Photos tab).
+        if(!TourNav.isPhone()) TourStageDetail.photosPane(act.id, { getMap: getStageMap, setMedia: m => { _shareLbMedia = m; } });
         el.insertAdjacentHTML('beforeend',_entireTourBtn);
-
-        // Auto-sync if Strava description or photos not yet synced
-        if(act.strava_activity_id && !act.notes) doShareSync();
       }).catch(()=>_renderActFallback(c));
   }
-}
-
-// ── Photos / videos ───────────────────────────────────────────────────────────
-async function loadSharePhotos(actId) {
-  MapUtils.clearPhotoMarkers(shareMap);
-  try {
-    const r=await fetch(`/activities/${actId}/photos`); if(!r.ok) return;
-    const d=await r.json();
-    const media=d.media||(d.photos?d.photos.map(f=>({url:d.base_url+f,type:'image'})):[]);
-    if(!media.length) return;
-    _shareLbMedia=media;
-    const el=document.getElementById('share-photos'); if(!el) return;
-    let ph=`<div class="section-label" style="margin-top:12px;margin-bottom:6px">Photos</div>`;
-    ph+=`<div style="display:flex;flex-wrap:wrap;gap:6px;padding-bottom:6px;align-items:flex-start">`;
-    media.forEach((m,i)=>{
-      const cap=m.caption?`<div style="font-size:10px;color:var(--muted);margin-top:3px;line-height:1.3;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-word">${esc(m.caption)}</div>`:'';
-      if(m.type==='image'){
-        ph+=`<div style="flex-shrink:0;width:80px"><img src="${m.url}" loading="lazy" style="height:80px;width:80px;object-fit:cover;border-radius:5px;cursor:pointer;display:block" onclick="openShareLightbox(${i})">${cap}</div>`;
-      } else {
-        ph+=`<div style="flex-shrink:0;width:80px"><div style="position:relative;height:80px;width:80px;border-radius:5px;overflow:hidden;cursor:pointer;background:#000" onclick="openShareLightbox(${i})">
-          <video src="${m.hls_url||m.url}" muted preload="metadata" playsinline
-            style="width:100%;height:100%;object-fit:cover;pointer-events:none"
-            onloadedmetadata="this.currentTime=0.1"></video>
-          <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none">
-            <div style="width:28px;height:28px;border-radius:50%;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center">
-              <span style="font-size:13px;margin-left:2px">▶</span>
-            </div>
-          </div>
-        </div>${cap}</div>`;
-      }
-    });
-    ph+=`</div>`;
-    el.innerHTML=ph;
-    MapUtils.placePhotoMarkers(shareMap, media, idx => openShareLightbox(idx));
-  } catch(e) {}
 }
 
 function _renderActFallback(c) {
