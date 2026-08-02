@@ -2,8 +2,12 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install curl for file transfers and debugging
-RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+# curl for debugging; the rest are WeasyPrint's native deps for the tour-blog PDF export
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    libcairo2 libpango-1.0-0 libpangocairo-1.0-0 libgdk-pixbuf-2.0-0 libffi-dev \
+    fonts-dejavu \
+    && rm -rf /var/lib/apt/lists/*
 
 # Install dependencies
 COPY requirements.txt .

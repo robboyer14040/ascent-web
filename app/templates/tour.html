@@ -340,6 +340,10 @@ html.mob-embedded body.mob-stage-view #stage-detail { padding-bottom:12px!import
         <input id="publish-url" readonly style="flex:1;font-size:12px;padding:6px 8px;background:var(--surface2);border:1px solid var(--border2);border-radius:5px;color:var(--text);outline:none" onclick="this.select()">
         <button onclick="copyShareUrl()" style="padding:5px 10px;font-size:12px;background:var(--surface2);border:1px solid var(--border2);border-radius:5px;color:var(--text);cursor:pointer;white-space:nowrap">Copy</button>
       </div>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px">
+        <a id="publish-blog-link" href="#" target="_blank" style="flex:1;text-align:center;padding:7px 10px;font-size:12px;font-weight:600;background:var(--accent);border:1px solid var(--accent);border-radius:6px;color:#fff;text-decoration:none">Open Blog / Story view →</a>
+        <a id="publish-pdf-link" href="#" target="_blank" style="flex:1;text-align:center;padding:7px 10px;font-size:12px;font-weight:600;background:var(--surface2);border:1px solid var(--border2);border-radius:6px;color:var(--text);text-decoration:none">Publish PDF book ↓</a>
+      </div>
       <button onclick="doRevoke()" style="font-size:12px;color:#f87171;background:none;border:none;cursor:pointer;padding:0">Revoke link</button>
     </div>
     <div id="publish-status" style="font-size:12px;color:var(--muted);margin-top:8px"></div>
@@ -2870,6 +2874,8 @@ function openPublishModal() {
   const myAttempts = _isViewingSelf() ? tourAttempts : [];
   if(tourInfo.share_token) {
     urlInput.value = `${location.origin}/tours/share/${tourInfo.share_token}`;
+    document.getElementById('publish-blog-link').href = `/tours/blog/${tourInfo.share_token}`;
+    document.getElementById('publish-pdf-link').href = `/tours/blog/${tourInfo.share_token}/pdf`;
     unpub.style.display = 'none';
     pub.style.display   = '';
   } else if(!myAttempts.length) {
@@ -2922,6 +2928,8 @@ async function doPublish() {
     const d = await r.json();
     tourInfo.share_token = d.token;
     document.getElementById('publish-url').value = `${location.origin}/tours/share/${d.token}`;
+    document.getElementById('publish-blog-link').href = `/tours/blog/${d.token}`;
+    document.getElementById('publish-pdf-link').href = `/tours/blog/${d.token}/pdf`;
     document.getElementById('publish-unpublished').style.display = 'none';
     document.getElementById('publish-published').style.display   = '';
     status.textContent = '';

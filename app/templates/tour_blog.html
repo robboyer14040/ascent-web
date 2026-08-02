@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1c1c1e">
+<title>{{ tour_title }} — Ascent</title>
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+<link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="/static/common.css?v={{ app_version }}">
+<link rel="stylesheet" href="/static/tour_blog.css?v={{ app_version }}">
+</head>
+<body>
+
+<nav>
+  <div style="display:flex;align-items:center">
+    <a href="/"><img src="/static/favicon.svg" style="width:20px;height:20px;border-radius:4px;margin-right:6px;vertical-align:middle"><span class="nav-brand-name">Ascent</span></a>
+    <span style="font-size:10px;color:var(--muted);margin-left:4px">{{ app_version }}</span>
+  </div>
+  <div class="spacer"></div>
+  <span style="font-size:11px;color:var(--muted)">A tour by <strong style="color:var(--text)">{{ display_name }}</strong></span>
+</nav>
+
+<div class="blog-wrap" id="blog-root">
+  <div id="blog-loading" style="padding:60px 0;text-align:center;color:var(--muted)">Loading…</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="/static/common.js?v={{ app_version }}"></script>
+<script src="/static/tour_units.js?v={{ app_version }}"></script>
+<script src="/static/map_utils.js?v={{ app_version }}"></script>
+<script src="/static/elev_panel.js?v={{ app_version }}"></script>
+<script src="/static/elev_gradient.js?v={{ app_version }}"></script>
+<script src="/static/stage_elev_chart.js?v={{ app_version }}"></script>
+<script src="/static/lightbox.js?v={{ app_version }}"></script>
+<script>
+  window.BLOG = {
+    token:    {{ token | tojson }},
+    title:    {{ tour_title | tojson }},
+    author:   {{ display_name | tojson }},
+    ownerId:  {{ share_uid | tojson }},
+    isOwner:  {{ is_owner | tojson }},
+    useMetric:{{ use_metric | tojson }},
+  };
+</script>
+<script src="/static/tour_blog.js?v={{ app_version }}"></script>
+</body>
+</html>

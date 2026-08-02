@@ -32,6 +32,7 @@ from app.routers import coach
 from app.routers import auth as auth_router
 from app.routers import fitgpx
 from app.routers import tours
+from app.routers import tour_blog
 from app.routers import route_builder
 from app.routers import forecast
 from app.auth import get_session_user_id
@@ -129,7 +130,7 @@ def type_badge(t):
 
 templates.env.filters["fmt_date"]   = fmt_date
 templates.env.filters["type_badge"] = type_badge
-templates.env.globals["app_version"] = "v0.7.430"
+templates.env.globals["app_version"] = "v0.7.431"
 
 # ── wire routers ──────────────────────────────────────────────────────────────
 activities.db_getter = get_db
@@ -164,6 +165,10 @@ app.include_router(fitgpx.router)
 tours.db_getter  = get_db
 tours.templates  = templates
 app.include_router(tours.router)
+
+tour_blog.db_getter = get_db
+tour_blog.templates = templates
+app.include_router(tour_blog.router)
 
 route_builder.db_getter = get_db
 route_builder.templates = templates

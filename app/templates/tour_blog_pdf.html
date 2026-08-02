@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<style>
+  @page { size: 8in 8in; margin: 0.55in; }
+  @page :first { margin: 0; }
+  * { box-sizing: border-box; }
+  body { font-family: Georgia, "DejaVu Serif", serif; color: #1a1a1a; margin: 0;
+    font-size: 11pt; line-height: 1.55; }
+  h1, h2, .eyebrow, .chips, .toc-h { font-family: Helvetica, "DejaVu Sans", Arial, sans-serif; }
+
+  /* ── Cover (full-bleed first page) ─────────────────────────────────────── */
+  .cover { position: relative; width: 8in; height: 8in; overflow: hidden;
+    page-break-after: always; background: #0f172a; color: #fff; }
+  .cover img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .cover .scrim { position: absolute; inset: 0; display: flex; flex-direction: column;
+    justify-content: flex-end; padding: 0.7in;
+    background: linear-gradient(to top, rgba(0,0,0,.75), rgba(0,0,0,.15) 55%, transparent); }
+  .cover h1 { font-size: 34pt; margin: 0 0 10px; line-height: 1.08; font-weight: 700; }
+  .cover .by { font-size: 13pt; opacity: .92; }
+
+  /* ── Intro / TOC page ──────────────────────────────────────────────────── */
+  .section { page-break-after: always; }
+  .toc-h { font-size: 10pt; text-transform: uppercase; letter-spacing: .12em; color: #64748b;
+    margin: 0 0 8px; font-weight: 700; }
+  .intro { font-size: 12pt; line-height: 1.7; margin-bottom: 22px; }
+  .intro p { margin: 0 0 10px; }
+  .totals { display: flex; gap: 10px; margin: 8px 0 18px; }
+  .tchip { border: 1px solid #e2e2e2; border-radius: 6px; padding: 7px 12px; }
+  .tchip .l { font-size: 8pt; text-transform: uppercase; letter-spacing: .05em; color: #64748b; }
+  .tchip .v { font-size: 14pt; font-weight: 700; }
+  .toc-item { display: flex; align-items: baseline; padding: 5px 0; border-bottom: 1px solid #eee; }
+  .toc-item .n { width: 26px; font-weight: 700; color: #16a34a; }
+  .toc-item .nm { flex: 1; }
+  .toc-item.todo .n { color: #94a3b8; }
+
+  /* ── Stage page ────────────────────────────────────────────────────────── */
+  .stage { page-break-before: always; }
+  .eyebrow { font-size: 9pt; letter-spacing: .12em; text-transform: uppercase; color: #2563eb;
+    font-weight: 700; margin-bottom: 2px; }
+  .stage h2 { font-size: 20pt; margin: 0 0 3px; line-height: 1.15; }
+  .stage .date { font-size: 10pt; color: #16a34a; font-weight: 700; margin-bottom: 8px; }
+  .stage .todo { font-size: 10pt; color: #64748b; margin-bottom: 8px; }
+  .chips { display: flex; gap: 8px; margin: 8px 0 12px; }
+  .chip { border: 1px solid #e2e2e2; border-radius: 6px; padding: 5px 10px; }
+  .chip .l { font-size: 7.5pt; text-transform: uppercase; letter-spacing: .05em; color: #64748b; }
+  .chip .v { font-size: 12pt; font-weight: 700; }
+  .stage-map { width: 100%; border-radius: 8px; margin: 6px 0; }
+  .elev-svg { width: 100%; height: 1.05in; display: block; margin: 4px 0 10px; }
+  .body { font-size: 11pt; line-height: 1.6; }
+  .body p { margin: 0 0 9px; }
+
+  /* ── Figures ───────────────────────────────────────────────────────────── */
+  .fig { margin: 12px 0; page-break-inside: avoid; }
+  .fig img { width: 100%; border-radius: 6px; }
+  .fig figcaption { font-size: 9.5pt; color: #555; margin-top: 4px; }
+  .fig.portrait { display: flex; gap: 12px; align-items: center; }
+  .fig.portrait img { width: 55%; }
+  .fig.portrait figcaption { width: 45%; margin-top: 0; }
+</style>
+</head>
+<body>
+
+<!-- Cover -->
+<div class="cover">
+  {% if cover_uri %}<img src="{{ cover_uri }}" alt="">{% endif %}
+  <div class="scrim">
+    <h1>{{ title }}</h1>
+    <div class="by">A tour by {{ author }}</div>
+  </div>
+</div>
+
+<!-- Intro + Table of contents -->
+<div class="section">
+  {% if intro_html %}
+  <div class="toc-h">Introduction</div>
+  <div class="intro">{{ intro_html | safe }}</div>
+  {% endif %}
+  <div class="toc-h">The Tour</div>
+  <div class="totals">
+    <div class="tchip"><div class="l">Stages</div><div class="v">{{ done }}/{{ total }}</div></div>
+    <div class="tchip"><div class="l">Distance</div><div class="v">{{ tot_dist }}</div></div>
+    <div class="tchip"><div class="l">Ascent</div><div class="v">{{ tot_climb }}</div></div>
+  </div>
+  <div class="toc-h">Stages</div>
+  {% for t in toc %}
+  <div class="toc-item {{ 'todo' if not t.done else '' }}">
+    <span class="n">{{ t.stage_num }}</span><span class="nm">{{ t.name }}</span>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- Stages -->
+{% for s in stages %}
+<div class="stage">
+  <div class="eyebrow">Stage {{ s.stage_num }}</div>
+  <h2>{{ s.name }}</h2>
+  {% if s.date %}<div class="date">✓ Completed {{ s.date }}</div>{% else %}<div class="todo">Planned stage</div>{% endif %}
+  <div class="chips">
+    {% for l, v in s.chips %}<div class="chip"><div class="l">{{ l }}</div><div class="v">{{ v }}</div></div>{% endfor %}
+  </div>
+  {% if s.map_uri %}<img class="stage-map" src="{{ s.map_uri }}" alt="">{% endif %}
+  {% if s.elev_svg %}{{ s.elev_svg | safe }}{% endif %}
+  {% if s.body_html %}<div class="body">{{ s.body_html | safe }}</div>{% endif %}
+  {% for f in s.figs %}
+  <figure class="fig {{ 'portrait' if f.portrait else '' }}">
+    <img src="{{ f.data_uri }}" alt="">
+    {% if f.caption %}<figcaption>{{ f.caption }}</figcaption>{% endif %}
+  </figure>
+  {% endfor %}
+</div>
+{% endfor %}
+
+</body>
+</html>
