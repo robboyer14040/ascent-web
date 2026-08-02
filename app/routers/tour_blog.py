@@ -444,7 +444,7 @@ def _media_file(con, url: str) -> Optional[Path]:
     return p if p.exists() else None
 
 
-def _img_data_uri(path: Path, max_px: int = 1000, quality: int = 78):
+def _img_data_uri(path: Path, max_px: int = 820, quality: int = 72):
     """Downscale a local image and return (data_uri, is_portrait). None on failure.
     Kept modest (≈print DPI for an 8in page) so a photo-heavy book stays within the
     small deploy box's memory."""
@@ -537,7 +537,7 @@ def _pdf_context(con, token: str) -> dict:
         if blog and blog[1]:
             f = _media_file(con, blog[1])
             if f:
-                res = _img_data_uri(f, max_px=2000)
+                res = _img_data_uri(f, max_px=1600, quality=80)
                 cover_uri = res[0] if res else None
 
         bodies = {br[0]: br[1] for br in con.execute(

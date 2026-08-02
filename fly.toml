@@ -40,7 +40,7 @@ primary_region = 'sjc'
     path = '/favicon.ico'
 
 [[vm]]
-  memory = '512mb'
+  memory = '2gb'
   cpu_kind = 'shared'
   cpus = 1
-  memory_mb = 512
+  memory_mb = 2048

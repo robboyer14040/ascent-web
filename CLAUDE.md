@@ -178,7 +178,7 @@ Increment the third number (e.g. `v0.1.96` → `v0.1.97`). The third number can 
 
 ## Deployment
 
-Deployed on Fly.io (`fly.toml`): region `sjc`, 512MB RAM, persistent volume `ascent_data` mounted at `/data`. Health check via `GET /favicon.ico`.
+Deployed on Fly.io (`fly.toml`): region `sjc`, 2GB RAM, persistent volume `ascent_data` mounted at `/data`. Health check via `GET /favicon.ico`.
 
 
 ## Local Server
