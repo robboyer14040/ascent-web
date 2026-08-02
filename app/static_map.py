@@ -10,14 +10,26 @@ Pillow and httpx are already project dependencies.
 
 import io
 import math
+import os
+from concurrent.futures import ThreadPoolExecutor
 from typing import List, Optional, Sequence, Tuple
 
 import httpx
 from PIL import Image, ImageDraw
 
 TILE_SIZE = 256
-_UA = {"User-Agent": "AscentWeb/1.0 (tour blog PDF export)"}
+_UA = {"User-Agent": "AscentWeb/1.0 (tour blog PDF export; +https://ascent.fly.dev)"}
 _OSM = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+
+
+def default_tile_url() -> str:
+    """Prefer Stadia's light basemap when keyed (allowed server-side and not
+    throttled like OSM-from-cloud); fall back to OSM otherwise."""
+    key = os.environ.get("STADIA_API_KEY", "")
+    if key:
+        return ("https://tiles.stadiamaps.com/tiles/alidade_smooth"
+                "/{z}/{x}/{y}.png?api_key=" + key)
+    return _OSM
 
 
 def _lonlat_to_world_px(lon: float, lat: float, z: int) -> Tuple[float, float]:
@@ -46,13 +58,16 @@ def _pick_zoom(pts: Sequence[Tuple[float, float]], w: int, h: int, pad: float) -
 
 
 def render_route_png(points: Sequence[Sequence[float]],
-                     width: int = 1000, height: int = 1000,
+                     width: int = 960, height: int = 540,
                      line_color: Tuple[int, int, int] = (22, 163, 74),
-                     tile_url: str = _OSM,
+                     tile_url: Optional[str] = None,
                      pad: float = 0.08,
                      tile_cache: Optional[dict] = None) -> bytes:
     """Render a route (list of [lat, lon, ...]) onto a stitched tile map. Returns PNG bytes.
-    An optional tile_cache dict (shared across calls building one PDF) dedupes tile fetches."""
+    Tiles are fetched concurrently (and deduped via the optional shared tile_cache) so a
+    photo-heavy, many-stage book renders in seconds rather than stalling on sequential,
+    possibly-throttled requests from a cloud host."""
+    tile_url = tile_url or default_tile_url()
     pts = [(float(p[0]), float(p[1])) for p in points if p and p[0] is not None and p[1] is not None]
     canvas = Image.new("RGB", (width, height), (233, 231, 225))
     if len(pts) < 2:
@@ -75,22 +90,34 @@ def render_route_png(points: Sequence[Sequence[float]],
 
     if tile_cache is None:
         tile_cache = {}
-    with httpx.Client(timeout=8, headers=_UA) as client:
-        for tx in range(tx0, tx1 + 1):
-            for ty in range(ty0, ty1 + 1):
-                if ty < 0 or ty >= max_tile:
-                    continue
-                wx = tx % max_tile                      # horizontal wrap
-                key = (z, wx, ty)
-                tile = tile_cache.get(key)
-                if tile is None:
-                    tile = _fetch_tile(client, tile_url, z, wx, ty)
+
+    # Collect the tiles this canvas needs, fetch the uncached ones concurrently.
+    placements = []          # (px, py, cache_key)
+    to_fetch = {}            # cache_key -> (z, wx, ty)
+    for tx in range(tx0, tx1 + 1):
+        for ty in range(ty0, ty1 + 1):
+            if ty < 0 or ty >= max_tile:
+                continue
+            wx = tx % max_tile                          # horizontal wrap
+            key = (z, wx, ty)
+            placements.append((int(round(tx * TILE_SIZE - origin_x)),
+                               int(round(ty * TILE_SIZE - origin_y)), key))
+            if key not in tile_cache and key not in to_fetch:
+                to_fetch[key] = (z, wx, ty)
+
+    if to_fetch:
+        with httpx.Client(timeout=5, headers=_UA) as client:
+            def _grab(item):
+                key, (zz, xx, yy) = item
+                return key, _fetch_tile(client, tile_url, zz, xx, yy)
+            with ThreadPoolExecutor(max_workers=8) as pool:
+                for key, tile in pool.map(_grab, list(to_fetch.items())):
                     tile_cache[key] = tile
-                if tile is None:
-                    continue
-                px = int(round(tx * TILE_SIZE - origin_x))
-                py = int(round(ty * TILE_SIZE - origin_y))
-                canvas.paste(tile, (px, py))
+
+    for px, py, key in placements:
+        tile = tile_cache.get(key)
+        if tile is not None:
+            canvas.paste(tile, (px, py))
 
     # Draw the route polyline (with a subtle white casing for contrast).
     line = [(x - origin_x, y - origin_y) for x, y in world]

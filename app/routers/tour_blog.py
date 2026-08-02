@@ -566,7 +566,7 @@ def _pdf_context(con, token: str) -> dict:
             map_uri = None
             if len(pts) >= 2:
                 color = (22, 163, 74) if c else (30, 64, 175)
-                png = render_route_png([(p[0], p[1]) for p in pts], width=1100, height=620,
+                png = render_route_png([(p[0], p[1]) for p in pts],
                                        line_color=color, tile_cache=tile_cache)
                 map_uri = "data:image/png;base64," + base64.b64encode(png).decode()
             pdf_stages.append({
