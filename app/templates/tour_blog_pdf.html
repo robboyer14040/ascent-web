@@ -48,7 +48,12 @@
   .chip .v { font-size: 12pt; font-weight: 700; }
   .stage-map { width: 100%; border-radius: 8px; margin: 6px 0; }
   .elev-svg { width: 100%; height: 1.05in; display: block; margin: 4px 0 10px; }
-  .body { font-size: 11pt; line-height: 1.6; }
+  .stage-meta { margin: 6px 0 10px; }
+  .stage-meta .sm-loc, .stage-meta .sm-wx { font-size: 9.5pt; color: #475569; line-height: 1.5;
+    font-family: Helvetica, "DejaVu Sans", Arial, sans-serif; }
+  .stage-meta .sm-k { display: inline-block; min-width: 58px; font-size: 7.5pt; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .05em; color: #94a3b8; }
+  .body { font-size: 11pt; line-height: 1.6; margin: 4px 0 8px; }
   .body p { margin: 0 0 9px; }
 
   /* ── Figures ───────────────────────────────────────────────────────────── */
@@ -101,8 +106,14 @@
     {% for l, v in s.chips %}<div class="chip"><div class="l">{{ l }}</div><div class="v">{{ v }}</div></div>{% endfor %}
   </div>
   {% if s.map_uri %}<img class="stage-map" src="{{ s.map_uri }}" alt="">{% endif %}
-  {% if s.elev_svg %}{{ s.elev_svg | safe }}{% endif %}
+  {% if s.location or s.weather %}
+  <div class="stage-meta">
+    {% if s.location %}<div class="sm-loc"><span class="sm-k">Route</span>{{ s.location }}</div>{% endif %}
+    {% if s.weather %}<div class="sm-wx"><span class="sm-k">Weather</span>{{ s.weather }}</div>{% endif %}
+  </div>
+  {% endif %}
   {% if s.body_html %}<div class="body">{{ s.body_html | safe }}</div>{% endif %}
+  {% if s.elev_svg %}{{ s.elev_svg | safe }}{% endif %}
   {% for f in s.figs %}
   <figure class="fig {{ 'portrait' if f.portrait else '' }}">
     <img src="{{ f.data_uri }}" alt="">

@@ -29,6 +29,7 @@ from app.auth import get_session_user_id
 from app.routers.tours import (
     _ensure_tables,
     _completions_for_user,
+    build_activity,
 )
 
 router = APIRouter()
@@ -57,6 +58,17 @@ def _ensure_blog_tables(con):
             stage_id   INTEGER NOT NULL,
             body       TEXT,
             updated_at INTEGER,
+            PRIMARY KEY (tour_id, user_id, stage_id)
+        )
+    """)
+    con.execute("""
+        CREATE TABLE IF NOT EXISTS tour_blog_stage_media (
+            tour_id     INTEGER NOT NULL,
+            user_id     INTEGER NOT NULL,
+            stage_id    INTEGER NOT NULL,
+            order_json  TEXT,
+            hidden_json TEXT,
+            updated_at  INTEGER,
             PRIMARY KEY (tour_id, user_id, stage_id)
         )
     """)
@@ -131,6 +143,33 @@ def _require_owner(con, token: str, request: Request):
     if session_uid != owner_uid:
         raise HTTPException(403, "Only the tour owner can edit this blog")
     return tour_id, owner_uid, attempt_id, title
+
+
+def _media_layout(con, tour_id: int, owner_uid: int) -> dict:
+    """Per-stage blog-only media layout: {stage_id: {"order": [url,…], "hidden": [url,…]}}.
+    Both lists are keyed by media URL (the stable media identity)."""
+    out: dict = {}
+    for sid, order_json, hidden_json in con.execute(
+        "SELECT stage_id, order_json, hidden_json FROM tour_blog_stage_media "
+        "WHERE tour_id=? AND user_id=?",
+        (tour_id, owner_uid),
+    ).fetchall():
+        out[sid] = {
+            "order": json.loads(order_json) if order_json else [],
+            "hidden": json.loads(hidden_json) if hidden_json else [],
+        }
+    return out
+
+
+def _apply_media_layout(items, get_url, order: list, hidden: list):
+    """Order + filter a media sequence by a blog layout. `get_url(item)` returns an
+    item's URL. Items in `order` come first (in that order); the rest keep their natural
+    order after them; items whose URL is in `hidden` are dropped. Shared by the page
+    payload and the PDF so both agree."""
+    hide = set(hidden or [])
+    rank = {u: i for i, u in enumerate(order or [])}
+    kept = [it for it in items if get_url(it) not in hide]
+    return sorted(kept, key=lambda it: rank.get(get_url(it), len(rank)))
 
 
 def _stage_rows(con, tour_id: int):
@@ -219,18 +258,27 @@ async def tour_blog_content(token: str):
         ).fetchall()
         bodies = {br[0]: br[1] for br in body_rows}
 
+        # Per-stage blog-only media layout (order + hidden), keyed by media URL.
+        layout = _media_layout(con, tour_id, owner_uid)
+
         # AI-summary seeds: tour-level for the intro, per-stage for each section.
         tour_ai = con.execute(
             "SELECT ai_summary FROM tours WHERE id=?", (tour_id,)
         ).fetchone()
         for s in stages:
-            raw = bodies.get(s["id"]) or ""
+            # Default the stage note to the Strava activity description; once the
+            # owner saves an edit it takes over. One note, not two.
+            saved = (bodies.get(s["id"]) or "").strip()
+            raw = saved or _strava_notes(con, (s["completion"] or {}).get("activity_id"))
             s["body_raw"] = raw
             s["body_html"] = render_md(raw)
             seed = con.execute(
                 "SELECT summary FROM tour_stage_ai_summary WHERE stage_id=?", (s["id"],)
             ).fetchone()
             s["ai_seed"] = seed[0] if seed else ""
+            lay = layout.get(s["id"], {})
+            s["media_order"] = lay.get("order", [])
+            s["media_hidden"] = lay.get("hidden", [])
 
         return JSONResponse({
             "id":          tour_id,
@@ -293,6 +341,36 @@ async def tour_blog_set_stage(token: str, stage_id: int, request: Request,
         )
         con.commit()
         return JSONResponse({"body_html": render_md(body)})
+    finally:
+        con.close()
+
+
+@router.put("/tours/blog/{token}/stage/{stage_id}/media")
+async def tour_blog_set_stage_media(token: str, stage_id: int, request: Request,
+                                    payload: dict = Body(...)):
+    """Owner-only — save the blog-only media layout for a stage: an ordered list of media
+    URLs plus a hidden list. The underlying activity media is untouched."""
+    con = sqlite3.connect(db_getter().path, timeout=10)
+    try:
+        _ensure_tables(con)
+        _ensure_blog_tables(con)
+        tour_id, owner_uid, _a, _t = _require_owner(con, token, request)
+        ok = con.execute(
+            "SELECT 1 FROM tour_stages WHERE id=? AND tour_id=?", (stage_id, tour_id)
+        ).fetchone()
+        if not ok:
+            raise HTTPException(404, "Stage not found")
+        order = [str(u) for u in (payload.get("order") or [])]
+        hidden = [str(u) for u in (payload.get("hidden") or [])]
+        con.execute(
+            "INSERT INTO tour_blog_stage_media (tour_id, user_id, stage_id, order_json, hidden_json, updated_at) "
+            "VALUES (?,?,?,?,?,?) "
+            "ON CONFLICT(tour_id, user_id, stage_id) DO UPDATE SET "
+            "order_json=excluded.order_json, hidden_json=excluded.hidden_json, updated_at=excluded.updated_at",
+            (tour_id, owner_uid, stage_id, json.dumps(order), json.dumps(hidden), int(_time.time())),
+        )
+        con.commit()
+        return JSONResponse({"ok": True})
     finally:
         con.close()
 
@@ -421,6 +499,35 @@ def _stage_points(con, stage_id: int):
     return [[r[0], r[1], r[2]] for r in rows]
 
 
+def _strava_notes(con, activity_id) -> str:
+    """The completed activity's Strava description — used as the default blog stage
+    note (the owner can then edit it into saved prose)."""
+    if not activity_id:
+        return ""
+    old_rf = con.row_factory
+    con.row_factory = sqlite3.Row
+    try:
+        arow = con.execute("SELECT * FROM activities WHERE id=?", (activity_id,)).fetchone()
+        return (build_activity(arow).get("notes") or "") if arow else ""
+    except Exception:
+        return ""
+    finally:
+        con.row_factory = old_rf
+
+
+def _weather_location_blocking(activity_id) -> dict:
+    """Weather + location for a completed stage, for the (blocking) PDF build. Reuses the
+    shared activity resolver, which returns cached values instantly and otherwise fetches
+    them once and caches to the DB. Runs in a worker thread with no event loop, so a fresh
+    asyncio loop is safe. Never raises — a missing/failed lookup just yields no line."""
+    import asyncio
+    from app.routers.weather import activity_weather_location
+    try:
+        return asyncio.run(activity_weather_location(activity_id)) or {}
+    except Exception:
+        return {}
+
+
 def _media_file(con, url: str) -> Optional[Path]:
     """Resolve a media URL (/photos/{aid}/{fn} or /user-uploads/{aid}/{fn}) to a local
     file on disk, or None if it can't be resolved / doesn't exist."""
@@ -465,38 +572,42 @@ def _img_data_uri(path: Path, max_px: int = 820, quality: int = 72):
         return None
 
 
-def _pdf_stage_media(con, activity_id: int):
-    """Local, downscaled still-images for a completed stage (videos excluded from print)."""
-    out = []
+def _pdf_stage_media(con, activity_id: int, order=None, hidden=None):
+    """Local, downscaled still-images for a completed stage. Strava videos are kept as
+    their poster/thumbnail frame (with caption) — a printed book can't play video, but
+    the still + description mirror what the blog shows. The blog-only media layout
+    (order/hidden, keyed by URL) is applied before downscaling so hidden photos are
+    skipped entirely."""
+    out = []          # (url, file, caption)
     row = con.execute(
-        "SELECT local_media_items_json, local_media_captions_json, local_video_urls_json "
+        "SELECT local_media_items_json, local_media_captions_json "
         "FROM activities WHERE id=?", (activity_id,),
     ).fetchone()
     if row:
         items = json.loads(row[0]) if row[0] else []
         caps = json.loads(row[1]) if row[1] else {}
-        vids = json.loads(row[2]) if row[2] else {}
-        video_files = set(vids.keys() if isinstance(vids, dict) else (vids or []))
         for fn in items:
-            if fn in video_files:
-                continue
-            f = _media_file(con, f"/photos/{activity_id}/{fn}")
+            url = f"/photos/{activity_id}/{fn}"
+            f = _media_file(con, url)
             if f:
-                out.append((f, (caps.get(fn) if isinstance(caps, dict) else "") or ""))
+                out.append((url, f, (caps.get(fn) if isinstance(caps, dict) else "") or ""))
     try:
         for fn, cap in con.execute(
             "SELECT filename, caption FROM user_media WHERE activity_id=?", (activity_id,)
         ).fetchall():
             if fn.lower().endswith(_VIDEO_EXTS):
                 continue
-            f = _media_file(con, f"/user-uploads/{activity_id}/{fn}")
+            url = f"/user-uploads/{activity_id}/{fn}"
+            f = _media_file(con, url)
             if f:
-                out.append((f, cap or ""))
+                out.append((url, f, cap or ""))
     except Exception:
         pass
 
+    out = _apply_media_layout(out, lambda it: it[0], order or [], hidden or [])
+
     figs = []
-    for f, cap in out:
+    for _url, f, cap in out:
         res = _img_data_uri(f)
         if res:
             figs.append({"data_uri": res[0], "caption": cap, "portrait": res[1]})
@@ -547,9 +658,27 @@ def _pdf_context(con, token: str, progress=None) -> dict:
             "SELECT stage_id, body FROM tour_blog_stage WHERE tour_id=? AND user_id=?",
             (tour_id, owner_uid),
         ).fetchall()}
+        layout = _media_layout(con, tour_id, owner_uid)
 
         def unit_dist(mi): return f"{mi*1.60934:.1f} km" if metric else f"{mi:.1f} mi"
         def unit_climb(ft): return f"{round(ft*0.3048)} m" if metric else f"{round(ft)} ft"
+        def unit_temp(f): return f"{(f-32)*5/9:.1f} °C" if metric else f"{round(f)} °F"
+        def unit_wind(k): return f"{round(k)} km/h" if metric else f"{round(k/1.60934)} mph"
+        def unit_precip(mm): return f"{mm} mm" if metric else f'{mm/25.4:.2f}"'
+
+        def weather_location(activity_id):
+            """(location_text, weather_text) for a completed stage — plain text for print."""
+            wl = _weather_location_blocking(activity_id)
+            loc = wl.get("locations") or ""
+            wx = ""
+            w = wl.get("weather") or {}
+            if isinstance(w, dict) and w.get("description"):
+                parts = [w["description"]]
+                if w.get("avg_temp_f")   is not None: parts.append(unit_temp(w["avg_temp_f"]))
+                if w.get("avg_wind_kph") is not None: parts.append("Wind " + unit_wind(w["avg_wind_kph"]))
+                if w.get("precip_mm"):                parts.append(unit_precip(w["precip_mm"]))
+                wx = " · ".join(parts)
+            return loc, wx
 
         stat_stages = [s for s in stages if s["alt_override"] != 1]
         tot_dist = sum((s["completion"] or {}).get("distance_mi") or s["distance_mi"] or 0 for s in stat_stages)
@@ -575,14 +704,25 @@ def _pdf_context(con, token: str, progress=None) -> dict:
                 png = render_route_png([(p[0], p[1]) for p in pts],
                                        line_color=color, tile_cache=tile_cache)
                 map_uri = "data:image/png;base64," + base64.b64encode(png).decode()
+            # Stage note = saved prose, else the Strava activity description (default).
+            saved = (bodies.get(s["id"]) or "").strip()
+            body_raw = saved or _strava_notes(con, c["activity_id"] if c and c.get("activity_id") else None)
+            loc_text, wx_text = (weather_location(c["activity_id"])
+                                 if c and c.get("activity_id") else ("", ""))
             pdf_stages.append({
                 "stage_num": s["stage_num"], "name": s["name"],
                 "date": (c or {}).get("date") if c else None,
                 "chips": chips,
                 "map_uri": map_uri,
+                "location": loc_text,
+                "weather": wx_text,
                 "elev_svg": elevation_svg(pts, metric) if len(pts) >= 2 else "",
-                "body_html": render_md(bodies.get(s["id"], "")),
-                "figs": _pdf_stage_media(con, c["activity_id"]) if c and c.get("activity_id") else [],
+                "body_html": render_md(body_raw),
+                "figs": _pdf_stage_media(
+                    con, c["activity_id"],
+                    order=layout.get(s["id"], {}).get("order", []),
+                    hidden=layout.get(s["id"], {}).get("hidden", []),
+                ) if c and c.get("activity_id") else [],
             })
 
         return {

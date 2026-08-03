@@ -105,6 +105,8 @@ def test_blog_page_renders(client, test_db, make_user):
     r = client.get(f"/tours/blog/{TOKEN}")
     assert r.status_code == 200
     assert "window.BLOG" in r.text
+    # Clickable location links need LocationSummary loaded (same as tour / tour-share).
+    assert "location_summary.js" in r.text
 
 
 # ── owner editing guards ──────────────────────────────────────────────────────
@@ -150,6 +152,41 @@ def test_edit_unknown_stage_404(client, test_db, make_user):
     _make_tour_with_share(test_db.path, uid)
     _as(client, uid)
     assert client.put(f"/tours/blog/{TOKEN}/stage/99999", json={"body": "x"}).status_code == 404
+
+
+# ── media layout (blog-only reorder + hide) ─────────────────────────────────────
+
+def test_media_layout_owner_saves_and_content_reflects(client, test_db, make_user):
+    uid = make_user()
+    _tid, sid = _make_tour_with_share(test_db.path, uid)
+    _as(client, uid)
+    order = ["/photos/1/b.jpg", "/photos/1/a.jpg"]
+    hidden = ["/photos/1/a.jpg"]
+    r = client.put(f"/tours/blog/{TOKEN}/stage/{sid}/media",
+                   json={"order": order, "hidden": hidden})
+    assert r.status_code == 200
+
+    _anon(client)
+    st = client.get(f"/tours/blog/{TOKEN}/content").json()["stages"][0]
+    assert st["media_order"] == order
+    assert st["media_hidden"] == hidden
+
+
+def test_media_layout_non_owner_forbidden(client, test_db, make_user):
+    owner = make_user()
+    other = make_user()
+    _tid, sid = _make_tour_with_share(test_db.path, owner)
+    _as(client, other)
+    r = client.put(f"/tours/blog/{TOKEN}/stage/{sid}/media", json={"order": [], "hidden": []})
+    assert r.status_code == 403
+
+
+def test_media_layout_unknown_stage_404(client, test_db, make_user):
+    uid = make_user()
+    _make_tour_with_share(test_db.path, uid)
+    _as(client, uid)
+    r = client.put(f"/tours/blog/{TOKEN}/stage/99999/media", json={"order": [], "hidden": []})
+    assert r.status_code == 404
 
 
 # ── comments ──────────────────────────────────────────────────────────────────
@@ -241,6 +278,178 @@ def test_elevation_svg_gradient_fill():
 
 def test_elevation_svg_empty():
     assert elevation_svg([[37.1, -3.6, 2000]], metric=False) == ""
+
+
+def test_pdf_template_body_between_map_and_elevation():
+    """The single stage description renders below the map and above the elevation
+    profile — matching the blog's stage layout."""
+    import os
+    from jinja2 import Environment, FileSystemLoader, select_autoescape
+    tdir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "app", "templates")
+    env = Environment(loader=FileSystemLoader(tdir), autoescape=select_autoescape(["html"]))
+    ctx = {
+        "title": "T", "author": "A", "intro_html": "", "cover_uri": None,
+        "done": 1, "total": 1, "tot_dist": "1 mi", "tot_climb": "1 ft", "toc": [],
+        "stages": [{
+            "stage_num": 1, "name": "S1", "date": "2026-01-01", "chips": [],
+            "map_uri": "data:image/png;base64,AA", "elev_svg": "<svg id='elev'></svg>",
+            "body_html": "<p>A memorable day on the road.</p>", "figs": [],
+        }],
+    }
+    html = env.get_template("tour_blog_pdf.html").render(**ctx)
+    assert "A memorable day on the road." in html
+    assert 0 < html.index("stage-map") < html.index("A memorable day") < html.index("<svg id='elev'>")
+
+
+def test_pdf_template_weather_location_before_body():
+    """Weather + location render between the map and the stage description."""
+    import os
+    from jinja2 import Environment, FileSystemLoader, select_autoescape
+    tdir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "app", "templates")
+    env = Environment(loader=FileSystemLoader(tdir), autoescape=select_autoescape(["html"]))
+    ctx = {
+        "title": "T", "author": "A", "intro_html": "", "cover_uri": None,
+        "done": 1, "total": 1, "tot_dist": "1 mi", "tot_climb": "1 ft", "toc": [],
+        "stages": [{
+            "stage_num": 1, "name": "S1", "date": "2026-01-01", "chips": [],
+            "map_uri": "data:image/png;base64,AA", "elev_svg": "",
+            "location": "Boulder → Nederland", "weather": "Clear · 68 °F",
+            "body_html": "<p>The climb story.</p>", "figs": [],
+        }],
+    }
+    html = env.get_template("tour_blog_pdf.html").render(**ctx)
+    assert "Boulder" in html and "Nederland" in html and "Clear · 68 °F" in html
+    assert html.index("Boulder") < html.index("The climb story.")
+
+
+def test_pdf_context_includes_weather_location(client, test_db, make_user, monkeypatch):
+    """_pdf_context surfaces a completed stage's weather + location (formatted) so the
+    book can print them. The activity resolver is stubbed — no network."""
+    import sqlite3 as _sql
+    import app.routers.tour_blog as tb
+    import app.static_map as sm
+
+    uid = make_user()
+    tid, sid = _make_tour_with_share(test_db.path, uid)
+
+    # An activity inside the attempt window that matches the single stage.
+    con = _sql.connect(test_db.path)
+    try:
+        import json
+        for col in ("local_media_items_json", "local_media_captions_json"):
+            try:
+                con.execute(f"ALTER TABLE activities ADD COLUMN {col} TEXT")
+            except _sql.OperationalError:
+                pass
+        con.execute(
+            "INSERT INTO activities (id, uuid, user_id, creation_time_s, distance_mi, "
+            "start_lat, start_lon, attributes_json) VALUES (?,?,?,?,?,?,?,?)",
+            (8001, "act-8001", uid, 1767312000, 12.5, 37.1, -3.6,
+             json.dumps(["totalClimb", "800"])),
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    monkeypatch.setattr(sm, "render_route_png", lambda *a, **k: b"\x89PNG\r\n\x1a\n")
+    monkeypatch.setattr(tb, "_weather_location_blocking", lambda aid: {
+        "weather": {"description": "Partly cloudy", "avg_temp_f": 70.0,
+                    "avg_wind_kph": 16.0, "precip_mm": 0},
+        "locations": "Órgiva → Cáñar",
+    })
+
+    con = _sql.connect(test_db.path, timeout=30)
+    try:
+        ctx = tb._pdf_context(con, TOKEN)
+    finally:
+        con.close()
+
+    st = ctx["stages"][0]
+    assert st["location"] == "Órgiva → Cáñar"
+    assert st["weather"].startswith("Partly cloudy · 70 °F")
+    assert "Wind 10 mph" in st["weather"]      # 16 km/h → mph, imperial default
+
+
+def test_pdf_stage_media_keeps_video_poster_caption(test_db, monkeypatch):
+    """A Strava video item's poster frame + caption must appear in the PDF book
+    (regression: videos were skipped, dropping their descriptive text)."""
+    import json, os
+    from pathlib import Path
+    from PIL import Image
+    from app.routers.tour_blog import _pdf_stage_media
+
+    monkeypatch.setenv("ASCENT_DB_PATH", test_db.path)
+    con = sqlite3.connect(test_db.path)
+    try:
+        # Ensure the media columns exist on the harness's activities table.
+        for col in ("local_media_items_json", "local_media_captions_json", "local_video_urls_json"):
+            try:
+                con.execute(f"ALTER TABLE activities ADD COLUMN {col} TEXT")
+            except sqlite3.OperationalError:
+                pass
+        sid = 99001
+        photo, video = "photo.jpg", "clip.jpg"   # both are still-image files on disk
+        con.execute(
+            "INSERT INTO activities (id, uuid, strava_activity_id, local_media_items_json, "
+            "local_media_captions_json, local_video_urls_json) VALUES (?,?,?,?,?,?)",
+            (7001, "act-7001-uuid", sid, json.dumps([photo, video]),
+             json.dumps({photo: "A still photo", video: "A short clip"}),
+             json.dumps({video: "https://example/clip.m3u8"})),
+        )
+        con.commit()
+        # Write real (tiny) JPEGs where _photos_dir will look for them.
+        pdir = Path(test_db.path).parent / "support" / "photos" / str(sid)
+        pdir.mkdir(parents=True, exist_ok=True)
+        for fn in (photo, video):
+            Image.new("RGB", (12, 10), (100, 120, 140)).save(pdir / fn, "JPEG")
+
+        figs = _pdf_stage_media(con, 7001)
+        caps = [f["caption"] for f in figs]
+        assert "A still photo" in caps
+        assert "A short clip" in caps            # video poster caption is kept
+    finally:
+        con.close()
+
+
+def test_pdf_stage_media_applies_blog_layout(test_db, monkeypatch):
+    """Blog-only order/hidden must reorder and drop photos in the PDF book."""
+    import json
+    from pathlib import Path
+    from PIL import Image
+    from app.routers.tour_blog import _pdf_stage_media
+
+    monkeypatch.setenv("ASCENT_DB_PATH", test_db.path)
+    con = sqlite3.connect(test_db.path)
+    try:
+        for col in ("local_media_items_json", "local_media_captions_json", "local_video_urls_json"):
+            try:
+                con.execute(f"ALTER TABLE activities ADD COLUMN {col} TEXT")
+            except sqlite3.OperationalError:
+                pass
+        sid = 99002
+        a, b, c = "a.jpg", "b.jpg", "c.jpg"
+        con.execute(
+            "INSERT INTO activities (id, uuid, strava_activity_id, local_media_items_json, "
+            "local_media_captions_json, local_video_urls_json) VALUES (?,?,?,?,?,?)",
+            (7002, "act-7002-uuid", sid, json.dumps([a, b, c]),
+             json.dumps({a: "cap A", b: "cap B", c: "cap C"}), None),
+        )
+        con.commit()
+        pdir = Path(test_db.path).parent / "support" / "photos" / str(sid)
+        pdir.mkdir(parents=True, exist_ok=True)
+        for fn in (a, b, c):
+            Image.new("RGB", (12, 10), (100, 120, 140)).save(pdir / fn, "JPEG")
+
+        base = "/photos/7002/"
+        # Hide c; put b before a.
+        figs = _pdf_stage_media(con, 7002, order=[base + b, base + a], hidden=[base + c])
+        assert [f["caption"] for f in figs] == ["cap B", "cap A"]
+
+        # No layout → natural order, nothing dropped.
+        figs = _pdf_stage_media(con, 7002)
+        assert [f["caption"] for f in figs] == ["cap A", "cap B", "cap C"]
+    finally:
+        con.close()
 
 
 def test_render_route_png_degenerate_returns_png():

@@ -2,7 +2,8 @@
 // Renders a linear page: cover → intro → table of contents → per-stage stories with
 // stats, elevation, map, Strava notes, author prose, and orientation-aware photos.
 // Owner (window.BLOG.isOwner) gets inline editing of the intro, per-stage prose, photo
-// captions (via the lightbox), and cover-photo selection.
+// captions (via the lightbox), cover-photo selection, and a per-stage photo manager
+// (reorder + hide/show, blog-only).
 
 (function () {
   const B = window.BLOG;
@@ -67,7 +68,7 @@
 
     // Maps + elevation + photos after the DOM exists.
     initOverviewMap();
-    CONTENT.stages.forEach(s => { initStageMap(s); initStageElev(s); loadStagePhotos(s); renderStageProse(s); });
+    CONTENT.stages.forEach(s => { initStageMap(s); initStageElev(s); loadStagePhotos(s); hydrateStageMeta(s); renderStageProse(s); });
     renderAllComments();
   }
 
@@ -93,8 +94,32 @@
     const el = document.createElement('div');
     el.className = 'blog-topbar';
     el.innerHTML = `<a href="/tours/share/${TOKEN}">View interactive map →</a><span class="spacer"></span>` +
-      (B.isOwner ? `<span style="font-size:12px;color:var(--muted)">You're the author — edits below save instantly.</span>` : '');
+      (B.isOwner
+        ? `<span style="font-size:12px;color:var(--muted)">You're the author — edits below save instantly.</span>
+           <button class="edit-btn" id="share-link-btn"
+             title="Anyone with this link can read the blog and leave comments, but not edit it.">Copy public link</button>`
+        : '');
+    const share = el.querySelector('#share-link-btn');
+    if (share) share.onclick = () => copyPublicLink(share);
     return el;
+  }
+
+  // The current blog URL is already the read-only public link: viewing needs no
+  // login and editing is gated to the signed-in author, so anyone (even non-Ascent
+  // users) can open it to read + comment. This just hands the owner that link.
+  async function copyPublicLink(btn) {
+    const url = window.location.href;
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch (e) {
+      const ta = document.createElement('textarea');
+      ta.value = url; document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); } catch (_) {}
+      ta.remove();
+    }
+    const orig = btn.textContent;
+    btn.textContent = 'Link copied ✓';
+    setTimeout(() => { btn.textContent = orig; }, 1800);
   }
 
   // ── Intro ───────────────────────────────────────────────────────────────────
@@ -207,14 +232,13 @@
       <div class="blog-stats">${chips.join('')}</div>
       ${hasPts ? `<div class="stage-map" id="smap-${s.id}"></div>` : ''}
       ${hasPts ? `<div class="stage-elev" id="selev-${s.id}"><canvas></canvas></div>` : ''}
-      <div id="notes-${s.id}"></div>
+      <div class="stage-meta" id="meta-${s.id}"></div>
       <div id="prose-${s.id}"></div>
       <div class="blog-figs" id="figs-${s.id}"></div>
       <div class="blog-comments" id="cmts-${s.stage_num}"></div>`;
 
     // renderStageProse(s) is called from render() after this element is appended —
     // getElementById needs it in the document first.
-    if (c?.activity_id) loadStrava(s, c.activity_id);
     return sec;
   }
 
@@ -262,16 +286,34 @@
     };
   }
 
-  // ── Strava notes (description of the completed activity) ─────────────────────
-  function loadStrava(s, actId) {
-    fetch(`/tours/share/${TOKEN}/activities/${actId}`)
+  // ── Weather + location (before the description) ───────────────────────────────
+  // Async-hydrated from the shared activity endpoint (cached, self-warming). Location
+  // names are clickable — identical to the tour / tour-share pages (LocationSummary).
+  function hydrateStageMeta(s) {
+    const host = document.getElementById(`meta-${s.id}`); if (!host) return;
+    const actId = s.completion?.activity_id; if (!actId) return;
+    fetch(`/api/activities/${actId}/weather-location`)
       .then(r => r.ok ? r.json() : null)
-      .then(act => {
-        if (!act) return;
-        const host = document.getElementById(`notes-${s.id}`);
-        if (host && act.notes && act.notes.trim())
-          host.innerHTML = `<div class="strava-notes">${esc(act.notes)}</div>`;
-      }).catch(() => {});
+      .then(d => {
+        if (!d) return;
+        const rows = [];
+        if (d.locations) {
+          const links = (d.locations_points && d.locations_points.length)
+            ? LocationSummary.linkifyList(d.locations_points.map(
+                p => ({ label: p.name, name: p.name, lat: p.lat, lon: p.lon })))
+            : LocationSummary.linkifyNames(d.locations, d.region);
+          rows.push(`<div class="sm-loc"><span class="sm-ic">📍</span>${links}</div>`);
+        }
+        if (d.weather?.description) {
+          const w = d.weather, parts = [w.description];
+          if (w.avg_temp_f   != null) parts.push(U.tempS(w.avg_temp_f));
+          if (w.avg_wind_kph != null) parts.push('Wind ' + U.windS(w.avg_wind_kph));
+          if (w.precip_mm > 0)        parts.push(U.precipS(w.precip_mm));
+          rows.push(`<div class="sm-wx"><span class="sm-ic">🌤</span>${esc(parts.join(' · '))}</div>`);
+        }
+        if (rows.length) host.innerHTML = rows.join('');
+      })
+      .catch(() => {});
   }
 
   // ── Maps ─────────────────────────────────────────────────────────────────────
@@ -351,10 +393,43 @@
     }).catch(() => {});
   }
 
+  // Blog-only media layout (order + hidden), keyed by media URL. Mirrors the server's
+  // _apply_media_layout so page and PDF agree.
+  function stageLayout(s) {
+    return { order: s.media_order || [], hidden: s.media_hidden || [] };
+  }
+
+  // Raw activity media, stable-sorted by the saved order (URLs not in the order keep
+  // their natural position after known ones). Hidden items are kept in place — the
+  // manager needs them; the reading view filters them via visibleMedia().
+  function orderedAll(s) {
+    const media = stageMedia[s.id] || [];
+    const { order } = stageLayout(s);
+    const rank = new Map(order.map((u, i) => [u, i]));
+    return media
+      .map((m, i) => [m, i])
+      .sort((a, b) => (rank.has(a[0].url) ? rank.get(a[0].url) : order.length + a[1])
+                    - (rank.has(b[0].url) ? rank.get(b[0].url) : order.length + b[1]))
+      .map(pair => pair[0]);
+  }
+
+  function visibleMedia(s) {
+    const hide = new Set(stageLayout(s).hidden);
+    return orderedAll(s).filter(m => !hide.has(m.url));
+  }
+
   function renderFigures(s) {
     const host = document.getElementById(`figs-${s.id}`); if (!host) return;
-    const media = stageMedia[s.id] || [];
+    const raw = stageMedia[s.id] || [];
+    const media = visibleMedia(s);
     host.innerHTML = '';
+    if (B.isOwner && raw.length) {
+      const bar = document.createElement('div');
+      bar.className = 'figs-toolbar';
+      bar.innerHTML = `<button class="edit-btn">Manage photos</button>`;
+      bar.querySelector('button').onclick = () => openMediaManager(s);
+      host.appendChild(bar);
+    }
     media.forEach((m, i) => host.appendChild(buildFigure(s, m, i)));
   }
 
@@ -393,7 +468,7 @@
   }
 
   function openLightbox(s, idx) {
-    const media = stageMedia[s.id] || [];
+    const media = visibleMedia(s);
     let lastEdited = idx;                       // where to land back in the blog
     Lightbox.open(media, idx, {
       download: true,
@@ -408,7 +483,7 @@
       onClose: () => {
         renderFigures(s);                        // reflect any caption edits inline
         const host = document.getElementById(`figs-${s.id}`);
-        const fig = host && host.children[lastEdited];
+        const fig = host && host.querySelectorAll('.blog-fig')[lastEdited];
         if (fig) fig.scrollIntoView({ behavior: 'smooth', block: 'center' });
       },
     });
@@ -424,6 +499,92 @@
     // Rebuild just the cover in place.
     const old = document.getElementById('blog-cover');
     if (old) old.replaceWith(buildCover());
+  }
+
+  // ── Photo/video manager (owner) ───────────────────────────────────────────────
+  // A per-stage grid: drag the handle to reorder, tap the eye to hide/show. Hidden
+  // items stay in the grid (greyed) so they can be restored. Blog-only — the activity
+  // media is untouched.
+  function openMediaManager(s) {
+    const host = document.getElementById(`figs-${s.id}`); if (!host) return;
+    const hide = new Set(stageLayout(s).hidden);
+    const items = orderedAll(s);                 // hidden included, in current order
+
+    const thumb = (m) => {
+      const isVideo = m.type === 'video';
+      const hidden = hide.has(m.url);
+      return `<div class="mm-thumb ${hidden ? 'hidden' : ''}" data-url="${esc(m.url)}">
+        <img src="${esc(m.url)}" alt="" loading="lazy">
+        ${isVideo ? '<span class="mm-badge">▶</span>' : ''}
+        <span class="mm-off">🚫</span>
+        <button class="mm-eye" title="Hide/show in blog">${hidden ? '🚫' : '👁'}</button>
+        <button class="mm-drag" title="Drag to reorder">⠿</button>
+      </div>`;
+    };
+
+    host.innerHTML = `<div class="mediamgr">
+      <div class="mm-head">
+        <div class="blog-h" style="margin:0">Manage photos</div>
+        <span class="spacer"></span>
+        <button class="btn-primary" id="mm-done-${s.id}">Done</button>
+        <button class="btn-ghost" id="mm-cancel-${s.id}">Cancel</button>
+      </div>
+      <div class="mm-hint">Drag ⠿ to reorder · tap 👁 to hide/show. Changes affect only the blog.</div>
+      <div class="mm-grid" id="mm-grid-${s.id}">${items.map(thumb).join('')}</div>
+    </div>`;
+
+    const grid = host.querySelector(`#mm-grid-${s.id}`);
+    grid.querySelectorAll('.mm-eye').forEach(btn => {
+      btn.onclick = () => {
+        const cell = btn.closest('.mm-thumb');
+        const on = cell.classList.toggle('hidden');
+        btn.textContent = on ? '🚫' : '👁';
+      };
+    });
+    makeSortable(grid);
+
+    host.querySelector(`#mm-cancel-${s.id}`).onclick = () => renderFigures(s);
+    host.querySelector(`#mm-done-${s.id}`).onclick = async () => {
+      const cells = [...grid.querySelectorAll('.mm-thumb')];
+      const order = cells.map(c => c.dataset.url);
+      const hidden = cells.filter(c => c.classList.contains('hidden')).map(c => c.dataset.url);
+      const r = await fetch(`/tours/blog/${TOKEN}/stage/${s.id}/media`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order, hidden }),
+      });
+      if (!r.ok) { alert('Failed to save.'); return; }
+      s.media_order = order; s.media_hidden = hidden;
+      renderFigures(s);
+    };
+  }
+
+  // Minimal pointer-based sortable (mouse + touch): drag by the .mm-drag handle.
+  function makeSortable(grid) {
+    let dragEl = null;
+    grid.querySelectorAll('.mm-drag').forEach(handle => {
+      handle.style.touchAction = 'none';
+      handle.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        dragEl = handle.closest('.mm-thumb');
+        dragEl.classList.add('mm-dragging');
+        handle.setPointerCapture(e.pointerId);
+      });
+      handle.addEventListener('pointermove', (e) => {
+        if (!dragEl) return;
+        const el = document.elementFromPoint(e.clientX, e.clientY);
+        const over = el && el.closest('.mm-thumb');
+        if (!over || over === dragEl || over.parentElement !== grid) return;
+        // If the drag target sits after the hovered cell, insert before it; else after.
+        const after = over.compareDocumentPosition(dragEl) & Node.DOCUMENT_POSITION_FOLLOWING;
+        grid.insertBefore(dragEl, after ? over : over.nextSibling);
+      });
+      const end = (e) => {
+        if (dragEl) { dragEl.classList.remove('mm-dragging'); dragEl = null; }
+        try { handle.releasePointerCapture(e.pointerId); } catch (_) {}
+      };
+      handle.addEventListener('pointerup', end);
+      handle.addEventListener('pointercancel', end);
+    });
   }
 
   // ── Comments ─────────────────────────────────────────────────────────────────
