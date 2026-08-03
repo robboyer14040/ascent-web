@@ -241,6 +241,14 @@ def test_render_route_png_degenerate_returns_png():
     assert png[:8] == b"\x89PNG\r\n\x1a\n"
 
 
+def _weasyprint_present():
+    try:
+        import weasyprint  # noqa: F401
+        return True
+    except Exception:
+        return False
+
+
 def test_pdf_route_available_or_501(client, test_db, make_user, monkeypatch):
     uid = make_user()
     _make_tour_with_share(test_db.path, uid)
@@ -253,3 +261,43 @@ def test_pdf_route_available_or_501(client, test_db, make_user, monkeypatch):
     assert r.status_code in (200, 501)
     if r.status_code == 200:
         assert r.headers["content-type"] == "application/pdf"
+
+
+def test_pdf_job_start_bad_token(client, test_db, make_user):
+    make_user()
+    r = client.post("/tours/blog/nope/pdf/start")
+    # 404 (bad token) when WeasyPrint present, 501 when not — both before any work.
+    assert r.status_code in (404, 501)
+
+
+def test_pdf_job_status_unknown(client, test_db, make_user):
+    uid = make_user()
+    _make_tour_with_share(test_db.path, uid)
+    assert client.get(f"/tours/blog/{TOKEN}/pdf/status/deadbeef").status_code == 404
+
+
+def test_pdf_job_full_flow(client, test_db, make_user, monkeypatch):
+    if not _weasyprint_present():
+        import pytest
+        pytest.skip("WeasyPrint not installed")
+    import time as _t
+    import app.static_map as sm
+    monkeypatch.setattr(sm, "render_route_png", lambda *a, **k: b"\x89PNG\r\n\x1a\n")
+
+    uid = make_user()
+    _make_tour_with_share(test_db.path, uid)
+    job_id = client.post(f"/tours/blog/{TOKEN}/pdf/start").json()["job_id"]
+
+    # Poll until the background thread finishes (bounded).
+    status = None
+    for _ in range(100):
+        status = client.get(f"/tours/blog/{TOKEN}/pdf/status/{job_id}").json()
+        if status["status"] in ("ready", "error"):
+            break
+        _t.sleep(0.05)
+    assert status["status"] == "ready", status
+
+    dl = client.get(f"/tours/blog/{TOKEN}/pdf/download/{job_id}")
+    assert dl.status_code == 200
+    assert dl.headers["content-type"] == "application/pdf"
+    assert dl.content[:4] == b"%PDF"

@@ -340,9 +340,15 @@ html.mob-embedded body.mob-stage-view #stage-detail { padding-bottom:12px!import
         <input id="publish-url" readonly style="flex:1;font-size:12px;padding:6px 8px;background:var(--surface2);border:1px solid var(--border2);border-radius:5px;color:var(--text);outline:none" onclick="this.select()">
         <button onclick="copyShareUrl()" style="padding:5px 10px;font-size:12px;background:var(--surface2);border:1px solid var(--border2);border-radius:5px;color:var(--text);cursor:pointer;white-space:nowrap">Copy</button>
       </div>
-      <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px">
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
         <a id="publish-blog-link" href="#" target="_blank" style="flex:1;text-align:center;padding:7px 10px;font-size:12px;font-weight:600;background:var(--accent);border:1px solid var(--accent);border-radius:6px;color:#fff;text-decoration:none">Open Blog / Story view →</a>
-        <a id="publish-pdf-link" href="#" target="_blank" style="flex:1;text-align:center;padding:7px 10px;font-size:12px;font-weight:600;background:var(--surface2);border:1px solid var(--border2);border-radius:6px;color:var(--text);text-decoration:none">Publish PDF book ↓</a>
+        <button id="publish-pdf-btn" onclick="startPdfBuild()" style="flex:1;text-align:center;padding:7px 10px;font-size:12px;font-weight:600;background:var(--surface2);border:1px solid var(--border2);border-radius:6px;color:var(--text);cursor:pointer">Publish PDF book ↓</button>
+      </div>
+      <div id="pdf-progress" style="display:none;margin-bottom:14px">
+        <div style="height:8px;background:var(--surface2);border:1px solid var(--border2);border-radius:5px;overflow:hidden">
+          <div id="pdf-progress-bar" style="height:100%;width:0%;background:var(--accent);transition:width .3s ease"></div>
+        </div>
+        <div id="pdf-progress-text" style="font-size:11px;color:var(--muted);margin-top:4px">Starting…</div>
       </div>
       <button onclick="doRevoke()" style="font-size:12px;color:#f87171;background:none;border:none;cursor:pointer;padding:0">Revoke link</button>
     </div>
@@ -2875,7 +2881,6 @@ function openPublishModal() {
   if(tourInfo.share_token) {
     urlInput.value = `${location.origin}/tours/share/${tourInfo.share_token}`;
     document.getElementById('publish-blog-link').href = `/tours/blog/${tourInfo.share_token}`;
-    document.getElementById('publish-pdf-link').href = `/tours/blog/${tourInfo.share_token}/pdf`;
     unpub.style.display = 'none';
     pub.style.display   = '';
   } else if(!myAttempts.length) {
@@ -2929,12 +2934,71 @@ async function doPublish() {
     tourInfo.share_token = d.token;
     document.getElementById('publish-url').value = `${location.origin}/tours/share/${d.token}`;
     document.getElementById('publish-blog-link').href = `/tours/blog/${d.token}`;
-    document.getElementById('publish-pdf-link').href = `/tours/blog/${d.token}/pdf`;
     document.getElementById('publish-unpublished').style.display = 'none';
     document.getElementById('publish-published').style.display   = '';
     status.textContent = '';
   } catch(e) { status.textContent = 'Error generating link.'; }
 }
+// ── Publish PDF book (background job + progress bar) ────────────────────────────
+let _pdfPoll = null;
+async function startPdfBuild() {
+  const token = tourInfo && tourInfo.share_token;
+  if(!token) return;
+  const btn  = document.getElementById('publish-pdf-btn');
+  const wrap = document.getElementById('pdf-progress');
+  const bar  = document.getElementById('pdf-progress-bar');
+  const text = document.getElementById('pdf-progress-text');
+  if(_pdfPoll) { clearInterval(_pdfPoll); _pdfPoll = null; }
+
+  btn.disabled = true; btn.textContent = 'Building…';
+  wrap.style.display = ''; bar.style.width = '0%'; text.textContent = 'Starting…';
+
+  let jobId;
+  try {
+    const r = await fetch(`/tours/blog/${token}/pdf/start`, {method:'POST'});
+    if(!r.ok) throw new Error((await r.json().catch(()=>({}))).detail || 'Could not start PDF build.');
+    jobId = (await r.json()).job_id;
+  } catch(e) { _pdfFail(e.message); return; }
+
+  _pdfPoll = setInterval(async () => {
+    try {
+      const s = await fetch(`/tours/blog/${token}/pdf/status/${jobId}`).then(r=>r.json());
+      bar.style.width = (s.percent||0) + '%';
+      text.textContent = s.phase || 'Working…';
+      if(s.status === 'ready') {
+        clearInterval(_pdfPoll); _pdfPoll = null;
+        bar.style.width = '100%'; text.textContent = 'Downloading…';
+        // Trigger the browser download, then reset the control.
+        const a = document.createElement('a');
+        a.href = `/tours/blog/${token}/pdf/download/${jobId}`;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(_pdfReset, 1200);
+      } else if(s.status === 'error') {
+        clearInterval(_pdfPoll); _pdfPoll = null;
+        _pdfFail(s.error || 'PDF render failed.');
+      }
+    } catch(e) { /* transient — keep polling */ }
+  }, 900);
+}
+function _pdfFail(msg) {
+  const text = document.getElementById('pdf-progress-text');
+  const bar  = document.getElementById('pdf-progress-bar');
+  if(text){ text.textContent = msg; text.style.color = '#f87171'; }
+  if(bar) bar.style.background = '#f87171';
+  const btn = document.getElementById('publish-pdf-btn');
+  if(btn){ btn.disabled = false; btn.textContent = 'Retry PDF book ↓'; }
+}
+function _pdfReset() {
+  const btn  = document.getElementById('publish-pdf-btn');
+  const wrap = document.getElementById('pdf-progress');
+  const text = document.getElementById('pdf-progress-text');
+  const bar  = document.getElementById('pdf-progress-bar');
+  if(btn){ btn.disabled = false; btn.textContent = 'Publish PDF book ↓'; }
+  if(wrap) wrap.style.display = 'none';
+  if(text) text.style.color = 'var(--muted)';
+  if(bar) bar.style.background = 'var(--accent)';
+}
+
 async function doRevoke() {
   if(!confirm('Revoke the share link? Anyone with the current URL will no longer be able to access it.')) return;
   const status = document.getElementById('publish-status');

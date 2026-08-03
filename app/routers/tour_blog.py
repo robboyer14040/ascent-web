@@ -16,7 +16,9 @@ import io
 import json
 import re
 import sqlite3
+import threading
 import time as _time
+import uuid as _uuid
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -501,10 +503,11 @@ def _pdf_stage_media(con, activity_id: int):
     return figs
 
 
-def _pdf_context(con, token: str) -> dict:
+def _pdf_context(con, token: str, progress=None) -> dict:
     """Build the full template context for the PDF book (no WeasyPrint needed — split
     out so it can be exercised in tests / local verification). Fetches map tiles and
-    downscales photos, so it is slow and blocking; callers run it in a threadpool."""
+    downscales photos, so it is slow and blocking; callers run it in a threadpool.
+    Optional progress(current, total, phase) is called as each stage is built."""
     from app.static_map import render_route_png, elevation_svg
     if True:
         _ensure_tables(con)
@@ -555,7 +558,10 @@ def _pdf_context(con, token: str) -> dict:
 
         tile_cache: dict = {}
         pdf_stages = []
-        for s in stages:
+        n_stages = len(stages)
+        for idx, s in enumerate(stages):
+            if progress:
+                progress(idx, n_stages, f"Building stage {idx + 1} of {n_stages}…")
             pts = _stage_points(con, s["id"])
             c = s["completion"]
             chips = [("Distance", unit_dist((c or {}).get("distance_mi") or s["distance_mi"] or 0)),
@@ -589,25 +595,128 @@ def _pdf_context(con, token: str) -> dict:
         }
 
 
-@router.get("/tours/blog/{token}/pdf")
-def tour_blog_pdf(token: str):
-    """Render the whole tour as a square 8×8in printable book (WeasyPrint). Sync so it
-    runs in a threadpool: WeasyPrint, Pillow and the tile fetches all block. Comments
-    are intentionally excluded from the printed book."""
+def _render_pdf(token: str, progress=None):
+    """Build the book and return (pdf_bytes, filename). Raises RuntimeError(501-style)
+    if WeasyPrint is unavailable. Shared by the sync route and the background job."""
     try:
         import weasyprint  # lazy — heavy native deps
     except Exception:
-        raise HTTPException(
-            501, "PDF export is unavailable on this server (WeasyPrint not installed)."
-        )
+        raise RuntimeError("PDF export is unavailable on this server (WeasyPrint not installed).")
+
     con = sqlite3.connect(db_getter().path, timeout=30)
     try:
-        ctx = _pdf_context(con, token)
+        ctx = _pdf_context(con, token, progress=progress)
     finally:
         con.close()
 
+    if progress:
+        progress(ctx["total"], ctx["total"], "Rendering PDF…")
     html_str = templates.env.get_template("tour_blog_pdf.html").render(**ctx)
     pdf_bytes = weasyprint.HTML(string=html_str).write_pdf()
     safe = re.sub(r"[^A-Za-z0-9_-]+", "_", ctx["title"] or "tour").strip("_") or "tour"
+    return pdf_bytes, f"{safe}.pdf"
+
+
+@router.get("/tours/blog/{token}/pdf")
+def tour_blog_pdf(token: str):
+    """Synchronous render — kept for a direct link / backward compatibility. The UI uses
+    the job flow below so it can show progress. Comments are excluded from the book."""
+    try:
+        pdf_bytes, filename = _render_pdf(token)
+    except RuntimeError as e:
+        raise HTTPException(501, str(e))
     return Response(content=pdf_bytes, media_type="application/pdf",
-                    headers={"Content-Disposition": f'inline; filename="{safe}.pdf"'})
+                    headers={"Content-Disposition": f'inline; filename="{filename}"'})
+
+
+# ── Background PDF jobs (so the UI can show a progress bar) ────────────────────
+# Jobs live in memory — a book render is a one-shot, few-minute task tied to a single
+# download, so there's no need to persist it. Each job holds the finished bytes until
+# it's downloaded or reaped.
+
+_pdf_jobs: dict = {}
+_pdf_jobs_lock = threading.Lock()
+_PDF_JOB_TTL = 1800          # reap finished/failed jobs after 30 min
+
+
+def _reap_jobs():
+    now = _time.time()
+    with _pdf_jobs_lock:
+        for jid in [k for k, v in _pdf_jobs.items()
+                    if v.get("done_at") and now - v["done_at"] > _PDF_JOB_TTL]:
+            _pdf_jobs.pop(jid, None)
+
+
+def _run_pdf_job(job_id: str, token: str):
+    def progress(cur, total, phase):
+        with _pdf_jobs_lock:
+            j = _pdf_jobs.get(job_id)
+            if j:
+                j.update(current=cur, total=total, phase=phase)
+    try:
+        pdf_bytes, filename = _render_pdf(token, progress=progress)
+        with _pdf_jobs_lock:
+            j = _pdf_jobs.get(job_id)
+            if j:
+                j.update(status="ready", pdf=pdf_bytes, filename=filename,
+                         phase="Done", done_at=_time.time())
+    except Exception as e:
+        with _pdf_jobs_lock:
+            j = _pdf_jobs.get(job_id)
+            if j:
+                j.update(status="error", error=str(e), done_at=_time.time())
+
+
+@router.post("/tours/blog/{token}/pdf/start")
+def tour_blog_pdf_start(token: str):
+    """Kick off a background PDF build; returns a job_id to poll."""
+    try:
+        import weasyprint  # noqa: F401 — fail fast before spawning a thread
+    except Exception:
+        raise HTTPException(501, "PDF export is unavailable on this server (WeasyPrint not installed).")
+
+    con = sqlite3.connect(db_getter().path, timeout=10)
+    try:
+        _ensure_tables(con)
+        _ensure_blog_tables(con)
+        _resolve_blog_share(con, token)      # 404 on a bad token before we start
+    finally:
+        con.close()
+
+    _reap_jobs()
+    job_id = _uuid.uuid4().hex
+    with _pdf_jobs_lock:
+        _pdf_jobs[job_id] = {"status": "running", "current": 0, "total": 0,
+                             "phase": "Starting…", "created_at": _time.time()}
+    threading.Thread(target=_run_pdf_job, args=(job_id, token), daemon=True).start()
+    return JSONResponse({"job_id": job_id})
+
+
+@router.get("/tours/blog/{token}/pdf/status/{job_id}")
+def tour_blog_pdf_status(token: str, job_id: str):
+    with _pdf_jobs_lock:
+        j = _pdf_jobs.get(job_id)
+        if not j:
+            raise HTTPException(404, "Job not found or expired")
+        total = j.get("total") or 0
+        cur = j.get("current") or 0
+        pct = int(cur / total * 100) if total else (100 if j["status"] == "ready" else 0)
+        return JSONResponse({
+            "status": j["status"], "current": cur, "total": total,
+            "percent": pct, "phase": j.get("phase", ""), "error": j.get("error"),
+        })
+
+
+@router.get("/tours/blog/{token}/pdf/download/{job_id}")
+def tour_blog_pdf_download(token: str, job_id: str):
+    with _pdf_jobs_lock:
+        j = _pdf_jobs.get(job_id)
+        if not j:
+            raise HTTPException(404, "Job not found or expired")
+        if j["status"] == "error":
+            raise HTTPException(500, j.get("error") or "PDF render failed")
+        if j["status"] != "ready":
+            raise HTTPException(425, "Not ready")     # 425 Too Early
+        pdf_bytes, filename = j["pdf"], j["filename"]
+    return Response(content=pdf_bytes, media_type="application/pdf",
+                    headers={"Content-Disposition": f'attachment; filename="{filename}"'})
