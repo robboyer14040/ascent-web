@@ -150,10 +150,63 @@ def _to_png(img: Image.Image) -> bytes:
     return buf.getvalue()
 
 
+# Gradient % → color, matching elev_gradient.js `gradientColor` (light-theme stops):
+# blue (downhill) → green (flat) → yellow → orange → red (steep).
+_GRAD_STOPS = [(-20, 29, 78, 216), (-5, 96, 165, 250), (0, 21, 128, 61),
+               (5, 161, 98, 7), (10, 194, 65, 12), (20, 185, 28, 28)]
+
+
+def _grad_color(pct: float) -> str:
+    stops = _GRAD_STOPS
+    c = max(stops[0][0], min(stops[-1][0], pct))
+    for i in range(len(stops) - 1):
+        t0, r0, g0, b0 = stops[i]
+        t1, r1, g1, b1 = stops[i + 1]
+        if c <= t1:
+            f = (c - t0) / (t1 - t0)
+            return (f"rgb({round(r0 + (r1 - r0) * f)},"
+                    f"{round(g0 + (g1 - g0) * f)},{round(b0 + (b1 - b0) * f)})")
+    return "rgb(185,28,28)"
+
+
+def _point_grades(pts: Sequence[Sequence[float]]) -> List[float]:
+    """Per-point slope % using a ~25 m half-window, mirroring
+    stage_elev_chart.js `computeStageGradFromRawPts` so page and PDF agree."""
+    n = len(pts)
+    R = 3958.8
+    cum_mi = [0.0] * n
+    for i in range(1, n):
+        dlat = math.radians(pts[i][0] - pts[i - 1][0])
+        dlon = math.radians(pts[i][1] - pts[i - 1][1])
+        a = (math.sin(dlat / 2) ** 2 +
+             math.cos(math.radians(pts[i - 1][0])) * math.cos(math.radians(pts[i][0])) *
+             math.sin(dlon / 2) ** 2)
+        cum_mi[i] = cum_mi[i - 1] + R * 2 * math.asin(math.sqrt(a))
+    half = 0.016                                # ≈ 25 m in miles
+    grads = [0.0] * n
+    for i in range(n):
+        lo = hi = i
+        while lo > 0 and cum_mi[i] - cum_mi[lo - 1] <= half:
+            lo -= 1
+        while hi < n - 1 and cum_mi[hi + 1] - cum_mi[i] <= half:
+            hi += 1
+        if lo == hi:
+            if lo > 0:
+                lo -= 1
+            elif hi < n - 1:
+                hi += 1
+        d_alt = (pts[hi][2] or 0) - (pts[lo][2] or 0)          # feet
+        d_dist = (cum_mi[hi] - cum_mi[lo]) * 5280               # feet
+        grads[i] = (d_alt / d_dist * 100) if d_dist > 1 else 0.0
+    return grads
+
+
 def elevation_svg(points: Sequence[Sequence[float]], metric: bool,
                   width: int = 760, height: int = 150) -> str:
     """Inline SVG elevation profile from [[lat, lon, alt_ft], ...]. WeasyPrint renders
-    SVG natively, so no raster step is needed. X = cumulative distance, Y = altitude."""
+    SVG natively, so no raster step is needed. X = cumulative distance, Y = altitude.
+    The area is filled per-segment with a slope-gradient color (green→red) matching the
+    interactive chart, rather than a flat blue."""
     pts = [p for p in points if p and len(p) >= 3]
     if len(pts) < 2:
         return ""
@@ -175,6 +228,8 @@ def elevation_svg(points: Sequence[Sequence[float]], metric: bool,
         alt_ft = p[2] or 0
         ys.append(alt_ft * 0.3048 if metric else alt_ft)
 
+    grads = _point_grades(pts)
+
     pad = 6
     x_max = xs[-1] or 1
     y_min, y_max = min(ys), max(ys)
@@ -183,15 +238,25 @@ def elevation_svg(points: Sequence[Sequence[float]], metric: bool,
     def sx(x): return pad + (x / x_max) * (width - 2 * pad)
     def sy(y): return height - pad - ((y - y_min) / y_span) * (height - 2 * pad)
 
+    base = height - pad
+    # One filled trapezoid per segment, colored by the segment's slope.
+    segs = []
+    for i in range(len(xs) - 1):
+        x0, x1 = sx(xs[i]), sx(xs[i + 1])
+        y0, y1 = sy(ys[i]), sy(ys[i + 1])
+        color = _grad_color(grads[i])
+        segs.append(
+            f'<polygon points="{x0:.1f},{base:.1f} {x0:.1f},{y0:.1f} '
+            f'{x1:.1f},{y1:.1f} {x1:.1f},{base:.1f}" fill="{color}" fill-opacity="0.82"/>'
+        )
     line = " ".join(f"{sx(x):.1f},{sy(y):.1f}" for x, y in zip(xs, ys))
-    area = f"{pad},{height - pad} {line} {sx(x_max):.1f},{height - pad}"
     x_unit = "km" if metric else "mi"
     y_unit = "m" if metric else "ft"
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" '
         f'width="100%" preserveAspectRatio="none" class="elev-svg">'
-        f'<polygon points="{area}" fill="rgba(59,130,246,0.28)"/>'
-        f'<polyline points="{line}" fill="none" stroke="#3b82f6" stroke-width="1.5"/>'
+        f'{"".join(segs)}'
+        f'<polyline points="{line}" fill="none" stroke="rgba(255,255,255,0.55)" stroke-width="1"/>'
         f'<text x="{pad}" y="14" font-size="10" fill="#64748b">{round(y_max)} {y_unit}</text>'
         f'<text x="{width - pad}" y="{height - 4}" font-size="10" fill="#64748b" '
         f'text-anchor="end">{x_max:.1f} {x_unit}</text>'

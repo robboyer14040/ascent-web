@@ -231,6 +231,14 @@ def test_elevation_svg():
     assert svg.startswith("<svg") and "polyline" in svg
 
 
+def test_elevation_svg_gradient_fill():
+    # Fill is now per-segment, slope-colored polygons (green→red), not a flat blue area.
+    pts = [[37.1, -3.6, 2000], [37.2, -3.7, 2500], [37.3, -3.8, 1800]]
+    svg = elevation_svg(pts, metric=False)
+    assert "<polygon" in svg and "rgb(" in svg
+    assert "rgba(59,130,246" not in svg          # old flat-blue fill is gone
+
+
 def test_elevation_svg_empty():
     assert elevation_svg([[37.1, -3.6, 2000]], metric=False) == ""
 

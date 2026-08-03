@@ -71,7 +71,7 @@
   margin: 12px 0; }
 .stage-elev { height: 150px; position: relative; margin: 8px 0 4px; }
 .strava-notes { font-size: 15px; line-height: 1.6; color: var(--muted2); white-space: pre-wrap;
-  border-left: 3px solid var(--border2); padding: 2px 0 2px 14px; margin: 10px 0; }
+  padding: 2px 0; margin: 10px 0; }
 
 /* ── Photo figures — orientation-aware ────────────────────────────────────── */
 .blog-figs { margin: 20px 0 0; }

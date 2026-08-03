@@ -67,7 +67,7 @@
 
     // Maps + elevation + photos after the DOM exists.
     initOverviewMap();
-    CONTENT.stages.forEach(s => { initStageMap(s); initStageElev(s); loadStagePhotos(s); });
+    CONTENT.stages.forEach(s => { initStageMap(s); initStageElev(s); loadStagePhotos(s); renderStageProse(s); });
     renderAllComments();
   }
 
@@ -212,7 +212,8 @@
       <div class="blog-figs" id="figs-${s.id}"></div>
       <div class="blog-comments" id="cmts-${s.stage_num}"></div>`;
 
-    renderStageProse(s);
+    // renderStageProse(s) is called from render() after this element is appended —
+    // getElementById needs it in the document first.
     if (c?.activity_id) loadStrava(s, c.activity_id);
     return sec;
   }
@@ -221,10 +222,14 @@
     const host = document.getElementById(`prose-${s.id}`);
     if (!host) return;
     const has = !!(s.body_html && s.body_html.trim());
-    const editBtn = B.isOwner ? `<button class="edit-btn" id="ep-${s.id}">Edit story</button>` : '';
-    host.innerHTML = `<div class="edit-row" style="margin-top:14px">${editBtn}</div>` +
+    // Non-owners with no description see nothing at all here.
+    if (!has && !B.isOwner) { host.innerHTML = ''; return; }
+    const editBtn = B.isOwner
+      ? `<button class="edit-btn" id="ep-${s.id}">${has ? 'Edit description' : 'Add description'}</button>` : '';
+    host.innerHTML =
+      `<div class="edit-row" style="margin-top:14px"><div class="blog-h" style="margin:0">Description</div>${editBtn}</div>` +
       (has ? `<div class="blog-prose">${s.body_html}</div>`
-           : `<div class="blog-prose empty-hint">${B.isOwner ? 'No story yet — click “Edit story”.' : ''}</div>`);
+           : `<div class="blog-prose empty-hint">No description yet — click “Add description”.</div>`);
     const btn = host.querySelector(`#ep-${s.id}`);
     if (btn) btn.onclick = () => editStageProse(s);
   }
@@ -232,7 +237,8 @@
   function editStageProse(s) {
     const host = document.getElementById(`prose-${s.id}`);
     const canSeed = s.ai_seed && !(s.body_raw || '').trim();
-    host.innerHTML = `<div class="blog-editor" style="margin-top:14px">
+    host.innerHTML = `<div class="edit-row" style="margin-top:14px"><div class="blog-h" style="margin:0">Edit description</div></div>
+      <div class="blog-editor">
         <textarea id="ta-${s.id}">${esc(s.body_raw || '')}</textarea>
         <div class="md-hint">Markdown-lite: **bold**, *italic*, [text](https://link). Blank line = new paragraph.</div>
         <div class="actions">
@@ -325,7 +331,12 @@
     const strip = document.getElementById(`selev-${s.id}`); if (!strip) return;
     const pts = POINTS[String(s.id)]; if (!pts || pts.length < 2) return;
     const canvas = strip.querySelector('canvas');
-    try { buildStageElevChart(canvas, chartPtsFor(pts), {}); }
+    const chartPts = chartPtsFor(pts);
+    // Slope-gradient fill (green→red), computed from the full-resolution route points.
+    const distConv = mi => U.metric ? mi * 1.60934 : mi;
+    let gradPts = null;
+    try { gradPts = computeStageGradFromRawPts(pts, 1, distConv); } catch (e) { gradPts = null; }
+    try { buildStageElevChart(canvas, chartPts, { gradeOn: !!(gradPts && gradPts.length), gradPts }); }
     catch (e) { strip.style.display = 'none'; }
   }
 
@@ -383,11 +394,23 @@
 
   function openLightbox(s, idx) {
     const media = stageMedia[s.id] || [];
+    let lastEdited = idx;                       // where to land back in the blog
     Lightbox.open(media, idx, {
       download: true,
       captionEdit: B.isOwner,
-      onCaptionSave: saveCaption,
-      onClose: () => renderFigures(s),   // reflect any caption edits inline
+      // Arrow keys while editing cycle to the next/prev photo (see lightbox.js),
+      // saving through here — so lastEdited follows the caption you just wrote.
+      onCaptionSave: async (item, cap) => {
+        await saveCaption(item, cap);
+        const i = media.indexOf(item);
+        if (i >= 0) lastEdited = i;
+      },
+      onClose: () => {
+        renderFigures(s);                        // reflect any caption edits inline
+        const host = document.getElementById(`figs-${s.id}`);
+        const fig = host && host.children[lastEdited];
+        if (fig) fig.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      },
     });
   }
 

@@ -12,6 +12,7 @@
 
 const Lightbox = (() => {
   let _media = [], _idx = 0, _opts = {};
+  let _capSession = false;   // once editing starts, ← / → keep landing in edit mode
 
   // ── HLS attachment (used here and exported for the photo panel in photos.js) ──
   function attachHls(videoEl, hlsUrl, autoplay = true) {
@@ -41,9 +42,15 @@ const Lightbox = (() => {
   <div id="lb-cap" style="display:none;color:var(--lb-text);font-size:13px;margin-top:10px;max-width:min(90vw,600px);text-align:center;line-height:1.4;opacity:.9" onclick="event.stopPropagation()"></div>
   <div id="lb-cap-edit" style="display:none;margin-top:8px;max-width:min(90vw,520px);width:100%;padding:0 8px;box-sizing:border-box" onclick="event.stopPropagation()">
     <textarea id="lb-cap-inp" rows="2" placeholder="Add a description…" style="width:100%;box-sizing:border-box;padding:6px 8px;font-size:13px;border-radius:6px;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.1);color:#fff;resize:none;outline:none;line-height:1.4"></textarea>
-    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:5px">
-      <button onclick="event.stopPropagation();Lightbox.cancelCaptionEdit()" style="font-size:12px;padding:4px 12px;border-radius:5px;border:1px solid rgba(255,255,255,.3);background:transparent;color:#fff;cursor:pointer">Cancel</button>
-      <button onclick="event.stopPropagation();Lightbox.saveCaptionEdit()" style="font-size:12px;padding:4px 12px;border-radius:5px;border:none;background:#f97316;color:#fff;cursor:pointer;font-weight:600">Save</button>
+    <div style="display:flex;gap:8px;justify-content:space-between;align-items:center;margin-top:5px">
+      <div id="lb-cap-cycle" style="display:none;gap:6px">
+        <button onclick="event.stopPropagation();Lightbox.nav(-1)" style="font-size:12px;padding:4px 10px;border-radius:5px;border:1px solid rgba(255,255,255,.3);background:transparent;color:#fff;cursor:pointer">‹ Prev</button>
+        <button onclick="event.stopPropagation();Lightbox.nav(1)" style="font-size:12px;padding:4px 10px;border-radius:5px;border:1px solid rgba(255,255,255,.3);background:transparent;color:#fff;cursor:pointer">Next ›</button>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button onclick="event.stopPropagation();Lightbox.cancelCaptionEdit()" style="font-size:12px;padding:4px 12px;border-radius:5px;border:1px solid rgba(255,255,255,.3);background:transparent;color:#fff;cursor:pointer">Cancel</button>
+        <button onclick="event.stopPropagation();Lightbox.saveCaptionEdit()" style="font-size:12px;padding:4px 12px;border-radius:5px;border:none;background:#f97316;color:#fff;cursor:pointer;font-weight:600">Save</button>
+      </div>
     </div>
   </div>
   <div id="lb-nav" style="display:none;align-items:center;gap:1rem;margin-top:10px">
@@ -62,8 +69,9 @@ const Lightbox = (() => {
     document.addEventListener('keydown', e => {
       if (!isOpen()) return;
       if (e.key === 'Escape')     { close();    return; }
-      if (e.key === 'ArrowLeft')  { nav(-1);    return; }
-      if (e.key === 'ArrowRight') { nav(1);     return; }
+      // nav() itself decides browse-vs-save-and-cycle based on whether the editor is open.
+      if (e.key === 'ArrowLeft')  { e.preventDefault(); nav(-1); return; }
+      if (e.key === 'ArrowRight') { e.preventDefault(); nav(1);  return; }
     });
 
     const overlay = document.getElementById('lb-overlay');
@@ -148,14 +156,52 @@ const Lightbox = (() => {
   function openCaptionEdit() {
     const m = _media[_idx];
     if (!m || !_opts.captionEdit) return;
+    _capSession = true;                         // ← / → now cycle photos in edit mode
     document.getElementById('lb-cap').style.display = 'none';
     const inp = document.getElementById('lb-cap-inp');
     inp.value = m.caption || '';
+    // Handle arrows on the textarea itself — it has focus while editing, so this is a
+    // reliable trigger regardless of event bubbling. stopPropagation prevents the
+    // document-level handler from also firing.
+    inp.onkeydown = (e) => {
+      if (e.key === 'ArrowRight') { e.preventDefault(); e.stopPropagation(); _navSaving(1); }
+      else if (e.key === 'ArrowLeft') { e.preventDefault(); e.stopPropagation(); _navSaving(-1); }
+    };
     document.getElementById('lb-cap-edit').style.display = 'block';
+    // Show the in-editor Prev/Next cycle buttons when there's more than one photo.
+    const cyc = document.getElementById('lb-cap-cycle');
+    if (cyc) cyc.style.display = _media.length > 1 ? 'flex' : 'none';
     inp.focus();
   }
 
-  function cancelCaptionEdit() { _cancelEdit(); }
+  // Cancel ends the editing session — arrows go back to plain browsing.
+  function cancelCaptionEdit() { _capSession = false; _cancelEdit(); }
+
+  // Persist the current photo's caption in the background if it changed. Captures the
+  // photo + text now so it's safe to call right before navigating away.
+  function _flushCaption() {
+    const editEl = document.getElementById('lb-cap-edit');
+    if (!editEl || editEl.style.display !== 'block') return;
+    const m = _media[_idx];
+    const inp = document.getElementById('lb-cap-inp');
+    if (!m || !inp) return;
+    const caption = inp.value.trim();
+    if (caption === (m.caption || '')) return;
+    m.caption = caption || undefined;           // optimistic — reflected immediately
+    Promise.resolve().then(async () => {
+      try { if (_opts.onCaptionSave) await _opts.onCaptionSave(m, caption); }
+      catch (e) { alert('Failed to save description: ' + e.message); }
+    });
+  }
+
+  // Save the current caption (in the background) then immediately move to the prev/next
+  // photo and re-open the editor there, so the owner can add a description to every photo
+  // by just typing and pressing an arrow — no "Edit Description" click per photo.
+  function _navSaving(delta) {
+    _flushCaption();
+    _go(delta);
+    if (_opts.captionEdit) openCaptionEdit();
+  }
 
   async function saveCaptionEdit() {
     const m = _media[_idx];
@@ -219,12 +265,23 @@ const Lightbox = (() => {
     document.getElementById('lb-overlay').style.display = 'flex';
   }
 
-  function nav(delta) {
+  function _go(delta) {                    // plain move, no caption handling
     if (!_media.length) return;
     _show(_idx + delta);
   }
 
+  // Public nav: while a caption is being edited, the ‹ › buttons / swipe / arrows all
+  // save the current text and cycle in edit mode; otherwise they just browse.
+  function nav(delta) {
+    if (!_media.length) return;
+    const editorOpen = document.getElementById('lb-cap-edit')?.style.display === 'block';
+    if (_opts.captionEdit && (editorOpen || _capSession)) _navSaving(delta);
+    else _go(delta);
+  }
+
   function close() {
+    _flushCaption();          // don't lose an unsaved edit on the last photo
+    _capSession = false;
     _cancelEdit();
     const overlay = document.getElementById('lb-overlay');
     if (!overlay) return;
