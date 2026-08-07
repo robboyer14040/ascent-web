@@ -13,6 +13,7 @@
 const Lightbox = (() => {
   let _media = [], _idx = 0, _opts = {};
   let _capSession = false;   // once editing starts, ← / → keep landing in edit mode
+  let _expanded = false;     // fullscreen ("expanded") mode is active
 
   // ── HLS attachment (used here and exported for the photo panel in photos.js) ──
   function attachHls(videoEl, hlsUrl, autoplay = true) {
@@ -36,9 +37,19 @@ const Lightbox = (() => {
     const el = document.createElement('div');
     el.innerHTML = `
 <div id="lb-overlay" style="display:none;position:fixed;inset:0;background:var(--lb-bg);z-index:9999;align-items:center;justify-content:center;flex-direction:column" onclick="if(event.target===this)Lightbox.close()">
-  <button onclick="Lightbox.close()" style="position:absolute;top:14px;right:18px;font-size:22px;color:var(--lb-text);background:none;border:none;cursor:pointer;line-height:1;padding:4px">✕</button>
-  <img id="lb-img" alt="" style="display:none;max-width:90vw;max-height:80vh;object-fit:contain;border-radius:6px">
-  <video id="lb-vid" controls playsinline style="display:none;max-width:90vw;max-height:80vh;border-radius:6px;background:#000" onclick="event.stopPropagation()"></video>
+  <style>
+    #lb-overlay.lb-fs{background:#000}
+    #lb-overlay.lb-fs #lb-cap,#lb-overlay.lb-fs #lb-cap-edit,#lb-overlay.lb-fs #lb-nav,#lb-overlay.lb-fs #lb-acts,#lb-overlay.lb-fs .lb-close,#lb-overlay.lb-fs .lb-hint{display:none!important}
+    #lb-overlay.lb-fs #lb-stage{width:100vw;height:100vh}
+    #lb-overlay.lb-fs #lb-img,#lb-overlay.lb-fs #lb-vid{width:100vw!important;height:100vh!important;max-width:100vw!important;max-height:100vh!important;object-fit:contain!important;border-radius:0!important}
+    #lb-fs-btn:hover{background:rgba(0,0,0,.75)}
+  </style>
+  <button class="lb-close" onclick="Lightbox.close()" style="position:absolute;top:14px;right:18px;font-size:22px;color:var(--lb-text);background:none;border:none;cursor:pointer;line-height:1;padding:4px">✕</button>
+  <div id="lb-stage" style="position:relative;display:flex;align-items:center;justify-content:center" onclick="if(event.target===this)Lightbox.close()">
+    <img id="lb-img" alt="" style="display:none;max-width:90vw;max-height:80vh;object-fit:contain;border-radius:6px">
+    <video id="lb-vid" controls playsinline style="display:none;max-width:90vw;max-height:80vh;border-radius:6px;background:#000" onclick="event.stopPropagation()"></video>
+    <button id="lb-fs-btn" title="Full screen (F)" aria-label="Full screen" onclick="event.stopPropagation();Lightbox.toggleFullscreen()" style="position:absolute;bottom:10px;right:10px;width:34px;height:34px;border-radius:7px;border:none;background:rgba(0,0,0,.5);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:17px;line-height:1;padding:0">⛶</button>
+  </div>
   <div id="lb-cap" style="display:none;color:var(--lb-text);font-size:13px;margin-top:10px;max-width:min(90vw,600px);text-align:center;line-height:1.4;opacity:.9" onclick="event.stopPropagation()"></div>
   <div id="lb-cap-edit" style="display:none;margin-top:8px;max-width:min(90vw,520px);width:100%;padding:0 8px;box-sizing:border-box" onclick="event.stopPropagation()">
     <textarea id="lb-cap-inp" rows="2" placeholder="Add a description…" style="width:100%;box-sizing:border-box;padding:6px 8px;font-size:13px;border-radius:6px;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.1);color:#fff;resize:none;outline:none;line-height:1.4"></textarea>
@@ -62,17 +73,30 @@ const Lightbox = (() => {
     <button id="lb-dl" style="display:none;background:var(--lb-btn);border:none;color:var(--lb-text);border-radius:6px;padding:5px 18px;cursor:pointer;font-size:13px" onclick="Lightbox.download()">Download</button>
     <button id="lb-cap-btn" style="display:none;background:var(--lb-btn);border:none;color:var(--lb-text);border-radius:6px;padding:5px 14px;cursor:pointer;font-size:13px" onclick="Lightbox.openCaptionEdit()">Add Description…</button>
   </div>
-  <div style="color:var(--lb-hint);font-size:11px;margin-top:6px">Press Esc or click background to close · ← → to navigate</div>
+  <div class="lb-hint" style="color:var(--lb-hint);font-size:11px;margin-top:6px">Press Esc or click background to close · ← → to navigate · F for full screen</div>
 </div>`;
     document.body.appendChild(el.firstElementChild);
 
     document.addEventListener('keydown', e => {
       if (!isOpen()) return;
-      if (e.key === 'Escape')     { close();    return; }
+      // Esc collapses fullscreen back to the lightbox; only closes when not expanded.
+      // (In native fullscreen the browser usually swallows Esc itself and the
+      // fullscreenchange handler collapses us — this covers the case it reaches us.)
+      if (e.key === 'Escape')     { if (_expanded) toggleFullscreen(); else close(); return; }
+      // F toggles fullscreen — but not while typing a caption.
+      if ((e.key === 'f' || e.key === 'F') && document.activeElement?.id !== 'lb-cap-inp') {
+        e.preventDefault(); toggleFullscreen(); return;
+      }
       // nav() itself decides browse-vs-save-and-cycle based on whether the editor is open.
       if (e.key === 'ArrowLeft')  { e.preventDefault(); nav(-1); return; }
       if (e.key === 'ArrowRight') { e.preventDefault(); nav(1);  return; }
     });
+
+    // If the browser drops out of native fullscreen (via its own Esc / UI) while we're
+    // expanded, collapse back to the normal lightbox to stay in sync.
+    const _syncFs = () => { if (_expanded && !_isNativeFs()) _setExpanded(false); };
+    document.addEventListener('fullscreenchange', _syncFs);
+    document.addEventListener('webkitfullscreenchange', _syncFs);
 
     const overlay = document.getElementById('lb-overlay');
     let _tx = 0, _ty = 0;
@@ -274,13 +298,42 @@ const Lightbox = (() => {
   // save the current text and cycle in edit mode; otherwise they just browse.
   function nav(delta) {
     if (!_media.length) return;
+    if (_expanded) { _go(delta); return; }   // fullscreen = plain browsing, no caption editor
     const editorOpen = document.getElementById('lb-cap-edit')?.style.display === 'block';
     if (_opts.captionEdit && (editorOpen || _capSession)) _navSaving(delta);
     else _go(delta);
   }
 
+  // ── Fullscreen ──────────────────────────────────────────────────────────────
+  // `_expanded` is the source of truth: the .lb-fs class (which actually enlarges the
+  // media to fill the screen) is applied immediately, independent of whether the browser
+  // grants native OS fullscreen — so it works even where requestFullscreen is blocked.
+  // Native fullscreen is layered on best-effort for the immersive, chrome-free view.
+  function _isNativeFs() {
+    const fsEl = document.fullscreenElement || document.webkitFullscreenElement || null;
+    return !!fsEl && fsEl === document.getElementById('lb-overlay');
+  }
+  function _exitNativeFs() { if (_isNativeFs()) (document.exitFullscreen || document.webkitExitFullscreen)?.call(document); }
+  function _setExpanded(on) {
+    _expanded = on;
+    const o = document.getElementById('lb-overlay');
+    if (o) o.classList.toggle('lb-fs', on);
+  }
+  function toggleFullscreen() {
+    const o = document.getElementById('lb-overlay');
+    if (!o) return;
+    if (_expanded) {
+      _setExpanded(false);
+      _exitNativeFs();
+    } else {
+      _setExpanded(true);                       // enlarge now — doesn't depend on the API
+      if (!_isNativeFs()) (o.requestFullscreen || o.webkitRequestFullscreen)?.call(o);
+    }
+  }
+
   function close() {
     _flushCaption();          // don't lose an unsaved edit on the last photo
+    if (_expanded) { _setExpanded(false); _exitNativeFs(); }
     _capSession = false;
     _cancelEdit();
     const overlay = document.getElementById('lb-overlay');
@@ -310,5 +363,5 @@ const Lightbox = (() => {
     return document.getElementById('lb-overlay')?.style.display === 'flex';
   }
 
-  return { open, nav, close, isOpen, download, openCaptionEdit, cancelCaptionEdit, saveCaptionEdit, attachHls, fetchMedia, renderGrid };
+  return { open, nav, close, isOpen, download, toggleFullscreen, openCaptionEdit, cancelCaptionEdit, saveCaptionEdit, attachHls, fetchMedia, renderGrid };
 })();
