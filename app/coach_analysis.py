@@ -30,9 +30,8 @@ _ACTIVITY_SELECT = """
         src_max_heartrate,
         src_avg_power,
         src_avg_cadence,
-        json_extract(attributes_json, '$.activity')   AS act_type,
-        json_extract(attributes_json, '$.name')       AS name,
-        json_extract(attributes_json, '$.totalClimb') AS climb_attr
+        attributes_json,
+        local_sport_type
     FROM activities
     WHERE COALESCE(creation_time_override_s, creation_time_s) >= ?
     {user_filter}
@@ -119,15 +118,32 @@ def build_athlete_profile_block(db, user_id: Optional[int]) -> str:
 
 
 def _fetch_rows(db, user_id: Optional[int], days: int):
+    """Rows as plain dicts, with attribute-backed fields already resolved.
+
+    `attributes_json` is a flat ["key", "value", ...] array, so it can only be
+    read with parse_attrs() — json_extract() returns NULL for every row.
+    """
+    from app.db import parse_attrs
+
     cutoff = int(time.time()) - days * 86400
     user_filter = "AND user_id = ?" if user_id is not None else ""
     params = [cutoff] + ([user_id] if user_id is not None else [])
     try:
-        return db._con.execute(
+        rows = db._con.execute(
             _ACTIVITY_SELECT.format(user_filter=user_filter), params
         ).fetchall()
     except Exception:
         return []
+
+    out = []
+    for r in rows:
+        d = dict(r)
+        attrs = parse_attrs(d.pop("attributes_json", None)) or {}
+        d["act_type"]   = d.pop("local_sport_type", None) or attrs.get("activity") or "Activity"
+        d["name"]       = attrs.get("name")
+        d["climb_attr"] = attrs.get("totalClimb")
+        out.append(d)
+    return out
 
 
 def _mean(vals):

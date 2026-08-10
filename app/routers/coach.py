@@ -18,11 +18,14 @@ import json
 import time
 import sqlite3
 from typing import Callable, Optional
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import httpx
 from fastapi import APIRouter, Request, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+
+from app.db import parse_attrs
 
 router = APIRouter()
 db_getter: Callable = None
@@ -57,6 +60,7 @@ _MIGRATIONS = [
     "ALTER TABLE coach_messages ADD COLUMN output_tokens INTEGER DEFAULT 0",
     "ALTER TABLE coach_goals ADD COLUMN user_id INTEGER",
     "ALTER TABLE coach_goals ADD COLUMN target_date TEXT",   # ISO date YYYY-MM-DD, optional
+    "ALTER TABLE coach_messages ADD COLUMN model TEXT",      # model that produced this reply
 ]
 
 
@@ -86,96 +90,255 @@ def _get_con(db) -> sqlite3.Connection:
     return con
 
 
-# ── Activity summary builder ──────────────────────────────────────────────────
+# ── Athlete-local dates ───────────────────────────────────────────────────────
+#
+# Claude has no clock — it only knows what the prompt tells it. Activity
+# timestamps are UTC epochs, but the athlete trains (and thinks) in local time,
+# so every date we render is converted into the athlete's own zone, derived from
+# the most recent activity their device recorded.
+
+def _athlete_tz(db, user_id: Optional[int]) -> timezone:
+    """The athlete's UTC offset, taken from their latest activity. UTC if unknown."""
+    try:
+        user_filter = "AND user_id = ?" if user_id is not None else ""
+        params = [user_id] if user_id is not None else []
+        row = db._con.execute(f"""
+            SELECT seconds_from_gmt_at_sync AS off
+            FROM activities
+            WHERE seconds_from_gmt_at_sync IS NOT NULL {user_filter}
+            ORDER BY COALESCE(creation_time_override_s, creation_time_s) DESC
+            LIMIT 1
+        """, params).fetchone()
+        if row and row["off"] is not None:
+            # Sanity-check the offset before trusting it (valid range is ±14h).
+            off = int(row["off"])
+            if -50400 <= off <= 50400:
+                return timezone(timedelta(seconds=off))
+    except Exception:
+        pass
+    return timezone.utc
+
+
+def _resolve_type(row) -> str:
+    """Activity type, preferring a local override, then attributes_json.
+
+    `attributes_json` is a flat ["key", "value", ...] array, so json_extract()
+    cannot read it — parse_attrs() is the only correct reader.
+    """
+    try:
+        local = row["local_sport_type"]
+    except (KeyError, IndexError):
+        local = None
+    if local:
+        return str(local)
+    try:
+        attrs = parse_attrs(row["attributes_json"])
+    except Exception:
+        return "Activity"
+    return str(attrs.get("activity") or "Activity")
+
+
+def _activity_line(r, today, tz, with_id: bool = False) -> str:
+    """One activity rendered with an absolute date AND a relative day count."""
+    ts    = r["ts"] or 0
+    dt    = datetime.fromtimestamp(ts, tz=tz)
+    days  = (today - dt.date()).days
+    when  = "today" if days == 0 else ("yesterday" if days == 1 else f"{days} days ago")
+    attrs = parse_attrs(r["attributes_json"]) if r["attributes_json"] else {}
+
+    dist   = round(r["distance_mi"] or 0, 1)
+    climb  = round(attrs.get("totalClimb") or r["src_total_climb"] or 0)
+    moving = r["src_moving_time_s"] or r["src_elapsed_time_s"] or 0
+    hrs    = round(moving / 3600, 1)
+
+    bits = [f"{dist}mi", f"{climb}ft climb", f"{hrs}h moving"]
+    for label, val, unit in (
+        ("avg HR",  r["src_avg_heartrate"], "bpm"),
+        ("max HR",  r["src_max_heartrate"], "bpm"),
+        ("avg",     r["src_avg_power"],     "W"),
+        ("max",     r["src_max_power"],     "W"),
+        ("avg cad", r["src_avg_cadence"],   "rpm"),
+    ):
+        if val:
+            bits.append(f"{label} {round(val)}{unit}")
+
+    name    = attrs.get("name") or ""
+    name_s  = f' "{name}"' if name else ""
+    id_s    = f"[id={r['id']}] " if with_id else ""
+    gear    = f" · gear: {r['local_gear_name']}" if r["local_gear_name"] else ""
+    return (f"  {id_s}{dt.strftime('%Y-%m-%d')} ({when}, {dt.strftime('%a')}): "
+            f"{_resolve_type(r)}{name_s} — " + ", ".join(bits) + gear)
+
+
+_RECENT_SELECT = """
+    SELECT
+        id,
+        COALESCE(creation_time_override_s, creation_time_s) AS ts,
+        distance_mi, src_total_climb, src_moving_time_s, src_elapsed_time_s,
+        src_avg_heartrate, src_max_heartrate, src_avg_power, src_max_power,
+        src_avg_cadence, attributes_json, local_sport_type, local_gear_name
+    FROM activities
+    WHERE COALESCE(creation_time_override_s, creation_time_s) >= ?
+    {user_filter}
+    ORDER BY ts DESC
+    LIMIT 60
+"""
+
+
+def _build_zone_block(db, user_id: Optional[int], today) -> str:
+    """HR + power zone minutes for the current and previous month.
+
+    Month-scoped get_zone_time() runs in ~0.03s; the all-time variant scans the
+    whole points table (7.5s+), so deep zone history is a tool, not prompt text.
+    """
+    if user_id is None:
+        return ""
+    prev = (today.replace(day=1) - timedelta(days=1))
+    out  = []
+    for label, y, m in (
+        (today.strftime("%B %Y"), today.year, today.month),
+        (prev.strftime("%B %Y"),  prev.year,  prev.month),
+    ):
+        try:
+            z = db.get_zone_time(user_id, year=y, month=m)
+        except Exception:
+            continue
+        hr = z.get("hr_zones_min") or []
+        pw = z.get("power_zones_min") or []
+        if not any(hr) and not any(pw):
+            continue
+        out.append(f"  {label}:")
+        if any(hr):
+            total = sum(hr)
+            parts = [f"Z{i+1} {v:.0f}min ({v / total * 100:.0f}%)" for i, v in enumerate(hr)]
+            out.append(f"    HR zones (max {z.get('max_hr')}): " + ", ".join(parts))
+        if any(pw):
+            total = sum(pw)
+            parts = [f"Z{i+1} {v:.0f}min ({v / total * 100:.0f}%)" for i, v in enumerate(pw)]
+            out.append(f"    Power zones (FTP {z.get('ftp')}W): " + ", ".join(parts))
+            if any(hr) and sum(pw) < sum(hr) * 0.5:
+                out.append("    NOTE: power is recorded on only some activities — "
+                           "power-zone minutes cover less time than HR zones. Judge "
+                           "intensity distribution from the HR zones.")
+    if not out:
+        return ""
+    return "TIME IN ZONES (from recorded per-second data)\n" + "\n".join(out)
+
 
 def _build_activity_summary(db, user_id: Optional[int] = None) -> str:
+    """Recency-weighted training context for the system prompt.
+
+    Three tiers, most recent first — detail where it matters, rollups where it
+    doesn't, and everything else reachable through the coach's tools:
+      1. Last 14 days   — every activity, full detail, with ids to drill into
+      2. Last 12 weeks  — weekly rollups from the real all-history aggregate
+      3. Time in zones  — current + previous month
     """
-    Query the last ~90 days of activities and return a compact text summary
-    suitable for inclusion in the Claude system prompt.
-    """
-    cutoff = int(time.time()) - 90 * 86400  # 90 days ago
+    tz     = _athlete_tz(db, user_id)
+    today  = datetime.now(tz).date()
+    cutoff = int(time.time()) - 90 * 86400
 
     user_filter = "AND user_id = ?" if user_id is not None else ""
     params = [cutoff] + ([user_id] if user_id is not None else [])
-
     try:
-        rows = db._con.execute(f"""
-            SELECT
-                COALESCE(creation_time_override_s, creation_time_s) AS ts,
-                distance_mi,
-                src_total_climb,
-                src_moving_time_s,
-                src_elapsed_time_s,
-                src_avg_heartrate,
-                src_avg_power,
-                json_extract(attributes_json, '$.activity')   AS act_type,
-                json_extract(attributes_json, '$.name')       AS name,
-                json_extract(attributes_json, '$.totalClimb') AS climb_attr
-            FROM activities
-            WHERE COALESCE(creation_time_override_s, creation_time_s) >= ?
-            {user_filter}
-            ORDER BY ts DESC
-            LIMIT 200
-        """, params).fetchall()
+        rows = db._con.execute(
+            _RECENT_SELECT.format(user_filter=user_filter), params
+        ).fetchall()
     except Exception:
         return "No activity data available."
 
     if not rows:
         return "No activities recorded in the past 90 days."
 
-    # Per-activity lines
-    lines = []
-    for r in rows:
-        ts      = r["ts"] or 0
-        date    = datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%d")
-        atype   = r["act_type"] or "Activity"
-        dist    = round(r["distance_mi"] or 0, 1)
-        climb   = round(r["climb_attr"] or r["src_total_climb"] or 0)
-        moving  = r["src_moving_time_s"] or r["src_elapsed_time_s"] or 0
-        hrs     = round(moving / 3600, 1)
-        hr      = round(r["src_avg_heartrate"] or 0)
-        hr_str  = f", avg HR {hr}bpm" if hr else ""
-        pw      = round(r["src_avg_power"] or 0)
-        pw_str  = f", avg {pw}W" if pw else ""
+    recent_cutoff = int(time.time()) - 14 * 86400
+    recent = [r for r in rows if (r["ts"] or 0) >= recent_cutoff]
+
+    sections = []
+
+    # Tier 1 — the last two weeks, in full.
+    if recent:
+        sections.append(
+            "RECENT ACTIVITIES (last 14 days — the most important window; "
+            "use [id=N] with get_activity_detail or get_activity_streams to drill in)\n"
+            + "\n".join(_activity_line(r, today, tz, with_id=True) for r in recent)
+        )
+    else:
+        sections.append("RECENT ACTIVITIES (last 14 days)\n  None — no activities logged in the last 14 days.")
+
+    # Tier 2 — weekly rollups from the real aggregate (all history, not just 90 days).
+    if user_id is not None:
+        try:
+            weeks = db.get_weekly_totals(user_id=user_id)[-12:]
+        except Exception:
+            weeks = []
+        if weeks:
+            wl = [
+                f"  {w['week']}: {round(w['dist_mi'], 1)}mi, {round(w['climb_ft'])}ft climb, "
+                f"{w['active_h']:.1f}h, {w['count']} activities, {w['active_days']} active days"
+                + (f", avg HR {round(w['avg_hr'])}bpm" if w.get("avg_hr") else "")
+                + (f", avg {round(w['avg_power_w'])}W" if w.get("avg_power_w") else "")
+                for w in weeks
+            ]
+            sections.append(
+                "WEEKLY TOTALS (last 12 weeks, week starting Monday)\n" + "\n".join(wl)
+            )
+
+    # Tier 3 — how that time actually distributed across intensity.
+    zone_block = _build_zone_block(db, user_id, today)
+    if zone_block:
+        sections.append(zone_block)
+
+    return "\n\n".join(sections)
+
+
+def _build_date_anchor(db, user_id: Optional[int], target_date: Optional[str]) -> str:
+    """The single authoritative statement of 'now'.
+
+    Sent as the last message of every turn so it outranks any stale date the
+    model wrote earlier in the conversation, and so it sits adjacent to the
+    question rather than buried at the top of a long system prompt.
+    """
+    tz    = _athlete_tz(db, user_id)
+    now   = datetime.now(tz)
+    today = now.date()
+
+    lines = [
+        "CURRENT DATE ANCHOR — authoritative.",
+        f"Today is {now.strftime('%A, %B %-d, %Y')}.",
+    ]
+
+    if target_date:
+        try:
+            tgt  = datetime.strptime(target_date, "%Y-%m-%d").date()
+            diff = (tgt - today).days
+            if diff > 0:
+                lines.append(
+                    f"The athlete's target date is {tgt.strftime('%A, %B %-d, %Y')} — "
+                    f"{diff} days from today ({diff / 7:.1f} weeks)."
+                )
+            elif diff == 0:
+                lines.append(f"The athlete's target date is TODAY ({tgt.isoformat()}).")
+            else:
+                lines.append(
+                    f"The athlete's target date ({tgt.isoformat()}) passed {abs(diff)} days ago."
+                )
+        except ValueError:
+            pass
+
+    last_ts = _last_activity_ts(db, user_id=user_id)
+    if last_ts:
+        days = (today - datetime.fromtimestamp(last_ts, tz=tz).date()).days
         lines.append(
-            f"  {date}: {atype} — {dist}mi, {climb}ft climb, {hrs}h moving{hr_str}{pw_str}"
+            "The athlete's most recent logged activity was "
+            + ("today." if days == 0 else "yesterday." if days == 1 else f"{days} days ago.")
         )
 
-    # Weekly rollups (last 12 weeks)
-    from collections import defaultdict
-    import math
-
-    week_dist  = defaultdict(float)
-    week_climb = defaultdict(float)
-    week_count = defaultdict(int)
-
-    for r in rows:
-        ts = r["ts"] or 0
-        # ISO week key
-        dt = datetime.fromtimestamp(ts, tz=timezone.utc)
-        wk = dt.strftime("%G-W%V")
-        week_dist[wk]  += r["distance_mi"] or 0
-        week_climb[wk] += r["climb_attr"] or r["src_total_climb"] or 0
-        week_count[wk] += 1
-
-    sorted_weeks = sorted(week_dist.keys())[-12:]
-    week_lines = []
-    for wk in sorted_weeks:
-        week_lines.append(
-            f"  {wk}: {round(week_dist[wk],1)}mi, {round(week_climb[wk])}ft climb, {week_count[wk]} activities"
-        )
-
-    summary = (
-        f"TRAINING DATA SUMMARY (past 90 days)\n"
-        f"Total activities: {len(rows)}\n"
-        f"Total distance:   {round(sum(r['distance_mi'] or 0 for r in rows), 1)} miles\n"
-        f"Total climb:      {round(sum((r['climb_attr'] or r['src_total_climb'] or 0) for r in rows))} ft\n\n"
-        f"Weekly totals (most recent 12 weeks):\n"
-        + "\n".join(week_lines) +
-        f"\n\nIndividual activities (most recent first):\n"
-        + "\n".join(lines[:60])  # cap at 60 most recent
+    lines.append(
+        "This anchor reflects the real current date. Any date stated earlier in this "
+        "conversation is from a past session and is out of date — ignore it and use "
+        "this anchor for every date calculation."
     )
-    return summary
+    return "\n".join(lines)
 
 
 def _build_tour_summary(db, user_id: Optional[int] = None) -> str:
@@ -240,7 +403,12 @@ def _build_tour_summary(db, user_id: Optional[int] = None) -> str:
 def _build_system_prompt(goal_text: str, activity_summary: str, tour_summary: str = "",
                          target_date: Optional[str] = None, profile_block: str = "",
                          analysis_block: str = "") -> str:
-    today = datetime.now().strftime("%B %d, %Y")
+    """The static (cacheable) half of the prompt.
+
+    Deliberately contains no 'today' — the date lives in the date anchor sent as
+    the last message of every turn, so there is exactly one source of truth for
+    it and this block stays byte-identical across turns for prompt caching.
+    """
     target_line = f"\nTarget date: {target_date}" if target_date else ""
     tour_section    = f"\n{tour_summary}\n"    if tour_summary    else ""
     profile_section = f"\n{profile_block}\n"   if profile_block   else ""
@@ -248,18 +416,31 @@ def _build_system_prompt(goal_text: str, activity_summary: str, tour_summary: st
     return f"""You are an expert endurance sports coach embedded in Ascent, a training log app. \
 You have access to the athlete's real training data, physiology, and a specific goal they're working toward.
 
-Today's date: {today}
-
 ATHLETE'S GOAL:
 {goal_text}{target_line}
 {profile_section}{analysis_section}
 {activity_summary}
 {tour_section}
+INVESTIGATE BEFORE YOU ADVISE:
+The context above is a summary — recent activities, weekly totals, and recent zone
+distribution. You also have tools that read the athlete's full training database. Use them.
+- Before prescribing intensity or writing any training plan, call get_zone_distribution to
+  see how their time has ACTUALLY distributed across zones. Most athletes' real intensity
+  distribution differs from what they assume, and a plan that ignores it is guesswork.
+- Before making claims about progression, call get_training_totals to compare against the
+  same period in previous months or years, and get_personal_records for their real ceiling.
+- When a specific workout matters to your reasoning, open it with get_activity_detail, or
+  get_activity_streams to examine pacing, HR drift, or interval structure within the ride.
+- Prefer recent data. The last 14 days say more about current form than anything older;
+  weight the last 4-6 weeks most heavily and use older history only for context and trend.
+- Two or three well-chosen tool calls beat a dozen. Investigate what your recommendation
+  actually depends on, then answer.
+
 YOUR ROLE:
-- Ground every recommendation in the numbers above. Cite specific dates, mileage, climbing,
-  heart rate, power, and the trend/load figures — never speak in generalities.
-- Establish the athlete's current baseline from the recent 4-week averages, then state whether
-  each key metric is trending up, flat, or down, and by how much.
+- Ground every recommendation in real numbers. Cite specific dates, mileage, climbing, heart
+  rate, power, and zone minutes — never speak in generalities.
+- Establish the athlete's current baseline first, then state whether each key metric is
+  trending up, flat, or down, and by how much.
 - Read heart rate and power TOGETHER: rising HR at similar power/pace signals fatigue, heat, or
   dehydration; rising power (or efficiency factor) at similar HR signals improving aerobic fitness.
   Call out what the trend actually implies for this athlete.
@@ -268,42 +449,71 @@ YOUR ROLE:
   and scale the number of rest days to their age (older athletes recover slower).
 - When you prescribe rest or a change in load, say exactly how much and why, tied to the data.
 - Be proactive: surface patterns, gaps, or risks the athlete may not have noticed.
-- If the goal has a timeline, reason explicitly about how much time remains and whether the
-  current trajectory gets them there.
+- Reason explicitly about how much time remains before the target date and whether the current
+  trajectory gets them there. Take the current date from the date anchor, never from memory.
 - Do NOT offer generic platitudes ("stay hydrated", "listen to your body", "take it easy")
   unless directly tied to a specific observation in this athlete's data.
 
+Format your answer in Markdown — it is rendered as Markdown for the athlete. Use headings and
+tables where they aid scanning (a week-by-week plan is a table), prose where they don't.
 Respond conversationally and encouragingly, but stay honest and quantitative. You're a knowledgeable \
 coach who genuinely cares about this athlete's success."""
 
 
 # ── Model config (must be defined before Pydantic models) ────────────────────
 
-# Available models and their pricing (per million tokens)
+# Available models and their pricing (per million tokens).
+# NOTE: the keys here must match the <option value=...> entries in
+# _html_overlays.html — a value absent from this dict is silently downgraded to
+# DEFAULT_MODEL, which is exactly the bug that made the coach feel weak.
 MODELS = {
-    "claude-haiku-4-5-20251001": {
+    "claude-opus-5": {
+        "label":      "Opus 5",
+        "input_pm":   5.00,
+        "output_pm":  25.00,
+        "display":    "claude-opus-5",
+    },
+    "claude-sonnet-5": {
+        "label":      "Sonnet 5",
+        "input_pm":   3.00,
+        "output_pm":  15.00,
+        "display":    "claude-sonnet-5",
+    },
+    "claude-haiku-4-5": {
         "label":      "Haiku 4.5",
-        "input_pm":   0.25,
-        "output_pm":  1.25,
+        "input_pm":   1.00,
+        "output_pm":  5.00,
         "display":    "claude-haiku-4-5",
     },
-    "claude-sonnet-4-5-20250929": {
-        "label":      "Sonnet 4.5",
-        "input_pm":   3.00,
-        "output_pm":  15.00,
-        "display":    "claude-sonnet-4-5",
-    },
-    "claude-sonnet-4-20250514": {
-        "label":      "Sonnet 4",
-        "input_pm":   3.00,
-        "output_pm":  15.00,
-        "display":    "claude-sonnet-4",
-    },
 }
-DEFAULT_MODEL = "claude-haiku-4-5-20251001"
+DEFAULT_MODEL = "claude-opus-5"
+
+# Retired ids that may still be stored in user UI prefs or old coach_messages rows.
+_MODEL_ALIASES = {
+    "claude-haiku-4-5-20251001":  "claude-haiku-4-5",
+    "claude-sonnet-4-5-20250929": "claude-sonnet-5",
+    "claude-sonnet-4-20250514":   "claude-sonnet-5",
+    "claude-sonnet-4-6":          "claude-sonnet-5",
+}
+
+
+def _resolve_model(model_id: Optional[str]) -> str:
+    """Map any stored/submitted model id onto a currently-supported one."""
+    if not model_id:
+        return DEFAULT_MODEL
+    if model_id in MODELS:
+        return model_id
+    return _MODEL_ALIASES.get(model_id, DEFAULT_MODEL)
+
 
 def _model_info(model_id: str) -> dict:
-    return MODELS.get(model_id, MODELS[DEFAULT_MODEL])
+    return MODELS[_resolve_model(model_id)]
+
+
+# Mid-conversation system messages (role:"system" inside messages[]) are how the
+# date anchor stays authoritative without invalidating the cached prefix.
+# Only the newest models accept them; older ones 400.
+_SUPPORTS_SYSTEM_MESSAGES = {"claude-opus-5"}
 
 
 # ── Pydantic models ───────────────────────────────────────────────────────────
@@ -455,7 +665,7 @@ async def set_goal(req: GoalRequest, request: Request):
 
     # Generate initial coach response
     initial = await _call_claude(db, goal_id, req.goal_text.strip(), [], proactive=True, user_id=_uid,
-                                  model=req.model if req.model in MODELS else DEFAULT_MODEL,
+                                  model=_resolve_model(req.model),
                                   target_date=target_date)
     return {"goal_id": goal_id, "initial_message": initial}
 
@@ -463,8 +673,13 @@ async def set_goal(req: GoalRequest, request: Request):
 @router.post("/coach/chat")
 async def coach_chat(req: ChatRequest, request: Request):
     """
-    Send a user message. Optionally prepend a proactive activity observation.
-    Returns the assistant reply.
+    Send a user message and stream the coach's reply back as Server-Sent Events.
+
+    Events:
+      tool  — {"label": "..."} a database tool the coach is consulting
+      text  — {"delta": "..."} a chunk of the reply
+      done  — {"model": ..., "input_tokens": ...} reply complete and persisted
+      error — {"message": "..."} the turn failed
     """
     if not req.message.strip():
         raise HTTPException(400, "Message cannot be empty")
@@ -502,11 +717,32 @@ async def coach_chat(req: ChatRequest, request: Request):
     finally:
         con.close()
 
-    # Call Claude
-    model = req.model if req.model in MODELS else DEFAULT_MODEL
-    reply = await _call_claude(db, goal_id, goal_text, history, proactive=has_new, model=model, user_id=uid,
-                               target_date=target_date)
-    return {"reply": reply}
+    model = _resolve_model(req.model)
+
+    async def events():
+        def sse(kind: str, payload: dict) -> str:
+            return f"event: {kind}\ndata: {json.dumps(payload)}\n\n"
+        try:
+            async for kind, payload in _stream_coach_reply(
+                db, goal_id, goal_text, history, proactive=has_new,
+                model=model, user_id=uid, target_date=target_date,
+            ):
+                if kind == "text":
+                    yield sse("text", {"delta": payload})
+                elif kind == "tool":
+                    yield sse("tool", {"label": payload})
+                else:
+                    yield sse("done", payload)
+        except HTTPException as e:
+            yield sse("error", {"message": e.detail})
+        except Exception as e:  # never leave the client hanging on an open stream
+            yield sse("error", {"message": f"Coach failed: {e}"})
+
+    return StreamingResponse(
+        events(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.get("/coach/today")
@@ -536,7 +772,7 @@ async def coach_today(request: Request, model: str = DEFAULT_MODEL):
     if not api_key:
         raise HTTPException(503, "No Anthropic API key configured")
 
-    safe_model = model if model in MODELS else DEFAULT_MODEL
+    safe_model = _resolve_model(model)
 
     # Fetch recent activities (last 60 days) with IDs and stats
     cutoff = int(time.time()) - 60 * 86400
@@ -547,9 +783,7 @@ async def coach_today(request: Request, model: str = DEFAULT_MODEL):
                 COALESCE(creation_time_override_s, creation_time_s) AS ts,
                 distance_mi, src_total_climb, src_moving_time_s,
                 src_avg_heartrate, src_avg_power,
-                json_extract(attributes_json, '$.activity')   AS act_type,
-                json_extract(attributes_json, '$.name')       AS name,
-                json_extract(attributes_json, '$.totalClimb') AS climb_attr
+                attributes_json, local_sport_type
             FROM activities
             WHERE COALESCE(creation_time_override_s, creation_time_s) >= ?
               AND user_id = ?
@@ -562,17 +796,23 @@ async def coach_today(request: Request, model: str = DEFAULT_MODEL):
     if not rows:
         raise HTTPException(404, "No recent activities found to base advice on")
 
-    today_str = datetime.now().strftime("%A, %B %d, %Y")
+    tz        = _athlete_tz(db, uid)
+    now_local = datetime.now(tz)
+    today     = now_local.date()
+    today_str = now_local.strftime("%A, %B %-d, %Y")
     goal_section = f"\nATHLETE'S GOAL:\n{goal_text}\n" if goal_text else ""
 
     act_lines = []
     for r in rows:
         ts    = r["ts"] or 0
-        date  = datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%d")
-        atype = r["act_type"] or "Activity"
-        name  = r["name"] or "(unnamed)"
+        dt    = datetime.fromtimestamp(ts, tz=tz)
+        days  = (today - dt.date()).days
+        when  = "today" if days == 0 else ("yesterday" if days == 1 else f"{days} days ago")
+        attrs = parse_attrs(r["attributes_json"]) or {}
+        atype = _resolve_type(r)
+        name  = attrs.get("name") or "(unnamed)"
         dist  = round(r["distance_mi"] or 0, 1)
-        climb = round(r["climb_attr"] or r["src_total_climb"] or 0)
+        climb = round(attrs.get("totalClimb") or r["src_total_climb"] or 0)
         moving = r["src_moving_time_s"] or 0
         hrs   = round(moving / 3600, 1)
         hr    = round(r["src_avg_heartrate"] or 0)
@@ -580,7 +820,8 @@ async def coach_today(request: Request, model: str = DEFAULT_MODEL):
         pw    = round(r["src_avg_power"] or 0)
         pw_str = f", avg {pw}W" if pw else ""
         act_lines.append(
-            f"  id={r['id']}: {date} {atype} \"{name}\" — {dist}mi, {climb}ft climb, {hrs}h{hr_str}{pw_str}"
+            f"  id={r['id']}: {dt.strftime('%Y-%m-%d')} ({when}) {atype} \"{name}\" — "
+            f"{dist}mi, {climb}ft climb, {hrs}h{hr_str}{pw_str}"
         )
 
     profile_block  = build_athlete_profile_block(db, uid)
@@ -736,99 +977,277 @@ async def coach_usage(request: Request):
     user_params = [uid] if uid else []
 
     try:
-        # All-time totals
-        row = con.execute(f"""
+        # Group by model so each row is priced at the rate it actually cost.
+        # Rows written before the `model` column existed are priced as Haiku,
+        # which is what they in fact ran as.
+        rows = con.execute(f"""
             SELECT
-                COUNT(*)                          AS total_queries,
-                COALESCE(SUM(input_tokens),  0)   AS total_input,
-                COALESCE(SUM(output_tokens), 0)   AS total_output
+                strftime('%Y-%m', datetime(coach_messages.created_at, 'unixepoch')) AS month,
+                coach_messages.created_at        AS created_at,
+                COALESCE(model, '')              AS model,
+                COALESCE(input_tokens,  0)       AS input_tokens,
+                COALESCE(output_tokens, 0)       AS output_tokens
             FROM coach_messages
             {user_join}
             WHERE role = 'assistant' {user_where}
-        """, user_params).fetchone()
-
-        import time as _time
-        from datetime import datetime, timezone
-        now_dt   = datetime.now(timezone.utc)
-        month_ts = int(datetime(now_dt.year, now_dt.month, 1, tzinfo=timezone.utc).timestamp())
-
-        month_row = con.execute(f"""
-            SELECT
-                COUNT(*)                          AS queries,
-                COALESCE(SUM(input_tokens),  0)   AS input,
-                COALESCE(SUM(output_tokens), 0)   AS output
-            FROM coach_messages
-            {user_join}
-            WHERE role = 'assistant' AND coach_messages.created_at >= ? {user_where}
-        """, [month_ts] + user_params).fetchone()
-
-        monthly = con.execute(f"""
-            SELECT
-                strftime('%Y-%m', datetime(coach_messages.created_at, 'unixepoch')) AS month,
-                COUNT(*)                          AS queries,
-                COALESCE(SUM(input_tokens),  0)   AS input_tokens,
-                COALESCE(SUM(output_tokens), 0)   AS output_tokens
-            FROM coach_messages
-            {user_join}
-            WHERE role = 'assistant'
-              AND coach_messages.created_at >= ? {user_where}
-            GROUP BY month
-            ORDER BY month ASC
-        """, [int(_time.time()) - 6 * 30 * 86400] + user_params).fetchall()
-
+        """, user_params).fetchall()
     finally:
         con.close()
 
-    # Use Sonnet pricing for cost estimate if any Sonnet was used
-    # (conservative: use average of Haiku/Sonnet if mixed, or just Haiku rates)
-    # Since we don't store which model was used per-message, we use Haiku rates
-    # as the floor estimate. User sees the model selector so they know the cost.
-    haiku_info  = _model_info("claude-haiku-4-5-20251001")
-    sonnet_info = _model_info("claude-sonnet-4-5-20250929")
+    import time as _time
+    from datetime import datetime, timezone
+    now_dt   = datetime.now(timezone.utc)
+    month_ts = int(datetime(now_dt.year, now_dt.month, 1, tzinfo=timezone.utc).timestamp())
+    six_mo   = int(_time.time()) - 6 * 30 * 86400
 
-    def cost(inp, out):
-        # Use Haiku rates as minimum estimate (messages may be Sonnet)
-        return round(
-            (inp  / 1_000_000) * haiku_info["input_pm"] +
-            (out / 1_000_000) * haiku_info["output_pm"],
-            4
-        )
+    def row_cost(r) -> float:
+        info = _model_info(r["model"] or "claude-haiku-4-5")
+        return ((r["input_tokens"] / 1_000_000) * info["input_pm"] +
+                (r["output_tokens"] / 1_000_000) * info["output_pm"])
 
-    total_in  = row["total_input"]
-    total_out = row["total_output"]
-    m_in      = month_row["input"]
-    m_out     = month_row["output"]
+    def summarize(subset) -> dict:
+        return {
+            "queries":       len(subset),
+            "input_tokens":  sum(r["input_tokens"] for r in subset),
+            "output_tokens": sum(r["output_tokens"] for r in subset),
+            "cost_usd":      round(sum(row_cost(r) for r in subset), 4),
+        }
 
+    by_month = {}
+    for r in rows:
+        if r["created_at"] >= six_mo:
+            by_month.setdefault(r["month"], []).append(r)
+
+    default_info = _model_info(DEFAULT_MODEL)
     return {
-        "models":         {k: v["label"] for k, v in MODELS.items()},
-        "input_price_pm":  haiku_info["input_pm"],
-        "output_price_pm": haiku_info["output_pm"],
-        "alltime": {
-            "queries":       row["total_queries"],
-            "input_tokens":  total_in,
-            "output_tokens": total_out,
-            "cost_usd":      cost(total_in, total_out),
-        },
-        "this_month": {
-            "queries":       month_row["queries"],
-            "input_tokens":  m_in,
-            "output_tokens": m_out,
-            "cost_usd":      cost(m_in, m_out),
-        },
+        "models":          {k: v["label"] for k, v in MODELS.items()},
+        "pricing":         {k: {"label": v["label"], "input_pm": v["input_pm"],
+                                "output_pm": v["output_pm"]}
+                            for k, v in MODELS.items()},
+        "default_model":   DEFAULT_MODEL,
+        "input_price_pm":  default_info["input_pm"],
+        "output_price_pm": default_info["output_pm"],
+        "alltime":         summarize(rows),
+        "this_month":      summarize([r for r in rows if r["created_at"] >= month_ts]),
         "monthly_breakdown": [
-            {
-                "month":         r["month"],
-                "queries":       r["queries"],
-                "input_tokens":  r["input_tokens"],
-                "output_tokens": r["output_tokens"],
-                "cost_usd":      cost(r["input_tokens"], r["output_tokens"]),
-            }
-            for r in monthly
+            dict(summarize(subset), month=month)
+            for month, subset in sorted(by_month.items())
         ],
     }
 
 
 # ── Claude API call ───────────────────────────────────────────────────────────
+
+MAX_TOOL_ITERATIONS = 8   # generous ceiling; typical answers use 2-4
+
+# Models that accept adaptive thinking + the effort parameter.
+_MODERN_MODELS = {"claude-opus-5", "claude-sonnet-5"}
+
+
+def _api_key_for(db, user_id: Optional[int]) -> str:
+    """The user's own key takes priority over the global env key."""
+    api_key = ""
+    if user_id:
+        user = db.get_user(user_id)
+        api_key = (user or {}).get("anthropic_api_key") or ""
+    if not api_key:
+        api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        raise HTTPException(500, "No Anthropic API key set. Add your key in Settings.")
+    return api_key
+
+
+def _build_request_messages(db, history: list, proactive: bool, user_id: Optional[int],
+                            target_date: Optional[str], model: str) -> list:
+    """History as API messages, terminated by the authoritative date anchor."""
+    messages = [
+        {"role": m["role"], "content": m["content"]}
+        for m in history if m["role"] in ("user", "assistant")
+    ]
+
+    # New activities since the last reply — ask for an acknowledgement.
+    if proactive and messages and messages[-1]["role"] == "user":
+        probe = (
+            "[Note to coach: new activities have been logged since your last response. "
+            "Briefly acknowledge the most relevant recent activity in your reply if appropriate, "
+            "then address the athlete's question.]"
+        )
+        messages[-1]["content"] = probe + "\n\n" + messages[-1]["content"]
+
+    # Cold start: the goal was just set and there is nothing to reply to yet.
+    if not messages:
+        messages = [{"role": "user", "content":
+            "I've just set my training goal. Please give me an initial assessment based on "
+            "my recent training data and tell me what I should be focusing on right now."}]
+
+    anchor = _build_date_anchor(db, user_id, target_date)
+    if model in _SUPPORTS_SYSTEM_MESSAGES:
+        # An operator-authority turn placed after the cached history, so it wins
+        # over stale dates in the conversation without invalidating the cache.
+        messages.append({"role": "system", "content": anchor})
+    else:
+        # Older models reject role:"system" inside messages[] — fold it into the
+        # last user turn instead, which keeps it adjacent to the question.
+        messages[-1] = dict(messages[-1])
+        messages[-1]["content"] = anchor + "\n\n" + messages[-1]["content"]
+    return messages
+
+
+def _model_kwargs(model: str) -> dict:
+    """Thinking/effort settings, which only the current-generation models accept."""
+    if model in _MODERN_MODELS:
+        return {
+            "thinking":      {"type": "adaptive"},
+            "output_config": {"effort": "high"},
+        }
+    return {}
+
+
+async def _stream_coach_reply(
+    db,
+    goal_id: int,
+    goal_text: str,
+    history: list,
+    proactive: bool = False,
+    model: str = DEFAULT_MODEL,
+    user_id: Optional[int] = None,
+    target_date: Optional[str] = None,
+):
+    """Run the agentic coaching turn, yielding UI events as it goes.
+
+    Yields ("tool", label) when a database tool fires, ("text", delta) for each
+    chunk of the reply, and finally ("done", meta) once the assistant message has
+    been persisted. Raises HTTPException on a hard API failure.
+    """
+    import anthropic
+    from app.coach_analysis import build_athlete_profile_block, build_training_analysis
+    from app.coach_tools import TOOL_SCHEMAS, describe_call, run_tool
+
+    model  = _resolve_model(model)
+    client = anthropic.AsyncAnthropic(api_key=_api_key_for(db, user_id), max_retries=3)
+
+    system_prompt = _build_system_prompt(
+        goal_text,
+        _build_activity_summary(db, user_id=user_id),
+        tour_summary=_build_tour_summary(db, user_id=user_id),
+        target_date=target_date,
+        profile_block=build_athlete_profile_block(db, user_id),
+        analysis_block=build_training_analysis(db, user_id),
+    )
+    # One cache breakpoint at the end of the static block. Tools render before
+    # the system prompt, so they are cached along with it; the date anchor and
+    # the athlete's question sit after it and never invalidate it.
+    system = [{
+        "type": "text",
+        "text": system_prompt,
+        "cache_control": {"type": "ephemeral"},
+    }]
+
+    messages = _build_request_messages(db, history, proactive, user_id, target_date, model)
+
+    reply_parts = []
+    in_tok = out_tok = cache_read = cache_write = 0
+    persisted = False
+
+    def _persist(text: str, interrupted: bool = False):
+        """Write the assistant reply. Called once, even on an aborted stream."""
+        body = text + ("\n\n_(reply interrupted)_" if interrupted else "")
+        con = _get_con(db)
+        try:
+            con.execute(
+                "INSERT INTO coach_messages "
+                "(goal_id, role, content, created_at, input_tokens, output_tokens, model) "
+                "VALUES (?,?,?,?,?,?,?)",
+                (goal_id, "assistant", body, int(time.time()), in_tok, out_tok, model)
+            )
+            con.commit()
+        finally:
+            con.close()
+
+    try:
+        for _ in range(MAX_TOOL_ITERATIONS):
+            async with client.messages.stream(
+                model=model,
+                max_tokens=16000,
+                system=system,
+                messages=messages,
+                tools=TOOL_SCHEMAS,
+                **_model_kwargs(model),
+            ) as stream:
+                async for event in stream:
+                    if (event.type == "content_block_delta"
+                            and event.delta.type == "text_delta"):
+                        reply_parts.append(event.delta.text)
+                        yield ("text", event.delta.text)
+                final = await stream.get_final_message()
+
+            u = final.usage
+            in_tok      += u.input_tokens or 0
+            out_tok     += u.output_tokens or 0
+            cache_read  += getattr(u, "cache_read_input_tokens", 0) or 0
+            cache_write += getattr(u, "cache_creation_input_tokens", 0) or 0
+
+            if final.stop_reason == "refusal":
+                raise HTTPException(502, "Claude declined to answer that request.")
+            if final.stop_reason != "tool_use":
+                break
+
+            # Echo the assistant turn back verbatim — thinking and tool_use
+            # blocks must be preserved unmodified.
+            messages.append({"role": "assistant", "content": final.content})
+
+            results = []
+            for block in final.content:
+                if block.type != "tool_use":
+                    continue
+                yield ("tool", describe_call(block.name, block.input))
+                result = run_tool(db, user_id, block.name, block.input)
+                results.append({
+                    "type":        "tool_result",
+                    "tool_use_id": block.id,
+                    "content":     json.dumps(result, default=str)[:60000],
+                })
+            # All results for one assistant turn go back in a single user message.
+            messages.append({"role": "user", "content": results})
+
+            # Text the model wrote before calling tools runs straight into the
+            # text it writes after them; keep them visually separate.
+            if reply_parts and not reply_parts[-1].endswith("\n"):
+                reply_parts.append("\n\n")
+                yield ("text", "\n\n")
+        else:
+            yield ("tool", "Reached the tool-call limit — answering with what I have")
+
+        reply = "".join(reply_parts).strip()
+        if not reply:
+            raise HTTPException(502, "Claude returned an empty response")
+        _persist(reply)
+        persisted = True
+
+    except anthropic.APIStatusError as e:
+        if e.status_code == 529:
+            raise HTTPException(503, "Claude is currently overloaded — please try again in a moment")
+        raise HTTPException(502, f"Claude API error {e.status_code}: {str(e)[:300]}")
+    except anthropic.APIConnectionError:
+        raise HTTPException(504, "Could not reach Claude — please try again")
+    finally:
+        # The athlete may close the panel or drop connection mid-reply, and a
+        # long Opus turn can run for minutes. Save whatever was generated rather
+        # than leaving their question in the conversation with no answer at all.
+        if not persisted:
+            partial = "".join(reply_parts).strip()
+            if partial:
+                _persist(partial, interrupted=True)
+                persisted = True
+
+    yield ("done", {
+        "model":             model,
+        "input_tokens":      in_tok,
+        "output_tokens":     out_tok,
+        "cache_read_tokens": cache_read,
+        "cache_write_tokens": cache_write,
+    })
+
 
 async def _call_claude(
     db,
@@ -840,128 +1259,15 @@ async def _call_claude(
     user_id: int = None,
     target_date: Optional[str] = None,
 ) -> str:
-    """
-    Call the Claude API and persist the assistant reply to the DB.
-    `history` should be the messages already in the DB (including the latest user msg).
-    `model` should be a key in MODELS dict.
-    """
-    # User's own key takes priority over global env key
-    api_key = ""
-    if user_id:
-        user = db.get_user(user_id)
-        api_key = (user or {}).get("anthropic_api_key") or ""
-    if not api_key:
-        api_key = os.environ.get("ANTHROPIC_API_KEY", "")
-    if not api_key:
-        raise HTTPException(500, "No Anthropic API key set. Add your key in Settings.")
-
-    from app.coach_analysis import build_athlete_profile_block, build_training_analysis
-    activity_summary = _build_activity_summary(db, user_id=user_id)
-    tour_summary     = _build_tour_summary(db, user_id=user_id)
-    profile_block    = build_athlete_profile_block(db, user_id)
-    analysis_block   = build_training_analysis(db, user_id)
-    system_prompt    = _build_system_prompt(
-        goal_text, activity_summary, tour_summary=tour_summary, target_date=target_date,
-        profile_block=profile_block, analysis_block=analysis_block,
-    )
-
-    # Build messages array for the API (skip system-role rows)
-    messages = []
-    for m in history:
-        if m["role"] in ("user", "assistant"):
-            messages.append({"role": m["role"], "content": m["content"]})
-
-    # If proactive (new activities since last chat) AND this is a user-turn call,
-    # prepend a note so Claude acknowledges new activities
-    if proactive and messages and messages[-1]["role"] == "user":
-        probe = (
-            "[Note to coach: new activities have been logged since your last response. "
-            "Briefly acknowledge the most relevant recent activity in your reply if appropriate, "
-            "then address the athlete's question.]"
-        )
-        messages[-1]["content"] = probe + "\n\n" + messages[-1]["content"]
-
-    # If no messages yet (initial goal set), send a synthetic first message
-    if not messages:
-        messages = [{"role": "user", "content":
-            "I've just set my training goal. Please give me an initial assessment based on "
-            "my recent training data and tell me what I should be focusing on right now."}]
-
-    # Retry with exponential backoff on 529 (overloaded) and 529-adjacent errors
-    max_retries = 4
-    base_delay  = 2.0  # seconds
-
-    resp = None
-    last_error = None
-
-    for attempt in range(max_retries):
-        try:
-            async with httpx.AsyncClient(timeout=180) as client:
-                resp = await client.post(
-                    "https://api.anthropic.com/v1/messages",
-                    headers={
-                        "x-api-key":         api_key,
-                        "anthropic-version": "2023-06-01",
-                        "content-type":      "application/json",
-                    },
-                    json={
-                        "model":      model if model in MODELS else DEFAULT_MODEL,
-                        "max_tokens": 8192,
-                        "system":     system_prompt,
-                        "messages":   messages,
-                    },
-                )
-        except httpx.TimeoutException:
-            raise HTTPException(504, "Claude API timed out — please try again")
-
-        # Success
-        if resp.status_code == 200:
-            break
-
-        # Retryable: 529 overloaded or 529-style server errors
-        if resp.status_code in (529, 500, 502, 503) and attempt < max_retries - 1:
-            delay = base_delay * (2 ** attempt)  # 2s, 4s, 8s
-            await __import__("asyncio").sleep(delay)
-            continue
-
-        # Non-retryable error
-        last_error = resp
-        break
-
-    if resp is None or resp.status_code != 200:
-        status = resp.status_code if resp is not None else 0
-        body   = resp.text[:300] if resp is not None else "no response"
-        if status == 529:
-            raise HTTPException(503, "Claude is currently overloaded — please try again in a moment")
-        raise HTTPException(502, f"Claude API error {status}: {body}")
-
-    data    = resp.json()
-    content = data.get("content", [])
-    reply   = " ".join(b["text"] for b in content if b.get("type") == "text").strip()
-
-    if not reply:
-        raise HTTPException(502, "Claude returned an empty response")
-
-    # Capture token usage from response
-    usage         = data.get("usage", {})
-    input_tokens  = usage.get("input_tokens", 0)
-    output_tokens = usage.get("output_tokens", 0)
-
-    # Persist reply with token counts
-    now = int(time.time())
-    con = _get_con(db)
-    try:
-        con.execute(
-            "INSERT INTO coach_messages "
-            "(goal_id, role, content, created_at, input_tokens, output_tokens) "
-            "VALUES (?,?,?,?,?,?)",
-            (goal_id, "assistant", reply, now, input_tokens, output_tokens)
-        )
-        con.commit()
-    finally:
-        con.close()
-
-    return reply
+    """Non-streaming wrapper: run the turn and return the complete reply."""
+    parts = []
+    async for kind, payload in _stream_coach_reply(
+        db, goal_id, goal_text, history, proactive=proactive, model=model,
+        user_id=user_id, target_date=target_date,
+    ):
+        if kind == "text":
+            parts.append(payload)
+    return "".join(parts).strip()
 
 
 # ── Compare Analysis ──────────────────────────────────────────────────────────
@@ -994,7 +1300,7 @@ async def compare_analysis(req: CompareAnalysisRequest, request: Request):
     if not api_key:
         raise HTTPException(500, "No Anthropic API key set. Add your key in Settings.")
 
-    model = req.model if req.model in MODELS else DEFAULT_MODEL
+    model = _resolve_model(req.model)
 
     # Fetch activity details for each id
     activities = []

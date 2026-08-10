@@ -105,8 +105,9 @@
       <div style="display:flex;align-items:center;gap:8px;margin-top:4px;align-self:flex-start">
         <span style="font-size:12px;color:var(--muted)">Model:</span>
         <select id="coach-setup-model" style="background:var(--surface2);border:1px solid var(--border2);border-radius:6px;color:var(--text);font:inherit;font-size:12px;padding:3px 8px;outline:none;cursor:pointer">
-          <option value="claude-haiku-4-5-20251001">Haiku 4.5 — fast &amp; cheap</option>
-          <option value="claude-sonnet-4-6">Sonnet 4.6 — smarter, recommended</option>
+          <option value="claude-opus-5">Opus 5 — deepest analysis, recommended</option>
+          <option value="claude-sonnet-5">Sonnet 5 — strong, lower cost</option>
+          <option value="claude-haiku-4-5">Haiku 4.5 — fast &amp; cheap</option>
         </select>
       </div>
       <div style="display:flex;gap:8px;align-items:center">
@@ -122,8 +123,9 @@
       <div id="coach-toolbar">
         <span class="coach-model-label">Model:</span>
         <select id="coach-model-select" onchange="coachSaveModel(this.value)" title="Choose AI model">
-          <option value="claude-haiku-4-5-20251001">Haiku 4.5 — fast &amp; cheap</option>
-          <option value="claude-sonnet-4-6">Sonnet 4.6 — smarter, recommended</option>
+          <option value="claude-opus-5">Opus 5 — deepest analysis, recommended</option>
+          <option value="claude-sonnet-5">Sonnet 5 — strong, lower cost</option>
+          <option value="claude-haiku-4-5">Haiku 4.5 — fast &amp; cheap</option>
         </select>
         <button class="coach-plan-btn" id="coach-plan-btn" onclick="coachRequestPlan()" title="Generate a detailed training plan based on your goal and recent data">
           📋 Generate training plan
@@ -172,7 +174,7 @@
             <span class="u-val" id="u-alltime-queries">—</span>
           </div>
           <div class="u-row" style="margin-top:4px">
-            <span class="u-label">Model: claude-haiku-4-5 · $0.25/$1.25 per M tokens</span>
+            <span class="u-label" id="u-model-line">—</span>
             <a class="u-link" href="https://console.anthropic.com/settings/billing" target="_blank">Top up ↗</a>
           </div>
         </div>

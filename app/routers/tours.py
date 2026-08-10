@@ -1753,7 +1753,7 @@ async def stage_route_forecast(tour_id: int, stage_id: int, request: Request):
 async def get_tour_ai_summary(tour_id: int, request: Request, model: Optional[str] = Query(default=None), force: bool = Query(default=False)):
     """Return an AI-generated summary of the entire tour (structure only, no activity data)."""
     import os, httpx
-    from app.routers.coach import MODELS, DEFAULT_MODEL
+    from app.routers.coach import MODELS, DEFAULT_MODEL, _resolve_model
     uid = require_user(request)
 
     db = db_getter()
@@ -1827,7 +1827,7 @@ async def get_tour_ai_summary(tour_id: int, request: Request, model: Optional[st
                 "content-type":      "application/json",
             },
             json={
-                "model":      model if model in MODELS else DEFAULT_MODEL,
+                "model":      _resolve_model(model),
                 "max_tokens": 350,
                 "messages":   [{"role": "user", "content": prompt}],
             },
@@ -1864,7 +1864,7 @@ async def get_stage_ai_advice(
     readonly=true returns cached advice only ({"advice": null} if none exists).
     """
     import os, httpx
-    from app.routers.coach import MODELS, DEFAULT_MODEL
+    from app.routers.coach import MODELS, DEFAULT_MODEL, _resolve_model
     uid = require_user(request)
 
     actual_uid = match_user_id if match_user_id is not None else uid
@@ -2007,7 +2007,7 @@ async def get_stage_ai_advice(
                 "content-type":      "application/json",
             },
             json={
-                "model":      model if model in MODELS else DEFAULT_MODEL,
+                "model":      _resolve_model(model),
                 "max_tokens": 500,
                 "messages":   [{"role": "user", "content": prompt}],
             },
@@ -2041,7 +2041,7 @@ async def get_stage_ai_summary(
 ):
     """Return an AI-generated summary of a tour stage in the context of the overall tour."""
     import os, httpx
-    from app.routers.coach import MODELS, DEFAULT_MODEL
+    from app.routers.coach import MODELS, DEFAULT_MODEL, _resolve_model
     uid = require_user(request)
 
     db = db_getter()
@@ -2127,7 +2127,7 @@ async def get_stage_ai_summary(
                 "content-type":      "application/json",
             },
             json={
-                "model":      model if model in MODELS else DEFAULT_MODEL,
+                "model":      _resolve_model(model),
                 "max_tokens": 250,
                 "messages":   [{"role": "user", "content": prompt}],
             },

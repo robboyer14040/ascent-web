@@ -34,13 +34,39 @@ var document = {
   head: { appendChild: function () {} },
   body: { appendChild: function () {} },
 };
-var window = {};
-var localStorage = {
-  _s: {},
-  getItem: function (k) { return k in this._s ? this._s[k] : null; },
-  setItem: function (k, v) { this._s[k] = String(v); },
-  removeItem: function (k) { delete this._s[k]; },
+var _storage = function () {
+  return {
+    _s: {},
+    getItem: function (k) { return k in this._s ? this._s[k] : null; },
+    setItem: function (k, v) { this._s[k] = String(v); },
+    removeItem: function (k) { delete this._s[k]; },
+  };
 };
+var localStorage   = _storage();
+var sessionStorage = _storage();
+var location = { search: '', href: '' };
+var window = {};
+window.self = window;
+window.top  = window;          // coach.js checks for iframe embedding at load
+
+// coach.js reads the openCoach query param at load time.
+function URLSearchParams(qs) {
+  this._q = String(qs || '');
+  this.get = function () { return null; };
+}
+
+// coach.js starts a state-polling timer at load.
+function setInterval() { return 0; }
+function clearInterval() {}
+function setTimeout(fn) { return 0; }
+function clearTimeout() {}
+
+// escHtml lives in main.js, which is too DOM-heavy to load here; coach.js only
+// calls it at runtime, so the harness supplies the same implementation.
+function escHtml(s) {
+  return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
 
 // ── tiny test framework ───────────────────────────────────────────────────────
 var _T = { pass: 0, fail: 0, fails: [] };
