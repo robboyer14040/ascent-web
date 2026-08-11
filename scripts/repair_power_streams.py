@@ -42,6 +42,7 @@ load_dotenv()
 
 from app.db import AscentDB                                    # noqa: E402
 from app.strava_importer import build_points_rows, STRAVA_STREAM_KEYS  # noqa: E402
+from app.routers import strava as strava_router                # noqa: E402
 from app.routers.strava import refresh_tokens, tokens_are_fresh        # noqa: E402
 
 FIND_SQL = """
@@ -142,6 +143,11 @@ def main():
     if not db_path:
         sys.exit("ASCENT_DB_PATH is not set (add it to .env)")
     db = AscentDB(db_path)
+
+    # main.py normally wires this; running standalone we must do it ourselves or
+    # the Strava router cannot read per-user client credentials and token refresh
+    # fails with a 400 from /oauth/token.
+    strava_router.db_getter = lambda: db
 
     rows = find_damaged(db, args.user)
     if not rows:

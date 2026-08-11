@@ -545,11 +545,49 @@ class AscentDB:
             "properties": {"activity_id": activity_id},
         }
 
-    def store_points(self, activity_id: int, points_rows: list) -> int:
+    # points_rows tuple positions, for the channel-loss guard below.
+    _POINT_CHANNELS = {"heartrate_bpm": 6, "cadence_rpm": 7,
+                       "temperature_c10": 8, "power_w": 10}
+
+    def _would_lose_channels(self, con, activity_id: int, points_rows: list) -> list:
+        """Channels that are stored today but absent from every incoming row.
+
+        Guards against a caller re-storing a stream it fetched with an incomplete
+        set of Strava keys: because store_points() marks points_saved=1, such a
+        write is permanent and silent. This is exactly how power, cadence and
+        temperature were once wiped from hundreds of activities.
+        """
+        try:
+            existing = con.execute(
+                "SELECT " + ", ".join(
+                    f"SUM(CASE WHEN {col} > 0 THEN 1 ELSE 0 END)"
+                    for col in self._POINT_CHANNELS
+                ) + " FROM points WHERE track_id=?", (activity_id,)
+            ).fetchone()
+        except Exception:
+            return []
+        if not existing or not any(existing):
+            return []                      # nothing stored yet — nothing to lose
+
+        lost = []
+        for (col, idx), had in zip(self._POINT_CHANNELS.items(), existing):
+            if not had:
+                continue
+            incoming = any((r[idx] or 0) > 0 for r in points_rows)
+            if not incoming:
+                lost.append(col)
+        return lost
+
+    def store_points(self, activity_id: int, points_rows: list, force: bool = False) -> int:
         """
         Insert GPS points into the points table and update points_saved/points_count.
         points_rows: list of tuples matching points table columns (without id).
         Returns number of rows inserted.
+
+        Refuses to replace a richer stream with a poorer one — if the stored
+        points carry a channel (power, cadence, HR, temperature) that every
+        incoming row lacks, the write is skipped and 0 returned. Pass force=True
+        to overwrite anyway (e.g. a deliberate re-import).
         """
         if not points_rows:
             return 0
@@ -557,6 +595,18 @@ class AscentDB:
         try:
             con.execute("PRAGMA journal_mode=WAL")
             con.execute("PRAGMA foreign_keys=ON")
+            if not force:
+                lost = self._would_lose_channels(con, activity_id, points_rows)
+                if lost:
+                    import logging
+                    logging.getLogger("uvicorn").warning(
+                        "store_points(%s): refusing to overwrite — incoming stream is "
+                        "missing %s that the stored stream has. The caller likely "
+                        "requested an incomplete Strava key set; use "
+                        "strava_importer.STRAVA_STREAM_KEYS.",
+                        activity_id, ", ".join(lost),
+                    )
+                    return 0
             # Delete any existing points for this activity first
             con.execute("DELETE FROM points WHERE track_id=?", (activity_id,))
             con.executemany("""

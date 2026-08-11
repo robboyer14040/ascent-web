@@ -162,3 +162,52 @@ def test_no_fetch_path_hand_rolls_its_own_stream_keys():
         "stream keys must come from STRAVA_STREAM_KEYS, found: " + str(hand_written))
     # And every site that builds points must actually pass the shared constant.
     assert api.count("stream_types = STRAVA_STREAM_KEYS") == 3
+
+
+# ── store_points must not silently downgrade a stored stream ──────────────────
+
+def _pt(t, lat, lon, hr=0, cad=0, temp=0, power=0):
+    """points_rows tuple: (track_id filled by caller) — see store_points INSERT."""
+    return (t, lat, lon, hr, cad, temp, power)
+
+
+def _rows(activity_id, n=5, hr=0, cad=0, temp=0, power=0):
+    # (track_id, wall_clock_delta_s, active_time_delta_s, lat, lon, alt,
+    #  hr, cad, temp, speed, power, dist, flags)
+    return [(activity_id, i, 1, 37.0, -122.0, 100.0,
+             hr, cad, temp, 5.0, power, 0.1, 0) for i in range(n)]
+
+
+def test_store_points_refuses_to_wipe_a_channel(test_db, make_user, add_activity):
+    """Regression: a fetch path that omitted watts/cadence/temp overwrote good
+    streams with zeroed ones, and points_saved=1 made it permanent."""
+    uid = make_user()
+    aid = add_activity(user_id=uid)
+
+    full = _rows(aid, hr=140, cad=85, temp=700, power=210)
+    assert test_db.store_points(aid, full) == 5
+
+    # A caller that forgot watts/cadence/temp must not clobber them.
+    poor = _rows(aid, hr=140)
+    assert test_db.store_points(aid, poor) == 0
+
+    pts = test_db.get_track_points(aid)
+    assert any((p["power"] or 0) > 0 for p in pts), "power was wiped"
+    assert any((p["cad"] or 0) > 0 for p in pts), "cadence was wiped"
+
+
+def test_store_points_allows_a_deliberate_overwrite(test_db, make_user, add_activity):
+    uid = make_user()
+    aid = add_activity(user_id=uid)
+    test_db.store_points(aid, _rows(aid, hr=140, power=210))
+    assert test_db.store_points(aid, _rows(aid, hr=150), force=True) == 5
+    assert all((p["power"] or 0) == 0 for p in test_db.get_track_points(aid))
+
+
+def test_store_points_still_accepts_a_richer_stream(test_db, make_user, add_activity):
+    """Repairing a damaged activity — adding power back — must go through."""
+    uid = make_user()
+    aid = add_activity(user_id=uid)
+    test_db.store_points(aid, _rows(aid, hr=140))            # damaged
+    assert test_db.store_points(aid, _rows(aid, hr=140, cad=85, power=210)) == 5
+    assert any((p["power"] or 0) > 0 for p in test_db.get_track_points(aid))
