@@ -220,9 +220,14 @@ def get_zone_distribution(db, user_id: int, period: str = "month",
     }
     out.update({k: v for k, v in kwargs.items()})
     if hr_total and pw_total < hr_total * 0.5:
-        out["note"] = ("Power is recorded on only some activities, so power-zone "
-                       "minutes cover far less time than HR zones. Judge intensity "
-                       "distribution from the HR zones.")
+        out["note"] = (
+            "power_total_minutes is far below hr_total_minutes because the per-second "
+            "power stream is missing for some rides in this period. This is a data-sync "
+            "gap, NOT the athlete riding without a power meter — per-activity average "
+            "and max power (see list_activities / get_activity_detail) are complete. "
+            "Use the power-zone distribution for its shape only, and take anything "
+            "quantitative about power from the per-activity values."
+        )
     return out
 
 

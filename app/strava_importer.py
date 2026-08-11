@@ -232,9 +232,27 @@ def patch_attributes_name(attrs_json: str, new_name: str) -> str:
     return json.dumps(["name", new_name] + flat)
 
 
+# Every stream key build_points_rows() reads. Callers MUST request all of these.
+#
+# This is a single constant on purpose: three call sites in api.py each carried
+# their own hand-written key list, and the shortest of them (the PR check) omitted
+# watts/cadence/temp. Because store_points() sets points_saved=1, whichever path
+# ran first won permanently — so an activity backfilled by the PR check kept a
+# stream with power, cadence and temperature zeroed out and never re-fetched,
+# even though the activity's own avg/max power were correct. Add a key here and
+# every fetch path picks it up.
+STRAVA_STREAM_KEYS = (
+    "latlng,time,distance,altitude,velocity_smooth,"
+    "heartrate,cadence,watts,temp,moving"
+)
+
+
 def build_points_rows(streams: dict, activity_id_db: int) -> list[tuple]:
     """
     Convert Strava streams dict into list of tuples for INSERT into points table.
+
+    Reads exactly the keys in STRAVA_STREAM_KEYS; any key the caller didn't
+    request comes back empty and is stored as 0.
     """
     def stream_data(key):
         s = streams.get(key)

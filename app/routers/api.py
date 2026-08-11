@@ -588,7 +588,7 @@ async def fetch_points_from_strava(activity_id: int, request: Request):
     import os, json, time
     from pathlib import Path
     import httpx
-    from app.strava_importer import build_points_rows
+    from app.strava_importer import build_points_rows, STRAVA_STREAM_KEYS
 
     db = db_getter()
     act = db.get_activity(activity_id)
@@ -609,7 +609,7 @@ async def fetch_points_from_strava(activity_id: int, request: Request):
         tokens = await refresh_tokens(tokens, user_id=uid)
 
     token = tokens["access_token"]
-    stream_types = "latlng,heartrate,velocity_smooth,time,cadence,altitude,distance,watts,temp,moving"
+    stream_types = STRAVA_STREAM_KEYS
 
     async with httpx.AsyncClient(timeout=60) as client:
         resp = await client.get(
@@ -1211,7 +1211,7 @@ async def segment_compare(req: SegmentRequest, request: Request):
             try:
                 import os, json, time, httpx
                 from pathlib import Path
-                from app.strava_importer import build_points_rows
+                from app.strava_importer import build_points_rows, STRAVA_STREAM_KEYS
 
                 from app.routers.strava import load_tokens as _lt, tokens_are_fresh as _tf, refresh_tokens as _rt
                 _uid    = get_session_user_id(request)
@@ -1221,7 +1221,7 @@ async def segment_compare(req: SegmentRequest, request: Request):
                 if tokens.get("expires_at", 0) <= time.time() + 60:
                     continue  # skip refresh during bulk scan for speed
                 token = tokens["access_token"]
-                stream_types = "latlng,time,altitude,heartrate,velocity_smooth,distance,watts"
+                stream_types = STRAVA_STREAM_KEYS
                 async with httpx.AsyncClient(timeout=30) as client:
                     resp = await client.get(
                         f"https://www.strava.com/api/v3/activities/{strava_id}/streams",
@@ -2065,14 +2065,14 @@ async def check_prs(body: dict, request: Request):
             if strava_id:
                 try:
                     import httpx
-                    from app.strava_importer import build_points_rows
+                    from app.strava_importer import build_points_rows, STRAVA_STREAM_KEYS
                     from app.routers.strava import load_tokens, tokens_are_fresh, refresh_tokens
                     tokens = load_tokens(user_id=uid)
                     if tokens.get("refresh_token"):
                         if not tokens_are_fresh(tokens):
                             tokens = await refresh_tokens(tokens, user_id=uid)
                         token = tokens["access_token"]
-                        stream_types = "latlng,time,altitude,heartrate,velocity_smooth,distance"
+                        stream_types = STRAVA_STREAM_KEYS
                         async with httpx.AsyncClient(timeout=30) as client:
                             resp = await client.get(
                                 f"https://www.strava.com/api/v3/activities/{strava_id}/streams",

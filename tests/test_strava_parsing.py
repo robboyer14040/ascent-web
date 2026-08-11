@@ -1,3 +1,9 @@
+import pathlib
+
+
+def _app_dir():
+    return pathlib.Path(__file__).resolve().parent.parent / "app"
+
 """Parsing of data returned from Strava queries — the pure parsers plus an
 insert_activity_summary round-trip into a real temp DB. Uses the captured-shape
 payloads in tests/samples.py (no network)."""
@@ -125,3 +131,34 @@ def test_insert_activity_summary_round_trip(test_db, make_user):
     assert abs(row[2] - 40234.5 * M_TO_MI) < 1e-4
     assert abs(row[3] - 37.77) < 1e-6
     assert row[4] == "Morning Ride"
+
+
+# ── stream keys: every fetch path must request every stream we store ──────────
+
+def test_stream_keys_cover_everything_build_points_rows_reads():
+    """Regression: three fetch paths in api.py each carried their own key list,
+    and the PR-check path omitted watts/cadence/temp. store_points() sets
+    points_saved=1, so whichever path ran first won permanently — activities
+    backfilled by the PR check kept power, cadence and temperature zeroed and
+    were never re-fetched. One constant now feeds all three."""
+    import re
+    from app.strava_importer import STRAVA_STREAM_KEYS
+
+    requested = set(STRAVA_STREAM_KEYS.split(","))
+    src = pathlib.Path(_app_dir() / "strava_importer.py").read_text()
+    body = src[src.index("def build_points_rows"):]
+    body = body[:body.index("\ndef ", 1)]
+    consumed = set(re.findall(r'stream_data\("([a-z_]+)"\)', body))
+
+    missing = consumed - requested
+    assert not missing, f"build_points_rows reads streams nobody requests: {missing}"
+
+
+def test_no_fetch_path_hand_rolls_its_own_stream_keys():
+    import re
+    api = pathlib.Path(_app_dir() / "routers" / "api.py").read_text()
+    hand_written = re.findall(r'stream_types\s*=\s*"[^"]*"', api)
+    assert not hand_written, (
+        "stream keys must come from STRAVA_STREAM_KEYS, found: " + str(hand_written))
+    # And every site that builds points must actually pass the shared constant.
+    assert api.count("stream_types = STRAVA_STREAM_KEYS") == 3

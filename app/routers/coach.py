@@ -218,9 +218,13 @@ def _build_zone_block(db, user_id: Optional[int], today) -> str:
             parts = [f"Z{i+1} {v:.0f}min ({v / total * 100:.0f}%)" for i, v in enumerate(pw)]
             out.append(f"    Power zones (FTP {z.get('ftp')}W): " + ", ".join(parts))
             if any(hr) and sum(pw) < sum(hr) * 0.5:
-                out.append("    NOTE: power is recorded on only some activities — "
-                           "power-zone minutes cover less time than HR zones. Judge "
-                           "intensity distribution from the HR zones.")
+                out.append("    NOTE: power-zone minutes here cover far less time than the HR "
+                           "zones because the per-second power stream is missing for some "
+                           "rides. This is a data-sync gap, NOT the athlete riding without a "
+                           "power meter — their per-activity average and max power (in the "
+                           "activity list above) are complete and reliable. Read the power-zone "
+                           "SHAPE, not its absolute minutes, and use per-activity power for "
+                           "anything quantitative.")
     if not out:
         return ""
     return "TIME IN ZONES (from recorded per-second data)\n" + "\n".join(out)
