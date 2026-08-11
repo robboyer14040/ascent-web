@@ -665,10 +665,10 @@ async def set_goal(req: GoalRequest, request: Request):
         con.close()
 
     # Generate initial coach response
-    initial = await _call_claude(db, goal_id, req.goal_text.strip(), [], proactive=True, user_id=_uid,
-                                  model=_resolve_model(req.model),
-                                  target_date=target_date)
-    return {"goal_id": goal_id, "initial_message": initial}
+    initial, message_id = await _call_claude(
+        db, goal_id, req.goal_text.strip(), [], proactive=True, user_id=_uid,
+        model=_resolve_model(req.model), target_date=target_date)
+    return {"goal_id": goal_id, "initial_message": initial, "message_id": message_id}
 
 
 @router.post("/coach/chat")
@@ -1264,16 +1264,21 @@ async def _call_claude(
     model: str = DEFAULT_MODEL,
     user_id: int = None,
     target_date: Optional[str] = None,
-) -> str:
-    """Non-streaming wrapper: run the turn and return the complete reply."""
-    parts = []
+) -> tuple:
+    """Non-streaming wrapper: run the turn, return (reply_text, message_id).
+
+    The id lets the UI attach copy/PDF actions to the reply without a reload.
+    """
+    parts, message_id = [], None
     async for kind, payload in _stream_coach_reply(
         db, goal_id, goal_text, history, proactive=proactive, model=model,
         user_id=user_id, target_date=target_date,
     ):
         if kind == "text":
             parts.append(payload)
-    return "".join(parts).strip()
+        elif kind == "done":
+            message_id = payload.get("message_id")
+    return "".join(parts).strip(), message_id
 
 
 # ── Export: PDF + plain text ─────────────────────────────────────────────────

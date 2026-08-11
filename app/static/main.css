@@ -620,19 +620,19 @@ select.edit-act-input{appearance:none;-webkit-appearance:none;cursor:pointer;pad
 }
 .coach-bubble .coach-table th{background:var(--surface);font-weight:650}
 
-/* ── Per-reply Copy / PDF actions ── */
-.coach-meta-row{display:flex;align-items:center;gap:8px;margin-top:3px}
+/* ── Per-exchange Copy / PDF actions ──
+   Always visible: hover-reveal made them undiscoverable, and they're the
+   only way to get one exchange out of the conversation. */
+.coach-meta-row{display:flex;align-items:center;gap:8px;margin-top:4px}
 .coach-msg.user .coach-meta-row{justify-content:flex-end}
-.coach-actions{display:flex;gap:4px;opacity:0;transition:opacity .15s}
-.coach-msg:hover .coach-actions,.coach-actions:focus-within{opacity:1}
+.coach-actions{display:flex;gap:5px}
 .coach-action{
-  background:none;border:1px solid var(--border2);border-radius:5px;color:var(--muted);
-  font:inherit;font-size:10px;padding:1px 7px;cursor:pointer;line-height:1.6;
+  background:var(--surface2);border:1px solid var(--border2);border-radius:5px;
+  color:var(--muted);font:inherit;font-size:10.5px;padding:2px 8px;cursor:pointer;
+  line-height:1.6;white-space:nowrap;
 }
-.coach-action:hover:not(:disabled){background:var(--surface2);color:var(--text)}
+.coach-action:hover:not(:disabled){color:var(--text);border-color:var(--muted2)}
 .coach-action:disabled{opacity:.65;cursor:default}
-/* Touch devices have no hover — keep the actions permanently visible. */
-@media (hover:none){.coach-actions{opacity:1}}
 
 .coach-toolbar-spacer{flex:1}
 .coach-export-btn{

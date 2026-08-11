@@ -415,6 +415,18 @@ def test_streamed_reply_reports_its_message_id(authed_client, test_db, monkeypat
     assert pdf.status_code == 200 and pdf.content[:4] == b"%PDF"
 
 
+def test_goal_initial_assessment_is_exportable(authed_client, test_db, monkeypatch):
+    """The first reply after setting a goal must be exportable too."""
+    uid = authed_client.user_id
+    test_db.update_user_settings(uid, anthropic_api_key="sk-test")
+    fake_sdk(monkeypatch)
+
+    d = authed_client.post("/api/coach/goal", json={"goal_text": "Ride 200 miles"}).json()
+    assert isinstance(d["message_id"], int)
+    pdf = authed_client.get(f"/api/coach/messages/{d['message_id']}/pdf")
+    assert pdf.status_code == 200 and pdf.content[:4] == b"%PDF"
+
+
 def test_messages_endpoint_exposes_ids(authed_client, test_db):
     uid = authed_client.user_id
     _seed_conversation(test_db, uid, [("user", "q"), ("assistant", "a")])

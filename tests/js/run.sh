@@ -32,4 +32,5 @@ exec "$JSC" \
   "$DIR/test_elev_panel.js" \
   "$DIR/test_location_summary.js" \
   "$DIR/test_coach_markdown.js" \
+  "$DIR/test_coach_actions.js" \
   "$DIR/finalize.js"

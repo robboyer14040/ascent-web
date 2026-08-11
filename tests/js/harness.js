@@ -15,22 +15,43 @@ var L = {
   tileLayer: function () { return { addTo: function () { return this; } }; },
 };
 
-// document.createElement('div') backing for common.js `esc`: setting textContent
-// then reading innerHTML mirrors the browser's HTML-text escaping of & < >.
-function _escElement() {
-  var _html = '';
-  return {
+// Minimal element stub. Two consumers:
+//   * common.js `esc` — sets textContent, reads innerHTML back; that round-trip
+//     must mirror the browser's HTML-text escaping of & < >.
+//   * coach.js `coachAppendMessage` — sets className/dataset/innerHTML and
+//     appends into a container.
+function _element(tag) {
+  var el = {
+    tagName: String(tag || 'div').toUpperCase(),
+    className: '',
+    dataset: {},
+    children: [],
+    _html: '',
     set textContent(v) {
-      _html = String(v == null ? '' : v)
+      this._html = String(v == null ? '' : v)
         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     },
-    get innerHTML() { return _html; },
+    get textContent() { return this._html; },
+    set innerHTML(v) { this._html = String(v == null ? '' : v); },
+    get innerHTML() { return this._html; },
+    appendChild: function (c) { this.children.push(c); return c; },
+    remove: function () {},
+    classList: {
+      _c: [],
+      add: function () {}, remove: function () {},
+      contains: function () { return false; },
+      toggle: function () {},
+    },
   };
+  return el;
 }
+
 var document = {
-  createElement: function () { return _escElement(); },
+  _byId: {},                                 // tests register elements here
+  createElement: function (tag) { return _element(tag); },
   addEventListener: function () {},          // location_summary.js wires a click handler at load
-  getElementById: function () { return null; },
+  getElementById: function (id) { return this._byId[id] || null; },
+  querySelectorAll: function () { return []; },
   head: { appendChild: function () {} },
   body: { appendChild: function () {} },
 };
