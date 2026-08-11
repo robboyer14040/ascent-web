@@ -133,6 +133,13 @@
         <button class="coach-today-btn" id="coach-today-btn" onclick="coachAskToday()" title="Get AI advice on what workout to do today, with suggested routes from your history">
           📍 What should I do today?
         </button>
+        <span class="coach-toolbar-spacer"></span>
+        <button class="coach-export-btn" onclick="coachCopyConversation(this)" title="Copy this whole conversation as text">
+          ⧉ Copy all
+        </button>
+        <button class="coach-export-btn" onclick="coachConversationPdf(this)" title="Save this whole conversation as a PDF">
+          ⇩ PDF
+        </button>
       </div>
 
       <div id="coach-messages"></div>

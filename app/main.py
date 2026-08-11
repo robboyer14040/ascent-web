@@ -130,7 +130,7 @@ def type_badge(t):
 
 templates.env.filters["fmt_date"]   = fmt_date
 templates.env.filters["type_badge"] = type_badge
-templates.env.globals["app_version"] = "v0.7.451"
+templates.env.globals["app_version"] = "v0.7.452"
 
 # ── wire routers ──────────────────────────────────────────────────────────────
 activities.db_getter = get_db
@@ -144,6 +144,7 @@ settings.db_setter   = set_db
 settings.templates   = templates
 weather.db_getter    = get_db
 coach.db_getter      = get_db
+coach.templates      = templates
 
 # Auth router MUST be first so /login, /logout, /register take priority
 app.include_router(auth_router.router)

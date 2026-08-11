@@ -222,27 +222,80 @@ def test_training_analysis_reads_attribute_climb(test_db, make_user, add_activit
     assert "3,000 ft climb" in block     # 3 × 1000, read via parse_attrs
 
 
+def _athlete_today(db, uid):
+    """The date the anchor will use — the athlete's zone, UTC when unknown."""
+    from datetime import datetime
+    from app.routers.coach import _athlete_tz
+    return datetime.now(_athlete_tz(db, uid)).date()
+
+
 def test_date_anchor_counts_down_to_target(test_db, make_user):
     uid = make_user()
-    from datetime import date, timedelta
-    target = (date.today() + timedelta(days=30)).isoformat()
+    from datetime import timedelta
+    today  = _athlete_today(test_db, uid)
+    target = (today + timedelta(days=30)).isoformat()
 
     anchor = _build_date_anchor(test_db, uid, target)
     assert "CURRENT DATE ANCHOR" in anchor
     assert "30 days from today" in anchor
     assert "ignore it" in anchor          # instruction to override stale history
     # Today's real date must be present, spelled out.
-    assert date.today().strftime("%B") in anchor
+    assert today.strftime("%B") in anchor
+    assert str(today.day) in anchor
 
 
 def test_date_anchor_handles_passed_and_missing_targets(test_db, make_user):
     uid = make_user()
-    from datetime import date, timedelta
-    past = (date.today() - timedelta(days=5)).isoformat()
+    from datetime import timedelta
+    past = (_athlete_today(test_db, uid) - timedelta(days=5)).isoformat()
     assert "passed 5 days ago" in _build_date_anchor(test_db, uid, past)
     # No target date, and a malformed one, must not raise.
     assert "CURRENT DATE ANCHOR" in _build_date_anchor(test_db, uid, None)
     assert "CURRENT DATE ANCHOR" in _build_date_anchor(test_db, uid, "not-a-date")
+
+
+def test_dates_use_the_athletes_timezone_not_the_servers(test_db, make_user, add_activity):
+    """A ride logged at 5pm Pacific must not be reported as the next day.
+
+    The offset comes from the athlete's most recent activity; without it the
+    server's own clock would shift daily/weekly boundaries by a day.
+    """
+    from datetime import datetime, timedelta, timezone as tz
+    from app.routers.coach import _athlete_tz
+
+    uid = make_user()
+    # 01:30 UTC a few days ago — the same instant is the *previous* day in UTC-8.
+    moment = (datetime.now(tz.utc) - timedelta(days=3)).replace(
+        hour=1, minute=30, second=0, microsecond=0)
+    utc_day     = moment.date()
+    pacific_day = moment.astimezone(tz(timedelta(hours=-8))).date()
+    assert pacific_day != utc_day, "fixture must straddle a date boundary"
+
+    aid = add_activity(user_id=uid, creation_time_s=int(moment.timestamp()),
+                       attrs=_attrs(activity="Ride"))
+
+    con = sqlite3.connect(test_db.path)
+    try:
+        con.execute("UPDATE activities SET seconds_from_gmt_at_sync=? WHERE id=?",
+                    (-8 * 3600, aid))
+        con.commit()
+    finally:
+        con.close()
+
+    assert _athlete_tz(test_db, uid) == tz(timedelta(hours=-8))
+    summary = _build_activity_summary(test_db, uid)
+    assert pacific_day.isoformat() in summary
+    assert utc_day.isoformat() not in summary
+
+    # A nonsense offset must be ignored rather than producing an invalid tz.
+    con = sqlite3.connect(test_db.path)
+    try:
+        con.execute("UPDATE activities SET seconds_from_gmt_at_sync=? WHERE id=?",
+                    (999_999, aid))
+        con.commit()
+    finally:
+        con.close()
+    assert _athlete_tz(test_db, uid) == tz.utc
 
 
 def test_system_prompt_has_no_date(test_db):
@@ -252,6 +305,122 @@ def test_system_prompt_has_no_date(test_db):
     p = _build_system_prompt("Goal", "SUMMARY")
     assert str(date.today().year) not in p
     assert "Today's date" not in p
+
+
+# ── export: copy / PDF ────────────────────────────────────────────────────────
+
+def _seed_conversation(test_db, uid, turns):
+    """Insert (role, content) rows for one goal; returns (goal_id, [msg_ids])."""
+    from app.routers.coach import _ensure_tables
+    con = sqlite3.connect(test_db.path)
+    try:
+        _ensure_tables(con)
+        goal_id = con.execute(
+            "INSERT INTO coach_goals (goal_text, created_at, user_id, target_date) "
+            "VALUES (?,?,?,?)",
+            ("Ride 200 miles", int(time.time()), uid, "2099-06-01")).lastrowid
+        ids, now = [], int(time.time())
+        for i, (role, content) in enumerate(turns):
+            ids.append(con.execute(
+                "INSERT INTO coach_messages (goal_id, role, content, created_at, model) "
+                "VALUES (?,?,?,?,?)",
+                (goal_id, role, content, now + i,
+                 "claude-opus-5" if role == "assistant" else None)).lastrowid)
+        con.commit()
+    finally:
+        con.close()
+    return goal_id, ids
+
+
+def test_exchanges_pairs_prompts_with_replies():
+    from app.routers.coach import _exchanges
+    msgs = [
+        {"role": "user", "content": "a", "id": 1},
+        {"role": "assistant", "content": "A", "id": 2},
+        {"role": "user", "content": "b", "id": 3},
+        {"role": "user", "content": "c", "id": 4},      # follow-up before a reply
+        {"role": "assistant", "content": "BC", "id": 5},
+        {"role": "user", "content": "d", "id": 6},      # still unanswered
+    ]
+    ex = _exchanges(msgs)
+    assert [len(e["prompt"]) for e in ex] == [1, 2, 1]
+    assert [e["reply"]["id"] if e["reply"] else None for e in ex] == [2, 5, None]
+
+
+def test_markdown_to_html_renders_and_escapes():
+    from app.routers.coach import _markdown_to_html
+    html = _markdown_to_html("## Week 1\n\n| Day | Session |\n|---|---|\n| Mon | Rest |")
+    assert "<h2>Week 1</h2>" in html
+    assert "<table>" in html and "<td>Rest</td>" in html
+    # Model output must never become live markup in the PDF.
+    assert "<script>" not in _markdown_to_html("<script>alert(1)</script>")
+
+
+def test_single_exchange_pdf(authed_client, test_db):
+    uid = authed_client.user_id
+    _, ids = _seed_conversation(test_db, uid, [
+        ("user", "How should I train?"),
+        ("assistant", "## Plan\n\n- Ride **Z2** on Tuesday\n"),
+        ("user", "And Wednesday?"),
+        ("assistant", "Rest Wednesday."),
+    ])
+    r = authed_client.get(f"/api/coach/messages/{ids[1]}/pdf")
+    assert r.status_code == 200, r.text
+    assert r.headers["content-type"] == "application/pdf"
+    assert r.content[:4] == b"%PDF"
+    assert "attachment" in r.headers["content-disposition"]
+
+    # Asking for a PDF of a *user* message is a bad request, not a crash.
+    assert authed_client.get(f"/api/coach/messages/{ids[0]}/pdf").status_code == 400
+    assert authed_client.get("/api/coach/messages/999999/pdf").status_code == 404
+
+
+def test_full_conversation_pdf(authed_client, test_db):
+    uid = authed_client.user_id
+    goal_id, _ = _seed_conversation(test_db, uid, [
+        ("user", "Question one"),
+        ("assistant", "Answer one"),
+        ("user", "Question two"),
+        ("assistant", "Answer two"),
+    ])
+    r = authed_client.get(f"/api/coach/goals/{goal_id}/pdf")
+    assert r.status_code == 200, r.text
+    assert r.content[:4] == b"%PDF"
+    assert len(r.content) > 1000
+
+
+def test_pdf_export_refuses_another_users_conversation(authed_client, test_db, make_user):
+    stranger = make_user(email="stranger@example.com")
+    goal_id, ids = _seed_conversation(test_db, stranger, [
+        ("user", "Private question"),
+        ("assistant", "Private answer"),
+    ])
+    assert authed_client.get(f"/api/coach/goals/{goal_id}/pdf").status_code == 403
+    assert authed_client.get(f"/api/coach/messages/{ids[1]}/pdf").status_code == 403
+
+
+def test_streamed_reply_reports_its_message_id(authed_client, test_db, monkeypatch):
+    """The UI needs the new row's id to wire up Copy / PDF on a fresh reply."""
+    uid = authed_client.user_id
+    test_db.update_user_settings(uid, anthropic_api_key="sk-test")
+    fake_sdk(monkeypatch)
+
+    authed_client.post("/api/coach/goal", json={"goal_text": "Ride far"})
+    r = authed_client.post("/api/coach/chat", json={"message": "Hi"})
+    done = [p for k, p in sse_events(r.text) if k == "done"]
+    assert done and isinstance(done[0]["message_id"], int)
+
+    # That id must resolve to a downloadable PDF.
+    pdf = authed_client.get(f"/api/coach/messages/{done[0]['message_id']}/pdf")
+    assert pdf.status_code == 200 and pdf.content[:4] == b"%PDF"
+
+
+def test_messages_endpoint_exposes_ids(authed_client, test_db):
+    uid = authed_client.user_id
+    _seed_conversation(test_db, uid, [("user", "q"), ("assistant", "a")])
+    msgs = authed_client.get("/api/coach/messages").json()["messages"]
+    assert all(isinstance(m["id"], int) for m in msgs)
+    assert [m["role"] for m in msgs] == ["user", "assistant"]   # stable ordering
 
 
 # ── coach tools ───────────────────────────────────────────────────────────────

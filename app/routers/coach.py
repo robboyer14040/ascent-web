@@ -22,13 +22,14 @@ from datetime import datetime, timedelta, timezone
 
 import httpx
 from fastapi import APIRouter, Request, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 
 from app.db import parse_attrs
 
 router = APIRouter()
 db_getter: Callable = None
+templates = None          # set in main.py; used by the PDF export
 
 # ── SQL: table creation (always IF NOT EXISTS) ────────────────────────────────
 
@@ -543,8 +544,8 @@ def _active_goal(con: sqlite3.Connection, user_id: Optional[int] = None) -> Opti
 
 def _goal_messages(con: sqlite3.Connection, goal_id: int, limit: int = 60) -> list:
     rows = con.execute(
-        "SELECT role, content, created_at FROM coach_messages "
-        "WHERE goal_id = ? ORDER BY created_at DESC LIMIT ?",
+        "SELECT id, role, content, created_at FROM coach_messages "
+        "WHERE goal_id = ? ORDER BY created_at DESC, id DESC LIMIT ?",
         (goal_id, limit)
     ).fetchall()
     return [dict(r) for r in reversed(rows)]
@@ -1149,17 +1150,21 @@ async def _stream_coach_reply(
     in_tok = out_tok = cache_read = cache_write = 0
     persisted = False
 
+    saved_id = None
+
     def _persist(text: str, interrupted: bool = False):
         """Write the assistant reply. Called once, even on an aborted stream."""
+        nonlocal saved_id
         body = text + ("\n\n_(reply interrupted)_" if interrupted else "")
         con = _get_con(db)
         try:
-            con.execute(
+            cur = con.execute(
                 "INSERT INTO coach_messages "
                 "(goal_id, role, content, created_at, input_tokens, output_tokens, model) "
                 "VALUES (?,?,?,?,?,?,?)",
                 (goal_id, "assistant", body, int(time.time()), in_tok, out_tok, model)
             )
+            saved_id = cur.lastrowid
             con.commit()
         finally:
             con.close()
@@ -1241,6 +1246,7 @@ async def _stream_coach_reply(
                 persisted = True
 
     yield ("done", {
+        "message_id":        saved_id,   # lets the UI wire up copy / PDF actions
         "model":             model,
         "input_tokens":      in_tok,
         "output_tokens":     out_tok,
@@ -1268,6 +1274,152 @@ async def _call_claude(
         if kind == "text":
             parts.append(payload)
     return "".join(parts).strip()
+
+
+# ── Export: PDF + plain text ─────────────────────────────────────────────────
+
+def _markdown_to_html(text: str) -> str:
+    """Render a coach reply's Markdown for the PDF.
+
+    Mirrors coachMarkdown() in coach.js (headings, lists, tables, code, links).
+    markdown-it-py escapes HTML by default, so model output cannot inject markup.
+    """
+    from markdown_it import MarkdownIt
+    md = MarkdownIt("commonmark", {"html": False, "linkify": False})
+    md.enable("table")
+    return md.render(text or "")
+
+
+def _owned_goal(con: sqlite3.Connection, goal_id: int, uid: Optional[int]):
+    """Fetch a goal, refusing goals that belong to somebody else."""
+    goal = con.execute("SELECT * FROM coach_goals WHERE id=?", (goal_id,)).fetchone()
+    if not goal:
+        raise HTTPException(404, "Conversation not found")
+    if goal["user_id"] is not None and goal["user_id"] != uid:
+        raise HTTPException(403, "Not your conversation")
+    return goal
+
+
+def _exchanges(msgs: list) -> list:
+    """Pair each assistant reply with the question that prompted it.
+
+    Consecutive user messages are joined — the athlete can send a follow-up
+    before the coach has answered, and both belong to the reply that follows.
+    """
+    out, pending = [], []
+    for m in msgs:
+        if m["role"] == "user":
+            pending.append(m)
+        elif m["role"] == "assistant":
+            out.append({"prompt": pending, "reply": m})
+            pending = []
+    if pending:                       # question still awaiting an answer
+        out.append({"prompt": pending, "reply": None})
+    return out
+
+
+def _export_context(goal, exchanges: list, db, uid: Optional[int]) -> dict:
+    """Template context shared by the single-exchange and full-conversation PDFs."""
+    tz = _athlete_tz(db, uid)
+
+    def when(ts):
+        return datetime.fromtimestamp(ts or 0, tz=tz).strftime("%b %-d, %Y at %-I:%M %p")
+
+    user = db.get_user(uid) if uid else None
+    rendered = [
+        {
+            "prompt_texts": [p["content"] for p in ex["prompt"]],
+            "prompt_when":  when(ex["prompt"][0]["created_at"]) if ex["prompt"] else "",
+            "reply_html":   _markdown_to_html(ex["reply"]["content"]) if ex["reply"] else "",
+            "reply_when":   when(ex["reply"]["created_at"]) if ex["reply"] else "",
+            "model":        (ex["reply"] or {}).get("model") or "",
+        }
+        for ex in exchanges
+    ]
+    target = goal["target_date"] if "target_date" in goal.keys() else None
+    meta = [b for b in (
+        (user or {}).get("username") or "",
+        f"Target: {target}" if target else "",
+        datetime.now(tz).strftime("Exported %B %-d, %Y"),
+    ) if b]
+    return {
+        "goal_text": goal["goal_text"],
+        "meta":      meta,               # joined in the template, not via CSS
+        "exchanges": rendered,
+    }
+
+
+def _render_coach_pdf(ctx: dict, filename: str) -> Response:
+    """Render the export template to a PDF response.
+
+    A coach conversation is text-only, so unlike the photo-heavy tour book this
+    renders synchronously — no background job needed.
+    """
+    try:
+        import weasyprint          # lazy — heavy native deps
+    except Exception:
+        raise HTTPException(501, "PDF export is unavailable on this server "
+                                 "(WeasyPrint not installed).")
+    html_str  = templates.env.get_template("coach_pdf.html").render(**ctx)
+    pdf_bytes = weasyprint.HTML(string=html_str).write_pdf()
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+def _pdf_filename(goal, suffix: str) -> str:
+    import re
+    stem = re.sub(r"[^A-Za-z0-9_-]+", "_", (goal["goal_text"] or "coaching")[:40])
+    return f"{stem.strip('_') or 'coaching'}_{suffix}.pdf"
+
+
+@router.get("/coach/messages/{message_id}/pdf")
+async def coach_message_pdf(message_id: int, request: Request):
+    """One exchange — the coach's reply plus the question that prompted it."""
+    from app.auth import get_session_user_id
+    uid = get_session_user_id(request)
+    db  = db_getter()
+    con = _get_con(db)
+    try:
+        msg = con.execute("SELECT * FROM coach_messages WHERE id=?", (message_id,)).fetchone()
+        if not msg:
+            raise HTTPException(404, "Message not found")
+        goal = _owned_goal(con, msg["goal_id"], uid)
+
+        msgs = _goal_messages(con, msg["goal_id"], limit=10000)
+        match = [e for e in _exchanges(msgs)
+                 if e["reply"] and e["reply"]["id"] == message_id]
+        if not match:
+            raise HTTPException(400, "That message is not a coach reply")
+        ctx = _export_context(goal, match, db, uid)
+    finally:
+        con.close()
+
+    ctx["subtitle"] = "One exchange"
+    return _render_coach_pdf(ctx, _pdf_filename(goal, f"exchange_{message_id}"))
+
+
+@router.get("/coach/goals/{goal_id}/pdf")
+async def coach_goal_pdf(goal_id: int, request: Request):
+    """The whole conversation for one goal."""
+    from app.auth import get_session_user_id
+    uid = get_session_user_id(request)
+    db  = db_getter()
+    con = _get_con(db)
+    try:
+        goal = _owned_goal(con, goal_id, uid)
+        msgs = _goal_messages(con, goal_id, limit=10000)
+        if not msgs:
+            raise HTTPException(404, "This conversation has no messages yet")
+        ctx = _export_context(goal, _exchanges(msgs), db, uid)
+    finally:
+        con.close()
+
+    n = len(ctx["exchanges"])
+    ctx["subtitle"] = f"Full conversation · {n} exchange{'s' if n != 1 else ''}"
+    return _render_coach_pdf(ctx, _pdf_filename(goal, "conversation"))
 
 
 # ── Compare Analysis ──────────────────────────────────────────────────────────
