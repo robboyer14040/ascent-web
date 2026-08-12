@@ -19,6 +19,15 @@ WHAT IT DOES
     power, then re-fetches their streams from Strava with the full key set.
     store_points() replaces the activity's points, so this is idempotent.
 
+    That search deliberately over-matches, because a summary power value does
+    NOT imply a power meter: Strava estimates power from speed and gradient for
+    rides recorded without one, and reports it in the same average_watts field.
+    Such rides look identical to bug-damaged ones locally. Only the Strava API
+    separates them — device_watts true means a real meter (and a watts stream we
+    can recover), device_watts false means Strava has no measured power either
+    and there is nothing to recover. The script reports the two separately;
+    only the first kind is counted as repaired.
+
 USAGE
     python3 scripts/repair_power_streams.py                  # dry run, all users
     python3 scripts/repair_power_streams.py --user 1         # dry run, one user
@@ -78,7 +87,7 @@ async def repair(db, rows, limit):
     for r in rows:
         by_user.setdefault(r["user_id"], []).append(r)
 
-    fixed = failed = 0
+    fixed = failed = skipped = 0
     for uid, acts in by_user.items():
         tokens = db.get_user_strava_tokens(uid)
         if not tokens:
@@ -88,9 +97,9 @@ async def repair(db, rows, limit):
             tokens = await refresh_tokens(tokens, user_id=uid)
 
         for r in acts:
-            if fixed + failed >= limit:
+            if fixed + failed + skipped >= limit:
                 print(f"\nReached --limit {limit}; re-run to continue.")
-                return fixed, failed
+                return fixed, failed, skipped
             try:
                 async with httpx.AsyncClient(timeout=60) as client:
                     resp = await client.get(
@@ -101,7 +110,7 @@ async def repair(db, rows, limit):
                     )
                 if resp.status_code == 429:
                     print("\nStrava rate limit hit — stopping. Re-run later to continue.")
-                    return fixed, failed
+                    return fixed, failed, skipped
                 if resp.status_code != 200:
                     print(f"  ✗ {r['d']} id={r['id']}: HTTP {resp.status_code}")
                     failed += 1
@@ -119,14 +128,33 @@ async def repair(db, rows, limit):
                     print(f"  ✓ {r['d']} id={r['id']}: {n_pw} points now carry power")
                     fixed += 1
                 else:
-                    # Strava genuinely has no power for this ride.
-                    print(f"  – {r['d']} id={r['id']}: Strava returned no watts stream")
-                    failed += 1
+                    # Strava has no watts stream. Two very different reasons, and
+                    # only device_watts distinguishes them: either the ride was
+                    # recorded without a working power meter (nothing to recover
+                    # anywhere), or Strava has meter data we failed to store.
+                    # src_avg_power being set does NOT imply a meter — Strava
+                    # estimates power from speed/gradient and reports it the same
+                    # way, with device_watts False and weighted_average_watts null.
+                    async with httpx.AsyncClient(timeout=30) as client:
+                        det = await client.get(
+                            f"https://www.strava.com/api/v3/activities/"
+                            f"{r['strava_activity_id']}",
+                            headers={"Authorization": f"Bearer {tokens['access_token']}"},
+                        )
+                    metered = det.status_code == 200 and det.json().get("device_watts")
+                    if metered:
+                        print(f"  ! {r['d']} id={r['id']}: Strava reports a real power "
+                              f"meter but returned no watts stream — needs investigation")
+                        failed += 1
+                    else:
+                        print(f"  – {r['d']} id={r['id']}: recorded without a working "
+                              f"power meter (Strava's value is its own estimate)")
+                        skipped += 1
             except Exception as e:
                 print(f"  ✗ {r['d']} id={r['id']}: {e}")
                 failed += 1
             time.sleep(0.4)          # stay well inside 100 req / 15 min
-    return fixed, failed
+    return fixed, failed, skipped
 
 
 def main():
@@ -167,8 +195,13 @@ def main():
         return
 
     print(f"\nRe-fetching (limit {args.limit})…")
-    fixed, failed = asyncio.run(repair(db, rows, args.limit))
-    print(f"\nRepaired {fixed}, failed/skipped {failed}.")
+    fixed, failed, skipped = asyncio.run(repair(db, rows, args.limit))
+    print(f"\nRepaired {fixed}.")
+    if skipped:
+        print(f"{skipped} ride(s) had no working power meter when recorded — "
+              f"Strava has no power data for them either, so nothing to recover.")
+    if failed:
+        print(f"{failed} ride(s) failed or need investigation (see above).")
     if fixed:
         print("Zone distributions and the AI Coach will pick this up immediately.")
 
