@@ -38,6 +38,13 @@ function fmtElapsed(s) {
   return `${m}:${String(ss).padStart(2,'0')}`;
 }
 
+// Show per-activity user avatars when the user picker has more than one user
+// selected, or when the compared activities themselves span multiple users.
+function _cmpMultiUser(userIds) {
+  if (viewState.selectedUserIds.size > 1) return true;
+  return new Set(userIds.filter(id => id != null)).size > 1;
+}
+
 // Called by elevation selection drag to record the selected indices
 function setElevSelection(startIdx, endIdx) {
   cmp.selStartIdx = startIdx;
@@ -207,19 +214,19 @@ async function cmpOpenManual() {
   const legendEl = document.getElementById('compare-legend');
   if (legendEl) {
     legendEl.innerHTML = '';
-    const multiUser = new Set(ordered.map(id => {
+    const multiUser = _cmpMultiUser(ordered.map(id => {
       const act = state.all?.find(a => a.id === id) || state.filtered?.find(a => a.id === id);
       return act?.user_id;
-    }).filter(id => id != null)).size > 1;
+    }));
     ordered.forEach((id, i) => {
       const act = state.all?.find(a => a.id === id) || state.filtered?.find(a => a.id === id);
-      const rawName = act?.name || `Activity ${id}`;
-      const userName = multiUser && act?.user_id && userMap[act.user_id] ? escHtml(userMap[act.user_id].username || '') + ': ' : '';
-      const name = userName + escHtml(rawName);
+      const name = escHtml(act?.name || `Activity ${id}`);
+      const avatar = multiUser ? userAvatarIcon(act?.user_id, 18, 'flex-shrink:0') : '';
       const color = CMP_COLORS[i % CMP_COLORS.length];
       const li = document.createElement('div');
       li.className = 'cmp-legend-item';
-      li.innerHTML = `<span class="cmp-dot" style="background:${color}"></span>` +
+      li.innerHTML = avatar +
+        `<span class="cmp-dot" style="background:${color}"></span>` +
         `<span style="font-weight:${i===0?700:400}">${name}</span>`;
       legendEl.appendChild(li);
     });
@@ -369,6 +376,7 @@ async function openCompare() {
         max_results:     4,
         radius_m:        150,
         include_friends: !!(document.getElementById('cmp-include-friends')?.checked),
+        view_user_ids:   _viewUserIdsList(),
       }),
     });
     const d = await r.json();
@@ -482,7 +490,7 @@ function closeCompare() {
 function buildCompareLegend() {
   const leg = document.getElementById('compare-legend');
   leg.innerHTML = '';
-  const multiUser = new Set(cmp.matches.map(m => m.user_id).filter(id => id != null)).size > 1;
+  const multiUser = _cmpMultiUser(cmp.matches.map(m => m.user_id));
 
   // Display order: fastest non-missing first, missing last
   const nonMissing = [...cmp.matches].filter(m => !m.missing).sort((a,b) => a.elapsed_s - b.elapsed_s);
@@ -496,12 +504,13 @@ function buildCompareLegend() {
     const isRef    = currentAct && m.activity_id === currentAct.id;
     const isFastest = m.activity_id === fastestId;
     const date     = m.start_time ? new Date(m.start_time*1000).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '';
-    const userName = multiUser && m.user_id && userMap[m.user_id] ? escHtml(userMap[m.user_id].username || '') + ': ' : '';
-    const dispName = userName + escHtml(m.name || '');
+    const avatar   = multiUser ? userAvatarIcon(m.user_id, 18, 'flex-shrink:0') : '';
+    const dispName = escHtml(m.name || '');
     const item     = document.createElement('div');
     item.className = 'cmp-legend-item';
     if (m.missing) {
       item.innerHTML =
+        avatar +
         `<div class="cmp-sphere" style="background:radial-gradient(circle at 35% 35%,#9ca3af66,#9ca3af33 55%,#9ca3af11);flex-shrink:0;opacity:0.6"></div>` +
         `<span style="font-style:italic;color:var(--muted)">${dispName}</span>` +
         `<span style="color:var(--muted);font-size:11px;white-space:nowrap">${date}</span>` +
@@ -517,6 +526,7 @@ function buildCompareLegend() {
       item.style.cursor = 'pointer';
       item.title = 'Go to activity';
       item.innerHTML =
+        avatar +
         `<div class="cmp-sphere" style="background:radial-gradient(circle at 35% 35%,${color}ee,${color}88 55%,${color}44);flex-shrink:0"></div>` +
         `<span style="${nameStyle}">${dispName}</span>` +
         `<span style="color:var(--muted);font-size:11px;white-space:nowrap">${date}</span>` +
@@ -1388,6 +1398,7 @@ async function cmpLoadSavedSegment(segId) {
         max_results:     4,
         radius_m:        150,
         include_friends: !!(document.getElementById('cmp-include-friends')?.checked),
+        view_user_ids:   _viewUserIdsList(),
       }),
     });
     const d = await r.json();

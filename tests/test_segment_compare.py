@@ -56,6 +56,30 @@ def test_segment_compare_explicit_candidates_are_trusted(authed_client, add_acti
     assert ref_id in ids and cand_id in ids
 
 
+def test_segment_compare_spans_selected_users(authed_client, add_activity, make_user):
+    # view_user_ids mirrors the user picker: another user's activity on the same
+    # segment counts only while that user is selected.
+    uid   = authed_client.user_id
+    other = make_user(username="Other")
+
+    ref_id   = add_activity(user_id=uid,   name="Ref",   points=_line(40.0000, -105.0))
+    other_id = add_activity(user_id=other, name="Other", points=_line(40.0002, -105.0))
+
+    body = {"activity_id": ref_id, "start_idx": 0, "end_idx": 9}
+
+    # Only me selected → the other user's ride is not a candidate (nothing to compare).
+    r = authed_client.post("/api/segment/compare", json={**body, "view_user_ids": [uid]})
+    assert r.status_code == 404
+
+    # Both selected → it is.
+    r = authed_client.post("/api/segment/compare",
+                           json={**body, "view_user_ids": [uid, other]})
+    assert r.status_code == 200, r.text
+    matches = r.json()["matches"]
+    assert other_id in [m["activity_id"] for m in matches]
+    assert other in [m["user_id"] for m in matches]
+
+
 def test_segment_compare_missing_reference_points_404(authed_client, add_activity):
     uid = authed_client.user_id
     # Activity with no GPS points at all.

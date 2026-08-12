@@ -199,14 +199,20 @@ function userInitialAvatar(userId, username, size, radius, extraStyle) {
   return `<div style="width:${size}px;height:${size}px;border-radius:${radius};background:${color};color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:${fs}px;font-weight:600;flex-shrink:0;${extraStyle}">${initial}</div>`;
 }
 
+// Icon only (photo if the user has one, otherwise a coloured initial disc).
+function userAvatarIcon(userId, size, extraStyle) {
+  const u = userMap[userId];
+  if (!u) return '';
+  if (u.avatar_url) {
+    return `<img src="${u.avatar_url}" alt="" title="${escHtml(u.username || '')}" style="width:${size}px;height:${size}px;border-radius:50%;object-fit:cover;vertical-align:middle;flex-shrink:0;${extraStyle || ''}">`;
+  }
+  return userInitialAvatar(userId, u.username, size, '50%', 'vertical-align:middle;' + (extraStyle || ''));
+}
+
 function renderUserCell(a) {
   const u = userMap[a.user_id];
   if (!u) return '';
-  const name = escHtml(u.username || '');
-  if (u.avatar_url) {
-    return `<img src="${u.avatar_url}" alt="" style="width:22px;height:22px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:5px;flex-shrink:0">${name}`;
-  }
-  return userInitialAvatar(a.user_id, u.username, 22, '50%', 'vertical-align:middle;margin-right:5px;') + name;
+  return userAvatarIcon(a.user_id, 22, 'margin-right:5px;') + escHtml(u.username || '');
 }
 
 const ALL_COLS = [
@@ -414,10 +420,14 @@ function updateSortHeaders() {
 // Empty set = show only own activities (myId).
 const viewState = { myId: null, myUsername: null, selectedUserIds: new Set() };
 
-function _viewUserIdsParam() {
+function _viewUserIdsList() {
   return viewState.selectedUserIds.size > 0
-    ? [...viewState.selectedUserIds].join(',')
-    : (viewState.myId !== null ? String(viewState.myId) : '');
+    ? [...viewState.selectedUserIds]
+    : (viewState.myId !== null ? [viewState.myId] : []);
+}
+
+function _viewUserIdsParam() {
+  return _viewUserIdsList().join(',');
 }
 
 function _updateViewBadge() {

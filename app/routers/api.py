@@ -827,6 +827,7 @@ class SegmentRequest(BaseModel):
     radius_m:        float      = 150.0
     include_friends: bool       = False
     candidate_ids:   list[int]  = []  # if set, only compare against these activities
+    view_user_ids:   list[int]  = []  # users selected in the user picker; empty = session user only
 
 
 @router.post("/segment/compare")
@@ -1102,13 +1103,17 @@ async def segment_compare(req: SegmentRequest, request: Request):
             ORDER BY COALESCE(creation_time_override_s, creation_time_s) DESC
         """, req.candidate_ids).fetchall()
     else:
-        if req.include_friends and uid is not None:
-            user_filter = """AND (user_id = ? OR user_id IN (
-                    SELECT id FROM users WHERE share_activities = 1 AND id != ?))"""
-            user_params = [uid, uid]
-        elif uid is not None:
-            user_filter = "AND (user_id = ? OR user_id IS NULL)"
-            user_params = [uid]
+        # Viewed users = whoever is selected in the user picker (defaults to session user)
+        view_ids = req.view_user_ids or ([uid] if uid is not None else [])
+        view_ph  = ','.join('?' * len(view_ids))
+
+        if req.include_friends and view_ids:
+            user_filter = f"""AND (user_id IN ({view_ph}) OR user_id IN (
+                    SELECT id FROM users WHERE share_activities = 1))"""
+            user_params = list(view_ids)
+        elif view_ids:
+            user_filter = f"AND (user_id IN ({view_ph}) OR user_id IS NULL)"
+            user_params = list(view_ids)
         else:
             user_filter = ""
             user_params = []
