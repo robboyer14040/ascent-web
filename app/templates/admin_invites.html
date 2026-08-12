@@ -68,6 +68,11 @@ td{padding:.5rem;border-bottom:1px solid var(--border);vertical-align:middle;whi
 .result{margin-top:.75rem;padding:.65rem .9rem;border-radius:8px;font-size:.875rem;display:none}
 .result-ok{background:rgba(48,209,88,.12);border:1px solid rgba(48,209,88,.3);color:#30d158}
 .result-err{background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);color:#ef4444}
+.modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;
+  align-items:center;justify-content:center;padding:1rem;z-index:1000}
+.modal-backdrop.open{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:12px;
+  padding:1.25rem;width:100%;max-width:520px}
 </style>
 </head>
 <body class="has-mob-topbar">
@@ -168,7 +173,7 @@ td{padding:.5rem;border-bottom:1px solid var(--border);vertical-align:middle;whi
     {% if invites %}
     <div class="table-wrap">
     <table>
-      <tr><th>Email</th><th>Status</th><th>Created</th><th></th></tr>
+      <tr><th>Email</th><th>Status</th><th>Created</th><th></th><th></th></tr>
       {% for inv in invites %}
       <tr>
         <td>{{ inv.email or '—' }}</td>
@@ -180,6 +185,10 @@ td{padding:.5rem;border-bottom:1px solid var(--border);vertical-align:middle;whi
           {% endif %}
         </td>
         <td style="color:var(--muted)">{{ inv.created_at | fmt_date }}</td>
+        <td>
+          <button type="button" class="btn btn-ghost" style="font-size:11px;padding:.25rem .6rem"
+                  onclick='openInviteModal({{ inv.token | tojson }})'>Invite Link...</button>
+        </td>
         <td>
           {% if not inv.used_at %}
           <form method="post" action="/admin/invites/delete" style="display:inline">
@@ -270,7 +279,60 @@ td{padding:.5rem;border-bottom:1px solid var(--border);vertical-align:middle;whi
   {% endif %}
 </div>
 
+<div class="modal-backdrop" id="inviteModal" onclick="if(event.target===this)closeInviteModal()">
+  <div class="modal">
+    <h2>Invite Link</h2>
+    <div class="invite-url" id="inviteModalUrl" style="margin-top:0;user-select:text"></div>
+    <div class="btn-row">
+      <button class="copy-btn" id="inviteModalCopy" style="margin-left:0;display:inline-flex;align-items:center;gap:.35rem"
+              onclick="copyInviteLink(this)">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0">
+          <rect x="9" y="9" width="13" height="13" rx="2"></rect>
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+        </svg>
+        <span>Copy</span>
+      </button>
+      <div class="spacer"></div>
+      <button class="btn btn-primary" onclick="closeInviteModal()">OK</button>
+    </div>
+  </div>
+</div>
+
 <script>
+function openInviteModal(token) {
+  document.getElementById('inviteModalUrl').textContent =
+    window.location.origin + '/register?token=' + encodeURIComponent(token);
+  document.getElementById('inviteModalCopy').querySelector('span').textContent = 'Copy';
+  document.getElementById('inviteModal').classList.add('open');
+}
+
+function closeInviteModal() {
+  document.getElementById('inviteModal').classList.remove('open');
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeInviteModal();
+});
+
+function copyInviteLink(btn) {
+  const text = document.getElementById('inviteModalUrl').textContent;
+  const done = ok => btn.querySelector('span').textContent = ok ? 'Copied!' : 'Press ⌘C';
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).then(() => done(true), () => done(false));
+    return;
+  }
+  // http:// over the LAN has no clipboard API — select the text so ⌘C works.
+  const sel = window.getSelection();
+  const range = document.createRange();
+  range.selectNodeContents(document.getElementById('inviteModalUrl'));
+  sel.removeAllRanges();
+  sel.addRange(range);
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch (e) {}
+  done(ok);
+}
+
 function show(el, type, msg) {
   el.className = `result result-${type}`;
   el.textContent = msg;
