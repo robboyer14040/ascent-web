@@ -1372,6 +1372,7 @@ function animReset() {
 document.addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
   if (document.getElementById('coach-overlay')?.classList.contains('open')) return;
+  if (document.getElementById('compare-overlay')?.classList.contains('open')) return;
   if (document.getElementById('lightbox').style.display === 'flex') return;
   if (hudModeActive && elevChartData && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
     e.preventDefault();

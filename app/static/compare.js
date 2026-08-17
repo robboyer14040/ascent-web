@@ -1017,29 +1017,54 @@ function cmpScrub(val) {
   cmpUpdateUI((val / 1000) * cmpFastestElapsed());
 }
 
+// Space = play/pause while the Compare overlay is open.
+// preventDefault also stops the transport buttons re-firing when one has focus.
+function cmpIsOpen() {
+  return !!document.getElementById('compare-overlay')?.classList.contains('open');
+}
+document.addEventListener('keydown', e => {
+  if (e.key !== ' ' && e.key !== 'Spacebar') return;
+  const t = e.target.tagName;
+  if (t === 'INPUT' || t === 'SELECT' || t === 'TEXTAREA') return;
+  if (!cmpIsOpen() || !cmp.matches.length) return;
+  e.preventDefault();
+  cmpPlay();
+});
+
 // ── COMPARE PANE RESIZE ──────────────────────────────────────────────────────
 (function() {
   function initCmpResize() {
     const handle  = document.getElementById('cmp-maps-handle');
     const mapsRow = document.getElementById('compare-maps');
-    if (!handle || !mapsRow) return;
+    const aiPanel = document.getElementById('cmp-ai-analysis');
+    if (!handle || !mapsRow || !aiPanel) return;
 
-    let startY = 0, startH = 0;
+    const MIN_MAPS = 120;  // keep the maps usable
+    const MIN_AI   = 40;   // keep the AI ANALYSIS header visible
+
+    let startY = 0, startMapsH = 0, startAiH = 0;
 
     function startResize(clientY) {
-      startY = clientY;
-      startH = mapsRow.getBoundingClientRect().height;
+      // Nothing to trade height with until an analysis is on screen.
+      if (aiPanel.offsetParent === null) return false;
+      startY     = clientY;
+      startMapsH = mapsRow.getBoundingClientRect().height;
+      startAiH   = aiPanel.getBoundingClientRect().height;
       handle.classList.add('dragging');
       document.body.style.cursor = 'row-resize';
       document.body.style.userSelect = 'none';
       cmp._resizing = true;
       clearTimeout(cmp._resizeTimer);
+      return true;
     }
     function doResize(clientY) {
-      const dy   = clientY - startY;
-      const newH = Math.max(120, startH + dy);
-      mapsRow.style.flex = 'none';
-      mapsRow.style.height = newH + 'px';
+      // The drag resizes the AI panel only; the maps (flex:1) absorb the
+      // difference, so the profile and the activity table keep their heights.
+      const dy    = clientY - startY;
+      const maxAi = startAiH + Math.max(0, startMapsH - MIN_MAPS);
+      const newH  = Math.min(maxAi, Math.max(MIN_AI, startAiH - dy));
+      aiPanel.style.maxHeight = 'none';
+      aiPanel.style.height    = newH + 'px';
       if (cmp.map)     cmp.map.invalidateSize();
       if (cmp.zoomMap) cmp.zoomMap.invalidateSize();
     }
@@ -1072,14 +1097,14 @@ function cmpScrub(val) {
 
     handle.addEventListener('mousedown', e => {
       e.preventDefault();
-      startResize(e.clientY);
+      if (!startResize(e.clientY)) return;
       document.addEventListener('mousemove', onMouseMove);
       document.addEventListener('mouseup',   onMouseUp);
     });
     handle.addEventListener('touchstart', e => {
       e.preventDefault();
       const t = e.touches[0] || e.changedTouches[0];
-      if (t) startResize(t.clientY);
+      if (!t || !startResize(t.clientY)) return;
       document.addEventListener('touchmove', onTouchMove, {passive: false});
       document.addEventListener('touchend',  onTouchEnd,  {passive: false});
     }, {passive: false});
