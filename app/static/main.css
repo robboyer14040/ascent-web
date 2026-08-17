@@ -57,6 +57,12 @@ input,select{font:inherit}
 }
 .tb-search input{background:none;border:none;outline:none;color:var(--text);font-size:12px;width:100%}
 .tb-search input::placeholder{color:var(--muted2)}
+.tb-clear{
+  flex-shrink:0;cursor:pointer;width:15px;height:15px;border-radius:50%;
+  background:var(--muted2);color:var(--surface2);font-size:9px;line-height:1;
+  display:flex;align-items:center;justify-content:center;user-select:none;
+}
+.tb-clear:hover{background:var(--muted)}
 .tb-icon{color:var(--muted);font-size:15px;flex-shrink:0}
 .tb-btn{padding:4px 10px;border-radius:6px;font-size:12px;font-weight:500;background:var(--surface2);border:1px solid var(--border2);color:var(--text);display:flex;align-items:center;gap:5px;}
 .tb-btn:hover{background:var(--border2)}

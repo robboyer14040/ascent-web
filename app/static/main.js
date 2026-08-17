@@ -899,9 +899,23 @@ document.getElementById('yearFilter').addEventListener('change',e=>{ state.year=
 
 let searchTimer=null;
 document.getElementById('searchInput').addEventListener('input',e=>{
+  _syncSearchClear();
   clearTimeout(searchTimer);
   searchTimer=setTimeout(()=>{ state.search=e.target.value; applyFilterAndSort(); },250);
 });
+
+function _syncSearchClear(){
+  document.getElementById('searchClear').style.display =
+    document.getElementById('searchInput').value ? 'flex' : 'none';
+}
+
+function clearSearch(){
+  clearTimeout(searchTimer);
+  const inp=document.getElementById('searchInput');
+  inp.value=''; _syncSearchClear();
+  state.search=''; applyFilterAndSort();
+  inp.focus();
+}
 
 // ── COLUMN SORT ───────────────────────────────────────────────────────────────
 document.querySelectorAll('.ch[data-col]').forEach(el=>{
@@ -1871,6 +1885,7 @@ async function applyUserSelection() {
   // Reset filters
   state.search = ''; state.actType = ''; state.year = '';
   document.getElementById('searchInput').value = '';
+  _syncSearchClear();
   document.getElementById('typeFilter').value  = '';
   document.getElementById('yearFilter').value  = '';
   state.all = []; state.filtered = []; state.selected = null; state.selectedId = null;
