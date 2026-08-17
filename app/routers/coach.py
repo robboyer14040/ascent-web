@@ -1552,7 +1552,9 @@ Be concise, specific, and reference actual numbers from the data. Do not use mar
                     },
                     json={
                         "model":      model,
-                        "max_tokens": 1024,
+                        # max_tokens covers thinking + reply, and Opus 5 thinks by
+                        # default — 1024 truncated the analysis mid-sentence.
+                        "max_tokens": 4096,
                         "messages":   [{"role": "user", "content": prompt}],
                     },
                 )
