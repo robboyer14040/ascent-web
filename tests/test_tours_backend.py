@@ -1001,7 +1001,7 @@ def capture_claude(monkeypatch):
     class _Resp:
         status_code = 200
         def json(self):
-            return {"content": [{"text": "A summary of the col."}]}
+            return {"content": [{"type": "text", "text": "A summary of the col."}]}
 
     class _Client:
         def __init__(self, *a, **k): pass
@@ -1084,3 +1084,52 @@ def test_completed_summary_is_cached_and_not_regenerated(client, shared_tour,
     client.get("/tours/share/tok123/stages/10/ai-summary")
     client.get("/tours/share/tok123/stages/10/ai-summary")
     assert len(capture_claude) == 1
+
+
+# ── Opus 5 thinking blocks ────────────────────────────────────────────────────
+
+def test_first_text_skips_thinking_blocks():
+    """Opus 5 thinks by default, so content[0] is often not the reply."""
+    from app.routers.coach import first_text
+    assert first_text({"content": [
+        {"type": "thinking", "thinking": "", "signature": "abc"},
+        {"type": "text", "text": "  the reply  "},
+    ]}) == "the reply"
+    # Plain single-text responses still work.
+    assert first_text({"content": [{"type": "text", "text": "hi"}]}) == "hi"
+    # Nothing usable must not raise.
+    assert first_text({"content": [{"type": "thinking", "thinking": ""}]}) == ""
+    assert first_text({}) == ""
+
+
+def test_summary_survives_a_thinking_first_response(client, shared_tour, monkeypatch):
+    """Regression: content[0]["text"] raised KeyError and blanked the card."""
+    class _Resp:
+        status_code = 200
+        def json(self):
+            return {"content": [
+                {"type": "thinking", "thinking": "", "signature": "sig"},
+                {"type": "text", "text": "A summary of the col."},
+            ]}
+    class _Client:
+        def __init__(self, *a, **k): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): return False
+        async def post(self, url, **kw): return _Resp()
+    import httpx
+    monkeypatch.setattr(httpx, "AsyncClient", _Client)
+    async def _places(pts): return []
+    import app.routers.weather as wx
+    monkeypatch.setattr(wx, "fetch_location_points", _places)
+
+    r = client.get("/tours/share/tok123/stages/10/ai-summary")
+    assert r.status_code == 200
+    assert r.json()["summary"] == "A summary of the col."
+
+
+def test_token_budgets_leave_room_for_thinking():
+    """max_tokens covers thinking + reply; small budgets truncate the prose."""
+    import re, pathlib
+    for f in ("app/routers/tours.py", "app/routers/api.py"):
+        for n in re.findall(r'"max_tokens":\s*(\d+)', pathlib.Path(f).read_text()):
+            assert int(n) >= 1000, f"{f}: max_tokens {n} is too small for thinking"

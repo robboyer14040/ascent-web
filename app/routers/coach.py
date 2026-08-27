@@ -511,6 +511,18 @@ def _resolve_model(model_id: Optional[str]) -> str:
     return _MODEL_ALIASES.get(model_id, DEFAULT_MODEL)
 
 
+def first_text(resp_json: dict) -> str:
+    """The reply text from a Messages response.
+
+    Opus 5 thinks by default, so content[0] is often a thinking block with no
+    "text" key — the reply is the first block that actually is text.
+    """
+    for block in resp_json.get("content") or []:
+        if block.get("type") == "text" and block.get("text"):
+            return block["text"].strip()
+    return ""
+
+
 def _model_info(model_id: str) -> dict:
     return MODELS[_resolve_model(model_id)]
 
@@ -859,7 +871,8 @@ async def coach_today(request: Request, model: str = DEFAULT_MODEL):
             },
             json={
                 "model":    safe_model,
-                "max_tokens": 500,
+                # Covers thinking + reply; Opus 5 thinks by default.
+                "max_tokens": 2000,
                 "messages": [{"role": "user", "content": prompt}],
             },
         )
@@ -867,7 +880,7 @@ async def coach_today(request: Request, model: str = DEFAULT_MODEL):
     if resp.status_code != 200:
         raise HTTPException(502, f"Claude API error: {resp.status_code}")
 
-    raw = resp.json()["content"][0]["text"].strip()
+    raw = first_text(resp.json())
 
     # Strip markdown fences if present
     if raw.startswith("```"):

@@ -1919,7 +1919,7 @@ async def stage_route_forecast(tour_id: int, stage_id: int, request: Request):
 async def get_tour_ai_summary(tour_id: int, request: Request, model: Optional[str] = Query(default=None), force: bool = Query(default=False)):
     """Return an AI-generated summary of the entire tour (structure only, no activity data)."""
     import os, httpx
-    from app.routers.coach import MODELS, DEFAULT_MODEL, _resolve_model
+    from app.routers.coach import MODELS, DEFAULT_MODEL, _resolve_model, first_text
     uid = require_user(request)
 
     db = db_getter()
@@ -1994,7 +1994,8 @@ async def get_tour_ai_summary(tour_id: int, request: Request, model: Optional[st
             },
             json={
                 "model":      _resolve_model(model),
-                "max_tokens": 350,
+                # Covers thinking + reply; Opus 5 thinks by default.
+                "max_tokens": 2000,
                 "messages":   [{"role": "user", "content": prompt}],
             },
         )
@@ -2002,7 +2003,7 @@ async def get_tour_ai_summary(tour_id: int, request: Request, model: Optional[st
     if resp.status_code != 200:
         raise HTTPException(502, f"Claude API error: {resp.status_code}")
 
-    summary = resp.json()["content"][0]["text"].strip()
+    summary = first_text(resp.json())
 
     # Persist the generated summary
     con2 = sqlite3.connect(db.path, timeout=10)
@@ -2030,7 +2031,7 @@ async def get_stage_ai_advice(
     readonly=true returns cached advice only ({"advice": null} if none exists).
     """
     import os, httpx
-    from app.routers.coach import MODELS, DEFAULT_MODEL, _resolve_model
+    from app.routers.coach import MODELS, DEFAULT_MODEL, _resolve_model, first_text
     uid = require_user(request)
 
     actual_uid = match_user_id if match_user_id is not None else uid
@@ -2174,7 +2175,8 @@ async def get_stage_ai_advice(
             },
             json={
                 "model":      _resolve_model(model),
-                "max_tokens": 500,
+                # Covers thinking + reply; Opus 5 thinks by default.
+                "max_tokens": 2500,
                 "messages":   [{"role": "user", "content": prompt}],
             },
         )
@@ -2182,7 +2184,7 @@ async def get_stage_ai_advice(
     if resp.status_code != 200:
         raise HTTPException(502, f"Claude API error: {resp.status_code}")
 
-    advice = resp.json()["content"][0]["text"].strip()
+    advice = first_text(resp.json())
 
     con3 = sqlite3.connect(db.path, timeout=10)
     try:
@@ -2205,7 +2207,7 @@ async def _generate_stage_summary(db, tour_id: int, stage_id: int, user_id: int,
     climbs — and only reports performance once the user has ridden the stage.
     """
     import httpx
-    from app.routers.coach import _resolve_model
+    from app.routers.coach import _resolve_model, first_text
 
     con = sqlite3.connect(db.path, timeout=10)
     try:
@@ -2333,7 +2335,8 @@ async def _generate_stage_summary(db, tour_id: int, stage_id: int, user_id: int,
             },
             json={
                 "model":      _resolve_model(model),
-                "max_tokens": 700,
+                # Covers thinking + reply; Opus 5 thinks by default.
+                "max_tokens": 2500,
                 "messages":   [{"role": "user", "content": prompt}],
             },
         )
@@ -2341,7 +2344,10 @@ async def _generate_stage_summary(db, tour_id: int, stage_id: int, user_id: int,
     if resp.status_code != 200:
         raise HTTPException(502, f"Claude API error: {resp.status_code}")
 
-    summary = resp.json()["content"][0]["text"].strip()
+    summary = first_text(resp.json())
+    if not summary:
+        # No text block at all — cache nothing rather than an empty card.
+        raise HTTPException(502, "Claude API returned no text")
 
     con2 = sqlite3.connect(db.path, timeout=10)
     try:

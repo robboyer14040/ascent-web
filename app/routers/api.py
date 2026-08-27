@@ -217,6 +217,7 @@ async def me(request: Request):
 @router.post("/activities/{activity_id}/suggest-title")
 async def suggest_activity_title(activity_id: int, request: Request):
     """Call Claude to generate a witty/humorous activity title based on stats."""
+    from app.routers.coach import first_text
     import httpx
 
     uid = require_user(request)
@@ -311,7 +312,8 @@ async def suggest_activity_title(activity_id: int, request: Request):
             },
             json={
                 "model":       "claude-haiku-4-5-20251001",
-                "max_tokens":  300,
+                # Covers thinking + reply; Opus 5 thinks by default.
+                "max_tokens":  1500,
                 "temperature": 1,
                 "messages":    [{"role": "user", "content": prompt}],
             },
@@ -320,7 +322,7 @@ async def suggest_activity_title(activity_id: int, request: Request):
     if resp.status_code != 200:
         raise HTTPException(502, f"Claude API error: {resp.status_code}")
 
-    title = _pick_title(resp.json()["content"][0]["text"])
+    title = _pick_title(first_text(resp.json()))
     return {"title": title}
 
 
@@ -366,6 +368,7 @@ def _act_stats_str(a: dict) -> str:
 @router.get("/activities/{activity_id}/ai-summary")
 async def activity_ai_summary(activity_id: int, request: Request, model: str = "claude-haiku-4-5-20251001", refresh: bool = False):
     """Return a cached or freshly generated AI summary for an activity."""
+    from app.routers.coach import first_text
     import httpx, sqlite3, time as _time
 
     uid = require_user(request)
@@ -509,7 +512,8 @@ async def activity_ai_summary(activity_id: int, request: Request, model: str = "
             },
             json={
                 "model":      safe_model,
-                "max_tokens": 150,
+                # Covers thinking + reply; Opus 5 thinks by default.
+                "max_tokens": 1500,
                 "messages":   [{"role": "user", "content": prompt}],
             },
         )
@@ -517,7 +521,7 @@ async def activity_ai_summary(activity_id: int, request: Request, model: str = "
     if resp.status_code != 200:
         raise HTTPException(502, f"Claude API error: {resp.status_code}")
 
-    summary = resp.json()["content"][0]["text"].strip()
+    summary = first_text(resp.json())
 
     # ── Persist ───────────────────────────────────────────────────────────────
     try:
