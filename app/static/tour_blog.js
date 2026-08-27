@@ -70,6 +70,31 @@
     initOverviewMap();
     CONTENT.stages.forEach(s => { initStageMap(s); initStageElev(s); loadStagePhotos(s); hydrateStageMeta(s); renderStageProse(s); });
     renderAllComments();
+    pollPendingSummaries();
+  }
+
+  // Summaries missing on load are queued server-side and built one at a time,
+  // so re-fetch periodically and drop each in as it lands.
+  let _aiPollTimer = null;
+  function pollPendingSummaries() {
+    clearTimeout(_aiPollTimer);
+    if (!CONTENT.stages.some(s => s.ai_pending)) return;
+    _aiPollTimer = setTimeout(async () => {
+      let fresh;
+      try {
+        fresh = await fetch(`/tours/blog/${TOKEN}/content`).then(r => r.ok ? r.json() : null);
+      } catch (e) { fresh = null; }
+      if (!fresh) { pollPendingSummaries(); return; }
+      const byId = new Map(fresh.stages.map(s => [s.id, s]));
+      CONTENT.stages.forEach(s => {
+        const f = byId.get(s.id);
+        if (!f || !s.ai_pending || f.ai_pending) return;
+        s.ai_html = f.ai_html;
+        s.ai_pending = false;
+        renderStageProse(s);
+      });
+      pollPendingSummaries();
+    }, 8000);
   }
 
   // ── Cover ─────────────────────────────────────────────────────────────────
@@ -122,6 +147,19 @@
     setTimeout(() => { btn.textContent = orig; }, 1800);
   }
 
+  // ── AI summary (read-only for everyone, owner included) ─────────────────────
+  // Deliberately separate from the author's own prose — this is the machine's
+  // account of the route, never something a person edits.
+  function aiBlock(label, html, pending) {
+    if (html && html.trim()) {
+      return `<div class="ai-sum"><div class="ai-sum-k">${label}</div>` +
+             `<div class="blog-prose ai-sum-body">${html}</div></div>`;
+    }
+    if (!pending) return '';
+    return `<div class="ai-sum"><div class="ai-sum-k">${label}</div>` +
+           `<div class="blog-prose ai-sum-body ai-sum-wait">Generating summary…</div></div>`;
+  }
+
   // ── Intro ───────────────────────────────────────────────────────────────────
   function buildIntroSection() {
     const sec = document.createElement('div');
@@ -137,13 +175,13 @@
     sec.innerHTML = `<div class="edit-row"><div class="blog-h" style="margin:0">Introduction</div>${editBtn}</div>` +
       (hasIntro
         ? `<div class="blog-prose">${CONTENT.intro_html}</div>`
-        : `<div class="blog-prose empty-hint">${B.isOwner ? 'No introduction yet — click “Edit intro” to add one.' : ''}</div>`);
+        : `<div class="blog-prose empty-hint">${B.isOwner ? 'No introduction yet — click “Edit intro” to add one.' : ''}</div>`) +
+      aiBlock('AI Tour Summary', CONTENT.intro_ai_html, false);
     const btn = sec.querySelector('#edit-intro-btn');
     if (btn) btn.onclick = () => editIntro(sec);
   }
 
   function editIntro(sec) {
-    const canSeed = CONTENT.intro_seed && !(CONTENT.intro_raw || '').trim();
     sec.innerHTML = `<div class="blog-h">Edit introduction</div>
       <div class="blog-editor">
         <textarea id="intro-ta">${esc(CONTENT.intro_raw || '')}</textarea>
@@ -151,12 +189,10 @@
         <div class="actions">
           <button class="btn-primary" id="intro-save">Save</button>
           <button class="btn-ghost" id="intro-cancel">Cancel</button>
-          ${canSeed ? `<button class="btn-ghost" id="intro-seed">Seed from AI summary</button>` : ''}
         </div>
       </div>`;
     const ta = sec.querySelector('#intro-ta');
     sec.querySelector('#intro-cancel').onclick = () => renderIntro(sec);
-    if (canSeed) sec.querySelector('#intro-seed').onclick = () => { ta.value = CONTENT.intro_seed; };
     sec.querySelector('#intro-save').onclick = async () => {
       const body = { intro: ta.value, cover_media: CONTENT.cover_media };
       const r = await fetch(`/tours/blog/${TOKEN}/intro`, {
@@ -246,11 +282,12 @@
     const host = document.getElementById(`prose-${s.id}`);
     if (!host) return;
     const has = !!(s.body_html && s.body_html.trim());
-    // Non-owners with no description see nothing at all here.
-    if (!has && !B.isOwner) { host.innerHTML = ''; return; }
+    const ai = aiBlock(`AI Stage Summary`, s.ai_html, s.ai_pending);
+    // Non-owners with no description still get the AI summary, if there is one.
+    if (!has && !B.isOwner) { host.innerHTML = ai; return; }
     const editBtn = B.isOwner
       ? `<button class="edit-btn" id="ep-${s.id}">${has ? 'Edit description' : 'Add description'}</button>` : '';
-    host.innerHTML =
+    host.innerHTML = ai +
       `<div class="edit-row" style="margin-top:14px"><div class="blog-h" style="margin:0">Description</div>${editBtn}</div>` +
       (has ? `<div class="blog-prose">${s.body_html}</div>`
            : `<div class="blog-prose empty-hint">No description yet — click “Add description”.</div>`);
@@ -260,7 +297,6 @@
 
   function editStageProse(s) {
     const host = document.getElementById(`prose-${s.id}`);
-    const canSeed = s.ai_seed && !(s.body_raw || '').trim();
     host.innerHTML = `<div class="edit-row" style="margin-top:14px"><div class="blog-h" style="margin:0">Edit description</div></div>
       <div class="blog-editor">
         <textarea id="ta-${s.id}">${esc(s.body_raw || '')}</textarea>
@@ -268,12 +304,10 @@
         <div class="actions">
           <button class="btn-primary" id="sv-${s.id}">Save</button>
           <button class="btn-ghost" id="cn-${s.id}">Cancel</button>
-          ${canSeed ? `<button class="btn-ghost" id="sd-${s.id}">Seed from AI summary</button>` : ''}
         </div>
       </div>`;
     const ta = host.querySelector(`#ta-${s.id}`);
     host.querySelector(`#cn-${s.id}`).onclick = () => renderStageProse(s);
-    if (canSeed) host.querySelector(`#sd-${s.id}`).onclick = () => { ta.value = s.ai_seed; };
     host.querySelector(`#sv-${s.id}`).onclick = async () => {
       const r = await fetch(`/tours/blog/${TOKEN}/stage/${s.id}`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },

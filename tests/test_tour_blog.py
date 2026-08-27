@@ -10,6 +10,7 @@ import sqlite3
 import time
 
 from app.auth import create_session_token, SESSION_COOKIE
+from app.routers import tours
 from app.routers.tours import _ensure_tables
 from app.routers.tour_blog import _ensure_blog_tables, render_md
 from app.static_map import elevation_svg, render_route_png
@@ -518,3 +519,92 @@ def test_pdf_job_full_flow(client, test_db, make_user, monkeypatch):
     assert dl.status_code == 200
     assert dl.headers["content-type"] == "application/pdf"
     assert dl.content[:4] == b"%PDF"
+
+
+# ── AI summaries in the blog and the book ─────────────────────────────────────
+
+def _seed_summaries(db_path, owner_uid, tour_ai="Tour overview.", stage_ai="Stage overview."):
+    """Give the tour a summary and its first stage one, owned by owner_uid."""
+    con = sqlite3.connect(db_path, timeout=10)
+    try:
+        tours._ensure_tables(con)
+        sid = con.execute("SELECT id FROM tour_stages ORDER BY id LIMIT 1").fetchone()[0]
+        con.execute("UPDATE tours SET ai_summary=?", (tour_ai,))
+        con.execute("INSERT OR REPLACE INTO tour_stage_ai_summary "
+                    "(stage_id, user_id, summary, completed) VALUES (?,?,?,0)",
+                    (sid, owner_uid, stage_ai))
+        con.commit()
+        return sid
+    finally:
+        con.close()
+
+
+def test_blog_shows_ai_summaries_read_only(client, test_db, make_user):
+    """Both summaries must reach the page as rendered HTML of their own."""
+    uid = make_user()
+    _make_tour_with_share(test_db.path, uid)
+    _seed_summaries(test_db.path, uid)
+    d = client.get(f"/tours/blog/{TOKEN}/content").json()
+    assert "Tour overview." in d["intro_ai_html"]
+    assert "Stage overview." in d["stages"][0]["ai_html"]
+    assert d["stages"][0]["ai_pending"] is False
+    # It is its own field — never folded into the owner's editable prose.
+    assert "Stage overview." not in (d["stages"][0]["body_raw"] or "")
+    assert "Tour overview." not in (d["intro_raw"] or "")
+
+
+def test_blog_does_not_show_another_riders_summary(client, test_db, make_user):
+    """Summaries are per-rider; the blog must show its owner's, not whoever's
+    row happened to come first."""
+    owner = make_user()
+    other = make_user()
+    _make_tour_with_share(test_db.path, owner)
+    con = sqlite3.connect(test_db.path, timeout=10)
+    try:
+        tours._ensure_tables(con)
+        sid = con.execute("SELECT id FROM tour_stages ORDER BY id LIMIT 1").fetchone()[0]
+        con.execute("INSERT OR REPLACE INTO tour_stage_ai_summary "
+                    "(stage_id, user_id, summary, completed) VALUES (?,?,?,0)",
+                    (sid, other, "Someone else's ride."))
+        con.commit()
+    finally:
+        con.close()
+    d = client.get(f"/tours/blog/{TOKEN}/content").json()
+    assert "Someone else" not in (d["stages"][0]["ai_html"] or "")
+    assert d["stages"][0]["ai_pending"] is True
+
+
+def test_blog_marks_missing_summaries_pending(client, test_db, make_user):
+    uid = make_user()
+    _make_tour_with_share(test_db.path, uid)
+    d = client.get(f"/tours/blog/{TOKEN}/content").json()
+    assert d["stages"][0]["ai_html"] == ""
+    assert d["stages"][0]["ai_pending"] is True
+
+
+def test_pdf_payload_carries_both_summaries(client, test_db, make_user):
+    """The book renders the same summaries as the page."""
+    uid = make_user()
+    _make_tour_with_share(test_db.path, uid)
+    _seed_summaries(test_db.path, uid)
+    from app.routers.tour_blog import _pdf_context
+    con = sqlite3.connect(test_db.path, timeout=10)
+    try:
+        data = _pdf_context(con, TOKEN)
+    finally:
+        con.close()
+    assert "Tour overview." in data["intro_ai_html"]
+    assert "Stage overview." in data["stages"][0]["ai_html"]
+
+
+def test_render_ai_strips_markdown_headings():
+    """Models open with a heading despite the prompt; render_md has no heading
+    rule, so it would otherwise print a literal '#'."""
+    from app.routers.tour_blog import render_ai
+    out = render_ai("# Stage 3: Over the Col\n\nA long climb.")
+    assert "#" not in out
+    assert "Stage 3: Over the Col" in out
+    assert "A long climb." in out
+    # Ordinary prose and inline formatting are untouched.
+    assert "<strong>bold</strong>" in render_ai("Some **bold** text.")
+    assert render_ai("") == ""

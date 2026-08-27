@@ -29,6 +29,7 @@ from app.auth import get_session_user_id
 from app.routers.tours import (
     _ensure_tables,
     _completions_for_user,
+    _start_summary_job,
     build_activity,
 )
 
@@ -172,6 +173,52 @@ def _apply_media_layout(items, get_url, order: list, hidden: list):
     return sorted(kept, key=lambda it: rank.get(get_url(it), len(rank)))
 
 
+def render_ai(text: Optional[str]) -> str:
+    """Render an AI summary for display.
+
+    The models sometimes open with a markdown heading despite being asked not
+    to. render_md is markdown-lite and has no heading rule, so those would show
+    as a literal "#" — strip them, since the block already carries its own label.
+    """
+    if not text:
+        return ""
+    lines = [re.sub(r"^\s{0,3}#{1,6}\s+", "", ln) for ln in text.splitlines()]
+    return render_md("\n".join(lines).strip())
+
+
+def _ai_summaries(con, tour_id: int, owner_uid: int) -> dict:
+    """{stage_id: summary} for this tour's owner.
+
+    Summaries are per-rider (the same stage reads differently once ridden), so
+    they must be keyed by the blog owner rather than taken from whichever row
+    happens to come first.
+    """
+    rows = con.execute(
+        "SELECT sa.stage_id, sa.summary FROM tour_stage_ai_summary sa "
+        "JOIN tour_stages ts ON ts.id = sa.stage_id "
+        "WHERE ts.tour_id=? AND sa.user_id=?",
+        (tour_id, owner_uid),
+    ).fetchall()
+    return {r[0]: r[1] for r in rows}
+
+
+def _queue_missing_summaries(db, tour_id: int, owner_uid: int, attempt_id,
+                             stage_ids: list) -> None:
+    """Start generation for stages with no summary yet.
+
+    Jobs are serialized by tours._gate(), so queueing a whole tour is safe —
+    they build one at a time and each page poll picks up whatever has landed.
+    """
+    api_key = (db.get_user(owner_uid) or {}).get("anthropic_api_key") or ""
+    if not api_key:
+        import os
+        api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        return
+    for sid in stage_ids:
+        _start_summary_job(db, tour_id, sid, owner_uid, attempt_id, api_key, None, False)
+
+
 def _stage_rows(con, tour_id: int):
     return con.execute(
         "SELECT id, stage_num, name, distance_mi, climb_ft, start_lat, start_lon, alt_override "
@@ -261,10 +308,11 @@ async def tour_blog_content(token: str):
         # Per-stage blog-only media layout (order + hidden), keyed by media URL.
         layout = _media_layout(con, tour_id, owner_uid)
 
-        # AI-summary seeds: tour-level for the intro, per-stage for each section.
+        # AI summaries — shown read-only, separate from the owner's own prose.
         tour_ai = con.execute(
             "SELECT ai_summary FROM tours WHERE id=?", (tour_id,)
         ).fetchone()
+        ai_map = _ai_summaries(con, tour_id, owner_uid)
         for s in stages:
             # Default the stage note to the Strava activity description; once the
             # owner saves an edit it takes over. One note, not two.
@@ -272,25 +320,31 @@ async def tour_blog_content(token: str):
             raw = saved or _strava_notes(con, (s["completion"] or {}).get("activity_id"))
             s["body_raw"] = raw
             s["body_html"] = render_md(raw)
-            seed = con.execute(
-                "SELECT summary FROM tour_stage_ai_summary WHERE stage_id=?", (s["id"],)
-            ).fetchone()
-            s["ai_seed"] = seed[0] if seed else ""
+            ai = ai_map.get(s["id"], "")
+            s["ai_html"] = render_ai(ai)
+            # Tells the page whether to keep polling for one still being built.
+            s["ai_pending"] = not ai
             lay = layout.get(s["id"], {})
             s["media_order"] = lay.get("order", [])
             s["media_hidden"] = lay.get("hidden", [])
 
-        return JSONResponse({
+        missing = [s["id"] for s in stages if s["ai_pending"]]
+        payload = {
             "id":          tour_id,
             "title":       title,
             "intro_raw":   intro_raw or "",
             "intro_html":  render_md(intro_raw),
-            "intro_seed":  (tour_ai[0] if tour_ai and tour_ai[0] else ""),
+            "intro_ai_html": render_ai(tour_ai[0] if tour_ai and tour_ai[0] else ""),
             "cover_media": cover_media,
             "stages":      stages,
-        })
+        }
     finally:
         con.close()
+
+    # Build whatever is missing in the background; the page polls for it.
+    if missing:
+        _queue_missing_summaries(db_getter(), tour_id, owner_uid, attempt_id, missing)
+    return JSONResponse(payload)
 
 
 # ── Owner editing ─────────────────────────────────────────────────────────────
@@ -647,6 +701,8 @@ def _pdf_context(con, token: str, progress=None) -> dict:
             (tour_id, owner_uid),
         ).fetchone()
         intro_html = render_md(blog[0]) if blog and blog[0] else ""
+        tour_ai_row = con.execute("SELECT ai_summary FROM tours WHERE id=?", (tour_id,)).fetchone()
+        intro_ai_html = render_ai(tour_ai_row[0] if tour_ai_row and tour_ai_row[0] else "")
         cover_uri = None
         if blog and blog[1]:
             f = _media_file(con, blog[1])
@@ -659,6 +715,7 @@ def _pdf_context(con, token: str, progress=None) -> dict:
             (tour_id, owner_uid),
         ).fetchall()}
         layout = _media_layout(con, tour_id, owner_uid)
+        ai_map = _ai_summaries(con, tour_id, owner_uid)
 
         def unit_dist(mi): return f"{mi*1.60934:.1f} km" if metric else f"{mi:.1f} mi"
         def unit_climb(ft): return f"{round(ft*0.3048)} m" if metric else f"{round(ft)} ft"
@@ -717,6 +774,7 @@ def _pdf_context(con, token: str, progress=None) -> dict:
                 "location": loc_text,
                 "weather": wx_text,
                 "elev_svg": elevation_svg(pts, metric) if len(pts) >= 2 else "",
+                "ai_html": render_ai(ai_map.get(s["id"], "")),
                 "body_html": render_md(body_raw),
                 "figs": _pdf_stage_media(
                     con, c["activity_id"],
@@ -726,7 +784,8 @@ def _pdf_context(con, token: str, progress=None) -> dict:
             })
 
         return {
-            "title": title, "author": author, "intro_html": intro_html, "cover_uri": cover_uri,
+            "title": title, "author": author, "intro_html": intro_html,
+            "intro_ai_html": intro_ai_html, "cover_uri": cover_uri,
             "toc": [{"stage_num": s["stage_num"], "name": s["name"],
                      "done": bool(s["completion"])} for s in stages],
             "tot_dist": unit_dist(tot_dist), "tot_climb": unit_climb(tot_climb),

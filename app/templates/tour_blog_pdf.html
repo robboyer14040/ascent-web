@@ -51,6 +51,11 @@
   .stage-meta { margin: 6px 0 10px; }
   .stage-meta .sm-loc, .stage-meta .sm-wx { font-size: 9.5pt; color: #475569; line-height: 1.5;
     font-family: Helvetica, "DejaVu Sans", Arial, sans-serif; }
+  /* AI summary — set apart from the author's own writing, never mixed in. */
+  .ai-sum { border-left: 2.5pt solid #cbd5e1; padding: 2pt 0 2pt 9pt; margin: 8px 0 10px; }
+  .ai-sum .ai-k { font-size: 7.5pt; font-weight: 700; letter-spacing: .06em;
+                  text-transform: uppercase; color: #64748b; margin-bottom: 3px; }
+  .ai-sum p { font-size: 9.5pt; color: #334155; line-height: 1.55; margin: 0 0 5px; }
   .stage-meta .sm-k { display: inline-block; min-width: 58px; font-size: 7.5pt; font-weight: 700;
     text-transform: uppercase; letter-spacing: .05em; color: #94a3b8; }
   .body { font-size: 11pt; line-height: 1.6; margin: 4px 0 8px; }
@@ -82,6 +87,9 @@
   <div class="toc-h">Introduction</div>
   <div class="intro">{{ intro_html | safe }}</div>
   {% endif %}
+  {% if intro_ai_html %}
+  <div class="ai-sum"><div class="ai-k">AI Tour Summary</div>{{ intro_ai_html | safe }}</div>
+  {% endif %}
   <div class="toc-h">The Tour</div>
   <div class="totals">
     <div class="tchip"><div class="l">Stages</div><div class="v">{{ done }}/{{ total }}</div></div>
@@ -111,6 +119,9 @@
     {% if s.location %}<div class="sm-loc"><span class="sm-k">Route</span>{{ s.location }}</div>{% endif %}
     {% if s.weather %}<div class="sm-wx"><span class="sm-k">Weather</span>{{ s.weather }}</div>{% endif %}
   </div>
+  {% endif %}
+  {% if s.ai_html %}
+  <div class="ai-sum"><div class="ai-k">AI Stage Summary</div>{{ s.ai_html | safe }}</div>
   {% endif %}
   {% if s.body_html %}<div class="body">{{ s.body_html | safe }}</div>{% endif %}
   {% if s.elev_svg %}{{ s.elev_svg | safe }}{% endif %}

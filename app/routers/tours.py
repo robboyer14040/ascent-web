@@ -32,6 +32,19 @@ STAGE_SUMMARY_MODEL = "claude-sonnet-5"
 _summary_jobs: set = set()
 _summary_tasks: set = set()
 
+# Generation reverse-geocodes through Nominatim, whose policy is one request a
+# second for the whole application. A page showing every stage at once would
+# otherwise start dozens of generations together and get the app blocked, so
+# only one summary is ever built at a time.
+_summary_gate: Optional[asyncio.Semaphore] = None
+
+
+def _gate() -> asyncio.Semaphore:
+    global _summary_gate
+    if _summary_gate is None:
+        _summary_gate = asyncio.Semaphore(1)
+    return _summary_gate
+
 M_TO_MI    = 0.000621371
 M_TO_FT    = 3.28084
 _EXP_ALPHA = 0.18
@@ -2262,9 +2275,10 @@ def _start_summary_job(db, tour_id: int, stage_id: int, user_id: int,
 
     async def _run():
         try:
-            await _generate_stage_summary(
-                db, tour_id, stage_id, user_id, attempt_id, api_key, model, force
-            )
+            async with _gate():
+                await _generate_stage_summary(
+                    db, tour_id, stage_id, user_id, attempt_id, api_key, model, force
+                )
         except Exception:
             pass          # the next poll simply asks again
         finally:
