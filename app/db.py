@@ -937,12 +937,19 @@ class AscentDB:
         where = base_where if base_where else "WHERE creation_time_s IS NOT NULL"
         if base_where:
             where += " AND creation_time_s IS NOT NULL"
+        # Bucket by the activity's own local time, not UTC — a Sunday-evening ride
+        # in UTC-8 is already Monday in UTC and would land in the wrong week.
+        # Offsets outside the valid ±14h range are treated as unknown (0).
+        local_dt = ("datetime(creation_time_s + CASE WHEN seconds_from_gmt_at_sync"
+                    " BETWEEN -50400 AND 50400 THEN seconds_from_gmt_at_sync ELSE 0 END,"
+                    " 'unixepoch')")
+
         if month:
             # Filter by the activity's actual date falling in the month.
             # Weeks that straddle the month boundary will still appear, showing
             # only the days that fall within the selected month.
             where += (
-                f" AND strftime('%m', date(datetime(creation_time_s,'unixepoch')))"
+                f" AND strftime('%m', date({local_dt}))"
                 f" = '{month:02d}'"
             )
 
@@ -950,9 +957,9 @@ class AscentDB:
         # SQLite: 'weekday 1' = Monday; subtract days to get Monday of that week
         rows = self._con.execute(
             f"""SELECT
-                    date(datetime(creation_time_s,'unixepoch'), '-' || ((strftime('%w', datetime(creation_time_s,'unixepoch')) + 6) % 7) || ' days') AS week,
+                    date({local_dt}, '-' || ((strftime('%w', {local_dt}) + 6) % 7) || ' days') AS week,
                     COUNT(*)               AS count,
-                    COUNT(DISTINCT date(datetime(creation_time_s,'unixepoch'))) AS active_days,
+                    COUNT(DISTINCT date({local_dt})) AS active_days,
                     SUM(distance_mi)       AS dist_mi,
                     SUM(src_total_climb)   AS climb_ft,
                     SUM(src_moving_time_s) AS moving_s,
