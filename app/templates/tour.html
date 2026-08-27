@@ -2050,7 +2050,11 @@ async function renderDetail(activeId) {
         if(txt) { txt.textContent = 'Generating summary…'; txt.classList.add('ai-card-loading'); }
         if(btn) btn.style.opacity = '0.4';
         const forceParam = force ? '&force=1' : '';
-        fetch(`/tours/${tourInfo.id}/stages/${_stageIdForSummary}/ai-summary?model=${encodeURIComponent(tourCoachModel)}${forceParam}`)
+        // Key the summary to the rider and attempt being viewed, so its
+        // completion state matches what the page is showing.
+        const who = (tourMatchUserId ? `&match_user_id=${tourMatchUserId}` : '')
+                  + (currentAttemptId ? `&attempt_id=${currentAttemptId}` : '');
+        fetch(`/tours/${tourInfo.id}/stages/${_stageIdForSummary}/ai-summary?model=${encodeURIComponent(tourCoachModel)}${forceParam}${who}`)
           .then(r => r.ok ? r.json() : null)
           .then(d => {
             const el2 = document.getElementById('stage-ai-summary-text');

@@ -136,10 +136,36 @@ def _ensure_tables(con):
     """)
     con.execute("""
         CREATE TABLE IF NOT EXISTS tour_stage_ai_summary (
-            stage_id INTEGER NOT NULL PRIMARY KEY,
-            summary  TEXT    NOT NULL
+            stage_id  INTEGER NOT NULL,
+            user_id   INTEGER NOT NULL DEFAULT 0,
+            summary   TEXT    NOT NULL,
+            completed INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (stage_id, user_id)
         )
     """)
+    # Older DBs keyed summaries by stage alone, and their text predates the
+    # route/terrain context. Both make them wrong to keep, so rebuild empty.
+    try:
+        cols = {r[1] for r in con.execute("PRAGMA table_info(tour_stage_ai_summary)")}
+        if "user_id" not in cols:
+            con.execute("DROP TABLE tour_stage_ai_summary")
+            con.execute("""
+                CREATE TABLE tour_stage_ai_summary (
+                    stage_id  INTEGER NOT NULL,
+                    user_id   INTEGER NOT NULL DEFAULT 0,
+                    summary   TEXT    NOT NULL,
+                    completed INTEGER NOT NULL DEFAULT 0,
+                    PRIMARY KEY (stage_id, user_id)
+                )
+            """)
+            con.commit()
+    except Exception:
+        pass
+    try:
+        con.execute("ALTER TABLE tour_stage_ai_summary "
+                    "ADD COLUMN completed INTEGER NOT NULL DEFAULT 0")
+    except Exception:
+        pass
     con.execute("""
         CREATE TABLE IF NOT EXISTS tour_stages (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -648,6 +674,146 @@ import re as _re
 _LEADING_NUM_RE = _re.compile(r"^\s*(\d+)")               # "3 Alpe d'Huez"
 _STAGE_WORD_RE  = _re.compile(r"\bstage\s*(\d+)", _re.I)  # "Stage 3" / "stage 3"
 _CODE_PREFIX_RE = _re.compile(r"^\s*([A-Za-z]{1,4})\s*(\d+)")  # "CdP 3", "TdF15"
+
+
+def _stage_points_raw(con, stage_id: int) -> list:
+    """[(lat, lon, alt_ft)] for a stage, in route order."""
+    return con.execute(
+        "SELECT lat, lon, alt_ft FROM tour_stage_points WHERE stage_id=? ORDER BY seq",
+        (stage_id,),
+    ).fetchall()
+
+
+def _format_route_block(profile: dict, places: list) -> str:
+    """Render route terrain + place names as prompt context. Empty when the
+    stage has no usable route, so the prompt simply omits the section."""
+    lines = []
+    if places:
+        lines.append("Places along the route, in order: "
+                     + " -> ".join(p["name"] for p in places))
+    if profile.get("high_ft") is not None:
+        lines.append(
+            f"Elevation: starts {profile['start_ft']:.0f}ft, ends {profile['end_ft']:.0f}ft, "
+            f"low {profile['low_ft']:.0f}ft, high {profile['high_ft']:.0f}ft "
+            f"reached at mile {profile['high_at_mi']:.1f}"
+        )
+    climbs = profile.get("climbs") or []
+    if climbs:
+        lines.append("Significant climbs (sustained gains of 300ft or more):")
+        for c in climbs:
+            lines.append(
+                f"  - starts at mile {c['start_mi']:.1f}, {c['len_mi']:.1f}mi long, "
+                f"{c['gain_ft']:.0f}ft gain, averaging {c['grade_pct']:.1f}% grade, "
+                f"topping out at {c['top_ft']:.0f}ft"
+            )
+    elif profile.get("distance_mi"):
+        lines.append("No sustained climbs over 300ft — the route is comparatively steady.")
+    return "\n".join(lines)
+
+
+async def _stage_route_context(db_path: str, stage_id: int) -> str:
+    """Terrain profile + reverse-geocoded place names for a stage route.
+
+    Geocoding is a rate-limited network call, so this is only ever run on a
+    cache miss, immediately before generating a summary.
+    """
+    con = sqlite3.connect(db_path, timeout=10)
+    try:
+        pts = _stage_points_raw(con, stage_id)
+    finally:
+        con.close()
+    if len(pts) < 2:
+        return ""
+
+    profile = _stage_route_profile(pts)
+    places = []
+    try:
+        from app.routers.weather import fetch_location_points
+        places = await fetch_location_points(
+            [{"lat": p[0], "lon": p[1]} for p in pts if p[0] is not None]
+        )
+    except Exception:
+        pass
+    return _format_route_block(profile, places)
+
+
+def _stage_route_profile(pts: list) -> dict:
+    """Terrain facts for a stage route, derived from its own points.
+
+    pts is [(lat, lon, alt_ft)]. Returns distance, elevation extremes, and the
+    significant climbs (>=300ft sustained gain), each with its distance from the
+    start so a summary can say *where* on the stage the hard part falls.
+    """
+    clean = [p for p in pts if p[0] is not None and p[1] is not None]
+    if len(clean) < 2:
+        return {}
+
+    # Cumulative distance at each point, in miles.
+    cum, total_m = [0.0], 0.0
+    for a, b in zip(clean, clean[1:]):
+        total_m += _haversine_m(a[0], a[1], b[0], b[1])
+        cum.append(total_m * M_TO_MI)
+
+    alts = [p[2] for p in clean]
+    if not any(a is not None for a in alts):
+        return {"distance_mi": cum[-1], "climbs": []}
+
+    # Carry the last known elevation across gaps so a dropout isn't a cliff.
+    filled, last = [], None
+    for a in alts:
+        last = a if a is not None else last
+        filled.append(last if last is not None else 0.0)
+
+    # Smooth lightly — raw GPS elevation is noisy enough to invent climbs.
+    smooth = []
+    for i in range(len(filled)):
+        w = filled[max(0, i - 2):i + 3]
+        smooth.append(sum(w) / len(w))
+
+    hi = max(range(len(smooth)), key=lambda i: smooth[i])
+    lo = min(range(len(smooth)), key=lambda i: smooth[i])
+
+    # Walk the profile, banking a climb whenever a sustained rise ends. A dip of
+    # more than 100ft closes the current climb; smaller ones are noise.
+    climbs, start_i, peak_i = [], 0, 0
+    for i in range(1, len(smooth)):
+        if smooth[i] <= smooth[start_i]:
+            # At or below the base — the climb hasn't started yet, so don't let
+            # flat or descending ground inflate its length and dilute its grade.
+            start_i = peak_i = i
+        elif smooth[i] >= smooth[peak_i]:
+            peak_i = i
+        elif smooth[peak_i] - smooth[i] > 100:
+            gain = smooth[peak_i] - smooth[start_i]
+            if gain >= 300:
+                climbs.append(_climb_dict(cum, smooth, start_i, peak_i))
+            start_i = peak_i = i
+    gain = smooth[peak_i] - smooth[start_i]
+    if gain >= 300:
+        climbs.append(_climb_dict(cum, smooth, start_i, peak_i))
+
+    return {
+        "distance_mi": cum[-1],
+        "high_ft":     smooth[hi],
+        "high_at_mi":  cum[hi],
+        "low_ft":      smooth[lo],
+        "start_ft":    smooth[0],
+        "end_ft":      smooth[-1],
+        "climbs":      sorted(climbs, key=lambda c: c["gain_ft"], reverse=True)[:4],
+    }
+
+
+def _climb_dict(cum: list, smooth: list, i0: int, i1: int) -> dict:
+    gain_ft = smooth[i1] - smooth[i0]
+    len_mi  = cum[i1] - cum[i0]
+    return {
+        "start_mi": cum[i0],
+        "len_mi":   len_mi,
+        "gain_ft":  gain_ft,
+        "top_ft":   smooth[i1],
+        # Average gradient over the climb; 5280 ft per mile.
+        "grade_pct": (gain_ft / (len_mi * 5280) * 100) if len_mi > 0 else 0.0,
+    }
 
 
 def _stage_display_num(stages: list) -> Callable[[int], int]:
@@ -2031,25 +2197,15 @@ async def get_stage_ai_advice(
     return JSONResponse({"advice": advice})
 
 
-@router.get("/tours/{tour_id}/stages/{stage_id}/ai-summary")
-async def get_stage_ai_summary(
-    tour_id: int,
-    stage_id: int,
-    request: Request,
-    model: Optional[str] = Query(default=None),
-    force: bool = Query(default=False),
-):
-    """Return an AI-generated summary of a tour stage in the context of the overall tour."""
-    import os, httpx
-    from app.routers.coach import MODELS, DEFAULT_MODEL, _resolve_model
-    uid = require_user(request)
+async def _generate_stage_summary(db, tour_id: int, stage_id: int, user_id: int,
+                                  attempt_id, api_key: str, model, force: bool) -> str:
+    """Summary of one stage for one user, generated on a cache miss and cached.
 
-    db = db_getter()
-    api_key = (db.get_user(uid) or {}).get("anthropic_api_key") or ""
-    if not api_key:
-        api_key = os.environ.get("ANTHROPIC_API_KEY", "")
-    if not api_key:
-        raise HTTPException(503, "No Anthropic API key configured")
+    The summary leads with the route itself — where it goes, its terrain and
+    climbs — and only reports performance once the user has ridden the stage.
+    """
+    import httpx
+    from app.routers.coach import _resolve_model
 
     con = sqlite3.connect(db.path, timeout=10)
     try:
@@ -2070,10 +2226,10 @@ async def get_stage_ai_summary(
             raise HTTPException(404, "Stage not found")
 
         cache_row = con.execute(
-            "SELECT summary FROM tour_stage_ai_summary WHERE stage_id=?", (stage_id,)
+            "SELECT summary, completed FROM tour_stage_ai_summary "
+            "WHERE stage_id=? AND user_id=?",
+            (stage_id, user_id),
         ).fetchone()
-        if cache_row and not force:
-            return JSONResponse({"summary": cache_row[0]})
 
         all_stage_rows = con.execute(
             "SELECT id, stage_num, name, distance_mi, climb_ft, start_lat, start_lon "
@@ -2089,8 +2245,15 @@ async def get_stage_ai_summary(
         # Exclude alternative routes so counts/totals reflect one route per
         # segment; keep THIS stage even if it is itself an alternate.
         stages = _collapse_alternate_stages(con, all_stages, prefer_id=stage_id)
+        completions, _, _ = _completions_for_user(con, tour_id, user_id, stages, attempt_id)
     finally:
         con.close()
+
+    # A summary written before the rider finished the stage says nothing about
+    # how it went, so completing the stage has to invalidate it.
+    is_done = 1 if completions.get(stage_id) else 0
+    if cache_row and not force and cache_row[1] == is_done:
+        return cache_row[0]
 
     stage_num, stage_name, dist_mi, climb_ft = target_row
     total_stages = len(stages)
@@ -2105,20 +2268,62 @@ async def get_stage_ai_summary(
         for s in stages
     ]
 
+    route_block = await _stage_route_context(db.path, stage_id)
+    route_section = f"\n\nRoute detail for this stage:\n{route_block}" if route_block else ""
+
+    # Performance only enters the picture once this user has ridden the stage.
+    comp = completions.get(stage_id)
+    if comp:
+        dur_h = (comp.get("duration_s") or 0) / 3600
+        perf_bits = [
+            f"completed on {comp.get('date')}",
+            f"{comp.get('distance_mi') or 0:.1f}mi",
+            f"{comp.get('climb_ft') or 0:.0f}ft climb",
+        ]
+        if dur_h:
+            perf_bits.append(f"{dur_h:.1f}h elapsed")
+        if comp.get("avg_moving_speed_mph"):
+            perf_bits.append(f"{comp['avg_moving_speed_mph']:.1f}mph moving average")
+        if comp.get("avg_hr"):
+            perf_bits.append(f"avg HR {round(comp['avg_hr'])}bpm")
+        if comp.get("avg_power"):
+            perf_bits.append(f"avg power {round(comp['avg_power'])}W")
+        perf_section = (
+            "\n\nThe rider has COMPLETED this stage: " + ", ".join(perf_bits) + "."
+            "\nClose with one or two sentences on how that ride went against the "
+            "terrain above — where the climbs would have bitten, how the pace reads "
+            "for this profile."
+        )
+        closing = ""
+    else:
+        perf_section = ""
+        closing = (
+            "\nThis stage has NOT been ridden yet, so do not invent or imply performance "
+            "data — describe the route as it awaits the rider.\n"
+        )
+
     prompt = (
         f"Tour: {tour_title} ({start_date} to {end_date})\n"
         f"Total: {total_stages} stages, {total_dist:.1f}mi, {total_climb:.0f}ft climb\n"
         f"Average per stage: {avg_dist:.1f}mi, {avg_climb:.0f}ft climb\n\n"
-        "All stages:\n" + "\n".join(stage_lines) + "\n\n"
+        "All stages:\n" + "\n".join(stage_lines)
+        + route_section + perf_section + "\n\n"
         f"Describe Stage {disp(stage_num)}: {stage_name} ({dist_mi:.1f}mi, {climb_ft:.0f}ft climb) "
-        "in the context of the overall tour. "
-        "In 2-3 sentences: characterize what kind of stage it is (e.g. short/long, flat/hilly, "
-        "hard/moderate relative to the tour average), and where it sits in the tour arc "
-        "(early/mid/late, after or before harder stages, etc.). "
-        "Be specific and factual. Do not give training advice or coaching tips."
+        "for someone about to ride or follow it.\n"
+        "Lead with what makes THIS route interesting: the places it passes through, the "
+        "terrain and scenery those names imply, where the hard climbing falls and how steep "
+        "it gets, the high point, and any standout feature of its shape (a summit finish, a "
+        "long valley run-in, a sting in the tail).\n"
+        "Name real places and real numbers from the route detail above — miles, gradients, "
+        "elevations. Prefer concrete specifics over adjectives.\n"
+        "Mention how it compares to the tour average, and where it sits in the tour arc, but "
+        "keep that to a single clause — it is context, not the point.\n"
+        + closing +
+        "Write 4-6 sentences of flowing prose. No bullet points, no headings, no training "
+        "or coaching advice."
     )
 
-    async with httpx.AsyncClient(timeout=30) as client:
+    async with httpx.AsyncClient(timeout=60) as client:
         resp = await client.post(
             "https://api.anthropic.com/v1/messages",
             headers={
@@ -2128,7 +2333,7 @@ async def get_stage_ai_summary(
             },
             json={
                 "model":      _resolve_model(model),
-                "max_tokens": 250,
+                "max_tokens": 700,
                 "messages":   [{"role": "user", "content": prompt}],
             },
         )
@@ -2140,14 +2345,43 @@ async def get_stage_ai_summary(
 
     con2 = sqlite3.connect(db.path, timeout=10)
     try:
+        _ensure_tables(con2)
         con2.execute(
-            "INSERT OR REPLACE INTO tour_stage_ai_summary (stage_id, summary) VALUES (?,?)",
-            (stage_id, summary),
+            "INSERT OR REPLACE INTO tour_stage_ai_summary "
+            "(stage_id, user_id, summary, completed) VALUES (?,?,?,?)",
+            (stage_id, user_id, summary, is_done),
         )
         con2.commit()
     finally:
         con2.close()
 
+    return summary
+
+
+@router.get("/tours/{tour_id}/stages/{stage_id}/ai-summary")
+async def get_stage_ai_summary(
+    tour_id: int,
+    stage_id: int,
+    request: Request,
+    model: Optional[str] = Query(default=None),
+    force: bool = Query(default=False),
+    attempt_id: Optional[int] = Query(default=None),
+    match_user_id: Optional[int] = Query(default=None),
+):
+    """Return an AI-generated summary of a tour stage in the context of the overall tour."""
+    uid = require_user(request)
+    # The tour page can view another rider's data; the summary follows suit.
+    actual_uid = match_user_id if match_user_id is not None else uid
+    db = db_getter()
+    api_key = (db.get_user(uid) or {}).get("anthropic_api_key") or ""
+    if not api_key:
+        api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        raise HTTPException(503, "No Anthropic API key configured")
+
+    summary = await _generate_stage_summary(
+        db, tour_id, stage_id, actual_uid, attempt_id, api_key, model, force
+    )
     return JSONResponse({"summary": summary})
 
 
@@ -2713,26 +2947,51 @@ async def tour_share_activity_sync(token: str, activity_id: int):
 
 @router.get("/tours/share/{token}/stages/{stage_id}/ai-summary")
 async def tour_share_stage_ai_summary(token: str, stage_id: int):
-    """Public endpoint — cached AI stage summary (read-only, no generation)."""
-    con = sqlite3.connect(db_getter().path, timeout=10)
+    """Public endpoint — AI stage summary for the shared rider's attempt.
+
+    Generated on a cache miss using the share owner's key, so stages the owner
+    never opened are not blank for visitors. Generation is once per stage.
+    """
+    db = db_getter()
+    con = sqlite3.connect(db.path, timeout=10)
     try:
         _ensure_tables(con)
-        tour_row = con.execute("SELECT tour_id FROM tour_shares WHERE token=?", (token,)).fetchone()
+        tour_row = con.execute(
+            "SELECT tour_id, user_id, attempt_id FROM tour_shares WHERE token=?", (token,)
+        ).fetchone()
         if not tour_row:
             raise HTTPException(404, "Share link not found or revoked")
+        tour_id, owner_uid, attempt_id = tour_row
         stage_row = con.execute(
-            "SELECT id FROM tour_stages WHERE id=? AND tour_id=?", (stage_id, tour_row[0])
+            "SELECT id FROM tour_stages WHERE id=? AND tour_id=?", (stage_id, tour_id)
         ).fetchone()
         if not stage_row:
             raise HTTPException(404, "Stage not found")
-        cache_row = con.execute(
-            "SELECT summary FROM tour_stage_ai_summary WHERE stage_id=?", (stage_id,)
-        ).fetchone()
-        if not cache_row:
-            raise HTTPException(404, "No cached summary")
-        return JSONResponse({"summary": cache_row[0]})
     finally:
         con.close()
+
+    api_key = (db.get_user(owner_uid) or {}).get("anthropic_api_key") or ""
+    if not api_key:
+        api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        # Without a key nothing can be generated, but an existing summary is
+        # still perfectly serveable.
+        con = sqlite3.connect(db.path, timeout=10)
+        try:
+            row = con.execute(
+                "SELECT summary FROM tour_stage_ai_summary WHERE stage_id=? AND user_id=?",
+                (stage_id, owner_uid),
+            ).fetchone()
+        finally:
+            con.close()
+        if not row:
+            raise HTTPException(404, "No cached summary")
+        return JSONResponse({"summary": row[0]})
+
+    summary = await _generate_stage_summary(
+        db, tour_id, stage_id, owner_uid, attempt_id, api_key, None, False
+    )
+    return JSONResponse({"summary": summary})
 
 
 @router.get("/tour", response_class=HTMLResponse)

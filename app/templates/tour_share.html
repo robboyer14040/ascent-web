@@ -456,12 +456,9 @@ async function renderDetail(activeId) {
       renderTrajectory: _renderTrajectory,
     });
 
-    // AI Stage Summary — cached only, no regeneration. AI Coach Advice NOT shown.
-    fetch(`/tours/share/${TOKEN}/stages/${stage.id}/ai-summary`)
-      .then(r=>r.ok?r.json():null).then(d=>{
-        if(d?.summary) el.insertAdjacentHTML('beforeend',`<div class="ai-card"><div class="ai-card-label">AI Stage Summary</div><div class="ai-card-body">${esc(d.summary)}</div></div>`);
-        el.insertAdjacentHTML('beforeend',_entireTourBtn);
-      }).catch(()=>{ el.insertAdjacentHTML('beforeend',_entireTourBtn); });
+    // AI Stage Summary — generated server-side on first view, then cached.
+    // AI Coach Advice is NOT shown on the share page.
+    _renderStageSummary(el, stage.id, true);
 
   } else {
     // ── Completed stage ──────────────────────────────────────────────────────
@@ -486,9 +483,29 @@ async function renderDetail(activeId) {
         });
         // Photos → the separate PHOTOS pane (desktop/tablet; phone uses its Photos tab).
         if(!TourNav.isPhone()) TourStageDetail.photosPane(act.id, { getMap: getStageMap, setMedia: m => { _shareLbMedia = m; } });
-        el.insertAdjacentHTML('beforeend',_entireTourBtn);
+        // The summary covers how the ride went once the stage is complete.
+        _renderStageSummary(el, stage.id, true);
       }).catch(()=>_renderActFallback(c));
   }
+}
+
+function _renderStageSummary(el, stageId, withTourBtn) {
+  // First view of a stage generates the summary (geocode + model), so show a
+  // placeholder rather than leaving the pane looking finished but empty.
+  const cardId = `ai-sum-${stageId}`;
+  el.insertAdjacentHTML('beforeend',
+    `<div class="ai-card" id="${cardId}"><div class="ai-card-label">AI Stage Summary</div>`+
+    `<div class="ai-card-body ai-card-loading">Generating summary…</div></div>`);
+  if(withTourBtn) el.insertAdjacentHTML('beforeend',_entireTourBtn);
+  const done = html => {
+    const card=document.getElementById(cardId); if(!card) return;
+    if(html) card.querySelector('.ai-card-body').outerHTML=`<div class="ai-card-body">${html}</div>`;
+    else card.remove();   // nothing to show (no key configured, or generation failed)
+  };
+  fetch(`/tours/share/${TOKEN}/stages/${stageId}/ai-summary`)
+    .then(r=>r.ok?r.json():null)
+    .then(d=>done(d?.summary?esc(d.summary):null))
+    .catch(()=>done(null));
 }
 
 function _renderActFallback(c) {

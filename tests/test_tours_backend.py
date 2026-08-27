@@ -909,3 +909,178 @@ def test_create_tour_from_activities_rejects_other_users_activity(authed_client,
     r = c.post("/tours/from-activities",
                data={"title": "Sneaky", "activity_ids": json.dumps([a])})
     assert r.status_code == 404
+
+
+# ── stage route profile / AI summary context ──────────────────────────────────
+
+def _ramp_route():
+    """~3mi: 1mi flat at 5000ft, 1mi climbing to ~6960ft, 1mi back down."""
+    pts, lat, step = [], 40.0, 0.00029
+    for i in range(50):
+        pts.append((lat + i * step, -105.0, 5000.0))
+    lat2 = lat + 50 * step
+    for i in range(50):
+        pts.append((lat2 + i * step, -105.0, 5000.0 + i * 40.0))
+    lat3 = lat2 + 50 * step
+    for i in range(50):
+        pts.append((lat3 + i * step, -105.0, 6960.0 - i * 40.0))
+    return pts
+
+
+def test_route_profile_finds_the_climb_and_its_position():
+    p = tours._stage_route_profile(_ramp_route())
+    assert len(p["climbs"]) == 1
+    c = p["climbs"][0]
+    # The climb must start where the flat ends (~mile 1), not at mile 0 —
+    # otherwise flat ground dilutes the reported gradient.
+    assert 0.8 < c["start_mi"] < 1.2
+    assert 1800 < c["gain_ft"] < 2000
+    assert c["grade_pct"] > 20
+    assert 6900 < p["high_ft"] <= 6960
+    assert 1.8 < p["high_at_mi"] < 2.2
+
+
+def test_route_profile_ignores_noise_and_handles_missing_data():
+    assert tours._stage_route_profile([]) == {}
+    assert tours._stage_route_profile([(40.0, -105.0, 100.0)]) == {}
+    # No elevation anywhere — distance still reported, no invented climbs.
+    flat = tours._stage_route_profile([(40.0 + i * 0.01, -105.0, None) for i in range(20)])
+    assert flat["climbs"] == []
+    assert flat["distance_mi"] > 0
+    # Small undulations must not register as climbs.
+    wiggle = [(40.0 + i * 0.001, -105.0, 5000.0 + (i % 3) * 20) for i in range(100)]
+    assert tours._stage_route_profile(wiggle)["climbs"] == []
+
+
+def test_format_route_block_states_places_climbs_and_high_point():
+    block = tours._format_route_block(
+        tours._stage_route_profile(_ramp_route()),
+        [{"name": "Boulder", "lat": 40.0, "lon": -105.0},
+         {"name": "Nederland", "lat": 40.1, "lon": -105.0}],
+    )
+    assert "Boulder -> Nederland" in block
+    assert "Significant climbs" in block
+    assert "% grade" in block
+    assert "high" in block
+
+
+def test_format_route_block_is_empty_without_a_route():
+    assert tours._format_route_block({}, []) == ""
+
+
+# ── share-page stage summary generation ───────────────────────────────────────
+
+@pytest.fixture
+def shared_tour(test_db, make_user):
+    """A shared tour with one stage that has a real climbing route."""
+    uid = make_user()
+    test_db.update_user_settings(uid, anthropic_api_key="sk-test")
+    con = sqlite3.connect(test_db.path, timeout=10)
+    try:
+        tours._ensure_tables(con)
+        con.execute("INSERT INTO tours (id, created_by, title, start_date, end_date, created_at) "
+                    "VALUES (1,?,'Alps Traverse','2026-07-01','2026-07-10',0)", (uid,))
+        con.execute("INSERT INTO tour_stages (id, tour_id, stage_num, name, distance_mi, climb_ft, "
+                    "start_lat, start_lon) VALUES (10,1,1,'Col du Test',3.0,1960,40.0,-105.0)")
+        con.executemany(
+            "INSERT INTO tour_stage_points (stage_id, seq, lat, lon, alt_ft) VALUES (10,?,?,?,?)",
+            [(i, p[0], p[1], p[2]) for i, p in enumerate(_ramp_route())],
+        )
+        con.execute("INSERT INTO tour_shares (tour_id, user_id, token) VALUES (1,?,'tok123')", (uid,))
+        con.commit()
+    finally:
+        con.close()
+    return uid
+
+
+@pytest.fixture
+def capture_claude(monkeypatch):
+    """Stub httpx.AsyncClient.post; record prompts, return a canned summary."""
+    seen = []
+
+    class _Resp:
+        status_code = 200
+        def json(self):
+            return {"content": [{"text": "A summary of the col."}]}
+
+    class _Client:
+        def __init__(self, *a, **k): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): return False
+        async def post(self, url, **kw):
+            seen.append(kw["json"]["messages"][0]["content"])
+            return _Resp()
+
+    import httpx
+    monkeypatch.setattr(httpx, "AsyncClient", _Client)
+    # Geocoding is a live rate-limited call — stub it with fixed places.
+    async def _places(pts):
+        return [{"name": "Boulder", "lat": 40.0, "lon": -105.0},
+                {"name": "Nederland", "lat": 40.1, "lon": -105.0}]
+    import app.routers.weather as wx
+    monkeypatch.setattr(wx, "fetch_location_points", _places)
+    return seen
+
+
+def test_share_generates_summary_when_none_is_cached(client, shared_tour, capture_claude):
+    """The share page used to 404 for any stage the owner never opened."""
+    r = client.get("/tours/share/tok123/stages/10/ai-summary")
+    assert r.status_code == 200
+    assert r.json()["summary"] == "A summary of the col."
+    assert len(capture_claude) == 1
+
+
+def test_generated_prompt_carries_real_route_detail(client, shared_tour, capture_claude):
+    client.get("/tours/share/tok123/stages/10/ai-summary")
+    prompt = capture_claude[0]
+    assert "Boulder -> Nederland" in prompt          # named places
+    assert "Significant climbs" in prompt            # terrain, not just totals
+    assert "% grade" in prompt
+    assert "NOT been ridden" in prompt               # no invented performance
+
+
+def test_share_summary_is_cached_after_first_generation(client, shared_tour, capture_claude):
+    a = client.get("/tours/share/tok123/stages/10/ai-summary")
+    b = client.get("/tours/share/tok123/stages/10/ai-summary")
+    assert a.json()["summary"] == b.json()["summary"]
+    assert len(capture_claude) == 1                  # generated once, then cached
+
+
+def _fake_completion(monkeypatch, comp):
+    """Force _completions_for_user to report a completion for stage 10."""
+    def _c(con, tour_id, user_id, stages, attempt_id):
+        return {s["id"]: (comp if s["id"] == 10 else None) for s in stages}, [], None
+    monkeypatch.setattr(tours, "_completions_for_user", _c)
+
+
+COMPLETION = {"activity_id": 7, "date": "2026-07-02", "distance_mi": 3.1,
+              "climb_ft": 1975.0, "duration_s": 5400.0,
+              "avg_moving_speed_mph": 8.4, "avg_hr": 148.0, "avg_power": 210.0}
+
+
+def test_completing_a_stage_regenerates_its_summary(client, shared_tour,
+                                                    capture_claude, monkeypatch):
+    """A summary written before the ride says nothing about how it went."""
+    client.get("/tours/share/tok123/stages/10/ai-summary")
+    assert "NOT been ridden" in capture_claude[0]
+
+    _fake_completion(monkeypatch, COMPLETION)
+    client.get("/tours/share/tok123/stages/10/ai-summary")
+
+    assert len(capture_claude) == 2, "stale pre-completion summary was served"
+    prompt = capture_claude[1]
+    assert "COMPLETED this stage" in prompt
+    assert "2026-07-02" in prompt
+    assert "148bpm" in prompt
+    assert "210W" in prompt
+    assert "8.4mph" in prompt
+    # Route detail must survive alongside the performance data.
+    assert "Boulder -> Nederland" in prompt
+
+
+def test_completed_summary_is_cached_and_not_regenerated(client, shared_tour,
+                                                         capture_claude, monkeypatch):
+    _fake_completion(monkeypatch, COMPLETION)
+    client.get("/tours/share/tok123/stages/10/ai-summary")
+    client.get("/tours/share/tok123/stages/10/ai-summary")
+    assert len(capture_claude) == 1
