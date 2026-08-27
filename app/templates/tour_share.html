@@ -490,22 +490,13 @@ async function renderDetail(activeId) {
 }
 
 function _renderStageSummary(el, stageId, withTourBtn) {
-  // First view of a stage generates the summary (geocode + model), so show a
-  // placeholder rather than leaving the pane looking finished but empty.
-  const cardId = `ai-sum-${stageId}`;
-  el.insertAdjacentHTML('beforeend',
-    `<div class="ai-card" id="${cardId}"><div class="ai-card-label">AI Stage Summary</div>`+
-    `<div class="ai-card-body ai-card-loading">Generating summary…</div></div>`);
+  // Generation is slow, so the endpoint answers 202 and we poll (see
+  // TourStageDetail.stageSummary). No regenerate button on the share page.
+  TourStageDetail.stageSummary(el, {
+    refreshable: false,
+    url: () => `/tours/share/${TOKEN}/stages/${stageId}/ai-summary`,
+  });
   if(withTourBtn) el.insertAdjacentHTML('beforeend',_entireTourBtn);
-  const done = html => {
-    const card=document.getElementById(cardId); if(!card) return;
-    if(html) card.querySelector('.ai-card-body').outerHTML=`<div class="ai-card-body">${html}</div>`;
-    else card.remove();   // nothing to show (no key configured, or generation failed)
-  };
-  fetch(`/tours/share/${TOKEN}/stages/${stageId}/ai-summary`)
-    .then(r=>r.ok?r.json():null)
-    .then(d=>done(d?.summary?esc(d.summary):null))
-    .catch(()=>done(null));
 }
 
 function _renderActFallback(c) {

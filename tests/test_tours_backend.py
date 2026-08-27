@@ -1021,17 +1021,42 @@ def capture_claude(monkeypatch):
     monkeypatch.setattr(wx, "fetch_location_points", _places)
     return seen
 
+def _summary(client, url, tries=60):
+    """Drive the 202-then-poll contract to a final summary (or None).
+
+    Generation runs in a background task, so the first request answers 202 and
+    later polls pick up the cached result.
+    """
+    import time as _t
+    for _ in range(tries):
+        r = client.get(url)
+        if r.status_code == 200:
+            return r.json().get("summary")
+        if r.status_code != 202:
+            return None
+        _t.sleep(0.02)
+    return None
+
+
+SHARE_URL = "/tours/share/tok123/stages/10/ai-summary"
+
+
+def test_share_answers_202_while_generating(client, shared_tour, capture_claude):
+    """A slow generation must not hold the connection open — the machine can
+    scale to zero underneath it, leaving the card spinning forever."""
+    r = client.get(SHARE_URL)
+    assert r.status_code == 202
+    assert r.json()["pending"] is True
+
 
 def test_share_generates_summary_when_none_is_cached(client, shared_tour, capture_claude):
     """The share page used to 404 for any stage the owner never opened."""
-    r = client.get("/tours/share/tok123/stages/10/ai-summary")
-    assert r.status_code == 200
-    assert r.json()["summary"] == "A summary of the col."
+    assert _summary(client, SHARE_URL) == "A summary of the col."
     assert len(capture_claude) == 1
 
 
 def test_generated_prompt_carries_real_route_detail(client, shared_tour, capture_claude):
-    client.get("/tours/share/tok123/stages/10/ai-summary")
+    _summary(client, SHARE_URL)
     prompt = capture_claude[0]
     assert "Boulder -> Nederland" in prompt          # named places
     assert "Significant climbs" in prompt            # terrain, not just totals
@@ -1040,10 +1065,18 @@ def test_generated_prompt_carries_real_route_detail(client, shared_tour, capture
 
 
 def test_share_summary_is_cached_after_first_generation(client, shared_tour, capture_claude):
-    a = client.get("/tours/share/tok123/stages/10/ai-summary")
-    b = client.get("/tours/share/tok123/stages/10/ai-summary")
-    assert a.json()["summary"] == b.json()["summary"]
+    a = _summary(client, SHARE_URL)
+    b = _summary(client, SHARE_URL)
+    assert a == b == "A summary of the col."
     assert len(capture_claude) == 1                  # generated once, then cached
+
+
+def test_polling_does_not_pile_up_duplicate_generations(client, shared_tour, capture_claude):
+    """Every poll used to be able to start its own generation."""
+    for _ in range(5):
+        client.get(SHARE_URL)
+    _summary(client, SHARE_URL)
+    assert len(capture_claude) == 1
 
 
 def _fake_completion(monkeypatch, comp):
@@ -1061,11 +1094,11 @@ COMPLETION = {"activity_id": 7, "date": "2026-07-02", "distance_mi": 3.1,
 def test_completing_a_stage_regenerates_its_summary(client, shared_tour,
                                                     capture_claude, monkeypatch):
     """A summary written before the ride says nothing about how it went."""
-    client.get("/tours/share/tok123/stages/10/ai-summary")
+    _summary(client, SHARE_URL)
     assert "NOT been ridden" in capture_claude[0]
 
     _fake_completion(monkeypatch, COMPLETION)
-    client.get("/tours/share/tok123/stages/10/ai-summary")
+    _summary(client, SHARE_URL)
 
     assert len(capture_claude) == 2, "stale pre-completion summary was served"
     prompt = capture_claude[1]
@@ -1081,8 +1114,8 @@ def test_completing_a_stage_regenerates_its_summary(client, shared_tour,
 def test_completed_summary_is_cached_and_not_regenerated(client, shared_tour,
                                                          capture_claude, monkeypatch):
     _fake_completion(monkeypatch, COMPLETION)
-    client.get("/tours/share/tok123/stages/10/ai-summary")
-    client.get("/tours/share/tok123/stages/10/ai-summary")
+    _summary(client, SHARE_URL)
+    _summary(client, SHARE_URL)
     assert len(capture_claude) == 1
 
 
@@ -1122,9 +1155,7 @@ def test_summary_survives_a_thinking_first_response(client, shared_tour, monkeyp
     import app.routers.weather as wx
     monkeypatch.setattr(wx, "fetch_location_points", _places)
 
-    r = client.get("/tours/share/tok123/stages/10/ai-summary")
-    assert r.status_code == 200
-    assert r.json()["summary"] == "A summary of the col."
+    assert _summary(client, SHARE_URL) == "A summary of the col."
 
 
 def test_token_budgets_leave_room_for_thinking():

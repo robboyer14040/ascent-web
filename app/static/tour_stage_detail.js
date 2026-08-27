@@ -42,6 +42,76 @@ function _ovWireGlobal() {
 
 const TourStageDetail = {
 
+  // ── AI stage summary ────────────────────────────────────────────────────────
+  // Generation takes many seconds, so the endpoint answers 202 {pending} and
+  // generates in the background; we poll until it lands. Holding one long
+  // request open instead used to die whenever the machine scaled to zero
+  // mid-flight, leaving the card spinning forever.
+  //
+  // ctx: { url(force), refreshable, onRefresh }
+  stageSummary(el, ctx) {
+    if (!el) return;
+    const btn = ctx.refreshable
+      ? '<button id="stage-ai-summary-refresh" title="Regenerate summary" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:13px;padding:0;line-height:1;flex-shrink:0">↺</button>'
+      : '';
+    el.insertAdjacentHTML('beforeend',
+      '<div class="ai-card" id="stage-ai-summary-card">' +
+      '<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">' +
+        '<div class="ai-card-label" style="margin-bottom:0">AI Stage Summary</div>' + btn +
+      '</div>' +
+      '<div class="ai-card-body ai-card-loading" id="stage-ai-summary-text">Generating summary…</div>' +
+      '</div>');
+    const refresh = document.getElementById('stage-ai-summary-refresh');
+    if (refresh) refresh.onclick = () => TourStageDetail.stageSummaryLoad(ctx, true);
+    TourStageDetail.stageSummaryLoad(ctx, false);
+  },
+
+  stageSummaryLoad(ctx, force) {
+    const card = () => document.getElementById('stage-ai-summary-card');
+    const txt  = () => document.getElementById('stage-ai-summary-text');
+    const btn  = () => document.getElementById('stage-ai-summary-refresh');
+    const t0 = Date.now();
+    const LIMIT = 150000;   // give up after ~2.5min of polling
+
+    const start = txt();
+    if (start) { start.textContent = 'Generating summary…'; start.classList.add('ai-card-loading'); }
+    const b0 = btn(); if (b0) b0.style.opacity = '0.4';
+
+    const settle = (text, drop) => {
+      const c = card(); if (!c) return;
+      if (drop) { c.remove(); return; }
+      const t = txt(); if (t) { t.textContent = text; t.classList.remove('ai-card-loading'); }
+      const b = btn(); if (b) b.style.opacity = '';
+    };
+    const again = () => {
+      if (Date.now() - t0 < LIMIT) { setTimeout(poll, 3000); return true; }
+      return false;
+    };
+
+    // force applies to the first request only — re-sending it on every poll
+    // would restart generation the moment it finished.
+    let f = force;
+    const poll = () => {
+      fetch(ctx.url(f))
+        .then(r => { f = false; return r; })
+        .then(r => {
+          if (r.status === 202) return { pending: true };          // still generating
+          if (r.status === 404) return { none: true };             // nothing to show
+          if (!r.ok) return { failed: true };
+          return r.json();
+        })
+        .then(d => {
+          if (d.pending) { if (!again()) settle('Summary is taking longer than expected.'); return; }
+          if (d.none)    { settle(null, true); return; }
+          if (d.failed)  { if (!again()) settle('Summary unavailable.'); return; }
+          settle(d.summary || 'Summary unavailable.');
+        })
+        // A dropped connection (cold start, sleeping machine) is worth retrying.
+        .catch(() => { if (!again()) settle('Summary unavailable.'); });
+    };
+    poll();
+  },
+
   // Mobile Analysis tab: move the activity stat chips into a collapsed "Performance"
   // section under the AI summary. Idempotent — safe to call after each render.
   enhanceAnalysis() {

@@ -1720,38 +1720,16 @@ async function resyncStageActivity(activityId) {
 // rider's performance in once the stage has been ridden.
 function renderStageSummaryCard(el, stage) {
   if(!_hasAnthropicKey || !el) return;
-  el.insertAdjacentHTML('beforeend', `<div class="ai-card" id="stage-ai-summary-card">
-    <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
-      <div class="ai-card-label" style="margin-bottom:0">AI Stage Summary</div>
-      <button id="stage-ai-summary-refresh" title="Regenerate summary" onclick="refreshStageSummary()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:13px;padding:0;line-height:1;flex-shrink:0">↺</button>
-    </div>
-    <div class="ai-card-body ai-card-loading" id="stage-ai-summary-text">Generating summary…</div>
-  </div>`);
-
-  const stageId = stage.id;
-  function load(force) {
-    const txt = document.getElementById('stage-ai-summary-text');
-    const btn = document.getElementById('stage-ai-summary-refresh');
-    if(txt) { txt.textContent = 'Generating summary…'; txt.classList.add('ai-card-loading'); }
-    if(btn) btn.style.opacity = '0.4';
-    const forceParam = force ? '&force=1' : '';
-    // Key the summary to the rider and attempt being viewed, so its
-    // completion state matches what the page is showing.
-    const who = (tourMatchUserId ? `&match_user_id=${tourMatchUserId}` : '')
-              + (currentAttemptId ? `&attempt_id=${currentAttemptId}` : '');
-    const done = (text) => {
-      const el2 = document.getElementById('stage-ai-summary-text');
-      const b   = document.getElementById('stage-ai-summary-refresh');
-      if(el2) { el2.textContent = text; el2.classList.remove('ai-card-loading'); }
-      if(b) b.style.opacity = '';
-    };
-    fetch(`/tours/${tourInfo.id}/stages/${stageId}/ai-summary?model=${encodeURIComponent(tourCoachModel)}${forceParam}${who}`)
-      .then(r => r.ok ? r.json() : null)
-      .then(d => done(d?.summary || 'Summary unavailable.'))
-      .catch(() => done('Summary unavailable.'));
-  }
-  window.refreshStageSummary = () => load(true);
-  load(false);
+  // Key the summary to the rider and attempt being viewed, so its completion
+  // state matches what the page is showing. Generation is slow, so the
+  // endpoint answers 202 and TourStageDetail.stageSummary polls for it.
+  const who = (tourMatchUserId ? `&match_user_id=${tourMatchUserId}` : '')
+            + (currentAttemptId ? `&attempt_id=${currentAttemptId}` : '');
+  TourStageDetail.stageSummary(el, {
+    refreshable: true,
+    url: (force) => `/tours/${tourInfo.id}/stages/${stage.id}/ai-summary`
+                  + `?${force ? 'force=1' : ''}${who}`,
+  });
 }
 
 // ── AI Summary for completed stage activity ───────────────────────────────────

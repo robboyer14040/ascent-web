@@ -1,5 +1,6 @@
 """routers/tours.py — Shared tour management with per-user stage completion tracking."""
 
+import asyncio
 import json
 import math
 import os
@@ -19,6 +20,17 @@ from app.db import build_activity, parse_attrs
 router    = APIRouter()
 db_getter: Callable = None
 templates = None
+
+# Stage summaries write prose from route facts already supplied in the prompt,
+# so they don't need the coach's model — Sonnet is markedly faster to first byte.
+STAGE_SUMMARY_MODEL = "claude-sonnet-5"
+
+# (stage_id, user_id) currently generating, so repeated polls don't pile up
+# duplicate generations for the same card. _summary_tasks holds a strong
+# reference to each running task — asyncio only keeps a weak one, so a task
+# without one can be garbage-collected mid-flight.
+_summary_jobs: set = set()
+_summary_tasks: set = set()
 
 M_TO_MI    = 0.000621371
 M_TO_FT    = 3.28084
@@ -2199,6 +2211,70 @@ async def get_stage_ai_advice(
     return JSONResponse({"advice": advice})
 
 
+def _cached_stage_summary(db, tour_id: int, stage_id: int, user_id: int, attempt_id):
+    """The cached summary for this stage/user if it is still current, else None.
+
+    "Current" means it was generated against the same completion state — a
+    summary written before the ride has nothing to say about how it went.
+    """
+    con = sqlite3.connect(db.path, timeout=10)
+    try:
+        _ensure_tables(con)
+        row = con.execute(
+            "SELECT summary, completed FROM tour_stage_ai_summary "
+            "WHERE stage_id=? AND user_id=?",
+            (stage_id, user_id),
+        ).fetchone()
+        if not row:
+            return None
+        stage_rows = con.execute(
+            "SELECT id, stage_num, name, distance_mi, climb_ft, start_lat, start_lon "
+            "FROM tour_stages WHERE tour_id=? ORDER BY stage_num",
+            (tour_id,),
+        ).fetchall()
+        stages = [{
+            "id": r[0], "stage_num": r[1], "name": r[2],
+            "distance_mi": r[3], "climb_ft": r[4],
+            "start_lat": r[5], "start_lon": r[6],
+        } for r in stage_rows]
+        stages = _collapse_alternate_stages(con, stages, prefer_id=stage_id)
+        completions, _, _ = _completions_for_user(con, tour_id, user_id, stages, attempt_id)
+        is_done = 1 if completions.get(stage_id) else 0
+        return row[0] if row[1] == is_done else None
+    except Exception:
+        return None
+    finally:
+        con.close()
+
+
+def _start_summary_job(db, tour_id: int, stage_id: int, user_id: int,
+                       attempt_id, api_key: str, model, force: bool) -> None:
+    """Generate a stage summary in the background, at most one per stage/user.
+
+    The request that asks for it returns straight away — generation runs for
+    tens of seconds, and holding the connection open for that long risks the
+    machine scaling to zero underneath it.
+    """
+    job = (stage_id, user_id)
+    if job in _summary_jobs:
+        return
+    _summary_jobs.add(job)
+
+    async def _run():
+        try:
+            await _generate_stage_summary(
+                db, tour_id, stage_id, user_id, attempt_id, api_key, model, force
+            )
+        except Exception:
+            pass          # the next poll simply asks again
+        finally:
+            _summary_jobs.discard(job)
+
+    task = asyncio.create_task(_run())
+    _summary_tasks.add(task)
+    task.add_done_callback(_summary_tasks.discard)
+
+
 async def _generate_stage_summary(db, tour_id: int, stage_id: int, user_id: int,
                                   attempt_id, api_key: str, model, force: bool) -> str:
     """Summary of one stage for one user, generated on a cache miss and cached.
@@ -2334,7 +2410,7 @@ async def _generate_stage_summary(db, tour_id: int, stage_id: int, user_id: int,
                 "content-type":      "application/json",
             },
             json={
-                "model":      _resolve_model(model),
+                "model":      _resolve_model(model or STAGE_SUMMARY_MODEL),
                 # Covers thinking + reply; Opus 5 thinks by default.
                 "max_tokens": 2500,
                 "messages":   [{"role": "user", "content": prompt}],
@@ -2385,10 +2461,13 @@ async def get_stage_ai_summary(
     if not api_key:
         raise HTTPException(503, "No Anthropic API key configured")
 
-    summary = await _generate_stage_summary(
-        db, tour_id, stage_id, actual_uid, attempt_id, api_key, model, force
-    )
-    return JSONResponse({"summary": summary})
+    if not force:
+        cached = _cached_stage_summary(db, tour_id, stage_id, actual_uid, attempt_id)
+        if cached:
+            return JSONResponse({"summary": cached})
+
+    _start_summary_job(db, tour_id, stage_id, actual_uid, attempt_id, api_key, model, force)
+    return JSONResponse({"pending": True}, status_code=202)
 
 
 def _resolve_share_token(con, token: str):
@@ -2976,28 +3055,18 @@ async def tour_share_stage_ai_summary(token: str, stage_id: int):
     finally:
         con.close()
 
+    cached = _cached_stage_summary(db, tour_id, stage_id, owner_uid, attempt_id)
+    if cached:
+        return JSONResponse({"summary": cached})
+
     api_key = (db.get_user(owner_uid) or {}).get("anthropic_api_key") or ""
     if not api_key:
         api_key = os.environ.get("ANTHROPIC_API_KEY", "")
     if not api_key:
-        # Without a key nothing can be generated, but an existing summary is
-        # still perfectly serveable.
-        con = sqlite3.connect(db.path, timeout=10)
-        try:
-            row = con.execute(
-                "SELECT summary FROM tour_stage_ai_summary WHERE stage_id=? AND user_id=?",
-                (stage_id, owner_uid),
-            ).fetchone()
-        finally:
-            con.close()
-        if not row:
-            raise HTTPException(404, "No cached summary")
-        return JSONResponse({"summary": row[0]})
+        raise HTTPException(404, "No cached summary")
 
-    summary = await _generate_stage_summary(
-        db, tour_id, stage_id, owner_uid, attempt_id, api_key, None, False
-    )
-    return JSONResponse({"summary": summary})
+    _start_summary_job(db, tour_id, stage_id, owner_uid, attempt_id, api_key, None, False)
+    return JSONResponse({"pending": True}, status_code=202)
 
 
 @router.get("/tour", response_class=HTMLResponse)
