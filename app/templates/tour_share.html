@@ -175,6 +175,42 @@ function _syncStageListHeight() {
 let tourInfo = null, pointsCache = {}, selectedId = null;
 let mapH = 0;
 let _shareLbMedia = [];
+let _newestDoneId = null;   // most recently completed stage as of this page load
+
+// ── Last-viewed persistence ───────────────────────────────────────────────────
+// Reopening the link puts you back where you left off. The exception: if 12h+
+// have passed AND a stage has been completed since your last visit, open that
+// stage instead (nothing completed → the entire-tour view).
+const VIEW_KEY = `tour_share_view:${TOKEN}`;
+const STALE_MS = 12 * 60 * 60 * 1000;
+
+function _loadView() {
+  try { return JSON.parse(localStorage.getItem(VIEW_KEY)); } catch(e) { return null; }
+}
+function _saveView() {
+  try {
+    localStorage.setItem(VIEW_KEY, JSON.stringify(
+      { stage: selectedId, newest: _newestDoneId, ts: Date.now() }));
+  } catch(e) {}
+}
+
+// Latest-dated completed stage; ties break toward the later stage in tour order.
+function _newestCompletedId(stages) {
+  let best = null;
+  for (const s of stages)
+    if (s.completion && (!best || (s.completion.date||'') >= (best.completion.date||''))) best = s;
+  return best ? String(best.id) : null;
+}
+
+function _restoreView(stages) {
+  const saved = _loadView();
+  _newestDoneId = _newestCompletedId(stages);
+  const stale   = !saved || (Date.now() - (saved.ts||0)) >= STALE_MS;
+  const isNew   = _newestDoneId && _newestDoneId !== String(saved && saved.newest || '');
+  const target  = (stale && isNew) ? _newestDoneId : (saved ? saved.stage : null);
+  if (target && stages.some(s => String(s.id) === String(target))) selectStage(target);
+  _saveView();
+}
 
 // ── Lightbox ──────────────────────────────────────────────────────────────────
 function openShareLightbox(idx) {
@@ -215,7 +251,9 @@ function openShareLightbox(idx) {
   _syncStageListHeight();
   if (TourNav.isPhone()) { _setTourMobTitle(); TourNav.showStage(false); }
 
-  setTimeout(() => { shareMap.invalidateSize(); if(_lastBounds) shareMap.fitBounds(_lastBounds, {padding:[24,24]}); }, 150);
+  _restoreView(stages);
+
+  setTimeout(() => { shareMap.invalidateSize(); refitTourMap(); }, 150);
 })();
 
 // ── Routes ────────────────────────────────────────────────────────────────────
@@ -262,6 +300,7 @@ function selectStage(id) {
     TourNav.showStage(!!selectedId);
     setTimeout(() => shareMap && shareMap.invalidateSize(), 60);
   }
+  _saveView();
 }
 
 // Mobile header title reflects the selected stage (or the tour).
