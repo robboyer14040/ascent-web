@@ -4,6 +4,7 @@ import asyncio
 import json
 import math
 import os
+import re
 import sqlite3
 import time as _time
 import xml.etree.ElementTree as ET
@@ -226,6 +227,38 @@ def _ensure_tables(con):
     con.execute(
         "CREATE INDEX IF NOT EXISTS idx_tour_stage_pts ON tour_stage_points(stage_id)"
     )
+    # Public share-page followers. A subscriber is "whoever holds this share
+    # link", so rows are keyed by the tour_shares token and die with it.
+    # confirmed_at NULL means signed up but not yet confirmed — only confirmed
+    # rows are ever mailed.
+    con.execute("""
+        CREATE TABLE IF NOT EXISTS tour_subscribers (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            token         TEXT    NOT NULL,
+            email         TEXT    NOT NULL,
+            confirm_token TEXT    NOT NULL,
+            unsub_token   TEXT    NOT NULL,
+            confirmed_at  INTEGER,
+            created_at    INTEGER NOT NULL
+        )
+    """)
+    con.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_tour_subs "
+                "ON tour_subscribers(token, email)")
+    con.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_tour_subs_confirm "
+                "ON tour_subscribers(confirm_token)")
+    con.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_tour_subs_unsub "
+                "ON tour_subscribers(unsub_token)")
+    # One row per stage announced. Mail cannot be recalled, so a stage that has
+    # been sent about is never sent about again.
+    con.execute("""
+        CREATE TABLE IF NOT EXISTS tour_stage_notified (
+            token      TEXT    NOT NULL,
+            stage_id   INTEGER NOT NULL,
+            sent_at    INTEGER NOT NULL,
+            sent_count INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (token, stage_id)
+        )
+    """)
     _migrate_legacy_tours_to_attempts(con)
     con.commit()
 
@@ -1499,6 +1532,12 @@ async def delete_tour(tour_id: int, request: Request):
 
         # Hard-delete the tour and every user's attempts + share links for it.
         con.execute("DELETE FROM tour_attempts WHERE tour_id=?", (tour_id,))
+        con.execute(
+            "DELETE FROM tour_subscribers WHERE token IN "
+            "(SELECT token FROM tour_shares WHERE tour_id=?)", (tour_id,))
+        con.execute(
+            "DELETE FROM tour_stage_notified WHERE token IN "
+            "(SELECT token FROM tour_shares WHERE tour_id=?)", (tour_id,))
         con.execute("DELETE FROM tour_shares WHERE tour_id=?", (tour_id,))
         con.execute("DELETE FROM tours WHERE id=?", (tour_id,))
         con.commit()
@@ -2542,6 +2581,17 @@ async def revoke_tour_publish(tour_id: int, request: Request):
     con = sqlite3.connect(db_getter().path, timeout=10)
     try:
         _ensure_tables(con)
+        # Subscribers followed this link, so revoking it unsubscribes them.
+        con.execute(
+            "DELETE FROM tour_subscribers WHERE token IN "
+            "(SELECT token FROM tour_shares WHERE tour_id=? AND user_id=?)",
+            (tour_id, uid),
+        )
+        con.execute(
+            "DELETE FROM tour_stage_notified WHERE token IN "
+            "(SELECT token FROM tour_shares WHERE tour_id=? AND user_id=?)",
+            (tour_id, uid),
+        )
         con.execute(
             "DELETE FROM tour_shares WHERE tour_id=? AND user_id=?", (tour_id, uid)
         )
@@ -3081,6 +3131,308 @@ async def tour_share_stage_ai_summary(token: str, stage_id: int):
 
     _start_summary_job(db, tour_id, stage_id, owner_uid, attempt_id, api_key, None, False)
     return JSONResponse({"pending": True}, status_code=202)
+
+
+# ── Share-page followers: opt-in email updates ────────────────────────────────
+# The share page has no login, so the only thing we know about a follower is the
+# address they typed. Subscriptions are therefore keyed by the share token and
+# confirmed by email before anything is ever sent to them.
+
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+# The subscribe endpoint is public and causes outbound mail, so it is capped per
+# client. In-process only — good enough for a single machine, which is what runs.
+_SUB_HITS: dict = {}
+_SUB_MAX    = 5
+_SUB_WINDOW = 3600
+
+
+def _sub_rate_ok(ip: str) -> bool:
+    now  = _time.time()
+    # The endpoint is public, so the table itself must stay bounded: sweep out
+    # clients whose window has fully expired once it grows past a sane size.
+    if len(_SUB_HITS) > 1000:
+        for k in [k for k, v in _SUB_HITS.items()
+                  if not v or now - v[-1] >= _SUB_WINDOW]:
+            del _SUB_HITS[k]
+    hits = [t for t in _SUB_HITS.get(ip, []) if now - t < _SUB_WINDOW]
+    _SUB_HITS[ip] = hits
+    if len(hits) >= _SUB_MAX:
+        return False
+    hits.append(now)
+    return True
+
+
+def _sub_result(request: Request, icon: str, message: str, sub: str = "",
+                back_url: str = ""):
+    return templates.TemplateResponse("tour_subscribe_result.html", {
+        "request":  request,
+        "icon":     icon,
+        "message":  message,
+        "sub":      sub,
+        "back_url": back_url,
+        "title":    message,
+    })
+
+
+def _stats_line(stage: tuple, comp: dict, use_metric: bool) -> str:
+    """"68.4 mi · 4,200 ft · 5h 12m" from a stage row and its completion."""
+    _num, _name, plan_mi, plan_ft = stage
+    dist_mi = (comp or {}).get("distance_mi") or plan_mi or 0
+    climb_ft = (comp or {}).get("climb_ft")
+    if climb_ft is None:
+        climb_ft = plan_ft or 0
+    parts = []
+    if use_metric:
+        parts.append(f"{dist_mi * 1.60934:,.1f} km")
+        parts.append(f"{climb_ft * 0.3048:,.0f} m")
+    else:
+        parts.append(f"{dist_mi:,.1f} mi")
+        parts.append(f"{climb_ft:,.0f} ft")
+    secs = (comp or {}).get("moving_s") or (comp or {}).get("duration_s")
+    if secs:
+        h, m = int(secs) // 3600, (int(secs) % 3600) // 60
+        parts.append(f"{h}h {m:02d}m" if h else f"{m}m")
+    return " · ".join(parts)
+
+
+@router.post("/tours/share/{token}/subscribe")
+async def tour_share_subscribe(token: str, request: Request, body: dict = Body(...)):
+    """Public: ask for stage updates by email. Sends a confirmation link.
+
+    Always answers {"ok": true} whether or not the address is already on the
+    list — the same non-enumeration stance as the password-reset flow.
+    """
+    import logging
+    import secrets
+    from app.mailer import smtp_configured, send_tour_confirm_email
+
+    email = (body.get("email") or "").strip().lower()
+    if not _EMAIL_RE.match(email) or len(email) > 254:
+        raise HTTPException(400, "Enter a valid email address.")
+    ip = request.client.host if request.client else "?"
+    if not _sub_rate_ok(ip):
+        raise HTTPException(429, "Too many sign-ups from here. Try again later.")
+
+    con = sqlite3.connect(db_getter().path, timeout=10)
+    try:
+        _ensure_tables(con)
+        row = con.execute(
+            "SELECT ts.user_id, t.title FROM tour_shares ts "
+            "JOIN tours t ON t.id=ts.tour_id WHERE ts.token=?", (token,)
+        ).fetchone()
+        if not row:
+            raise HTTPException(404, "Share link not found or revoked")
+        owner_uid, title = row
+        owner_row = con.execute(
+            "SELECT username FROM users WHERE id=?", (owner_uid,)
+        ).fetchone()
+        owner_name = owner_row[0] if owner_row else "Someone"
+
+        existing = con.execute(
+            "SELECT confirm_token, confirmed_at FROM tour_subscribers "
+            "WHERE token=? AND email=?", (token, email)
+        ).fetchone()
+        if existing and existing[1]:
+            return JSONResponse({"ok": True})   # already confirmed — nothing to do
+        if existing:
+            confirm_token = existing[0]         # resend the same link
+        else:
+            confirm_token = secrets.token_urlsafe(32)
+            con.execute(
+                "INSERT INTO tour_subscribers "
+                "(token, email, confirm_token, unsub_token, confirmed_at, created_at) "
+                "VALUES (?,?,?,?,NULL,?)",
+                (token, email, confirm_token, secrets.token_urlsafe(32),
+                 int(_time.time())),
+            )
+            con.commit()
+    finally:
+        con.close()
+
+    base        = str(request.base_url).rstrip("/")
+    confirm_url = f"{base}/tours/share/{token}/confirm/{confirm_token}"
+    # Logged so the flow is testable locally without SMTP, as the reset flow does.
+    logging.getLogger("uvicorn").info(f"[tour-sub] confirm URL for {email}: {confirm_url}")
+    if smtp_configured():
+        try:
+            send_tour_confirm_email(email, confirm_url, title, owner_name)
+        except Exception:
+            pass   # the caller still sees "check your email"
+    return JSONResponse({"ok": True})
+
+
+@router.get("/tours/share/{token}/confirm/{confirm_token}", response_class=HTMLResponse)
+async def tour_share_confirm(token: str, confirm_token: str, request: Request):
+    """Public: complete a double opt-in."""
+    con = sqlite3.connect(db_getter().path, timeout=10)
+    try:
+        _ensure_tables(con)
+        row = con.execute(
+            "SELECT id, confirmed_at FROM tour_subscribers "
+            "WHERE token=? AND confirm_token=?", (token, confirm_token)
+        ).fetchone()
+        if not row:
+            return _sub_result(
+                request, "⚠️", "That confirmation link is no longer valid.",
+                "It may have already been used, or the tour's share link was revoked.")
+        if not row[1]:
+            con.execute("UPDATE tour_subscribers SET confirmed_at=? WHERE id=?",
+                        (int(_time.time()), row[0]))
+            con.commit()
+    finally:
+        con.close()
+    return _sub_result(
+        request, "📬", "You're subscribed.",
+        "You'll get an email each time a new stage is completed. "
+        "Every message has an unsubscribe link.",
+        f"/tours/share/{token}")
+
+
+@router.get("/tours/share/{token}/unsubscribe/{unsub_token}", response_class=HTMLResponse)
+async def tour_share_unsubscribe(token: str, unsub_token: str, request: Request):
+    """Public: one-click unsubscribe, no confirmation step."""
+    con = sqlite3.connect(db_getter().path, timeout=10)
+    try:
+        _ensure_tables(con)
+        con.execute("DELETE FROM tour_subscribers WHERE token=? AND unsub_token=?",
+                    (token, unsub_token))
+        con.commit()
+    finally:
+        con.close()
+    return _sub_result(
+        request, "👋", "Unsubscribed.",
+        "You won't get any more stage updates for this tour.",
+        f"/tours/share/{token}")
+
+
+@router.get("/tours/{tour_id}/notify-status")
+async def tour_notify_status(tour_id: int, request: Request):
+    """Owner: follower count and which stages have already been announced."""
+    uid = require_user(request)
+    con = sqlite3.connect(db_getter().path, timeout=10)
+    try:
+        _ensure_tables(con)
+        _tour_visible_or_404(con, tour_id, uid)
+        row = con.execute(
+            "SELECT token FROM tour_shares WHERE tour_id=? AND user_id=?", (tour_id, uid)
+        ).fetchone()
+        if not row:
+            return JSONResponse({"subscribers": 0, "notified": []})
+        token = row[0]
+        n = con.execute(
+            "SELECT COUNT(*) FROM tour_subscribers "
+            "WHERE token=? AND confirmed_at IS NOT NULL", (token,)
+        ).fetchone()[0]
+        notified = [r[0] for r in con.execute(
+            "SELECT stage_id FROM tour_stage_notified WHERE token=?", (token,))]
+        return JSONResponse({"subscribers": n, "notified": notified})
+    finally:
+        con.close()
+
+
+@router.post("/tours/{tour_id}/notify")
+async def tour_notify_stage(tour_id: int, request: Request, body: dict = Body(...)):
+    """Owner: announce one completed stage to that share link's followers.
+
+    Sending is deliberately manual. Stage completion is inferred by matching
+    activities to stages, and a match can shift as later rides land — mail cannot
+    be recalled, so the owner confirms each one.
+    """
+    from app.mailer import smtp_configured, send_stage_update_emails
+
+    uid = require_user(request)
+    stage_id = body.get("stage_id")
+    if not isinstance(stage_id, int):
+        raise HTTPException(400, "stage_id is required")
+
+    db = db_getter()
+    con = sqlite3.connect(db.path, timeout=15)
+    try:
+        _ensure_tables(con)
+        _tour_visible_or_404(con, tour_id, uid)
+        share = con.execute(
+            "SELECT ts.token, ts.attempt_id, t.title FROM tour_shares ts "
+            "JOIN tours t ON t.id=ts.tour_id WHERE ts.tour_id=? AND ts.user_id=?",
+            (tour_id, uid),
+        ).fetchone()
+        if not share:
+            raise HTTPException(400, "Share this tour before notifying followers.")
+        token, attempt_id, tour_title = share
+
+        already = con.execute(
+            "SELECT 1 FROM tour_stage_notified WHERE token=? AND stage_id=?",
+            (token, stage_id),
+        ).fetchone()
+        if already:
+            raise HTTPException(409, "Followers have already been told about this stage.")
+
+        stage = con.execute(
+            "SELECT stage_num, name, distance_mi, climb_ft FROM tour_stages "
+            "WHERE id=? AND tour_id=?", (stage_id, tour_id)
+        ).fetchone()
+        if not stage:
+            raise HTTPException(404, "Stage not found")
+
+        # Confirm the stage really is complete for the shared attempt.
+        stage_rows = con.execute(
+            "SELECT id, stage_num, name, distance_mi, climb_ft, start_lat, start_lon "
+            "FROM tour_stages WHERE tour_id=? ORDER BY stage_num", (tour_id,)
+        ).fetchall()
+        stages = [{"id": r[0], "stage_num": r[1], "name": r[2],
+                   "distance_mi": r[3], "climb_ft": r[4],
+                   "start_lat": r[5], "start_lon": r[6]} for r in stage_rows]
+        stages = _collapse_alternate_stages(con, stages, prefer_id=stage_id)
+        completions, _, _ = _completions_for_user(con, tour_id, uid, stages, attempt_id)
+        comp = completions.get(stage_id)
+        if not comp:
+            raise HTTPException(400, "That stage isn't completed yet.")
+
+        recipients = con.execute(
+            "SELECT email, unsub_token FROM tour_subscribers "
+            "WHERE token=? AND confirmed_at IS NOT NULL", (token,)
+        ).fetchall()
+
+        owner_row = con.execute("SELECT username FROM users WHERE id=?", (uid,)).fetchone()
+        owner_name = owner_row[0] if owner_row else "Someone"
+    finally:
+        con.close()
+
+    if not recipients:
+        return JSONResponse({"sent": 0})
+    if not smtp_configured():
+        raise HTTPException(503, "Email is not configured on this server.")
+
+    try:
+        use_metric = (db.get_user_profile(uid) or {}).get("use_metric", False)
+    except Exception:
+        use_metric = False
+
+    # An uncached summary would take tens of seconds to generate; the mail is
+    # worth more than the prose, so send without it.
+    summary = _cached_stage_summary(db, tour_id, stage_id, uid, attempt_id) or ""
+
+    base        = str(request.base_url).rstrip("/")
+    stage_url   = f"{base}/tours/share/{token}?stage={stage_id}"
+    stage_title = f"Stage {stage[0]} — {stage[1]}"
+    stats_line  = _stats_line(stage, comp, use_metric)
+
+    sent = send_stage_update_emails(
+        [(e, f"{base}/tours/share/{token}/unsubscribe/{u}") for e, u in recipients],
+        tour_title, owner_name, stage_title, stats_line, summary, stage_url,
+    )
+
+    con = sqlite3.connect(db.path, timeout=10)
+    try:
+        con.execute(
+            "INSERT OR REPLACE INTO tour_stage_notified "
+            "(token, stage_id, sent_at, sent_count) VALUES (?,?,?,?)",
+            (token, stage_id, int(_time.time()), sent),
+        )
+        con.commit()
+    finally:
+        con.close()
+    return JSONResponse({"sent": sent})
 
 
 @router.get("/tour", response_class=HTMLResponse)

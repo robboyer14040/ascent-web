@@ -1164,3 +1164,197 @@ def test_token_budgets_leave_room_for_thinking():
     for f in ("app/routers/tours.py", "app/routers/api.py"):
         for n in re.findall(r'"max_tokens":\s*(\d+)', pathlib.Path(f).read_text()):
             assert int(n) >= 1000, f"{f}: max_tokens {n} is too small for thinking"
+
+
+# ── Share-page follower notifications ─────────────────────────────────────────
+
+def _publish(c, tid, start="2026-07-01", end="2026-07-10"):
+    """Give the tour an attempt and a share link; return the token."""
+    aid = c.post(f"/tours/{tid}/attempts",
+                 data={"start_date": start, "end_date": end}).json()["id"]
+    return c.post(f"/tours/{tid}/publish", json={"attempt_id": aid}).json()["token"]
+
+
+def _subscribe(c, token, email="fan@example.com"):
+    """Subscribe and confirm; returns the row's unsubscribe token."""
+    import app.main as main_mod
+    assert c.post(f"/tours/share/{token}/subscribe",
+                  json={"email": email}).status_code == 200
+    con = sqlite3.connect(main_mod.get_db().path)
+    try:
+        ct, ut = con.execute(
+            "SELECT confirm_token, unsub_token FROM tour_subscribers "
+            "WHERE token=? AND email=?", (token, email)).fetchone()
+    finally:
+        con.close()
+    assert c.get(f"/tours/share/{token}/confirm/{ct}").status_code == 200
+    return ut
+
+
+@pytest.fixture
+def sent_mail(monkeypatch):
+    """Capture outgoing mail — tests never open an SMTP connection.
+
+    tours.py imports the senders inside the handlers, so patching the module
+    attributes is enough.
+    """
+    box = {"confirm": [], "updates": []}
+    # The subscribe cap is per-process and every TestClient shares one client
+    # host, so without this the later tests in the file trip it.
+    tours._SUB_HITS.clear()
+    import app.mailer as mailer
+    monkeypatch.setattr(mailer, "smtp_configured", lambda: True)
+    monkeypatch.setattr(mailer, "send_tour_confirm_email",
+                        lambda *a, **k: box["confirm"].append(a))
+
+    def _updates(recipients, *a, **k):
+        box["updates"].append((recipients, a))
+        return len(recipients)
+
+    monkeypatch.setattr(mailer, "send_stage_update_emails", _updates)
+    return box
+
+
+def test_subscribe_is_pending_until_confirmed(authed_client, test_db, sent_mail):
+    """Anyone holding the link can type any address, so nothing is mailed to it
+    until the owner of that inbox clicks through."""
+    c = authed_client
+    tid = _make_tour(c)
+    token = _publish(c, tid)
+
+    r = c.post(f"/tours/share/{token}/subscribe", json={"email": "  Fan@Example.com "})
+    assert r.status_code == 200 and r.json()["ok"] is True
+    assert len(sent_mail["confirm"]) == 1
+
+    con = sqlite3.connect(test_db.path)
+    email, confirmed, ct = con.execute(
+        "SELECT email, confirmed_at, confirm_token FROM tour_subscribers "
+        "WHERE token=?", (token,)).fetchone()
+    con.close()
+    assert email == "fan@example.com"       # trimmed and lowercased
+    assert confirmed is None
+    assert c.get(f"/tours/{tid}/notify-status").json()["subscribers"] == 0
+
+    assert c.get(f"/tours/share/{token}/confirm/{ct}").status_code == 200
+    assert c.get(f"/tours/{tid}/notify-status").json()["subscribers"] == 1
+
+
+def test_subscribing_twice_does_not_duplicate(authed_client, test_db, sent_mail):
+    c = authed_client
+    token = _publish(c, _make_tour(c))
+    for _ in range(2):
+        c.post(f"/tours/share/{token}/subscribe", json={"email": "fan@example.com"})
+
+    con = sqlite3.connect(test_db.path)
+    n = con.execute("SELECT COUNT(*) FROM tour_subscribers WHERE token=?",
+                    (token,)).fetchone()[0]
+    con.close()
+    assert n == 1
+
+
+def test_invalid_email_rejected(authed_client, sent_mail):
+    c = authed_client
+    token = _publish(c, _make_tour(c))
+    assert c.post(f"/tours/share/{token}/subscribe",
+                  json={"email": "not-an-address"}).status_code == 400
+    assert sent_mail["confirm"] == []
+
+
+def test_unsubscribe_removes_the_row(authed_client, test_db, sent_mail):
+    c = authed_client
+    tid = _make_tour(c)
+    token = _publish(c, tid)
+    ut = _subscribe(c, token)
+
+    assert c.get(f"/tours/share/{token}/unsubscribe/{ut}").status_code == 200
+    assert c.get(f"/tours/{tid}/notify-status").json()["subscribers"] == 0
+
+
+def test_revoking_the_share_link_drops_its_followers(authed_client, test_db, sent_mail):
+    c = authed_client
+    tid = _make_tour(c)
+    token = _publish(c, tid)
+    _subscribe(c, token)
+
+    assert c.delete(f"/tours/{tid}/publish").status_code == 200
+    con = sqlite3.connect(test_db.path)
+    n = con.execute("SELECT COUNT(*) FROM tour_subscribers WHERE token=?",
+                    (token,)).fetchone()[0]
+    con.close()
+    assert n == 0
+
+
+def test_notify_refuses_an_incomplete_stage(authed_client, sent_mail):
+    """The button should never fire for a stage that hasn't been ridden."""
+    c = authed_client
+    tid = _make_tour(c)
+    token = _publish(c, tid)
+    _subscribe(c, token)
+    stage_id = c.get(f"/tours/{tid}").json()["stages"][0]["id"]
+
+    r = c.post(f"/tours/{tid}/notify", json={"stage_id": stage_id})
+    assert r.status_code == 400
+    assert sent_mail["updates"] == []
+
+
+def test_notify_sends_once_to_confirmed_followers(authed_client, add_activity, sent_mail):
+    c = authed_client
+    tid = _make_tour(c)
+    token = _publish(c, tid)
+    _subscribe(c, token, "yes@example.com")
+    # A second address that never confirmed must not be mailed.
+    c.post(f"/tours/share/{token}/subscribe", json={"email": "pending@example.com"})
+
+    add_activity(user_id=c.user_id, distance_mi=2.07,
+                 creation_time_s=int(datetime(2026, 7, 3, 12, tzinfo=timezone.utc).timestamp()),
+                 start_lat=40.0, start_lon=-105.0, attrs=["totalClimb", 328])
+    stage = c.get(f"/tours/{tid}").json()["stages"][0]
+    assert stage["completion"], "fixture activity should match the stage"
+
+    r = c.post(f"/tours/{tid}/notify", json={"stage_id": stage["id"]})
+    assert r.status_code == 200, r.text
+    assert r.json()["sent"] == 1
+    recipients = sent_mail["updates"][0][0]
+    assert [e for e, _ in recipients] == ["yes@example.com"]
+
+    # Mail cannot be recalled, so a stage is never announced twice.
+    r2 = c.post(f"/tours/{tid}/notify", json={"stage_id": stage["id"]})
+    assert r2.status_code == 409
+    assert len(sent_mail["updates"]) == 1
+    assert c.get(f"/tours/{tid}/notify-status").json()["notified"] == [stage["id"]]
+
+
+def test_notify_rejects_a_peer(authed_client, make_user, add_activity, sent_mail):
+    """A public tour is visible to peers, but the share link — and its
+    followers — belong to whoever published it."""
+    from app.auth import create_session_token, SESSION_COOKIE
+    from starlette.testclient import TestClient
+    import app.main as main_mod
+
+    c = authed_client
+    tid = _make_tour(c)
+    token = _publish(c, tid)
+    _subscribe(c, token)
+    add_activity(user_id=c.user_id, distance_mi=2.07,
+                 creation_time_s=int(datetime(2026, 7, 3, 12, tzinfo=timezone.utc).timestamp()),
+                 start_lat=40.0, start_lon=-105.0, attrs=["totalClimb", 328])
+    stage_id = c.get(f"/tours/{tid}").json()["stages"][0]["id"]
+
+    peer = TestClient(main_mod.app)
+    peer.cookies.set(SESSION_COOKIE, create_session_token(make_user()))
+    r = peer.post(f"/tours/{tid}/notify", json={"stage_id": stage_id})
+    assert r.status_code == 400          # the peer has no share link of their own
+    assert peer.get(f"/tours/{tid}/notify-status").json()["subscribers"] == 0
+    assert sent_mail["updates"] == []
+
+
+def test_subscribe_is_rate_limited(authed_client, sent_mail):
+    """The endpoint is public and sends mail, so it can't be an open relay for
+    confirmation spam."""
+    c = authed_client
+    token = _publish(c, _make_tour(c))
+    codes = [c.post(f"/tours/share/{token}/subscribe",
+                    json={"email": f"fan{i}@example.com"}).status_code
+             for i in range(tours._SUB_MAX + 1)]
+    assert codes[:-1] == [200] * tours._SUB_MAX
+    assert codes[-1] == 429

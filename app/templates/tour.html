@@ -340,6 +340,7 @@ html.mob-embedded body.mob-stage-view #stage-detail { padding-bottom:12px!import
         <input id="publish-url" readonly style="flex:1;font-size:12px;padding:6px 8px;background:var(--surface2);border:1px solid var(--border2);border-radius:5px;color:var(--text);outline:none" onclick="this.select()">
         <button onclick="copyShareUrl()" style="padding:5px 10px;font-size:12px;background:var(--surface2);border:1px solid var(--border2);border-radius:5px;color:var(--text);cursor:pointer;white-space:nowrap">Copy</button>
       </div>
+      <div id="publish-subs" style="font-size:11px;color:var(--muted);margin:-8px 0 14px;line-height:1.5"></div>
       <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
         <a id="publish-blog-link" href="#" target="_blank" style="flex:1;text-align:center;padding:7px 10px;font-size:12px;font-weight:600;background:var(--accent);border:1px solid var(--accent);border-radius:6px;color:#fff;text-decoration:none">Open Blog / Story view →</a>
         <button id="publish-pdf-btn" onclick="startPdfBuild()" style="flex:1;text-align:center;padding:7px 10px;font-size:12px;font-weight:600;background:var(--surface2);border:1px solid var(--border2);border-radius:6px;color:var(--text);cursor:pointer">Publish PDF book ↓</button>
@@ -927,6 +928,7 @@ async function onTourSelect(id) {
 
   // Rebuild the user-selector scope for this tour (private → creator only).
   _applyUserSelectorScope();
+  await loadNotifyStatus(id);
 
   document.getElementById('manage-btn').style.visibility   = 'visible';
   document.getElementById('publish-btn').style.visibility  = 'visible';
@@ -1718,6 +1720,51 @@ async function resyncStageActivity(activityId) {
 // ── AI Stage Summary (route + tour context; performance once completed) ───────
 // Shown for completed and uncompleted stages alike — the backend folds the
 // rider's performance in once the stage has been ridden.
+// ── Notifying share-link followers ────────────────────────────────────────────
+// Followers subscribe to a share link, so notifying is about YOUR link: peers
+// browsing someone else's data never see the control. Sending is manual because
+// stage matching can re-shuffle as later rides land, and mail cannot be recalled.
+let _notifyStatus = { subscribers: 0, notified: [] };
+
+async function loadNotifyStatus(tourId) {
+  _notifyStatus = { subscribers: 0, notified: [] };
+  if (!_isViewingSelf()) return;
+  try {
+    _notifyStatus = await fetch(`/tours/${tourId}/notify-status`).then(r => r.json());
+  } catch(e) {}
+}
+
+function _notifyBtnHtml(stage) {
+  if (!_isViewingSelf() || !tourInfo?.share_token) return '';
+  if ((_notifyStatus.notified || []).includes(stage.id))
+    return `<span style="font-size:10px;color:var(--muted)">📬 Followers notified</span>`;
+  const n = _notifyStatus.subscribers || 0;
+  if (!n) return '';
+  return `<button id="notify-stage-btn" onclick="notifyStage(${stage.id})" style="font-size:10px;padding:2px 7px;border-radius:4px;border:1px solid var(--border2);background:var(--surface2);color:var(--muted);cursor:pointer;line-height:1.5">📬 Notify ${n} follower${n === 1 ? '' : 's'}</button>`;
+}
+
+async function notifyStage(stageId) {
+  const btn = document.getElementById('notify-stage-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+  try {
+    const r = await fetch(`/tours/${tourInfo.id}/notify`, {
+      method:  'POST',
+      headers: {'Content-Type':'application/json'},
+      body:    JSON.stringify({stage_id: stageId})
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      if (btn) { btn.disabled = false; btn.textContent = d.detail || 'Could not send'; }
+      return;
+    }
+    (_notifyStatus.notified = _notifyStatus.notified || []).push(stageId);
+    if (btn) btn.outerHTML =
+      `<span style="font-size:10px;color:var(--muted)">📬 Sent to ${d.sent}</span>`;
+  } catch(e) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Could not send'; }
+  }
+}
+
 function renderStageSummaryCard(el, stage) {
   if(!_hasAnthropicKey || !el) return;
   // Key the summary to the rider and attempt being viewed, so its completion
@@ -2138,6 +2185,7 @@ async function renderDetail(activeId) {
       `<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
         <div style="font-size:11px;color:#22c55e;font-weight:500">✓ Completed ${stage.completion.date}</div>
         <button onclick="sessionStorage.setItem('selectActivityId','${act.id}');window.location='/activities'" style="font-size:10px;padding:2px 7px;border-radius:4px;border:1px solid var(--border2);background:var(--surface2);color:var(--muted);cursor:pointer;line-height:1.5">View on Activities page</button>
+        ${_notifyBtnHtml(stage)}
       </div>` +
       buildStageActivityDetail(act);
     // Same stage summary as uncompleted stages; now it also covers the ride.
@@ -2864,6 +2912,11 @@ function openPublishModal() {
   if(tourInfo.share_token) {
     urlInput.value = `${location.origin}/tours/share/${tourInfo.share_token}`;
     document.getElementById('publish-blog-link').href = `/tours/blog/${tourInfo.share_token}`;
+    // Count only — follower addresses are never shown to the tour owner.
+    const subs = _notifyStatus.subscribers || 0;
+    document.getElementById('publish-subs').textContent = subs
+      ? `${subs} ${subs === 1 ? 'person gets' : 'people get'} an email when you notify them about a completed stage.`
+      : 'Anyone opening this link can ask for an email when a new stage is posted.';
     unpub.style.display = 'none';
     pub.style.display   = '';
   } else if(!myAttempts.length) {

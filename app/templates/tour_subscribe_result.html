@@ -1,0 +1,10 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1c1c1e">
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg"><link rel="apple-touch-icon" href="/static/apple-touch-icon.png"><title>{{ title }} — Ascent</title>
+<style>body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#1c1c1e;color:#f2f2f7;display:flex;align-items:center;justify-content:center;min-height:100vh;flex-direction:column;gap:.9rem;margin:0;padding:2rem;box-sizing:border-box}
+.icon{font-size:2rem}.msg{font-size:1.05rem;font-weight:600;max-width:460px;text-align:center;line-height:1.4}
+.sub{color:#8e8e93;font-size:13px;max-width:420px;text-align:center;line-height:1.55}a{color:#f97316;font-size:14px;text-decoration:none;margin-top:.4rem}</style></head>
+<body><div class="icon">{{ icon }}</div><div class="msg">{{ message }}</div>
+{% if sub %}<div class="sub">{{ sub }}</div>{% endif %}
+{% if back_url %}<a href="{{ back_url }}">← Back to the tour</a>{% endif %}</body></html>
