@@ -1215,6 +1215,14 @@ def sent_mail(monkeypatch):
     return box
 
 
+@pytest.fixture
+def no_photo(monkeypatch):
+    """No cached ride photo. photos.py resolves its own DB from ASCENT_DB_PATH,
+    so without this the lookup reads whatever that env var happens to point at."""
+    import app.routers.photos as photos
+    monkeypatch.setattr(photos, "first_local_image", lambda _aid: None)
+
+
 def test_subscribe_is_pending_until_confirmed(authed_client, test_db, sent_mail):
     """Anyone holding the link can type any address, so nothing is mailed to it
     until the owner of that inbox clicks through."""
@@ -1297,7 +1305,8 @@ def test_notify_refuses_an_incomplete_stage(authed_client, sent_mail):
     assert sent_mail["updates"] == []
 
 
-def test_notify_sends_once_to_confirmed_followers(authed_client, add_activity, sent_mail):
+def test_notify_sends_once_to_confirmed_followers(authed_client, add_activity,
+                                                  sent_mail, no_photo):
     c = authed_client
     tid = _make_tour(c)
     token = _publish(c, tid)
@@ -1324,7 +1333,8 @@ def test_notify_sends_once_to_confirmed_followers(authed_client, add_activity, s
     assert c.get(f"/tours/{tid}/notify-status").json()["notified"] == [stage["id"]]
 
 
-def test_notify_rejects_a_peer(authed_client, make_user, add_activity, sent_mail):
+def test_notify_rejects_a_peer(authed_client, make_user, add_activity,
+                               sent_mail, no_photo):
     """A public tour is visible to peers, but the share link — and its
     followers — belong to whoever published it."""
     from app.auth import create_session_token, SESSION_COOKIE
@@ -1358,3 +1368,33 @@ def test_subscribe_is_rate_limited(authed_client, sent_mail):
              for i in range(tours._SUB_MAX + 1)]
     assert codes[:-1] == [200] * tours._SUB_MAX
     assert codes[-1] == 429
+
+
+def test_notify_attaches_the_rides_first_photo(authed_client, add_activity,
+                                               sent_mail, monkeypatch, tmp_path):
+    """A cached photo rides along, scaled down and embedded rather than linked."""
+    from PIL import Image
+    src = tmp_path / "ride.jpg"
+    Image.new("RGB", (3000, 2000), (120, 90, 60)).save(src, "JPEG")
+
+    import app.routers.photos as photos
+    monkeypatch.setattr(photos, "first_local_image", lambda _aid: src)
+
+    c = authed_client
+    tid = _make_tour(c)
+    token = _publish(c, tid)
+    _subscribe(c, token)
+    add_activity(user_id=c.user_id, distance_mi=2.07,
+                 creation_time_s=int(datetime(2026, 7, 3, 12, tzinfo=timezone.utc).timestamp()),
+                 start_lat=40.0, start_lon=-105.0, attrs=["totalClimb", 328])
+    stage = c.get(f"/tours/{tid}").json()["stages"][0]
+
+    assert c.post(f"/tours/{tid}/notify", json={"stage_id": stage["id"]}).status_code == 200
+    photo = sent_mail["updates"][0][1][-1]      # trailing `photo` argument
+    assert photo, "a cached photo should be attached"
+    assert len(photo) < src.stat().st_size      # scaled down, not sent whole
+
+    from io import BytesIO
+    with Image.open(BytesIO(photo)) as out:
+        from app.mailer import CARD_WIDTH_PX
+        assert out.width == CARD_WIDTH_PX * 2   # 2x the card column, for retina

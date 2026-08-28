@@ -468,24 +468,31 @@ def first_local_image(activity_id: int) -> Optional[Path]:
     email) would rather send without a photo than wait for one. HEIC is skipped
     because Pillow cannot decode it without a plugin, and mail clients mostly
     cannot render it either.
+
+    Note this module resolves its own DB from ASCENT_DB_PATH rather than the
+    injected db_getter, so a caller running against a different database gets
+    no photo rather than an error.
     """
-    info = _get_info(activity_id)
-    if info and info.get("strava_id"):
-        video_map = info.get("video_map") or {}
-        dest_dir  = _photos_dir(int(info["strava_id"]))
-        for fname in info["filenames"]:
-            if fname in video_map or Path(fname).suffix.lower() in _SKIP_IMAGE_EXTS:
+    try:
+        info = _get_info(activity_id)
+        if info and info.get("strava_id"):
+            video_map = info.get("video_map") or {}
+            dest_dir  = _photos_dir(int(info["strava_id"]))
+            for fname in info["filenames"]:
+                if fname in video_map or Path(fname).suffix.lower() in _SKIP_IMAGE_EXTS:
+                    continue
+                path = dest_dir / fname
+                if path.exists():
+                    return path
+        for media in _get_user_media(activity_id):
+            fname = media["filename"]
+            if Path(fname).suffix.lower() in _SKIP_IMAGE_EXTS:
                 continue
-            path = dest_dir / fname
+            path = _user_uploads_dir(activity_id) / fname
             if path.exists():
                 return path
-    for media in _get_user_media(activity_id):
-        fname = media["filename"]
-        if Path(fname).suffix.lower() in _SKIP_IMAGE_EXTS:
-            continue
-        path = _user_uploads_dir(activity_id) / fname
-        if path.exists():
-            return path
+    except Exception:
+        pass   # best-effort decoration; never hold up the mail it is for
     return None
 
 
