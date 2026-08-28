@@ -3339,7 +3339,8 @@ async def tour_notify_stage(tour_id: int, request: Request, body: dict = Body(..
     activities to stages, and a match can shift as later rides land — mail cannot
     be recalled, so the owner confirms each one.
     """
-    from app.mailer import smtp_configured, send_stage_update_emails
+    from app.mailer import photo_for_email, smtp_configured, send_stage_update_emails
+    from app.routers.photos import first_local_image
 
     uid = require_user(request)
     stage_id = body.get("stage_id")
@@ -3408,9 +3409,10 @@ async def tour_notify_stage(tour_id: int, request: Request, body: dict = Body(..
     except Exception:
         use_metric = False
 
-    # An uncached summary would take tens of seconds to generate; the mail is
-    # worth more than the prose, so send without it.
-    summary = _cached_stage_summary(db, tour_id, stage_id, uid, attempt_id) or ""
+    # Whatever photo is already cached for the ride, scaled to the email card.
+    # None is fine — the mail just goes without one.
+    photo_path = first_local_image(comp["activity_id"])
+    photo      = photo_for_email(photo_path) if photo_path else None
 
     base        = str(request.base_url).rstrip("/")
     stage_url   = f"{base}/tours/share/{token}?stage={stage_id}"
@@ -3419,7 +3421,7 @@ async def tour_notify_stage(tour_id: int, request: Request, body: dict = Body(..
 
     sent = send_stage_update_emails(
         [(e, f"{base}/tours/share/{token}/unsubscribe/{u}") for e, u in recipients],
-        tour_title, owner_name, stage_title, stats_line, summary, stage_url,
+        tour_title, owner_name, stage_title, stats_line, stage_url, photo,
     )
 
     con = sqlite3.connect(db.path, timeout=10)

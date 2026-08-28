@@ -9,10 +9,12 @@ Required env vars:
   SMTP_FROM      address shown in From: header (defaults to SMTP_USER)
 """
 
+import io
 import os
 import smtplib
 import ssl
 from html import escape
+from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
@@ -229,16 +231,53 @@ def _card(inner_html: str) -> str:
 """
 
 
+# The card is 480px wide with 2rem of padding a side, so its content column is
+# 416px. Encode at 2x for retina and let the img tag scale it back down.
+CARD_WIDTH_PX = 416
+
+
+def photo_for_email(path) -> "bytes | None":
+    """Downscale a photo to the card width as JPEG bytes, or None if unusable.
+
+    Anything unreadable is simply dropped — a missing photo must never stop the
+    mail going out.
+    """
+    try:
+        from PIL import Image, ImageOps
+
+        with Image.open(path) as img:
+            img = ImageOps.exif_transpose(img)   # honour phone orientation
+            img = img.convert("RGB")
+            img.thumbnail((CARD_WIDTH_PX * 2, CARD_WIDTH_PX * 3))
+            buf = io.BytesIO()
+            img.save(buf, "JPEG", quality=80, optimize=True)
+            return buf.getvalue()
+    except Exception:
+        return None
+
+
 def _msg(subject: str, from_addr: str, to_email: str, text_body: str,
-         html_body: str, headers: dict = None):
-    msg = MIMEMultipart("alternative")
+         html_body: str, headers: dict = None, photo: bytes = None):
+    body = MIMEMultipart("alternative")
+    body.attach(MIMEText(text_body, "plain"))
+    body.attach(MIMEText(html_body, "html"))
+
+    if photo:
+        # related wraps the alternative so the HTML can reference cid:stagephoto.
+        msg = MIMEMultipart("related")
+        msg.attach(body)
+        img = MIMEImage(photo, "jpeg")
+        img.add_header("Content-ID", "<stagephoto>")
+        img.add_header("Content-Disposition", "inline", filename="stage.jpg")
+        msg.attach(img)
+    else:
+        msg = body
+
     msg["Subject"] = subject
     msg["From"]    = from_addr
     msg["To"]      = to_email
     for k, v in (headers or {}).items():
         msg[k] = v
-    msg.attach(MIMEText(text_body, "plain"))
-    msg.attach(MIMEText(html_body, "html"))
     return msg
 
 
@@ -289,8 +328,8 @@ address will not be kept.
 
 
 def send_stage_update_emails(recipients: list, tour_title: str, owner_name: str,
-                             stage_title: str, stats_line: str, summary: str,
-                             stage_url: str) -> int:
+                             stage_title: str, stats_line: str,
+                             stage_url: str, photo: bytes = None) -> int:
     """Mail one stage announcement to each follower.
 
     `recipients` is [(email, unsubscribe_url)] — one message per person so each
@@ -300,11 +339,12 @@ def send_stage_update_emails(recipients: list, tour_title: str, owner_name: str,
     subject = f"{tour_title}: {stage_title}"
     e_title, e_owner = escape(tour_title), escape(owner_name)
     e_stage, e_stats = escape(stage_title), escape(stats_line)
-
-    summary_text = f"\n{summary}\n" if summary else ""
-    summary_html = (
-        f'<p style="margin-bottom:1.5rem;color:#c7c7cc;font-size:13px;line-height:1.55">'
-        f'{escape(summary)}</p>' if summary else "")
+    photo_html = (
+        # Outlook's Word engine ignores max-width, so the width attribute carries it.
+        f'<img src="cid:stagephoto" alt="" width="{CARD_WIDTH_PX}" '
+        f'style="width:100%;max-width:{CARD_WIDTH_PX}px;height:auto;'
+        f'border-radius:8px;display:block;margin-bottom:1.5rem">'
+        if photo else "")
 
     messages = []
     for email, unsub_url in recipients:
@@ -313,7 +353,7 @@ def send_stage_update_emails(recipients: list, tour_title: str, owner_name: str,
 
 {stage_title}
 {stats_line}
-{summary_text}
+
 See the route, the map and the ride data:
 
 {stage_url}
@@ -326,8 +366,8 @@ Stop receiving these: {unsub_url}
       <strong>{e_owner}</strong> just completed a stage of {e_title}
     </p>
     <div style="font-size:1.05rem;font-weight:600;margin-bottom:.35rem">{e_stage}</div>
-    <div style="color:#8e8e93;font-size:13px;margin-bottom:1.25rem">{e_stats}</div>
-{summary_html}
+    <div style="color:#8e8e93;font-size:13px;margin-bottom:1.5rem">{e_stats}</div>
+{photo_html}
     <a href="{stage_url}"
        style="display:inline-block;background:#f97316;color:#fff;text-decoration:none;
               border-radius:8px;padding:.7rem 1.5rem;font-weight:600;font-size:14px">
@@ -342,6 +382,7 @@ Stop receiving these: {unsub_url}
             subject, from_addr, email, text_body, html_body,
             # Lets Gmail and Apple Mail show their own one-tap unsubscribe.
             {"List-Unsubscribe": f"<{unsub_url}>"},
+            photo,
         )))
 
     return _smtp_send(messages)

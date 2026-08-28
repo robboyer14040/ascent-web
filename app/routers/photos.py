@@ -99,6 +99,7 @@ def _ensure_locations_column():
         con.close()
 
 _VIDEO_EXTS = {'.mp4', '.mov', '.avi', '.mkv', '.m4v', '.webm'}
+_SKIP_IMAGE_EXTS = _VIDEO_EXTS | {'.heic', '.heif'}
 UPLOAD_MAX_BYTES  = 100 * 1024 * 1024   # 100 MB per file
 DISK_FREE_MIN     = 200 * 1024 * 1024   # refuse uploads if < 200 MB free
 
@@ -458,6 +459,35 @@ async def resolve_photos(activity_id: int, force: bool = False) -> dict:
     return {"filenames": final, "video_map": final_video_map, "caption_map": final_caption_map, "location_map": final_location_map}
 
 # ── API endpoints ──────────────────────────────────────────────────────────────
+
+def first_local_image(activity_id: int) -> Optional[Path]:
+    """Path of the activity's first still image already on disk, or None.
+
+    Deliberately disk-only: resolve_photos() will download anything missing from
+    Strava, and callers that must not block on the network (the stage-update
+    email) would rather send without a photo than wait for one. HEIC is skipped
+    because Pillow cannot decode it without a plugin, and mail clients mostly
+    cannot render it either.
+    """
+    info = _get_info(activity_id)
+    if info and info.get("strava_id"):
+        video_map = info.get("video_map") or {}
+        dest_dir  = _photos_dir(int(info["strava_id"]))
+        for fname in info["filenames"]:
+            if fname in video_map or Path(fname).suffix.lower() in _SKIP_IMAGE_EXTS:
+                continue
+            path = dest_dir / fname
+            if path.exists():
+                return path
+    for media in _get_user_media(activity_id):
+        fname = media["filename"]
+        if Path(fname).suffix.lower() in _SKIP_IMAGE_EXTS:
+            continue
+        path = _user_uploads_dir(activity_id) / fname
+        if path.exists():
+            return path
+    return None
+
 
 @router.get("/activities/{activity_id}/photos")
 async def get_photos(activity_id: int):
