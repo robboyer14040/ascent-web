@@ -308,7 +308,7 @@ address will not be kept.
       <strong>{e_title}</strong>.
     </p>
     <p style="margin-bottom:1.5rem;color:#8e8e93;font-size:13px">
-      Confirm below and you'll hear from us only when a new stage is posted.
+      Confirm below and you'll hear from us only when a stage is completed.
     </p>
     <a href="{confirm_url}"
        style="display:inline-block;background:#f97316;color:#fff;text-decoration:none;

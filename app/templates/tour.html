@@ -2916,7 +2916,7 @@ function openPublishModal() {
     const subs = _notifyStatus.subscribers || 0;
     document.getElementById('publish-subs').textContent = subs
       ? `${subs} ${subs === 1 ? 'person gets' : 'people get'} an email when you notify them about a completed stage.`
-      : 'Anyone opening this link can ask for an email when a new stage is posted.';
+      : 'Anyone opening this link can ask for an email when a stage is completed.';
     unpub.style.display = 'none';
     pub.style.display   = '';
   } else if(!myAttempts.length) {

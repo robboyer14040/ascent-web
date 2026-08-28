@@ -28,7 +28,7 @@
 #stage-list-wrap{flex:1;overflow-y:auto}
 #stage-list{padding:4px 0}
 #notify-optin{padding:10px 12px 20px;border-top:1px solid var(--border);margin-top:8px}
-#notify-toggle{width:100%;background:none;border:none;padding:3px 0;color:var(--muted);font-size:12px;text-align:left;cursor:pointer;font-family:inherit}
+#notify-toggle{width:100%;background:none;border:none;padding:3px 0;color:var(--muted);font-size:13px;font-weight:600;text-align:left;cursor:pointer;font-family:inherit}
 #notify-toggle:hover{color:var(--text)}
 #notify-form{margin-top:8px;display:flex;flex-direction:column;gap:6px}
 #notify-email{font-size:13px;padding:7px 8px;background:var(--surface2);border:1px solid var(--border2);border-radius:6px;color:var(--text);outline:none;font-family:inherit}
@@ -102,7 +102,7 @@
     <div id="stage-list-wrap">
       <div id="stage-list"></div>
       <div id="notify-optin">
-        <button id="notify-toggle" type="button" onclick="toggleNotifyForm()">📬 Email me when a new stage is posted</button>
+        <button id="notify-toggle" type="button" onclick="toggleNotifyForm()">📬 Email me when a stage is completed</button>
         <div id="notify-form" style="display:none">
           <input id="notify-email" type="email" inputmode="email" autocomplete="email"
                  placeholder="you@example.com" onkeydown="if(event.key==='Enter')submitNotify()">
@@ -258,7 +258,7 @@ async function submitNotify() {
     if (r.ok) {
       document.getElementById('notify-optin').innerHTML =
         '<div id="notify-msg">📬 Check your email to confirm. After that you\'ll hear ' +
-        'from us whenever a new stage is posted.</div>';
+        'from us whenever a stage is completed.</div>';
       return;
     }
     const d = await r.json().catch(() => ({}));
