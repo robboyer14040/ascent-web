@@ -27,14 +27,17 @@
 .view-all-btn.active{background:var(--accent);border-color:var(--accent);color:#fff;cursor:pointer}
 #stage-list-wrap{flex:1;overflow-y:auto}
 #stage-list{padding:4px 0}
-#notify-optin{padding:10px 12px 20px;border-top:1px solid var(--border);margin-top:8px}
-#notify-toggle{width:100%;background:none;border:none;padding:3px 0;color:var(--muted);font-size:13px;font-weight:600;text-align:left;cursor:pointer;font-family:inherit}
-#notify-toggle:hover{color:var(--text)}
-#notify-form{margin-top:8px;display:flex;flex-direction:column;gap:6px}
+#notify-optin{flex-shrink:0}
+/* A button sizes to its content, so unlike #view-all-btn (a flex child that
+   stretches) it needs an explicit width to match. box-sizing is border-box, so
+   this lands on the same edges as the button above. margin-top trims 4px off
+   the gap between the two. */
+#notify-toggle{display:block;width:calc(100% - 20px);margin-top:4px;font-family:inherit}
+#notify-form{margin:0 10px 8px;display:flex;flex-direction:column;gap:6px}
 #notify-email{font-size:13px;padding:7px 8px;background:var(--surface2);border:1px solid var(--border2);border-radius:6px;color:var(--text);outline:none;font-family:inherit}
 #notify-submit{padding:7px 10px;font-size:12px;font-weight:600;background:var(--accent);border:1px solid var(--accent);border-radius:6px;color:#fff;cursor:pointer;font-family:inherit}
 #notify-submit:disabled{opacity:.55;cursor:default}
-#notify-msg{font-size:11px;color:var(--muted);line-height:1.45}
+#notify-msg{margin:0 10px 10px;font-size:11px;color:var(--muted);line-height:1.45}
 .stage-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
 /* Split-pane detail layout + elevation strip styles live in share_detail.css. */
 #mob-portrait-stats.stats-collapsed{display:none}
@@ -99,17 +102,17 @@
       </div>
     </div>
     <button id="view-all-btn" class="view-all-btn" onclick="viewEntireTour()" disabled>View Entire Tour</button>
+    <div id="notify-optin">
+      <button id="notify-toggle" class="view-all-btn active" type="button" onclick="toggleNotifyForm()">📬 Email me whenever a stage is completed</button>
+      <div id="notify-form" style="display:none">
+        <input id="notify-email" type="email" inputmode="email" autocomplete="email"
+               placeholder="you@example.com" onkeydown="if(event.key==='Enter')submitNotify()">
+        <button id="notify-submit" type="button" onclick="submitNotify()">Subscribe</button>
+        <div id="notify-msg"></div>
+      </div>
+    </div>
     <div id="stage-list-wrap">
       <div id="stage-list"></div>
-      <div id="notify-optin">
-        <button id="notify-toggle" type="button" onclick="toggleNotifyForm()">📬 Email me when a stage is completed</button>
-        <div id="notify-form" style="display:none">
-          <input id="notify-email" type="email" inputmode="email" autocomplete="email"
-                 placeholder="you@example.com" onkeydown="if(event.key==='Enter')submitNotify()">
-          <button id="notify-submit" type="button" onclick="submitNotify()">Subscribe</button>
-          <div id="notify-msg"></div>
-        </div>
-      </div>
     </div>
   </div>
 

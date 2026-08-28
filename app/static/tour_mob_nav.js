@@ -102,6 +102,8 @@ const TourNav = (function () {
     move($('stage-chart-settings'), document.body);
     // Stage list always lives in the Stages panel (also shown pinned-left in landscape).
     move($('stage-list-wrap'), panels.stages);
+    // The follower opt-in (tour_share only) rides above it, as it does on desktop.
+    move($('notify-optin'), panels.stages, true);
     // Tour-management controls (tour.html only) sit above the map on Entire Route.
     move($('tour-controls'), panels.route);
     move($('map'), panels.route);
