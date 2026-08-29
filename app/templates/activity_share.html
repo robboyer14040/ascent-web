@@ -144,8 +144,11 @@ function renderActivity() {
     },
     analysis: TourNav.isPhone(),
   });
-  // Photos → the separate PHOTOS pane (desktop/tablet); phone uses its Photos tab.
-  if(!TourNav.isPhone()) TourStageDetail.photosPane(_act.id, { getMap: getStageMap, setMedia: m => { _shareLbMedia = m; } });
+  // Photos: desktop/tablet fills the PHOTOS pane (which pins them on the map as a
+  // side effect); phone uses its Photos tab, so it needs the map pins on their own.
+  const pctx = { getMap: getStageMap, setMedia: m => { _shareLbMedia = m; } };
+  if(TourNav.isPhone()) TourStageDetail.photoMarkers(_act.id, { ...pctx, lightboxName: 'openShareLightbox' });
+  else TourStageDetail.photosPane(_act.id, pctx);
 }
 
 // ── Phone tab hooks (shared controller in tour_mob_nav.js) ──────────────────────

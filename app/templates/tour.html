@@ -2279,7 +2279,7 @@ async function loadStagePhotos(actId) {
     });
     html += `</div>`;
     el.innerHTML = html;
-    MapUtils.placePhotoMarkers(tourMap, media, idx => openTourLightbox(idx));
+    TourStageDetail.photoMarkers(media, { getMap: () => tourMap, lightboxName: 'openTourLightbox' });
   } catch(e) {}
 }
 

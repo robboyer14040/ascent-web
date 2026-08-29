@@ -577,6 +577,31 @@ const TourStageDetail = {
     }
   },
 
+  // Photo markers on the map for one stage / activity's media, without the PHOTOS
+  // pane. Tapping a marker opens that photo; on phone it selects the Photos tab
+  // first, so closing the lightbox lands on the grid rather than back on the map.
+  // Used where the pane isn't available (phone tabs) or is filled separately
+  // (tour.html's own photo strip). `source` is an activity id (fetch its media), a
+  // ready media[] array, or null to just clear.
+  // ctx: { getMap, setMedia, lightboxName }.
+  photoMarkers(source, ctx = {}) {
+    const map = ctx.getMap && ctx.getMap();
+    if (!map || typeof MapUtils === 'undefined') return;
+    const place = media => {
+      if (ctx.setMedia) ctx.setMedia(media);
+      MapUtils.clearPhotoMarkers(map);
+      if (!media || !media.length) return;
+      MapUtils.placePhotoMarkers(map, media, idx => {
+        // TourNav is a top-level const, not a window property — reference it bare.
+        if (typeof TourNav !== 'undefined' && TourNav.isPhone()) TourNav.navL2('photos');
+        window[ctx.lightboxName](idx);
+      });
+    };
+    if (Array.isArray(source)) place(source);
+    else if (source != null) Lightbox.fetchMedia(source).then(place).catch(() => {});
+    else place([]);
+  },
+
   // Render the PHOTOS pane (#photos-body) as a thumbnail grid and drop matching photo
   // markers on the map, toggling the whole pane's visibility to match. Shared by the
   // share pages' completed / overview views. `source` is an activity id (fetch its

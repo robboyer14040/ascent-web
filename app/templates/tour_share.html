@@ -541,8 +541,11 @@ async function renderDetail(activeId) {
           onSynced: () => renderDetail(activeId),
           analysis: TourNav.isPhone(),
         });
-        // Photos → the separate PHOTOS pane (desktop/tablet; phone uses its Photos tab).
-        if(!TourNav.isPhone()) TourStageDetail.photosPane(act.id, { getMap: getStageMap, setMedia: m => { _shareLbMedia = m; } });
+        // Photos → the separate PHOTOS pane (desktop/tablet; phone uses its Photos
+        // tab). Either way the geotagged ones get pinned on the map.
+        const _pctx = { getMap: getStageMap, setMedia: m => { _shareLbMedia = m; } };
+        if(TourNav.isPhone()) TourStageDetail.photoMarkers(act.id, { ..._pctx, lightboxName: 'openShareLightbox' });
+        else TourStageDetail.photosPane(act.id, _pctx);
         // The summary covers how the ride went once the stage is complete.
         _renderStageSummary(el, stage.id, true);
       }).catch(()=>_renderActFallback(c));
