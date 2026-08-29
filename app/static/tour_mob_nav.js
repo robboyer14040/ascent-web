@@ -1,4 +1,5 @@
-// ── Tours mobile nested-nav controller — shared by tour.html & tour_share.html ──
+// ── Tours mobile nested-nav controller — shared by tour.html, tour_share.html and
+// activity_share.html ────────────────────────────────────────────────────────
 // Owns the phone-only two-level nav. It reparents the existing desktop DOM (#map,
 // #stage-list-wrap, #stage-detail, #stage-elev-strip) into the panels defined by
 // _tour_mob_nav.html and swaps between:
@@ -15,6 +16,11 @@
 // The page's selectStage() calls TourNav.showStage(hasStage) after rendering so the
 // controller can enter/leave level 2. renderDetail() writes stage photos into
 // #stage-photos-body and the forecast into #stage-forecast-body (both created here).
+//
+// Solo mode (activity_share: one activity, no tour) — the page includes
+// _tour_mob_nav.html with mob_nav_solo=true, which renders only the level-2
+// Map / Analysis / Photos panels. Detected from the missing level-1 panels; the
+// controller then boots straight into level 2 and never leaves it.
 
 const TourNav = (function () {
   'use strict';
@@ -26,6 +32,8 @@ const TourNav = (function () {
   }
 
   const $ = id => document.getElementById(id);
+  // Solo pages render no level-1 panels (see _tour_mob_nav.html).
+  function isSolo() { return !$('tour-panel-route'); }
   function move(el, parent, prepend) {
     if (!el || !parent || el.parentNode === parent) return;
     if (prepend) parent.insertBefore(el, parent.firstChild);
@@ -80,19 +88,20 @@ const TourNav = (function () {
     if (_ready) return;
     const panels = ['route', 'stages', 'info', 'allphotos', 'map', 'analysis', 'photos', 'forecast']
       .reduce((o, k) => (o[k] = $('tour-panel-' + k), o), {});
-    if (!panels.route) return;
+    if (!panels.map) return;
 
-    // Photos / Forecast bodies — renderDetail() targets these by id.
+    // Photos / Forecast bodies — renderDetail() targets these by id. The level-1
+    // and Forecast panels are absent in solo mode, so each is guarded.
     if (!$('stage-photos-body')) {
       const p = document.createElement('div'); p.id = 'stage-photos-body';
       panels.photos.appendChild(p);
     }
     // All-stages Photos body (level-1 overview tab).
-    if (!$('tour-allphotos-body')) {
+    if (panels.allphotos && !$('tour-allphotos-body')) {
       const a = document.createElement('div'); a.id = 'tour-allphotos-body';
       panels.allphotos.appendChild(a);
     }
-    if (!$('stage-forecast-body')) {
+    if (panels.forecast && !$('stage-forecast-body')) {
       const f = document.createElement('div'); f.id = 'stage-forecast-body';
       panels.forecast.appendChild(f);
     }
@@ -234,7 +243,8 @@ const TourNav = (function () {
   function init() {
     if (!isPhone()) return;
     _wire();
-    navL1('route');
+    if (isSolo()) showStage(true);   // one activity → level 2 is the whole page
+    else navL1('route');
     _placeChrome();
     if (window.visualViewport) window.visualViewport.addEventListener('resize', _placeChrome);
     window.addEventListener('load', _placeChrome);
@@ -259,6 +269,7 @@ const TourNav = (function () {
   api.showStage = showStage;
   api.back = back;
   api.isPhone = isPhone;
+  api.isSolo = isSolo;
   return api;
 })();
 

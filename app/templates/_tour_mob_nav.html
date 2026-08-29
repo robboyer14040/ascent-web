@@ -1,9 +1,15 @@
-{# ── Tours mobile nested nav — shared by tour.html and tour_share.html ──
-   Phone only. The sub-nav bar swaps between level 1 (Entire Route / Stages / Info)
-   and level 2 (Map / Analysis / Photos / Forecast). The panels below are empty
-   reparent targets that tour_mob_nav.js fills from the existing desktop DOM. #}
+{# ── Tours mobile nested nav — shared by tour.html, tour_share.html and
+   activity_share.html. Phone only. The sub-nav bar swaps between level 1 (Entire
+   Route / Stages / Info) and level 2 (Map / Analysis / Photos / Forecast). The
+   panels below are empty reparent targets that tour_mob_nav.js fills from the
+   existing desktop DOM.
+
+   Set `mob_nav_solo = true` before including for a single activity (no tour): only
+   the level-2 Map / Analysis / Photos tabs are rendered. tour_mob_nav.js detects
+   this from the absent level-1 panels and boots straight into level 2. #}
 <script src="/static/mob_nav_anchor.js?v={{ app_version }}"></script>
 <div id="tour-subnav">
+{% if not mob_nav_solo %}
   {# Landscape-only back (header/back is hidden in landscape) — returns level 2 → 1 #}
   <button id="tour-subnav-back" onclick="tourMobBack()" aria-label="Back">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
@@ -25,6 +31,7 @@
     <span class="tmob-btn-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span>
     <span>Photos</span>
   </button>
+{% endif %}
   {# ── Level 2 (a stage is selected) ── #}
   <button class="tmob-btn active" data-l2="map" onclick="tourNavL2('map')">
     <span class="tmob-btn-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg></span>
@@ -38,19 +45,25 @@
     <span class="tmob-btn-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span>
     <span>Photos</span>
   </button>
+{% if not mob_nav_solo %}
   <button class="tmob-btn" data-l2="forecast" onclick="tourNavL2('forecast')">
     <span class="tmob-btn-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 17.58A5 5 0 0 0 18 8h-1.26A8 8 0 1 0 4 16.25"/><line x1="8" y1="19" x2="8" y2="21"/><line x1="8" y1="13" x2="8" y2="15"/><line x1="16" y1="19" x2="16" y2="21"/><line x1="16" y1="13" x2="16" y2="15"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="12" y1="15" x2="12" y2="17"/></svg></span>
     <span>Forecast</span>
   </button>
+{% endif %}
 </div>
 
 <div id="tour-panels">
+{% if not mob_nav_solo %}
   <div id="tour-panel-route"     class="tour-panel active"></div>
   <div id="tour-panel-stages"    class="tour-panel"></div>
   <div id="tour-panel-info"      class="tour-panel"></div>
   <div id="tour-panel-allphotos" class="tour-panel"></div>
-  <div id="tour-panel-map"      class="tour-panel"></div>
+{% endif %}
+  <div id="tour-panel-map"      class="tour-panel{% if mob_nav_solo %} active{% endif %}"></div>
   <div id="tour-panel-analysis" class="tour-panel"></div>
   <div id="tour-panel-photos"   class="tour-panel"></div>
+{% if not mob_nav_solo %}
   <div id="tour-panel-forecast" class="tour-panel"></div>
+{% endif %}
 </div>
