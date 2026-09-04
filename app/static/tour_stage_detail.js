@@ -389,6 +389,10 @@ const TourStageDetail = {
       : [];
     const groupIds = new Set(activeGroup.map(s => String(s.id)));
     let activeLine = null;
+    // Completed routes are lifted above uncompleted ones: where an unridden
+    // alternate retraces a stage that IS done, the shared section must read as
+    // done (red), leaving only the alternate's divergence blue.
+    const doneLines = [];
     stages.forEach(s => {
       const pts = pointsCache[String(s.id)];
       if (!pts?.length) return;
@@ -402,8 +406,10 @@ const TourStageDetail = {
       else { opts = { color: stageColor(s), weight: 3, opacity: activeId ? 0.18 : 0.85 }; if (altIds.has(sid)) opts.dashArray = '6,8'; }
       const line = L.polyline(lpts, opts).addTo(routeGroup);
       if (isActive) activeLine = line;
+      else if (s.completion) doneLines.push(line);
       allPts.push(...lpts);
     });
+    doneLines.forEach(l => l.bringToFront());
     if (activeLine) activeLine.bringToFront();
     if (!activeId) {
       const first = stages[0];
