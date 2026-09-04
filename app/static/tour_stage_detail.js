@@ -415,7 +415,7 @@ const TourStageDetail = {
       let opts;
       if (isActive)       opts = { color: ctx.selColor, weight: 5, opacity: 1.0 };
       else if (isSibling) opts = { color: ctx.selColor, weight: 3, opacity: 0.9, dashArray: '6,8' };
-      else { opts = { color: stageColor(s), weight: 3, opacity: activeId ? 0.18 : 0.85 }; if (altIds.has(sid)) opts.dashArray = '6,8'; }
+      else { opts = { color: stageColor(s), weight: 3, opacity: activeId ? 0.18 : 0.85 }; if (altIds.has(sid) && !s.completion) opts.dashArray = '6,8'; }
       const line = L.polyline(lpts, opts).addTo(routeGroup);
       if (isActive) activeLine = line;
       else if (s.completion) doneLines.push(line);
