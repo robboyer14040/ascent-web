@@ -384,10 +384,21 @@ const TourStageDetail = {
     if (typeof MapUtils !== 'undefined') MapUtils.clearPhotoMarkers(ctx.map);
     const allPts = [];
     const altIds = _altStageIds(stages, pointsCache);
+    const groups = _stageSegmentGroups(stages, pointsCache);
     const activeGroup = activeId
-      ? (_stageSegmentGroups(stages, pointsCache).find(g => g.some(s => String(s.id) === String(activeId))) || [])
+      ? (groups.find(g => g.some(s => String(s.id) === String(activeId))) || [])
       : [];
     const groupIds = new Set(activeGroup.map(s => String(s.id)));
+    // Among alternate routes for the same segment, a ridden stage wins: its
+    // unridden siblings aren't drawn at all, so the shared road reads as done
+    // instead of being overdrawn in blue. The selected stage's own group is
+    // exempt — that view exists to compare its alternates.
+    const hidden = new Set();
+    for (const g of groups) {
+      if (!g.some(s => s.completion)) continue;
+      for (const s of g)
+        if (!s.completion && !groupIds.has(String(s.id))) hidden.add(String(s.id));
+    }
     let activeLine = null;
     // Completed routes are lifted above uncompleted ones: where an unridden
     // alternate retraces a stage that IS done, the shared section must read as
@@ -396,8 +407,9 @@ const TourStageDetail = {
     stages.forEach(s => {
       const pts = pointsCache[String(s.id)];
       if (!pts?.length) return;
-      const lpts = pts.map(p => [p[0], p[1]]);
       const sid = String(s.id);
+      if (hidden.has(sid)) return;
+      const lpts = pts.map(p => [p[0], p[1]]);
       const isActive  = activeId && sid === String(activeId);
       const isSibling = activeId && !isActive && groupIds.has(sid);
       let opts;
