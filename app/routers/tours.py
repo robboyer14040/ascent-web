@@ -457,6 +457,109 @@ def _build_completion(act_row: tuple) -> dict:
     }
 
 
+# Grid used to test whether two GPS tracks run along each other: a point is "on"
+# a track when it shares a cell with one of its points, or sits in a neighbouring
+# cell — roughly a 300 m tolerance, loose enough for opposite sides of a road.
+_PARTIAL_CELL     = 0.0025   # degrees (~275 m of latitude)
+_PARTIAL_GAP_M    = 2000     # a jump this long is a ferry/transfer leg, not road
+_PARTIAL_ON_ROUTE = 0.75     # this much of the ride must lie on the stage route
+_PARTIAL_COVERED  = 0.5      # ...and the ride must cover this much of the route
+
+
+def _track_cells(pts: list) -> set:
+    return {(math.floor(lat / _PARTIAL_CELL), math.floor(lon / _PARTIAL_CELL))
+            for lat, lon in pts}
+
+
+def _near_cells(pt: tuple, cells: set) -> bool:
+    cy, cx = math.floor(pt[0] / _PARTIAL_CELL), math.floor(pt[1] / _PARTIAL_CELL)
+    return any((cy + dy, cx + dx) in cells for dy in (-1, 0, 1) for dx in (-1, 0, 1))
+
+
+def _frac_on_track(pts: list, cells: set) -> float:
+    """How much of the line `pts` runs along the track described by `cells`, as a
+    fraction of its length. Length-weighted rather than point-counted: route
+    points bunch up on hairpins and ride points bunch up at stops, either of
+    which would skew a plain count. Jumps longer than _PARTIAL_GAP_M count for
+    neither side — in a stage route they are the ferry/transfer legs (drawn as
+    one straight hop), which nobody rides, and in a ride they are a paused
+    recording."""
+    if len(pts) < 2 or not cells:
+        return 0.0
+    total = on = 0.0
+    prev_near = _near_cells(pts[0], cells)
+    for a, b in zip(pts, pts[1:]):
+        d = math.hypot((b[0] - a[0]) * 111000,
+                       (b[1] - a[1]) * 111000 * math.cos(math.radians(a[0])))
+        near = _near_cells(b, cells)
+        if d <= _PARTIAL_GAP_M:
+            total += d
+            if prev_near and near:
+                on += d
+        prev_near = near
+    return on / total if total else 0.0
+
+
+def _partial_matches(con, rows: list, stages: list, assignments: dict,
+                     used_acts: set) -> dict:
+    """Match leftover activities to leftover stages on GPS geometry alone, for
+    stages that were ridden only in part. An activity claims a stage when nearly
+    all of the ride (>= _PARTIAL_ON_ROUTE) runs along that stage's route and the
+    ride covers a real share of it (>= _PARTIAL_COVERED) — so a missing ferry leg
+    or a van transfer still counts as riding the stage, while an unrelated ride
+    in the same area does not. Returns {stage_id: row index} and marks the
+    activities it consumes as used.
+    """
+    open_si = [si for si in range(len(stages)) if stages[si]["id"] not in assignments]
+    free_ai = [ai for ai in range(len(rows)) if ai not in used_acts]
+    if not open_si or not free_ai:
+        return {}
+
+    routes = {}
+    for si in open_si:
+        pts = con.execute(
+            "SELECT lat, lon FROM tour_stage_points WHERE stage_id=? ORDER BY seq",
+            (stages[si]["id"],),
+        ).fetchall()
+        if pts:
+            routes[si] = [(r[0], r[1]) for r in pts]
+    if not routes:
+        return {}   # stages with no route can only be matched on distance/start
+
+    tracks = {}
+    for ai in free_ai:
+        pts = con.execute(
+            f"SELECT latitude_e7, longitude_e7 FROM points "
+            f"WHERE track_id=? AND {_VALID_GPS}",
+            (rows[ai][0],),
+        ).fetchall()
+        if not pts:
+            continue
+        step = max(1, len(pts) // 400)
+        sampled = [(p[0], p[1]) for p in pts[::step]]
+        tracks[ai] = (sampled, _track_cells(sampled))
+
+    candidates = []
+    for si, route in routes.items():
+        route_cells = _track_cells(route)
+        for ai, (track, track_cells) in tracks.items():
+            on_route = _frac_on_track(track, route_cells)
+            if on_route < _PARTIAL_ON_ROUTE:
+                continue
+            covered = _frac_on_track(route, track_cells)
+            if covered < _PARTIAL_COVERED:
+                continue
+            candidates.append((on_route + covered, si, ai))
+
+    out: dict = {}
+    for _score, si, ai in sorted(candidates, key=lambda c: -c[0]):
+        if stages[si]["id"] in out or ai in used_acts:
+            continue
+        out[stages[si]["id"]] = ai
+        used_acts.add(ai)
+    return out
+
+
 def _global_stage_matching(con, uid: int, start_date: str, end_date: str, stages: list) -> dict:
     """
     Assign activities to stages using global greedy scoring.
@@ -593,8 +696,24 @@ def _global_stage_matching(con, uid: int, start_date: str, end_date: str, stages
                     repair_changed = True
                     break
 
+    # ── Partial-ride pass ─────────────────────────────────────────────────────
+    # A stage can be ridden without the recording covering all of it: a ferry or
+    # transfer leg that is part of the route but not of the ride (BB13 Split -
+    # Korcula is three ferry hops), or a section skipped in the van. Those rides
+    # are too short — and often start in the wrong place — for the gates above,
+    # so fall back to geometry: a leftover ride running along a leftover stage's
+    # route means that stage was ridden, just not all of it.
+    partial = _partial_matches(con, rows, stages, assignments, used_acts)
+    assignments.update(partial)
+
+    def _completion(stage_id):
+        comp = _build_completion(rows[assignments[stage_id]])
+        if stage_id in partial:
+            comp["partial"] = True
+        return comp
+
     return {
-        stage["id"]: (_build_completion(rows[assignments[stage["id"]]]) if stage["id"] in assignments else None)
+        stage["id"]: (_completion(stage["id"]) if stage["id"] in assignments else None)
         for stage in stages
     }
 
@@ -1455,11 +1574,15 @@ _VALID_GPS = (
 
 
 def _activity_pts_for_stages(con, stages: list, completions: dict) -> dict:
-    """Return {stage_id: [[lat, lon, alt_ft], ...]} from actual activity GPS for completed stages."""
+    """Return {stage_id: [[lat, lon, alt_ft], ...]} from actual activity GPS for completed stages.
+
+    Partially-ridden stages are left out: their track covers only part of the
+    route, so substituting it on the tour map would erase the rest of the stage.
+    """
     result: dict = {}
     for stage in stages:
         comp = completions.get(stage["id"])
-        if not comp or not comp.get("activity_id"):
+        if not comp or not comp.get("activity_id") or comp.get("partial"):
             continue
         rows = con.execute(
             f"SELECT latitude_e7, longitude_e7, orig_altitude_cm "

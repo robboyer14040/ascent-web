@@ -1398,3 +1398,106 @@ def test_notify_attaches_the_rides_first_photo(authed_client, add_activity,
     with Image.open(BytesIO(photo)) as out:
         from app.mailer import CARD_WIDTH_PX
         assert out.width == CARD_WIDTH_PX * 2   # 2x the card column, for retina
+
+
+# ── Partially-ridden stages (ferry / transfer legs missing from the track) ────
+
+def _make_points_table(con):
+    con.execute("""
+        CREATE TABLE points (
+            id                  INTEGER PRIMARY KEY,
+            track_id            INTEGER NOT NULL,
+            wall_clock_delta_s  INTEGER NOT NULL,
+            active_time_delta_s INTEGER NOT NULL DEFAULT 0,
+            latitude_e7         REAL NOT NULL,
+            longitude_e7        REAL NOT NULL,
+            orig_altitude_cm    REAL DEFAULT 0
+        )
+    """)
+
+
+def _insert_track(con, act_id, pts):
+    con.executemany(
+        "INSERT INTO points (track_id, wall_clock_delta_s, active_time_delta_s, "
+        "latitude_e7, longitude_e7, orig_altitude_cm) VALUES (?,?,?,?,?,?)",
+        [(act_id, i, i, lat, lon, 0.0) for i, (lat, lon) in enumerate(pts)],
+    )
+    con.commit()
+
+
+# A 50mi stage in two ridden legs with a ferry hop between them, the way the
+# Balkans Split - Korcula stage is built. Point 0 is the stage start; the ride
+# below starts at the far side of the hop, so it only covers the second leg.
+_FERRY_STAGE_PTS = (
+    [(40.0 + 0.002 * i, -105.0) for i in range(100)]        # ridden leg 1 (~14mi)
+    + [(40.5 + 0.002 * i, -105.0) for i in range(200)]      # after the ferry hop
+)
+_FERRY_TAIL = _FERRY_STAGE_PTS[100:]
+FERRY_STAGE = [{"id": 200, "stage_num": 1, "name": "Ferry stage", "distance_mi": 50.0,
+                "start_lat": _FERRY_STAGE_PTS[0][0], "start_lon": _FERRY_STAGE_PTS[0][1]}]
+
+
+def _setup_ferry_stage(con):
+    _make_activities_table(con)
+    _make_points_table(con)
+    _insert_points(con, 200, _FERRY_STAGE_PTS)
+
+
+def test_partial_ride_after_ferry_counts_as_completed(con):
+    # The rider took the ferry for the first leg: the recording starts at the far
+    # side of the hop, so it is both too short and nowhere near the stage start.
+    _setup_ferry_stage(con)
+    tail = _FERRY_TAIL
+    _insert_activity(con, 21, _ts(2026, 7, 3), 10.0, tail[0][0], tail[0][1],
+                     json.dumps(["totalClimb", 900]))
+    _insert_track(con, 21, tail)
+
+    result = tours._global_stage_matching(con, 1, "2026-07-01", "2026-07-10", FERRY_STAGE)
+    assert result[200] is not None
+    assert result[200]["activity_id"] == 21
+    assert result[200]["partial"] is True
+
+
+def test_partial_ride_ignores_a_ride_off_the_route(con):
+    # Same length ride on the same day, but a few km east of the stage route.
+    _setup_ferry_stage(con)
+    away = [(lat, lon + 0.05) for lat, lon in _FERRY_TAIL]
+    _insert_activity(con, 22, _ts(2026, 7, 3), 10.0, away[0][0], away[0][1])
+    _insert_track(con, 22, away)
+
+    result = tours._global_stage_matching(con, 1, "2026-07-01", "2026-07-10", FERRY_STAGE)
+    assert result[200] is None
+
+
+def test_partial_ride_ignores_a_token_stretch_of_the_route(con):
+    # A couple of miles of the route ridden — not enough to call the stage done.
+    _setup_ferry_stage(con)
+    bit = _FERRY_TAIL[:15]
+    _insert_activity(con, 23, _ts(2026, 7, 3), 2.0, bit[0][0], bit[0][1])
+    _insert_track(con, 23, bit)
+
+    result = tours._global_stage_matching(con, 1, "2026-07-01", "2026-07-10", FERRY_STAGE)
+    assert result[200] is None
+
+
+def test_full_match_is_not_flagged_partial(con):
+    _setup_ferry_stage(con)
+    _insert_activity(con, 24, _ts(2026, 7, 3), 49.0,
+                     _FERRY_STAGE_PTS[0][0], _FERRY_STAGE_PTS[0][1])
+    _insert_track(con, 24, _FERRY_STAGE_PTS)
+
+    result = tours._global_stage_matching(con, 1, "2026-07-01", "2026-07-10", FERRY_STAGE)
+    assert result[200]["activity_id"] == 24
+    assert "partial" not in result[200]
+
+
+def test_partial_stage_keeps_the_planned_route_on_the_map(con):
+    # The actual track covers only part of the stage, so it must not replace the
+    # planned route in the tour map's points payload.
+    _setup_ferry_stage(con)
+    tail = _FERRY_TAIL
+    _insert_activity(con, 25, _ts(2026, 7, 3), 10.0, tail[0][0], tail[0][1])
+    _insert_track(con, 25, tail)
+
+    completions = tours._global_stage_matching(con, 1, "2026-07-01", "2026-07-10", FERRY_STAGE)
+    assert tours._activity_pts_for_stages(con, FERRY_STAGE, completions) == {}
