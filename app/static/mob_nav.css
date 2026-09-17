@@ -19,7 +19,7 @@
     padding:env(safe-area-inset-top, 0px) 12px 0;gap:6px;flex-shrink:0
   }
   .mob-topbar-brand { font-size:15px;font-weight:700;color:var(--accent);white-space:nowrap }
-  .mob-topbar-version { font-size:10px;font-weight:400;color:var(--muted);letter-spacing:.02em }
+  .mob-topbar-version { font-size:13px;font-weight:600;color:#fff;letter-spacing:.02em }
   .mob-topbar-spacer { flex:1 }
   .mob-topbar-btn {
     font-size:12px;font-weight:600;color:var(--text);
