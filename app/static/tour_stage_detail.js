@@ -57,7 +57,8 @@ const TourStageDetail = {
     el.insertAdjacentHTML('beforeend',
       '<div class="ai-card" id="stage-ai-summary-card">' +
       '<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">' +
-        '<div class="ai-card-label" style="margin-bottom:0">AI Stage Summary</div>' + btn +
+        '<div class="ai-card-label" style="margin-bottom:0">AI Stage Summary</div>' +
+        aiCopyBtnHtml('stage-ai-summary-copy', 'AI Stage Summary', 'stage-ai-summary-text') + btn +
       '</div>' +
       '<div class="ai-card-body ai-card-loading" id="stage-ai-summary-text">Generating summary…</div>' +
       '</div>');
@@ -580,7 +581,7 @@ const TourStageDetail = {
     </div>`;
     aHtml += rpeHtml;
     if (act.notes) aHtml += `<div class="act-notes">${esc(act.notes)}</div>`;
-    if (act.ai_summary) aHtml += `<div class="ai-card" style="margin-top:8px;margin-bottom:8px"><div class="ai-card-label">AI Summary</div><div class="ai-card-body">${esc(act.ai_summary)}</div></div>`;
+    if (act.ai_summary) aHtml += `<div class="ai-card" style="margin-top:8px;margin-bottom:8px"><div style="display:flex;align-items:center;gap:6px;margin-bottom:5px"><div class="ai-card-label" style="margin-bottom:0">AI Summary</div>${aiCopyBtnHtml('act-ai-summary-copy', 'AI Summary', 'act-ai-summary-text')}</div><div class="ai-card-body" id="act-ai-summary-text">${esc(act.ai_summary)}</div></div>`;
     aHtml += `<div class="stats-grid">${buildActivityStatChips(act, U, esc, fmtHMS)}</div>`;
     bodyEl.innerHTML = aHtml;   // photos render into the separate PHOTOS pane (see photosPane)
     if (ctx.analysis) this.enhanceAnalysis();

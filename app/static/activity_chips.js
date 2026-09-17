@@ -56,3 +56,40 @@ function buildActivityStatChips(a, U, esc, fmtHMS) {
     return `<div class="stat-chip"${s}><div class="sc-label">${l}</div><div class="sc-val">${v}</div><div class="sc-sub">${sub||''}</div></div>`;
   }).join('');
 }
+
+/* ── AI summary copy button ───────────────────────────────────────────────────
+   Used by the AI Stage Summary / AI Summary cards on the tour and tour-share
+   stage detail. Copies the heading plus the summary text. navigator.clipboard
+   needs a secure context, so plain-http (LAN testing) falls back to execCommand. */
+function aiCopyBtnHtml(btnId, title, textElId, fontSize) {
+  return `<button id="${btnId}" title="Copy summary" onclick="copyAiSummary('${btnId}','${title}','${textElId}')" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:${fontSize || 13}px;padding:0;line-height:1;flex-shrink:0" tabindex="-1">⧉</button>`;
+}
+
+function copyAiSummary(btnId, title, textElId) {
+  const el = document.getElementById(textElId);
+  if (!el || el.classList.contains('ai-card-loading')) return;   // still generating
+  const text = (el.innerText || el.textContent || '').trim();
+  if (!text) return;
+  const payload = `${title}\n\n${text}`;
+  const btn = document.getElementById(btnId);
+  const flash = ok => {
+    if (!btn) return;
+    const prev = btn.textContent;
+    btn.textContent = ok ? '✓' : '✕';
+    setTimeout(() => { btn.textContent = prev; }, 1200);
+  };
+  const fallback = () => {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = payload;
+      ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand('copy');
+      ta.remove();
+      flash(ok);
+    } catch (e) { flash(false); }
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(payload).then(() => flash(true), fallback);
+  else fallback();
+}
