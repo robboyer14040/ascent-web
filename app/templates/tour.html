@@ -129,6 +129,16 @@ html.mob-embedded body.mob-stage-view #stage-detail { padding-bottom:12px!import
 .modal-title{font-size:15px;font-weight:600;margin-bottom:14px}
 .modal-body{padding:0 20px;overflow-y:auto;flex:1}
 .modal-foot{padding:14px 20px 18px;flex-shrink:0;display:flex;align-items:center;gap:8px;border-top:1px solid var(--border)}
+/* Phone: the modal footer sits below the visible viewport, so move the
+   Save / Cancel row (and the progress bar) to the top of the modal. */
+@media(max-width:767px),(max-height:500px) and (orientation:landscape) and (pointer:coarse){
+  /* dvh, so the box fits the *visible* viewport when the URL bar is showing —
+     with 90vh the centred box overflows and clips the row we just moved up. */
+  #modal-box{max-height:90dvh}
+  .modal-foot{order:-1;padding:12px 20px;border-top:none;border-bottom:1px solid var(--border)}
+  #modal-progress{order:-1;margin-top:8px}
+  .modal-head{padding-top:14px}
+}
 .form-row{display:flex;gap:12px;margin-bottom:10px;flex-wrap:wrap}
 .form-field{display:flex;flex-direction:column;gap:4px;flex:1;min-width:110px}
 .form-field label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
