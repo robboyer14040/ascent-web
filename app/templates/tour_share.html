@@ -545,6 +545,7 @@ async function renderDetail(activeId) {
           syncEndpoint: `/tours/share/${TOKEN}/activities/${act.id}/sync`,
           onSynced: () => renderDetail(activeId),
           analysis: TourNav.isPhone(),
+          hideAiSummary: true,   // the AI Stage Summary below covers the ride
         });
         // Photos → the separate PHOTOS pane (desktop/tablet; phone uses its Photos
         // tab). Either way the geotagged ones get pinned on the map.

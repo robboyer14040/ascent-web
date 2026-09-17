@@ -556,7 +556,9 @@ const TourStageDetail = {
   //     onSynced,               // (optional) async () => re-render after a successful sync
   //     getMap,                 // () => Leaflet map (for photo markers)
   //     setMedia,               // (media) => store the lightbox media list
-  //     analysis }              // (optional) run enhanceAnalysis() after (phone)
+  //     analysis,               // (optional) run enhanceAnalysis() after (phone)
+  //     hideAiSummary }         // (optional) drop the activity's AI Summary card — the
+  //                             // tour pages show the AI Stage Summary instead
   completedActivityBody(bodyEl, act, ctx) {
     if (!bodyEl) return;
     const _rpeLabels = ['', 'Easy', 'Easy+', 'Moderate', 'Moderate+', 'Medium', 'Hard', 'Hard+', 'Very Hard', 'Max-', 'Max'];
@@ -586,7 +588,7 @@ const TourStageDetail = {
     </div>`;
     aHtml += rpeHtml;
     if (act.notes) aHtml += `<div class="act-notes">${esc(act.notes)}</div>`;
-    if (act.ai_summary) aHtml += `<div class="ai-card" style="margin-top:8px;margin-bottom:8px"><div style="display:flex;align-items:center;gap:6px;margin-bottom:5px"><div class="ai-card-label" style="margin-bottom:0">AI Summary</div>${aiCopyBtnHtml('act-ai-summary-copy', 'AI Summary', 'act-ai-summary-text')}</div><div class="ai-card-body" id="act-ai-summary-text">${esc(act.ai_summary)}</div></div>`;
+    if (act.ai_summary && !ctx.hideAiSummary) aHtml += `<div class="ai-card" style="margin-top:8px;margin-bottom:8px"><div style="display:flex;align-items:center;gap:6px;margin-bottom:5px"><div class="ai-card-label" style="margin-bottom:0">AI Summary</div>${aiCopyBtnHtml('act-ai-summary-copy', 'AI Summary', 'act-ai-summary-text')}</div><div class="ai-card-body" id="act-ai-summary-text">${esc(act.ai_summary)}</div></div>`;
     aHtml += `<div class="stats-grid">${buildActivityStatChips(act, U, esc, fmtHMS)}</div>`;
     bodyEl.innerHTML = aHtml;   // photos render into the separate PHOTOS pane (see photosPane)
     if (ctx.analysis) this.enhanceAnalysis();

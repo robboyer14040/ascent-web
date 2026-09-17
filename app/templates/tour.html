@@ -172,9 +172,8 @@ html.mob-embedded body.mob-stage-view #stage-detail { padding-bottom:12px!import
 
 /* ── Activity title bar (INFO-pane style) ── */
 .act-title-bar{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px}
-/* In tour stage detail, stack AI chip above stats-grid so chips get full width */
+/* In tour stage detail, let the stat chips use the full panel width */
 #stage-detail .act-stats-row{flex-direction:column!important;overflow:visible!important;max-width:none!important;gap:8px!important}
-#stage-detail .act-stats-row #ai-summary-chip{width:100%!important;max-height:none!important;order:-1}
 #stage-detail .act-stats-row .stats-grid{width:100%;flex:none}
 .act-title{font-size:15px;font-weight:600;line-height:1.3}
 .act-title-links{display:flex;gap:6px;flex-shrink:0;margin-left:8px;margin-top:2px}
@@ -1692,8 +1691,6 @@ function buildStageActivityDetail(a) {
     weatherElId:      'sd-weather',
     locationElId:     'sd-location',
     userMap:          _tourUserMap,
-    showAiSummary:    _hasAnthropicKey,
-    aiRefreshCb:      'loadStageAiSummary',
     escFn:            esc,
     fmtDateFn:        fmtDate,
     fmtHMSFn:         fmtHMS,
@@ -1799,33 +1796,6 @@ function renderStageSummaryCard(el, stage) {
     url: (force) => `/tours/${tourInfo.id}/stages/${stage.id}/ai-summary`
                   + `?${force ? 'force=1' : ''}${who}`,
   });
-}
-
-// ── AI Summary for completed stage activity ───────────────────────────────────
-async function loadStageAiSummary(actId, refresh = false) {
-  if (!_hasAnthropicKey) return;
-  const el   = document.getElementById('ai-summary-text');
-  const chip = document.getElementById('ai-summary-chip');
-  const btn  = document.getElementById('ai-summary-refresh');
-  if (!el || !chip) return;
-  if (refresh) {
-    el.textContent = 'Generating…';
-    if (btn) btn.disabled = true;
-  }
-  try {
-    const url = `/api/activities/${actId}/ai-summary?model=${encodeURIComponent(tourCoachModel)}${refresh ? '&refresh=true' : ''}`;
-    const r = await fetch(url);
-    if (r.status === 403) { chip.style.display = 'none'; return; }
-    if (!r.ok) { el.textContent = '—'; return; }
-    const d = await r.json();
-    chip.style.display = '';
-    el.style.color = 'var(--text)';
-    el.textContent = d.summary || '—';
-  } catch(e) {
-    el.textContent = '—';
-  } finally {
-    if (btn) btn.disabled = false;
-  }
 }
 
 // ── Save as Route (stage detail) ──────────────────────────────────────────────
@@ -2216,7 +2186,6 @@ async function renderDetail(activeId) {
     setTimeout(() => {
       loadStageActivityWx(act.id);
       loadStagePhotos(act.id);
-      loadStageAiSummary(act.id);
       if(act.strava_activity_id) loadStageSocial(act.id);
       if(act.strava_activity_id && !act.notes) loadStageDescription(act.id);
     }, 0);
