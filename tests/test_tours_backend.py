@@ -304,6 +304,28 @@ def test_alt_override_forces_classification(con):
     assert [[s["id"] for s in g] for g in groups] == [[1], [2, 3]]
 
 
+def test_same_numbered_names_group_as_alternates(con):
+    # BB24 / BB24G share a stage number and both endpoints, but the gravel variant
+    # detours far enough that the >=50% overlap test alone would miss it.
+    main   = [(40.0 + 0.001 * i, -105.0) for i in range(20)]
+    detour = [main[0]] + [(40.0 + 0.001 * i, -105.0 + 0.03) for i in range(1, 19)] + [main[-1]]
+    _insert_points(con, 1, main)
+    _insert_points(con, 2, detour)
+    stages = [_stage(1, main), _stage(2, detour)]
+    stages[0]["name"], stages[1]["name"] = "BB24 Ksamil - Permet", "BB24G Ksamil - Permet"
+
+    groups = tours._stage_segment_groups(con, stages)
+    assert [[s["id"] for s in g] for g in groups] == [[1, 2]]
+
+    # A same-numbered add-on elsewhere ("35x") is a stage of its own, not an alternate.
+    far = [(41.0 + 0.001 * i, -106.0) for i in range(20)]
+    _insert_points(con, 3, far)
+    addon = [_stage(1, main), _stage(3, far)]
+    addon[0]["name"], addon[1]["name"] = "BB35 Schinos - Athens", "BB35x Athens hotel"
+    groups = tours._stage_segment_groups(con, addon)
+    assert [[s["id"] for s in g] for g in groups] == [[1], [3]]
+
+
 def _make_activities_table(con):
     con.execute("""
         CREATE TABLE activities (

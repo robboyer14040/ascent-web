@@ -87,3 +87,34 @@ test('alt_override forces the alternate classification', function () {
   });
   eq(groups, [[1], [2, 3]]);
 });
+
+// Same stage number embedded in the name ("BB24" / "BB24G") + shared endpoints →
+// alternates, even when the detour keeps the overlap under 50%.
+test('same-numbered names with shared endpoints group as alternates', function () {
+  var main = _line(40.0, -105.0);
+  var detour = [main[0]];
+  for (var i = 1; i < 19; i++) detour.push([40.0 + 0.001 * i, -105.0 + 0.03, 0]);
+  detour.push(main[main.length - 1]);
+  var s1 = _stage(1, main), s2 = _stage(2, detour);
+  s1.name = 'BB24 Ksamil - Permet';
+  s2.name = 'BB24G Ksamil - Permet';
+  var cache = { '1': main, '2': detour };
+  var groups = _stageSegmentGroups([s1, s2], cache).map(function (g) {
+    return g.map(function (s) { return s.id; });
+  });
+  eq(groups, [[1, 2]]);
+});
+
+// A same-numbered add-on that starts where the stage ended is NOT an alternate.
+test('same-numbered name without shared endpoints stays its own segment', function () {
+  var main = _line(40.0, -105.0);
+  var addon = _line(41.0, -106.0);
+  var s1 = _stage(1, main), s2 = _stage(2, addon);
+  s1.name = 'BB35 Schinos - Athens';
+  s2.name = 'BB35x Athens hotel';
+  var cache = { '1': main, '2': addon };
+  var groups = _stageSegmentGroups([s1, s2], cache).map(function (g) {
+    return g.map(function (s) { return s.id; });
+  });
+  eq(groups, [[1], [2]]);
+});

@@ -735,8 +735,13 @@ def _stage_segment_groups(con, stages: list) -> list:
     at least half of the original (>= 50% of the anchor's points lie on the
     candidate), so two genuinely different stages that merely begin and end near
     the same place stay separate.
-    `stages` is a list of dicts (in stage order) each with id, distance_mi,
-    start_lat, start_lon.
+    `stages` is a list of dicts (in stage order) each with id, stage_num, name,
+    distance_mi, start_lat, start_lon.
+
+    Names are consulted too: an alternate is usually named by suffixing the
+    original's stage number ("BB24" / "BB24G"), so a stage resolving to the SAME
+    display number as the one before it is an alternate of it — a surer signal
+    than geometry, which misses alternates that take a long detour.
 
     A stage's stored `alt_override` forces the call regardless of geometry:
     0 = always its own segment, 1 = always an alternate of the preceding stage.
@@ -777,6 +782,8 @@ def _stage_segment_groups(con, stages: list) -> list:
             _acache[sid] = pts[::step]
         return _acache[sid]
 
+    num_map = _stage_num_map(stages)
+
     def _override(sid):
         if sid not in _ocache:
             r = con.execute(
@@ -812,14 +819,25 @@ def _stage_segment_groups(con, stages: list) -> list:
             return 0.0
         return sum(1 for p in orig if _near_any(p, cand)) / len(orig)
 
-    def _same_seg(a, b):
+    def _endpoints_match(a, b):
         starts = _near_any(_start_pt(a), _first_pts(b["id"])) or _near_any(_start_pt(b), _first_pts(a["id"]))
         ends   = _near_any(_end_pt(a["id"]), _last_pts(b["id"])) or _near_any(_end_pt(b["id"]), _last_pts(a["id"]))
-        if not (starts and ends):
-            return False
+        return starts and ends
+
+    def _same_seg(a, b):
         # a is the later candidate, b the group anchor (original); the alternate
         # (a) must retrace at least half of the original (b).
-        return _overlap_frac(b["id"], a["id"]) >= _OVERLAP_MIN
+        return _endpoints_match(a, b) and _overlap_frac(b["id"], a["id"]) >= _OVERLAP_MIN
+
+    def _same_named_seg(a, b):
+        """Same display stage number AND the same endpoints — an alternate whose
+        long detour keeps it under the overlap bar. Requiring the endpoints stops
+        a same-numbered add-on ("35x Athens hotel") swallowing the stage before it."""
+        if not num_map:
+            return False
+        na = num_map.get(a["stage_num"])
+        return (na is not None and na == num_map.get(b["stage_num"])
+                and _endpoints_match(a, b))
 
     # Anchor each group on the first occurrence of its [start, end]; a later
     # stage matching that anchor (and retracing it) is an alternate route.
@@ -833,6 +851,8 @@ def _stage_segment_groups(con, stages: list) -> list:
         if ov == 0:
             grp = None
         elif ov == 1 and prev is not None:
+            grp = group_of.get(prev["id"])
+        elif prev is not None and _same_named_seg(s, group_of[prev["id"]][0]):
             grp = group_of.get(prev["id"])
         else:
             grp = next((g for g in groups if _same_seg(s, g[0])), None)
@@ -993,16 +1013,13 @@ def _climb_dict(cum: list, smooth: list, i0: int, i1: int) -> dict:
     }
 
 
-def _stage_display_num(stages: list) -> Callable[[int], int]:
-    """Return a fn mapping a stage's stage_num to the number to *display* for it.
-    When one naming scheme matches EVERY stage name the embedded number is used;
-    otherwise it falls back to list order (stage_num). Schemes, tried in order:
+def _stage_num_map(stages: list) -> Optional[dict]:
+    """Map stage_num → the number embedded in the stage's name, when ONE naming
+    scheme matches EVERY name; None when no scheme fits. Schemes, tried in order:
       1. a leading number ("3 Alpe d'Huez");
       2. a "Stage N" reference anywhere ("Stage 3");
       3. the SAME 1-4 letter code + a number at the start of every name
-         ("CdP 1", "CdP 2" → 1, 2; mixed codes don't qualify).
-    Keeps AI-summary/advice stage references aligned with the tour pages, which
-    apply the same rule client-side (see tour_stage.js — keep the two in sync)."""
+         ("CdP 1", "CdP 2" → 1, 2; mixed codes don't qualify)."""
     def _by_regex(pat):
         ms = [pat.search(s.get("name") or "") for s in stages]
         if not (stages and all(ms)):
@@ -1022,7 +1039,19 @@ def _stage_display_num(stages: list) -> Callable[[int], int]:
                    _by_code_prefix):
         parsed = scheme()
         if parsed is not None:
-            return lambda n, _p=parsed: _p.get(n, n)
+            return parsed
+    return None
+
+
+def _stage_display_num(stages: list) -> Callable[[int], int]:
+    """Return a fn mapping a stage's stage_num to the number to *display* for it:
+    the number embedded in its name when one naming scheme matches every stage
+    (see _stage_num_map), otherwise list order (stage_num).
+    Keeps AI-summary/advice stage references aligned with the tour pages, which
+    apply the same rule client-side (see tour_stage.js — keep the two in sync)."""
+    parsed = _stage_num_map(stages)
+    if parsed is not None:
+        return lambda n, _p=parsed: _p.get(n, n)
     return lambda n: n
 
 

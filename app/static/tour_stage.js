@@ -111,6 +111,19 @@ const _segEndsMatch = (a, b, cache) =>
 // Mirrors the backend `_stage_segment_groups` — keep the two in sync.
 function _stageSegmentGroups(stages, cache) {
   const OVERLAP_MIN = 0.5; // alternate must retrace >= this fraction of the original
+  // Names usually mark an alternate by suffixing the original's stage number
+  // ("BB24" / "BB24G"), so the pair resolves to the SAME display number. Sharing
+  // a number plus both endpoints identifies an alternate that the overlap test
+  // above misses, e.g. a gravel variant that leaves the paved route for most of
+  // the day. The endpoint check keeps a same-numbered add-on ("35x Athens hotel")
+  // from being swallowed by the stage it follows.
+  const numMap = _stageNumMap(stages);
+  const sameNamedSeg = (a, b) => {
+    if (!numMap) return false;
+    const na = numMap[a.stage_num];
+    return na != null && na === numMap[b.stage_num]
+        && _segStartsMatch(a, b, cache) && _segEndsMatch(a, b, cache);
+  };
   const allPts = s => _segAllPts(s, cache);
   const nearAny = _segNearAny;
   // Cap the pairwise overlap work by sampling to ~150 points, like the backend.
@@ -141,6 +154,7 @@ function _stageSegmentGroups(stages, cache) {
     let g;
     if (s.alt_override === 0) g = null;
     else if (s.alt_override === 1 && prev) g = groupOf.get(String(prev.id));
+    else if (prev && sameNamedSeg(s, groupOf.get(String(prev.id))[0])) g = groupOf.get(String(prev.id));
     else g = groups.find(g => sameSeg(s, g[0]));
     if (g) g.push(s);
     else { g = [s]; groups.push(g); }
@@ -194,12 +208,15 @@ function _mapByCodePrefix(stages) {
   stages.forEach((s, i) => { map[s.stage_num] = parseInt(ms[i][2], 10); });
   return map;
 }
+// stage_num -> number embedded in the name, or null when no scheme fits them all.
+function _stageNumMap(stages) {
+  if (!Array.isArray(stages) || !stages.length) return null;
+  return _mapByRegex(stages, _LEADING_NUM_RE)
+      || _mapByRegex(stages, _STAGE_WORD_RE)
+      || _mapByCodePrefix(stages);
+}
 function stageDisplayNum(stage, stages, fallback) {
-  if (Array.isArray(stages) && stages.length) {
-    const map = _mapByRegex(stages, _LEADING_NUM_RE)
-             || _mapByRegex(stages, _STAGE_WORD_RE)
-             || _mapByCodePrefix(stages);
-    if (map && map[stage.stage_num] != null) return map[stage.stage_num];
-  }
+  const map = _stageNumMap(stages);
+  if (map && map[stage.stage_num] != null) return map[stage.stage_num];
   return fallback != null ? fallback : stage.stage_num;
 }
