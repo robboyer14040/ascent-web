@@ -265,7 +265,7 @@ html.mob-embedded body.mob-stage-view #stage-detail { padding-bottom:12px!import
     <div id="main-empty"><div>Select a tour above, or click <strong>Define Tour…</strong> to create one.</div></div>
     <div id="map-and-detail" style="display:none;flex:1;flex-direction:column;overflow:hidden">
       <div id="map">
-        {{ map_controls('setTourMapStyle', 'resetMapZoom', 'Reset zoom to fit route') }}
+        {{ map_controls('setTourMapStyle', 'resetMapZoom', 'Reset zoom to fit route', 'toggleTourStageNums') }}
       </div>
       <div id="resize-handle" title="Drag to resize map"><button id="stats-toggle" onclick="toggleMobStats()" ontouchstart="event.stopPropagation()" onmousedown="event.stopPropagation()" title="Toggle tour info">▾</button><span class="rh-section-lbl">Elevation</span><button class="mob-disclose" id="mob-elev-disclose" onclick="toggleMobElev()" title="Collapse elevation chart" ontouchstart="event.stopPropagation()" onmousedown="event.stopPropagation()"><span class="mob-arr">▾</span></button></div>
       <div id="mob-portrait-stats"></div>
@@ -1605,6 +1605,22 @@ window.renderStageForecastTab = function (el) {
 })();
 
 // ── Map drawing ───────────────────────────────────────────────────────────────
+// Repaint from the points already cached — no refetch. Used by drawRoutes and by
+// the stage-number toggle.
+function _paintRoutes(activeId) {
+  const r = TourStageDetail.drawRoutes({
+    map: tourMap, routeGroup, stages: tourStages, pointsCache: _tourPointsCache,
+    activeId, selColor: C.sel, startIcon: _startIcon, endIcon: _endIcon,
+  });
+  TourStageDetail.updateMapBadge({ stages: tourStages, pointsCache: _tourPointsCache, activeId });
+  return r;
+}
+
+function toggleTourStageNums() {
+  TourStageDetail.toggleStageNums(document.getElementById('mapStageNumToggle'),
+    () => _paintRoutes(selectedId));
+}
+
 async function drawRoutes(activeId) {
   if(!tourMap || !routeGroup || !tourInfo) return;
   try {
@@ -1618,11 +1634,7 @@ async function drawRoutes(activeId) {
     ]);
     _tourPointsCache = {...byStage};
     Object.entries(actPts).forEach(([sid, pts]) => { if(pts?.length) _tourPointsCache[sid] = pts; });
-    const { allPts, groupIds } = TourStageDetail.drawRoutes({
-      map: tourMap, routeGroup, stages: tourStages, pointsCache: _tourPointsCache,
-      activeId, selColor: C.sel, startIcon: _startIcon, endIcon: _endIcon,
-    });
-    TourStageDetail.updateMapBadge({ stages: tourStages, pointsCache: _tourPointsCache, activeId });
+    const { allPts, groupIds } = _paintRoutes(activeId);
     if(activeId) {
       const boundsPts = [];
       groupIds.forEach(id => { const p = _tourPointsCache[id]; if(p?.length) boundsPts.push(...p); });

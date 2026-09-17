@@ -374,6 +374,24 @@ const TourStageDetail = {
       .catch(() => { const t = document.getElementById('stage-forecast-text'); if (t) t.textContent = ''; });
   },
 
+  // Whether the whole-tour map labels each stage start with its number. Off by
+  // default: the starts read as plain black dots until the map's stage-number
+  // button is pressed. Page-wide (both tour pages have one map), not persisted.
+  stageNumsOn: false,
+
+  // The map's stage-number button: flip the setting, highlight the button the way
+  // the photos toggle does, and repaint the routes via the page's `redraw`.
+  toggleStageNums(btn, redraw) {
+    this.stageNumsOn = !this.stageNumsOn;
+    if (btn) {
+      btn.setAttribute('aria-pressed', this.stageNumsOn ? 'true' : 'false');
+      btn.style.background  = this.stageNumsOn ? 'rgba(10,132,255,.85)' : 'rgba(0,0,0,.6)';
+      btn.style.borderColor = this.stageNumsOn ? 'rgba(10,132,255,.9)'  : 'rgba(255,255,255,.15)';
+      btn.style.color       = this.stageNumsOn ? '#fff' : '#ccc';
+    }
+    redraw();
+  },
+
   // Draw the tour routes onto the map. Shared drawing core; each page provides its own
   // data (Tours fetches live points; Tour_share uses pre-loaded ones) and handles the
   // bounds-fit afterwards. ctx: { map, routeGroup, stages, pointsCache, activeId,
@@ -426,10 +444,13 @@ const TourStageDetail = {
     if (!activeId) {
       const first = stages[0];
       if (first?.start_lat != null) L.marker([first.start_lat, first.start_lon], { icon: ctx.startIcon, zIndexOffset: 50, interactive: false }).addTo(routeGroup);
-      // One numbered circle per segment group (alternates excluded from numbering).
+      // One marker per segment group start (alternates excluded from numbering) —
+      // a plain dot, or the numbered circle once the map's stage-number toggle is on.
       _dedupeStatStages(stages, pointsCache).forEach((s, i) => {
         if (s.start_lat == null || s.start_lon == null) return;
-        const icon = L.divIcon({ className: '', html: `<div style="width:16px;height:16px;border-radius:50%;background:#fff;border:1.5px solid #000;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:#000;font-family:-apple-system,sans-serif;line-height:1;box-sizing:border-box">${stageDisplayNum(s, stages, i + 1)}</div>`, iconSize: [16, 16], iconAnchor: [8, 8] });
+        const icon = this.stageNumsOn
+          ? L.divIcon({ className: '', html: `<div style="width:16px;height:16px;border-radius:50%;background:#fff;border:1.5px solid #000;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:#000;font-family:-apple-system,sans-serif;line-height:1;box-sizing:border-box">${stageDisplayNum(s, stages, i + 1)}</div>`, iconSize: [16, 16], iconAnchor: [8, 8] })
+          : L.divIcon({ className: '', html: `<div style="width:9px;height:9px;border-radius:50%;background:#000;border:1px solid #fff;box-sizing:border-box"></div>`, iconSize: [9, 9], iconAnchor: [4.5, 4.5] });
         L.marker([s.start_lat, s.start_lon], { icon, zIndexOffset: 150, interactive: false }).addTo(routeGroup);
       });
       const last = stages[stages.length - 1], lastPts = last ? pointsCache[String(last.id)] : null;

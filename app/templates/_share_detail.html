@@ -14,7 +14,7 @@
   <div id="info-map-divider" class="drag-handle drag-handle-v" title="Drag to resize info / map"></div>
   <div id="map-col">
     <div id="map">
-      {{ map_controls('setMapStyle', 'resetZoom', 'Re-center map') }}
+      {{ map_controls('setMapStyle', 'resetZoom', 'Re-center map', map_stage_nums_fn|default(none)) }}
     </div>
   </div>
 </div>

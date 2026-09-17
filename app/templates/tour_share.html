@@ -117,7 +117,7 @@
   </div>
 
   <div id="main">
-    {% include '_share_detail.html' %}
+    {% set map_stage_nums_fn = 'toggleTourStageNums' %}{% include '_share_detail.html' %}
   </div>
 </div>
 
@@ -324,6 +324,11 @@ function drawRoutes(selId) {
   });
   TourStageDetail.updateMapBadge({ stages: tourInfo?.stages || [], pointsCache, activeId: selId });
   if(!selId && allPts.length) _lastBounds = L.latLngBounds(allPts);
+}
+
+function toggleTourStageNums() {
+  TourStageDetail.toggleStageNums(document.getElementById('mapStageNumToggle'),
+    () => drawRoutes(selectedId));
 }
 
 // ── Stage list ────────────────────────────────────────────────────────────────
