@@ -445,12 +445,13 @@ const TourStageDetail = {
       const first = stages[0];
       if (first?.start_lat != null) L.marker([first.start_lat, first.start_lon], { icon: ctx.startIcon, zIndexOffset: 50, interactive: false }).addTo(routeGroup);
       // One marker per segment group start (alternates excluded from numbering) —
-      // a plain dot, or the numbered circle once the map's stage-number toggle is on.
+      // a dot in the segment's own route color, or the numbered circle once the
+      // map's stage-number toggle is on.
       _dedupeStatStages(stages, pointsCache).forEach((s, i) => {
         if (s.start_lat == null || s.start_lon == null) return;
         const icon = this.stageNumsOn
           ? L.divIcon({ className: '', html: `<div style="width:16px;height:16px;border-radius:50%;background:#fff;border:1.5px solid #000;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:#000;font-family:-apple-system,sans-serif;line-height:1;box-sizing:border-box">${stageDisplayNum(s, stages, i + 1)}</div>`, iconSize: [16, 16], iconAnchor: [8, 8] })
-          : L.divIcon({ className: '', html: `<div style="width:9px;height:9px;border-radius:50%;background:#000;border:1px solid #fff;box-sizing:border-box"></div>`, iconSize: [9, 9], iconAnchor: [4.5, 4.5] });
+          : L.divIcon({ className: '', html: `<div style="width:9px;height:9px;border-radius:50%;background:${stageColor(s)};border:1px solid #000;box-sizing:border-box"></div>`, iconSize: [9, 9], iconAnchor: [4.5, 4.5] });
         L.marker([s.start_lat, s.start_lon], { icon, zIndexOffset: 150, interactive: false }).addTo(routeGroup);
       });
       const last = stages[stages.length - 1], lastPts = last ? pointsCache[String(last.id)] : null;

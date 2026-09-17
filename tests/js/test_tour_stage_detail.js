@@ -118,18 +118,29 @@ function _drawWhole(s, d) {
   return s.markers.filter(function (m) { return m.icon && m.icon.html; });
 }
 
-test('drawRoutes: stage starts are black dots until the numbers are toggled on', function () {
+test('drawRoutes: stage starts are plain dots until the numbers are toggled on', function () {
   TourStageDetail.stageNumsOn = false;
   var s = _mapStubs(), d = _twoStageCtx();
   var dots = _drawWhole(s, d);
   eq(dots.length, 2, 'one marker per stage start');
   dots.forEach(function (m) {
-    ok(m.icon.html.indexOf('background:#000') >= 0, 'the dot is filled black');
+    ok(m.icon.html.indexOf('border:1px solid #000') >= 0, 'the dot is outlined in black');
     ok(!/>[0-9]+</.test(m.icon.html), 'no stage number is drawn');
   });
   eq(s.markers.length, 4, 'the start and end flags are still placed');
   ok(s.markers.some(function (m) { return m.icon && m.icon.flag === 'start'; }), 'start flag kept');
   ok(s.markers.some(function (m) { return m.icon && m.icon.flag === 'end'; }),   'end flag kept');
+});
+
+test('drawRoutes: a dot is filled with its own stage route color', function () {
+  TourStageDetail.stageNumsOn = false;
+  var s = _mapStubs(), d = _twoStageCtx();
+  d.stages[0].completion = { date: '2025-06-01' };      // ridden → done color
+  var dots = _drawWhole(s, d);
+  eq(dots.map(function (m) { return m.icon.html.replace(/.*background:([^;]+);.*/, '$1'); }),
+     [C_DONE, C_TODO], 'the ridden start matches its route, the unridden one matches its own');
+  eq(s.lines.map(function (l) { return l.opts.color; }), [C_DONE, C_TODO],
+     'and those are the colors the routes themselves were drawn in');
 });
 
 test('drawRoutes: toggling stage numbers on draws numbered circles instead', function () {
