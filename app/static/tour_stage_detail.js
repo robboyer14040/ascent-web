@@ -51,6 +51,11 @@ const TourStageDetail = {
   // ctx: { url(force), refreshable, onRefresh }
   stageSummary(el, ctx) {
     if (!el) return;
+    // Two renders of the same stage can overlap (a re-render while the first
+    // one's activity fetch is still in flight), and each appends a card — so
+    // drop any card already on the page before adding this one.
+    const stale = document.getElementById('stage-ai-summary-card');
+    if (stale) stale.remove();
     const btn = ctx.refreshable
       ? '<button id="stage-ai-summary-refresh" title="Regenerate summary" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:13px;padding:0;line-height:1;flex-shrink:0">↺</button>'
       : '';

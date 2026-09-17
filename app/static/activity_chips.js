@@ -61,8 +61,10 @@ function buildActivityStatChips(a, U, esc, fmtHMS) {
    Used by the AI Stage Summary / AI Summary cards on the tour and tour-share
    stage detail. Copies the heading plus the summary text. navigator.clipboard
    needs a secure context, so plain-http (LAN testing) falls back to execCommand. */
-function aiCopyBtnHtml(btnId, title, textElId, fontSize) {
-  return `<button id="${btnId}" title="Copy summary" onclick="copyAiSummary('${btnId}','${title}','${textElId}')" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:${fontSize || 13}px;padding:0;line-height:1;flex-shrink:0" tabindex="-1">⧉</button>`;
+function aiCopyBtnHtml(btnId, title, textElId, size) {
+  const s = size || 16;
+  return `<button id="${btnId}" title="Copy summary" onclick="copyAiSummary('${btnId}','${title}','${textElId}')" style="background:none;border:none;cursor:pointer;color:var(--text);padding:1px;line-height:0;flex-shrink:0;display:inline-flex;align-items:center" tabindex="-1">` +
+    `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>`;
 }
 
 function copyAiSummary(btnId, title, textElId) {
@@ -74,9 +76,9 @@ function copyAiSummary(btnId, title, textElId) {
   const btn = document.getElementById(btnId);
   const flash = ok => {
     if (!btn) return;
-    const prev = btn.textContent;
-    btn.textContent = ok ? '✓' : '✕';
-    setTimeout(() => { btn.textContent = prev; }, 1200);
+    const prev = btn.innerHTML;
+    btn.innerHTML = `<span style="font-size:15px;line-height:1;color:${ok ? '#22c55e' : '#ef4444'}">${ok ? '\u2713' : '\u2715'}</span>`;
+    setTimeout(() => { btn.innerHTML = prev; }, 1200);
   };
   const fallback = () => {
     try {
