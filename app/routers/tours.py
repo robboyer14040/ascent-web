@@ -464,6 +464,8 @@ _PARTIAL_CELL     = 0.0025   # degrees (~275 m of latitude)
 _PARTIAL_GAP_M    = 2000     # a jump this long is a ferry/transfer leg, not road
 _PARTIAL_ON_ROUTE = 0.75     # this much of the ride must lie on the stage route
 _PARTIAL_COVERED  = 0.5      # ...and the ride must cover this much of the route
+_FULL_COVERED     = 0.9      # a ride covering this much of the route rode the stage,
+                             # however far it wandered off it afterwards
 
 
 def _track_cells(pts: list) -> set:
@@ -503,11 +505,18 @@ def _frac_on_track(pts: list, cells: set) -> float:
 def _partial_matches(con, rows: list, stages: list, assignments: dict,
                      used_acts: set) -> dict:
     """Match leftover activities to leftover stages on GPS geometry alone, for
-    stages that were ridden only in part. An activity claims a stage when nearly
-    all of the ride (>= _PARTIAL_ON_ROUTE) runs along that stage's route and the
-    ride covers a real share of it (>= _PARTIAL_COVERED) — so a missing ferry leg
-    or a van transfer still counts as riding the stage, while an unrelated ride
-    in the same area does not. Returns {stage_id: row index} and marks the
+    stages whose ride does not line up with the route end to end. An activity
+    claims a stage either way round:
+
+      - ridden in part — nearly all of the ride (>= _PARTIAL_ON_ROUTE) runs along
+        the route and it covers a real share of it (>= _PARTIAL_COVERED), so a
+        missing ferry leg or a van transfer still counts, while an unrelated ride
+        in the same area does not;
+      - ridden and then some — the ride covers essentially the whole route
+        (>= _FULL_COVERED), so an optional add-on loop tacked onto the end does
+        not cost the rider the stage.
+
+    Returns {stage_id: (row index, was_only_partly_ridden)} and marks the
     activities it consumes as used.
     """
     open_si = [si for si in range(len(stages)) if stages[si]["id"] not in assignments]
@@ -544,18 +553,17 @@ def _partial_matches(con, rows: list, stages: list, assignments: dict,
         route_cells = _track_cells(route)
         for ai, (track, track_cells) in tracks.items():
             on_route = _frac_on_track(track, route_cells)
-            if on_route < _PARTIAL_ON_ROUTE:
+            covered  = _frac_on_track(route, track_cells)
+            if covered < _FULL_COVERED and not (
+                    on_route >= _PARTIAL_ON_ROUTE and covered >= _PARTIAL_COVERED):
                 continue
-            covered = _frac_on_track(route, track_cells)
-            if covered < _PARTIAL_COVERED:
-                continue
-            candidates.append((on_route + covered, si, ai))
+            candidates.append((on_route + covered, si, ai, covered < _FULL_COVERED))
 
     out: dict = {}
-    for _score, si, ai in sorted(candidates, key=lambda c: -c[0]):
+    for _score, si, ai, only_partly in sorted(candidates, key=lambda c: -c[0]):
         if stages[si]["id"] in out or ai in used_acts:
             continue
-        out[stages[si]["id"]] = ai
+        out[stages[si]["id"]] = (ai, only_partly)
         used_acts.add(ai)
     return out
 
@@ -696,19 +704,21 @@ def _global_stage_matching(con, uid: int, start_date: str, end_date: str, stages
                     repair_changed = True
                     break
 
-    # ── Partial-ride pass ─────────────────────────────────────────────────────
-    # A stage can be ridden without the recording covering all of it: a ferry or
-    # transfer leg that is part of the route but not of the ride (BB13 Split -
-    # Korcula is three ferry hops), or a section skipped in the van. Those rides
-    # are too short — and often start in the wrong place — for the gates above,
-    # so fall back to geometry: a leftover ride running along a leftover stage's
-    # route means that stage was ridden, just not all of it.
-    partial = _partial_matches(con, rows, stages, assignments, used_acts)
-    assignments.update(partial)
+    # ── Geometry pass ─────────────────────────────────────────────────────────
+    # A ride and its stage need not line up end to end. The recording can cover
+    # only part of the route — a ferry or transfer leg that is part of the route
+    # but not of the ride (BB13 Split - Korcula is three ferry hops), or a
+    # section skipped in the van — or it can run past the end of it, when an
+    # optional add-on loop is ridden on top of the stage. Either way the ride is
+    # the wrong length — and often starts in the wrong place — for the gates
+    # above, so fall back to geometry: a leftover ride running along a leftover
+    # stage's route means that stage was ridden.
+    geo = _partial_matches(con, rows, stages, assignments, used_acts)
+    assignments.update({sid: ai for sid, (ai, _p) in geo.items()})
 
     def _completion(stage_id):
         comp = _build_completion(rows[assignments[stage_id]])
-        if stage_id in partial:
+        if stage_id in geo and geo[stage_id][1]:
             comp["partial"] = True
         return comp
 

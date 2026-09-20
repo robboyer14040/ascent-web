@@ -1523,3 +1523,57 @@ def test_partial_stage_keeps_the_planned_route_on_the_map(con):
 
     completions = tours._global_stage_matching(con, 1, "2026-07-01", "2026-07-10", FERRY_STAGE)
     assert tours._activity_pts_for_stages(con, FERRY_STAGE, completions) == {}
+
+
+# ── Stages ridden with an optional add-on loop on the end ─────────────────────
+
+# A plain ~50mi stage, and a ride that covers all of it and then carries on for
+# another ~25mi of optional riding — 1.5x the stage, well outside the distance
+# gate, and only two thirds of it on the route.
+_ADDON_STAGE_PTS = [(40.0 + 0.0036 * i, -105.0) for i in range(200)]
+_ADDON_TAIL = [(_ADDON_STAGE_PTS[-1][0], -105.0 + 0.0048 * i) for i in range(1, 101)]
+ADDON_STAGE = [{"id": 300, "stage_num": 1, "name": "Add-on stage", "distance_mi": 50.0,
+                "start_lat": _ADDON_STAGE_PTS[0][0], "start_lon": _ADDON_STAGE_PTS[0][1]}]
+
+
+def _setup_addon_stage(con):
+    _make_activities_table(con)
+    _make_points_table(con)
+    _insert_points(con, 300, _ADDON_STAGE_PTS)
+
+
+def test_stage_ridden_with_an_addon_loop_counts_as_completed(con):
+    _setup_addon_stage(con)
+    ride = _ADDON_STAGE_PTS + _ADDON_TAIL
+    _insert_activity(con, 31, _ts(2026, 7, 3), 74.5,
+                     ride[0][0], ride[0][1], json.dumps(["totalClimb", 4200]))
+    _insert_track(con, 31, ride)
+
+    result = tours._global_stage_matching(con, 1, "2026-07-01", "2026-07-10", ADDON_STAGE)
+    assert result[300] is not None
+    assert result[300]["activity_id"] == 31
+    # The whole route was ridden, so this is a full completion, not a partial one.
+    assert "partial" not in result[300]
+
+
+def test_addon_ride_puts_the_actual_track_on_the_map(con):
+    # Full coverage means the recording can stand in for the planned route.
+    _setup_addon_stage(con)
+    ride = _ADDON_STAGE_PTS + _ADDON_TAIL
+    _insert_activity(con, 32, _ts(2026, 7, 3), 74.5, ride[0][0], ride[0][1])
+    _insert_track(con, 32, ride)
+
+    completions = tours._global_stage_matching(con, 1, "2026-07-01", "2026-07-10", ADDON_STAGE)
+    assert "300" in tours._activity_pts_for_stages(con, ADDON_STAGE, completions)
+
+
+def test_long_ride_covering_only_part_of_the_route_is_not_a_match(con):
+    # Joined the route a third of the way in, left it early, and rode 25mi
+    # elsewhere: neither gate is met, so the stage stays uncompleted.
+    _setup_addon_stage(con)
+    ride = _ADDON_STAGE_PTS[80:] + _ADDON_TAIL
+    _insert_activity(con, 33, _ts(2026, 7, 3), 54.7, ride[0][0], ride[0][1])
+    _insert_track(con, 33, ride)
+
+    result = tours._global_stage_matching(con, 1, "2026-07-01", "2026-07-10", ADDON_STAGE)
+    assert result[300] is None
