@@ -212,7 +212,7 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
     <div id="gpx-dialog-name"></div>
     <div id="gpx-dialog-actions">
       <button class="ov-btn" onclick="closeGpxDialog()">Cancel</button>
-      <button class="ov-btn primary" onclick="confirmGpxDownload()">
+      <button class="ov-btn primary" onclick="confirmGpxDownload(this)">
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;vertical-align:middle"><line x1="6" y1="1" x2="6" y2="8"/><polyline points="3,5 6,8 9,5"/><line x1="1" y1="11" x2="11" y2="11"/></svg>Download
       </button>
     </div>
@@ -321,6 +321,7 @@ nav{height:44px;background:var(--surface);border-bottom:1px solid var(--border);
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="/static/map_utils.js"></script>
+<script src="/static/gpx_download.js?v={{ app_version }}"></script>
 <script src="/static/strava_sync_btn.js?v={{ app_version }}" defer></script>
 <script>
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -1176,13 +1177,9 @@ function closeGpxDialog() {
   _gpxRouteId = null;
 }
 
-function confirmGpxDownload() {
+async function confirmGpxDownload(btn) {
   if (!_gpxRouteId) return;
-  const a = document.createElement('a');
-  a.href = `/api/routes/${_gpxRouteId}/gpx`;
-  a.download = '';
-  a.click();
-  closeGpxDialog();
+  if (await downloadGpx(`/api/routes/${_gpxRouteId}/gpx`, btn)) closeGpxDialog();
 }
 
 // Close dialog on backdrop click

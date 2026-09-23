@@ -354,7 +354,7 @@ const TourStageDetail = {
     html += `</div>`;
     html += `<div style="display:flex;align-items:baseline;gap:10px;min-height:1.4em">
       <div style="flex:1;font-size:11px;color:var(--muted)"><span style="font-size:10px;text-transform:uppercase;letter-spacing:.06em">Trajectory:</span> <span id="stage-loc-text">Loading…</span></div>
-      <a href="${ctx.gpxHref}" download style="flex-shrink:0;font-size:11px;font-weight:600;color:#f97316;border:1px solid #f97316;border-radius:4px;padding:2px 8px;text-decoration:none;line-height:1.6">↓ GPX</a>
+      <button type="button" onclick="downloadGpx('${ctx.gpxHref}', this)" style="flex-shrink:0;font-size:11px;font-weight:600;font-family:inherit;color:#f97316;background:none;border:1px solid #f97316;border-radius:4px;padding:2px 8px;line-height:1.6;cursor:pointer">↓ GPX</button>
     </div>`;
     html += `<div style="margin-top:6px;font-size:11px;color:var(--muted)"><span style="font-size:10px;text-transform:uppercase;letter-spacing:.06em">Forecast:</span> <span id="stage-forecast-text">Loading…</span></div>`;
     html += ctx.afterForecastHtml || '';

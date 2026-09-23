@@ -98,7 +98,7 @@ function buildActivityDetailHTML(a, opts) {
   const deleteBtn = (isOwner && deleteCallback)
     ? `<button class="edit-btn delete-act-btn" id="delete-act-btn" onclick="${deleteCallback}()" title="Delete this activity">Delete</button>`
     : '';
-  const exportBtn = `<a href="/activities/${a.id}/export/gpx" class="edit-btn" style="text-decoration:none" title="Download as GPX file">↓ GPX</a>`;
+  const exportBtn = `<button class="edit-btn" onclick="downloadGpx('/activities/${a.id}/export/gpx', this)" title="Download as GPX file">↓ GPX</button>`;
   const shareBtn = (isOwner && shareCb)
     ? `<button class="edit-btn" onclick="${shareCb}(${a.id})" title="Share this activity — create a public link for friends"><svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.15em;margin-right:3px"><circle cx="10" cy="2.5" r="1.5"/><circle cx="2.5" cy="6.5" r="1.5"/><circle cx="10" cy="10.5" r="1.5"/><line x1="4" y1="7.3" x2="8.5" y2="9.7"/><line x1="8.5" y1="3.3" x2="4" y2="5.7"/></svg>Share</button>`
     : '';
