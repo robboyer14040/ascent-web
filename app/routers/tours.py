@@ -580,20 +580,18 @@ def _global_stage_matching(con, uid: int, start_date: str, end_date: str, stages
       - Distance match (weight 1.0) — activity distance vs sum of stages in group
       - Date order     (weight 0.5) — activity rank aligns with first stage's rank
 
-    The tour date window is extended by ±1 day to catch activities recorded the day
-    before/after the official tour start/end (common when tour dates are approximate).
+    The window is exactly the attempt's dates: an activity before the start date is
+    never a candidate, and an explicit end date includes that whole day and no more.
 
     Returns dict: stage_id -> completion dict (or None if no match).
     """
-    from datetime import timedelta
-
     try:
         sd = datetime.fromisoformat(start_date).replace(tzinfo=timezone.utc)
         ed = datetime.fromisoformat(end_date).replace(
             hour=23, minute=59, second=59, tzinfo=timezone.utc
         )
-        start_ts = int((sd - timedelta(days=1)).timestamp())
-        end_ts   = int((ed + timedelta(days=1)).timestamp())
+        start_ts = int(sd.timestamp())
+        end_ts   = int(ed.timestamp())
     except Exception:
         return {s["id"]: None for s in stages}
 
@@ -1123,8 +1121,8 @@ def _attempt_window(attempts: list, attempt: dict) -> tuple:
             return start, cap.isoformat()
         except ValueError:
             return start, start
-    # No end and no subsequent attempt: match everything up to and incl. start.
-    return "1900-01-01", start
+    # No end and no subsequent attempt: everything from the start date onward.
+    return start, "2999-12-31"
 
 
 def _estimate_stage_date(attempt: dict, attempts: list, stage_num: int, total_stages: int):

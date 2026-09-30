@@ -387,10 +387,27 @@ def test_global_stage_matching_gps_far_away_is_none(con):
 
 def test_global_stage_matching_outside_date_window_is_none(con):
     _make_activities_table(con)
-    # 3 days after the tour end -> beyond the +1 day grace window.
-    _insert_activity(con, 10, _ts(2026, 7, 13), 52.0, 40.001, -105.001)
+    # The day after the end date -> outside the window (no grace).
+    _insert_activity(con, 10, _ts(2026, 7, 11), 52.0, 40.001, -105.001)
     result = tours._global_stage_matching(con, 1, "2026-07-01", "2026-07-10", ONE_STAGE)
     assert result[100] is None
+
+
+def test_global_stage_matching_before_start_date_is_none(con):
+    _make_activities_table(con)
+    # The day before the start date is never a candidate.
+    _insert_activity(con, 11, _ts(2026, 6, 30), 52.0, 40.001, -105.001)
+    result = tours._global_stage_matching(con, 1, "2026-07-01", "2026-07-10", ONE_STAGE)
+    assert result[100] is None
+
+
+def test_global_stage_matching_end_date_includes_whole_day(con):
+    _make_activities_table(con)
+    # 23:30 UTC on the end date still counts.
+    ts = int(datetime(2026, 7, 10, 23, 30, tzinfo=timezone.utc).timestamp())
+    _insert_activity(con, 12, ts, 52.0, 40.001, -105.001)
+    result = tours._global_stage_matching(con, 1, "2026-07-01", "2026-07-10", ONE_STAGE)
+    assert result[100]["activity_id"] == 12
 
 
 def test_global_stage_matching_no_activities_all_none(con):
@@ -412,9 +429,9 @@ def test_attempt_window_open_with_subsequent_caps_day_before():
     assert tours._attempt_window([a, b], a) == ("2026-07-01", "2026-07-31")
 
 
-def test_attempt_window_open_no_subsequent_is_open_start():
+def test_attempt_window_open_no_subsequent_runs_forward():
     a = {"id": 1, "start_date": "2026-07-01", "end_date": None}
-    assert tours._attempt_window([a], a) == ("1900-01-01", "2026-07-01")
+    assert tours._attempt_window([a], a) == ("2026-07-01", "2999-12-31")
 
 
 # ── Forecast stage-date estimate (attempt-anchored) ──────────────────────────
