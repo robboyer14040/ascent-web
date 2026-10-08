@@ -170,6 +170,20 @@ function _dedupeStatStages(stages, cache) {
   return _stageSegmentGroups(stages, cache).map(g => g[0]);
 }
 
+// IDs (as strings) of the stages numbered before the first completed one — the
+// stages an attempt that began mid-tour never set out to ride. They're left off
+// the map so it shows the attempt's own span: first completed stage to the end.
+// Empty when the attempt starts at the tour's first stage or nothing is done yet.
+function _preAttemptStageIds(stages) {
+  if (!Array.isArray(stages) || !stages.length) return new Set();
+  const doneNums = stages.filter(s => s.completion).map(s => s.stage_num);
+  if (!doneNums.length) return new Set();
+  const firstDone = Math.min(...doneNums);
+  const skip = new Set();
+  for (const s of stages) if (s.stage_num < firstDone) skip.add(String(s.id));
+  return skip;
+}
+
 // IDs (as strings) of the "alternative" routes — every stage after the first
 // occurrence of its [start, end]. Excluded from stats and drawn dashed on the map.
 function _altStageIds(stages, cache) {

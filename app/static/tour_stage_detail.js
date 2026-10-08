@@ -423,6 +423,11 @@ const TourStageDetail = {
       for (const s of g)
         if (!s.completion && !groupIds.has(String(s.id))) hidden.add(String(s.id));
     }
+    // An attempt that starts mid-tour draws only its own span — first completed
+    // stage to the end. A selected stage is still drawn wherever it sits.
+    for (const sid of _preAttemptStageIds(stages))
+      if (!groupIds.has(sid)) hidden.add(sid);
+    const shown = stages.filter(s => !hidden.has(String(s.id)));
     let activeLine = null;
     // Completed routes are lifted above uncompleted ones: where an unridden
     // alternate retraces a stage that IS done, the shared section must read as
@@ -448,19 +453,20 @@ const TourStageDetail = {
     doneLines.forEach(l => l.bringToFront());
     if (activeLine) activeLine.bringToFront();
     if (!activeId) {
-      const first = stages[0];
+      const first = shown[0];
       if (first?.start_lat != null) L.marker([first.start_lat, first.start_lon], { icon: ctx.startIcon, zIndexOffset: 50, interactive: false }).addTo(routeGroup);
       // One marker per segment group start (alternates excluded from numbering) —
       // a dot in the segment's own route color, or the numbered circle once the
       // map's stage-number toggle is on.
       _dedupeStatStages(stages, pointsCache).forEach((s, i) => {
         if (s.start_lat == null || s.start_lon == null) return;
+        if (hidden.has(String(s.id))) return;
         const icon = this.stageNumsOn
           ? L.divIcon({ className: '', html: `<div style="width:16px;height:16px;border-radius:50%;background:#fff;border:1.5px solid #000;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:#000;font-family:-apple-system,sans-serif;line-height:1;box-sizing:border-box">${stageDisplayNum(s, stages, i + 1)}</div>`, iconSize: [16, 16], iconAnchor: [8, 8] })
           : L.divIcon({ className: '', html: `<div style="width:9px;height:9px;border-radius:50%;background:${stageColor(s)};border:1px solid #000;box-sizing:border-box"></div>`, iconSize: [9, 9], iconAnchor: [4.5, 4.5] });
         L.marker([s.start_lat, s.start_lon], { icon, zIndexOffset: 150, interactive: false }).addTo(routeGroup);
       });
-      const last = stages[stages.length - 1], lastPts = last ? pointsCache[String(last.id)] : null;
+      const last = shown[shown.length - 1], lastPts = last ? pointsCache[String(last.id)] : null;
       if (lastPts?.length) L.marker(lastPts[lastPts.length - 1], { icon: ctx.endIcon, zIndexOffset: 200, interactive: false }).addTo(routeGroup);
     } else {
       const pts = pointsCache[String(activeId)];

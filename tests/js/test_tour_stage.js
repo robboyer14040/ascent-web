@@ -118,3 +118,31 @@ test('same-numbered name without shared endpoints stays its own segment', functi
   });
   eq(groups, [[1], [2]]);
 });
+
+// ── mid-tour attempts: stages before the first completed one ──────────────────
+function _mkStage(num, done) {
+  return { id: num, stage_num: num, name: 'Stage ' + num, completion: done ? { date: '2026-05-0' + num } : null };
+}
+
+test('_preAttemptStageIds is empty when the attempt starts at stage 1', function () {
+  var stages = [_mkStage(1, true), _mkStage(2, true), _mkStage(3, false)];
+  eq(Array.from(_preAttemptStageIds(stages)), []);
+});
+
+test('_preAttemptStageIds skips the stages before the first completed one', function () {
+  var stages = [_mkStage(1, false), _mkStage(2, false), _mkStage(3, true), _mkStage(4, false)];
+  eq(Array.from(_preAttemptStageIds(stages)).sort(), ['1', '2']);
+});
+
+test('_preAttemptStageIds keeps every stage when nothing is completed', function () {
+  var stages = [_mkStage(1, false), _mkStage(2, false)];
+  eq(Array.from(_preAttemptStageIds(stages)), []);
+});
+
+// An alternate of the first completed stage shares its stage_num, so it survives
+// the trim and is left to the alternate-route rules.
+test('_preAttemptStageIds keeps same-numbered alternates of the first done stage', function () {
+  var alt = _mkStage(2, false); alt.id = 99;
+  var stages = [_mkStage(1, false), _mkStage(2, true), alt, _mkStage(3, false)];
+  eq(Array.from(_preAttemptStageIds(stages)), ['1']);
+});
