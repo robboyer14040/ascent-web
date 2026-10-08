@@ -18,3 +18,5 @@ input:focus{border-color:#f97316}
   color:#fca5a5;padding:.6rem .75rem;font-size:12px;margin-bottom:1rem}
 .hint{color:#636366;font-size:11px;margin-top:.3rem}
 .footer{text-align:center;color:#636366;font-size:11px;margin-top:1.25rem}
+.pw-toggle{display:flex;align-items:center;gap:.4rem;margin-top:.5rem;cursor:pointer;user-select:none}
+.pw-toggle input{width:auto;accent-color:#f97316;cursor:pointer}
