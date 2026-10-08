@@ -2000,7 +2000,7 @@ async function renderDetail(activeId) {
       renderAi: (elx) => {
         // AI Tour Summary — show when the tour is not fully completed OR its end date passed.
         const today = new Date().toISOString().slice(0,10);
-        const _stat = _dedupeStatStages(tourStages, _tourPointsCache);
+        const _stat = _statSpanStages(tourStages, _tourPointsCache);
         const _done = _stat.filter(s => s.completion);
         const allCompleted = _stat.length > 0 && _done.length === _stat.length;
         if(allCompleted && !(tourInfo.end_date < today)) return;

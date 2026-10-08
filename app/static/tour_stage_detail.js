@@ -147,7 +147,8 @@ const TourStageDetail = {
   overview(el, ctx) {
     const stages = ctx.stages || [];
     if (!stages.length) { el.classList.remove('tour-ov-split'); el.innerHTML = ''; return; }
-    const statStages = _dedupeStatStages(stages, ctx.pointsCache);
+    const statStages = _statSpanStages(stages, ctx.pointsCache);
+    const spanStages = _attemptSpanStages(stages);
     const done       = statStages.filter(s => s.completion);
     const totalDist  = statStages.reduce((s, x) => s + (x.distance_mi || 0), 0);
     const totalClimb = statStages.reduce((s, x) => s + (x.climb_ft || 0), 0);
@@ -156,9 +157,9 @@ const TourStageDetail = {
     const pctD = totalDist  > 0 ? Math.round(doneDist / totalDist * 100) : 0;
     const pctC = totalClimb > 0 ? Math.round(doneClimb / totalClimb * 100) : 0;
     const n = statStages.length || 1, avgDist = totalDist / n, avgClimb = totalClimb / n;
-    const maxDistIdx  = stages.reduce((mi, x, i) => (x.distance_mi || 0) > (stages[mi].distance_mi || 0) ? i : mi, 0);
-    const maxClimbIdx = stages.reduce((mi, x, i) => (x.climb_ft || 0) > (stages[mi].climb_ft || 0) ? i : mi, 0);
-    const maxDist = stages[maxDistIdx]?.distance_mi || 0, maxClimb = stages[maxClimbIdx]?.climb_ft || 0;
+    const maxDistIdx  = spanStages.reduce((mi, x, i) => (x.distance_mi || 0) > (spanStages[mi].distance_mi || 0) ? i : mi, 0);
+    const maxClimbIdx = spanStages.reduce((mi, x, i) => (x.climb_ft || 0) > (spanStages[mi].climb_ft || 0) ? i : mi, 0);
+    const maxDist = spanStages[maxDistIdx]?.distance_mi || 0, maxClimb = spanStages[maxClimbIdx]?.climb_ft || 0;
     const alt = (val, mi) => U.metric ? val.toFixed(1) + ' mi' : (val * 1.60934).toFixed(1) + ' km';
     const altC = ft => U.metric ? Math.round(ft) + ' ft' : Math.round(ft * 0.3048) + ' m';
     const chips =
@@ -167,10 +168,10 @@ const TourStageDetail = {
       `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Total Ascent</div><div class="sc-val">${U.climbS(totalClimb)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${altC(totalClimb)}</div><div class="sc-sub">${U.climbS(doneClimb)} done (${pctC}%)</div></div>` +
       `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Avg Dist</div><div class="sc-val">${U.distS(avgDist)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${alt(avgDist)}</div><div class="sc-sub">per stage</div></div>` +
       `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Avg Ascent</div><div class="sc-val">${U.climbS(avgClimb)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${altC(avgClimb)}</div><div class="sc-sub">per stage</div></div>` +
-      `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Max Stage Dist</div><div class="sc-val">${U.distS(maxDist)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${alt(maxDist)}</div><div class="sc-sub">Stage ${stageDisplayNum(stages[maxDistIdx], stages)}</div></div>` +
-      `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Max Ascent</div><div class="sc-val">${U.climbS(maxClimb)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${altC(maxClimb)}</div><div class="sc-sub">Stage ${stageDisplayNum(stages[maxClimbIdx], stages)}</div></div>`;
+      `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Max Stage Dist</div><div class="sc-val">${U.distS(maxDist)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${alt(maxDist)}</div><div class="sc-sub">Stage ${stageDisplayNum(spanStages[maxDistIdx], stages)}</div></div>` +
+      `<div class="stat-chip" style="white-space:nowrap"><div class="sc-label">Max Ascent</div><div class="sc-val">${U.climbS(maxClimb)}</div><div class="sc-sub" style="font-size:10px;opacity:.65">${altC(maxClimb)}</div><div class="sc-sub">Stage ${stageDisplayNum(spanStages[maxClimbIdx], stages)}</div></div>`;
     let html = `<div class="stats-grid" style="grid-template-columns:repeat(7,1fr);margin-bottom:14px">${chips}</div>`;
-    const first = stages[0], last = stages[stages.length - 1];
+    const first = spanStages[0], last = stages[stages.length - 1];
     const lastDone = done.length ? done[done.length - 1] : null;
     const lastStagePts = last ? (ctx.pointsCache[String(last.id)] || []) : [];
     const lastPt = lastStagePts.length ? lastStagePts[lastStagePts.length - 1] : null;
@@ -544,7 +545,7 @@ const TourStageDetail = {
       const s = stages.find(x => String(x.id) === String(activeId));
       dist = s?.distance_mi || 0; climb = s?.climb_ft || 0;
     } else {
-      const stat = _dedupeStatStages(stages, pointsCache);
+      const stat = _statSpanStages(stages, pointsCache);
       dist  = stat.reduce((t, x) => t + (x.distance_mi || 0), 0);
       climb = stat.reduce((t, x) => t + (x.climb_ft || 0), 0);
     }

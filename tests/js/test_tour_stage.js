@@ -146,3 +146,36 @@ test('_preAttemptStageIds keeps same-numbered alternates of the first done stage
   var stages = [_mkStage(1, false), _mkStage(2, true), alt, _mkStage(3, false)];
   eq(Array.from(_preAttemptStageIds(stages)), ['1']);
 });
+
+// ── tour-wide stats count only the attempt's own span ─────────────────────────
+// A mid-tour attempt's stat set starts at its first completed stage, so totals,
+// averages and the map badge stop counting stages the rider never set out to ride.
+test('_attemptSpanStages keeps the whole tour when the attempt starts at stage 1', function () {
+  var stages = [_mkStage(1, true), _mkStage(2, false), _mkStage(3, false)];
+  eq(_attemptSpanStages(stages).map(function (s) { return s.id; }), [1, 2, 3]);
+});
+
+test('_attemptSpanStages drops the stages before the first completed one', function () {
+  var stages = [_mkStage(1, false), _mkStage(2, false), _mkStage(3, true), _mkStage(4, false)];
+  eq(_attemptSpanStages(stages).map(function (s) { return s.id; }), [3, 4]);
+});
+
+test('_attemptSpanStages keeps every stage when nothing is completed', function () {
+  var stages = [_mkStage(1, false), _mkStage(2, false)];
+  eq(_attemptSpanStages(stages).map(function (s) { return s.id; }), [1, 2]);
+});
+
+test('_statSpanStages collapses alternates AND drops the pre-attempt stages', function () {
+  // Stages 1 and 3 share geometry (3 is 1's alternate); the attempt starts at 2.
+  var s1 = _stage(1, LINE_AC), s2 = _stage(2, LINE_B), s3 = _stage(3, LINE_AC);
+  s2.completion = { date: '2026-05-02' };
+  var ids = _statSpanStages([s1, s2, s3], CACHE).map(function (s) { return s.id; });
+  eq(ids, [2]);   // 1 is pre-attempt, 3 is 1's alternate
+});
+
+test('_statSpanStages matches the plain dedupe when the attempt starts at stage 1', function () {
+  var s1 = _stage(1, LINE_AC), s2 = _stage(2, LINE_B), s3 = _stage(3, LINE_AC);
+  s1.completion = { date: '2026-05-01' };
+  var ids = _statSpanStages([s1, s2, s3], CACHE).map(function (s) { return s.id; });
+  eq(ids, [1, 2]);
+});

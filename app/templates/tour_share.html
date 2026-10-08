@@ -301,8 +301,9 @@ function openShareLightbox(idx) {
     Object.entries(_actual).forEach(([sid, pts]) => { if(pts?.length) pointsCache[sid] = pts; });
   } catch(e) {}
 
-  // Stage count excludes alternative routes — dedupe needs the loaded points.
-  const _statStages=_dedupeStatStages(stages, pointsCache), _done=_statStages.filter(s=>s.completion).length;
+  // Stage count excludes alternative routes and the stages a mid-tour attempt
+  // never set out to ride — both need the loaded points.
+  const _statStages=_statSpanStages(stages, pointsCache), _done=_statStages.filter(s=>s.completion).length;
   document.getElementById('tour-header-sub').textContent =
     `${tourInfo.start_date} – ${tourInfo.end_date}  ·  ${_done}/${_statStages.length} stages complete`;
 

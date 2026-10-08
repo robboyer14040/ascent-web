@@ -184,6 +184,21 @@ function _preAttemptStageIds(stages) {
   return skip;
 }
 
+// The stages an attempt actually set out to ride: the whole tour when it starts at
+// stage one, otherwise the first completed stage onward (see _preAttemptStageIds).
+// Tour-wide stats count only these, so they describe the same span the map draws.
+function _attemptSpanStages(stages) {
+  const skip = _preAttemptStageIds(stages);
+  return (stages || []).filter(s => !skip.has(String(s.id)));
+}
+
+// The same span with each same-segment group collapsed to one route — the set
+// behind every tour-wide count, total and average.
+function _statSpanStages(stages, cache) {
+  const skip = _preAttemptStageIds(stages);
+  return _dedupeStatStages(stages, cache).filter(s => !skip.has(String(s.id)));
+}
+
 // IDs (as strings) of the "alternative" routes — every stage after the first
 // occurrence of its [start, end]. Excluded from stats and drawn dashed on the map.
 function _altStageIds(stages, cache) {
