@@ -47,8 +47,11 @@ const _endIcon = L.divIcon({
 // Canonical map tile layers — the single source of truth for every page's map-style
 // switcher (tour.html's setTourMapStyle and the share pages' setMapStyle both read this).
 // OSM uses the no-subdomain host; OpenTopoMap requires the {s} (a/b/c) subdomains.
+// 'osm-en' is a vector style (styleUrl, not url) so its labels can be redrawn in
+// English — see MapUtils.baseLayer / englishLabels.
 const MAP_TILES = {
   'osm':         { url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',                                                attr: '© OpenStreetMap contributors' },
+  'osm-en':      { styleUrl: 'https://tiles.openfreemap.org/styles/liberty',                                             attr: '© OpenStreetMap contributors, © OpenFreeMap' },
   'topo':        { url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',                                             attr: '© OpenStreetMap contributors, © OpenTopoMap' },
   'carto-dark':  { url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',                                attr: '© OpenStreetMap contributors, © CARTO' },
   'carto-light': { url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',                               attr: '© OpenStreetMap contributors, © CARTO' },

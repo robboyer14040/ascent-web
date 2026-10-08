@@ -254,7 +254,7 @@ async function initCompareMapManual(actIds) {
 
   // Overview map
   cmp.map = L.map(mapEl, {zoomControl:true, attributionControl:false});
-  cmp.tileLayer = L.tileLayer(style.url, {maxZoom:19}).addTo(cmp.map);
+  cmp.tileLayer = MapUtils.baseLayer(style).addTo(cmp.map);
   MapUtils.addScale(cmp.map, U.metric);
 
   // Chase-cam map (no interaction)
@@ -264,7 +264,7 @@ async function initCompareMapManual(actIds) {
       dragging:false, scrollWheelZoom:false, doubleClickZoom:false,
       keyboard:false, touchZoom:false, boxZoom:false,
     });
-    cmp.zoomTile = L.tileLayer(style.url, {maxZoom:19}).addTo(cmp.zoomMap);
+    cmp.zoomTile = MapUtils.baseLayer(style).addTo(cmp.zoomMap);
   }
 
   const colors = ['#ef4444','#3b82f6','#22c55e','#f97316'];
@@ -560,7 +560,7 @@ function initCompareMapBrowse() {
 
   cmp.map = L.map(mapEl, {zoomControl:true, attributionControl:false});
   const _cmpStyle = MAP_STYLES[_uiPrefsGet('ascent-map-style') || 'osm'] || MAP_STYLES['osm'];
-  cmp.tileLayer = L.tileLayer(_cmpStyle.url, {maxZoom:19});
+  cmp.tileLayer = MapUtils.baseLayer(_cmpStyle);
   cmp.tileLayer.addTo(cmp.map);
   MapUtils.addScale(cmp.map, U.metric);
 
@@ -582,7 +582,7 @@ function initCompareMapBrowse() {
       dragging:false, scrollWheelZoom:false, doubleClickZoom:false,
       keyboard:false, touchZoom:false, boxZoom:false,
     });
-    cmp.zoomTile = L.tileLayer(_cmpStyle.url, {maxZoom:19});
+    cmp.zoomTile = MapUtils.baseLayer(_cmpStyle);
     cmp.zoomTile.addTo(cmp.zoomMap);
     const coords = splitsState.geo.geometry?.coordinates || [];
     if (coords.length > 1) {
@@ -647,7 +647,7 @@ function initCompareMap() {
   if (cmp.map) { cmp.map.remove(); cmp.map = null; }
   cmp.map = L.map(mapEl, {zoomControl:true, attributionControl:false});
   const _cmpStyle = MAP_STYLES[_uiPrefsGet('ascent-map-style') || 'osm'] || MAP_STYLES['osm'];
-  cmp.tileLayer = L.tileLayer(_cmpStyle.url, {maxZoom:19});
+  cmp.tileLayer = MapUtils.baseLayer(_cmpStyle);
   cmp.tileLayer.addTo(cmp.map);
   MapUtils.addScale(cmp.map, U.metric);
 
@@ -694,7 +694,7 @@ function initCompareMap() {
       dragging: false, scrollWheelZoom: false, doubleClickZoom: false,
       keyboard: false, touchZoom: false, boxZoom: false,
     });
-    cmp.zoomTile = L.tileLayer(_cmpStyle.url, {maxZoom:19});
+    cmp.zoomTile = MapUtils.baseLayer(_cmpStyle);
     cmp.zoomTile.addTo(cmp.zoomMap);
     cmp.zoomMap.setView(center, 16);
 

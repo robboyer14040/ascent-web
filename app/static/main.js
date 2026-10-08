@@ -474,6 +474,7 @@ function refitMap() {
 
 const MAP_STYLES = {
   'osm':        { label: 'Street',    url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',                                          attr: '© OpenStreetMap' },
+  'osm-en':     { label: 'English',   styleUrl: 'https://tiles.openfreemap.org/styles/liberty',                                       attr: '© OpenStreetMap, © OpenFreeMap' },
   'cycle':      { label: 'Cycling',   url: 'https://tile.waymarkedtrails.org/cycling/{z}/{x}/{y}.png',                                attr: '© OpenStreetMap, © Waymarked Trails' },
   'topo':       { label: 'Topo',      url: 'https://tile.opentopomap.org/{z}/{x}/{y}.png',                                            attr: '© OpenStreetMap, © OpenTopoMap' },
   'carto-dark': { label: 'Dark',      url: 'https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',                               attr: '© OpenStreetMap, © CARTO' },
@@ -497,7 +498,7 @@ function initMap() {
 function setMapStyle(styleKey, save=true) {
   const style = MAP_STYLES[styleKey] || MAP_STYLES['osm'];
   if (tileLayer) leafMap.removeLayer(tileLayer);
-  tileLayer = L.tileLayer(style.url, { maxZoom: 19, attribution: style.attr });
+  tileLayer = MapUtils.baseLayer(style);
   tileLayer.addTo(leafMap);
   if (save) _uiPrefsSet('ascent-map-style', styleKey);
   // Update selector UI
@@ -512,20 +513,20 @@ function setCmpMapStyle(styleKey) {
   // Update main map too
   if (tileLayer && leafMap) {
     leafMap.removeLayer(tileLayer);
-    tileLayer = L.tileLayer(style.url, { maxZoom: 19, attribution: style.attr });
+    tileLayer = MapUtils.baseLayer(style);
     tileLayer.addTo(leafMap);
   }
 
   // Update compare overview map
   if (cmp.tileLayer && cmp.map) {
     cmp.map.removeLayer(cmp.tileLayer);
-    cmp.tileLayer = L.tileLayer(style.url, { maxZoom: 19 });
+    cmp.tileLayer = MapUtils.baseLayer(style);
     cmp.tileLayer.addTo(cmp.map);
   }
   // Update chase-cam map
   if (cmp.zoomTile && cmp.zoomMap) {
     cmp.zoomMap.removeLayer(cmp.zoomTile);
-    cmp.zoomTile = L.tileLayer(style.url, { maxZoom: 19 });
+    cmp.zoomTile = MapUtils.baseLayer(style);
     cmp.zoomTile.addTo(cmp.zoomMap);
   }
 

@@ -10,7 +10,7 @@ function setMapStyle(key, init=false) {
   document.querySelectorAll('.map-style-btn').forEach(b => b.classList.toggle('active', b.dataset.style===key));
   const t = MAP_TILES[key] || MAP_TILES['osm'];
   if(tileLayer) shareMap.removeLayer(tileLayer);
-  tileLayer = L.tileLayer(t.url, {attribution:t.attr, maxZoom:19}).addTo(shareMap);
+  tileLayer = MapUtils.baseLayer(t).addTo(shareMap);
 }
 function resetZoom() {
   if(_lastBounds) shareMap.fitBounds(_lastBounds, {padding:[24,24]});

@@ -49,13 +49,15 @@ test('_haversineMi is symmetric', function () {
 });
 
 // ── MAP_TILES ─────────────────────────────────────────────────────────────────
-test('MAP_TILES has the five canonical styles', function () {
+test('MAP_TILES has the six canonical styles', function () {
   eq(Object.keys(MAP_TILES).sort(),
-     ['carto-dark', 'carto-light', 'esri-sat', 'osm', 'topo']);
+     ['carto-dark', 'carto-light', 'esri-sat', 'osm', 'osm-en', 'topo']);
 });
-test('MAP_TILES each entry has url + attr strings', function () {
+test('MAP_TILES each entry has a tile source + attr strings', function () {
   Object.keys(MAP_TILES).forEach(function (k) {
-    ok(typeof MAP_TILES[k].url === 'string' && MAP_TILES[k].url.length, k + ' url');
+    // Raster styles carry a tile `url`; vector ones a MapLibre `styleUrl`.
+    var src = MAP_TILES[k].url || MAP_TILES[k].styleUrl;
+    ok(typeof src === 'string' && src.length, k + ' url/styleUrl');
     ok(typeof MAP_TILES[k].attr === 'string' && MAP_TILES[k].attr.length, k + ' attr');
   });
 });

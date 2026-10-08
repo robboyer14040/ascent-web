@@ -76,6 +76,102 @@ const MapUtils = {
     }).addTo(map);
   },
 
+  // ── Base layers ─────────────────────────────────────────────────────────────
+  // Raster tiles arrive with their labels already painted into the pixels, so a
+  // map of Greece stays Greek. Styles declared with a `styleUrl` instead of a
+  // `url` are vector: MapLibre draws the labels at runtime, which lets
+  // englishLabels() below point every name at OSM's name:en tag. MapLibre is a
+  // ~300KB download, so it is fetched the first time such a style is selected
+  // rather than on every page load.
+  _ML_CSS:        'https://cdn.jsdelivr.net/npm/maplibre-gl@5.17.0/dist/maplibre-gl.css',
+  _ML_JS:         'https://cdn.jsdelivr.net/npm/maplibre-gl@5.17.0/dist/maplibre-gl.js',
+  _ML_LEAFLET_JS: 'https://cdn.jsdelivr.net/npm/@maplibre/maplibre-gl-leaflet@0.1.4/leaflet-maplibre-gl.js',
+
+  /**
+   * Build the base layer for an entry of MAP_TILES / MAP_STYLES.
+   * @param {Object} style - style-table entry: {url} for raster, {styleUrl} for vector
+   * @param {Object} [opts] - extra Leaflet layer options (merged over the defaults)
+   * @returns {L.Layer}
+   */
+  baseLayer(style, opts) {
+    const options = Object.assign({ maxZoom: 19, attribution: style.attr }, opts);
+    if (!style.styleUrl) return L.tileLayer(style.url, options);
+    return new (this._vectorLayerClass())(style.styleUrl, options);
+  },
+
+  /**
+   * Rewrite a MapLibre style's place labels to prefer English names, falling
+   * back to the romanised name and then the local one. Mutates and returns the
+   * style. Layers whose text-field names no OSM name tag (the road shields,
+   * which label `ref`) are left alone.
+   * @param {Object} style - parsed MapLibre style JSON
+   */
+  englishLabels(style) {
+    (style.layers || []).forEach(layer => {
+      const field = layer.layout && layer.layout['text-field'];
+      if (!field || JSON.stringify(field).indexOf('name') < 0) return;
+      layer.layout['text-field'] =
+        ['coalesce', ['get', 'name:en'], ['get', 'name:latin'], ['get', 'name']];
+    });
+    return style;
+  },
+
+  /** Fetch MapLibre + its Leaflet glue once; resolves once `L.maplibreGL` exists. */
+  _loadMapLibre() {
+    if (!this._mlPromise) {
+      const script = src => new Promise((resolve, reject) => {
+        const el = document.createElement('script');
+        el.src = src;
+        el.onload = resolve;
+        el.onerror = reject;
+        document.head.appendChild(el);
+      });
+      const css = document.createElement('link');
+      css.rel = 'stylesheet';
+      css.href = this._ML_CSS;
+      document.head.appendChild(css);
+      this._mlPromise = script(this._ML_JS).then(() => script(this._ML_LEAFLET_JS));
+    }
+    return this._mlPromise;
+  },
+
+  /** Leaflet layer that renders a MapLibre vector style with English labels. */
+  _vectorLayerClass() {
+    // Built on first use so this file stays loadable before Leaflet is defined.
+    if (!this._VectorLayer) {
+      this._VectorLayer = L.Layer.extend({
+        initialize(styleUrl, options) {
+          this._styleUrl = styleUrl;
+          L.setOptions(this, options);
+        },
+        onAdd(map) {
+          // Carry the same zoom ceiling the raster layers declare, so switching
+          // back to a raster style can't leave the map zoomed past its tiles.
+          map._addZoomLimit(this);
+          MapUtils._loadMapLibre()
+            .then(() => fetch(this._styleUrl))
+            .then(r => r.json())
+            .then(style => {
+              if (!this._map) return;                  // switched away while loading
+              // attributionControl:false — this wrapper supplies the credit, so
+              // MapLibre must not add its own on the canvas or to Leaflet.
+              this._gl = L.maplibreGL({
+                style: MapUtils.englishLabels(style),
+                attributionControl: false,
+              }).addTo(map);
+            })
+            .catch(() => {});
+        },
+        onRemove(map) {
+          map._removeZoomLimit(this);
+          if (this._gl) { map.removeLayer(this._gl); this._gl = null; }
+        },
+        getAttribution() { return this.options.attribution; },
+      });
+    }
+    return this._VectorLayer;
+  },
+
   /**
    * Place photo thumbnail markers on a map for media items that have a location.
    * Replaces any previously placed markers for this map instance.

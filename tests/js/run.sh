@@ -21,6 +21,7 @@ fi
 exec "$JSC" \
   "$DIR/harness.js" \
   "$S/common.js" \
+  "$S/map_utils.js" \
   "$S/tour_stage.js" \
   "$S/tour_stage_detail.js" \
   "$S/activity_chips.js" \
@@ -28,6 +29,7 @@ exec "$JSC" \
   "$S/location_summary.js" \
   "$S/coach.js" \
   "$DIR/test_common.js" \
+  "$DIR/test_map_utils.js" \
   "$DIR/test_tour_stage.js" \
   "$DIR/test_tour_stage_detail.js" \
   "$DIR/test_activity_chips.js" \

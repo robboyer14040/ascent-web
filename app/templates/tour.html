@@ -687,7 +687,7 @@ let tourTileLayer = null;
 function setTourMapStyle(styleKey) {
   const style = MAP_TILES[styleKey] || MAP_TILES['osm'];
   if(tourTileLayer) tourMap.removeLayer(tourTileLayer);
-  tourTileLayer = L.tileLayer(style.url, { maxZoom:19, attribution:style.attr }).addTo(tourMap);
+  tourTileLayer = MapUtils.baseLayer(style).addTo(tourMap);
   try { localStorage.setItem('ascent-map-style', styleKey); } catch(e) {}
   document.querySelectorAll('#map-style-bar .map-style-btn').forEach(b =>
     b.classList.toggle('active', b.dataset.style === styleKey));

@@ -222,7 +222,7 @@ function segInitMap() {
 
   const styleKey = _uiPrefsGet('ascent-map-style') || 'osm';
   const style = MAP_STYLES[styleKey] || MAP_STYLES['osm'];
-  seg.tileLayer = L.tileLayer(style.url, { maxZoom: 19, attribution: style.attr }).addTo(seg.map);
+  seg.tileLayer = MapUtils.baseLayer(style).addTo(seg.map);
 
   // Mark active style button
   document.querySelectorAll('#seg-map-style-bar .map-style-btn').forEach(b =>
@@ -232,7 +232,7 @@ function segInitMap() {
 function setSegMapStyle(styleKey) {
   const style = MAP_STYLES[styleKey] || MAP_STYLES['osm'];
   if (seg.tileLayer && seg.map) { seg.map.removeLayer(seg.tileLayer); }
-  seg.tileLayer = L.tileLayer(style.url, { maxZoom: 19, attribution: style.attr }).addTo(seg.map);
+  seg.tileLayer = MapUtils.baseLayer(style).addTo(seg.map);
   _uiPrefsSet('ascent-map-style', styleKey);
   document.querySelectorAll('#seg-map-style-bar .map-style-btn').forEach(b =>
     b.classList.toggle('active', b.dataset.style === styleKey));

@@ -12,7 +12,19 @@
 // ── browser / Leaflet stubs ───────────────────────────────────────────────────
 var L = {
   divIcon:   function (o) { return o; },
-  tileLayer: function () { return { addTo: function () { return this; } }; },
+  // map_utils.js tests assert on the url/options a base layer was built from.
+  tileLayer: function (url, opts) {
+    return { _url: url, _opts: opts || {}, addTo: function () { return this; } };
+  },
+  // Enough of L.Layer.extend for MapUtils._vectorLayerClass() to build its class.
+  Layer: {
+    extend: function (proto) {
+      function Klass() { if (proto.initialize) proto.initialize.apply(this, arguments); }
+      Klass.prototype = proto;
+      return Klass;
+    },
+  },
+  setOptions: function (obj, options) { obj.options = options || {}; return obj.options; },
 };
 
 // Minimal element stub. Two consumers:
