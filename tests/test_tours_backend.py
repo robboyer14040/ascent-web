@@ -1594,3 +1594,80 @@ def test_long_ride_covering_only_part_of_the_route_is_not_a_match(con):
 
     result = tours._global_stage_matching(con, 1, "2026-07-01", "2026-07-10", ADDON_STAGE)
     assert result[300] is None
+
+
+# ── Share page: the activity Description ──────────────────────────────────────
+
+def _stub_strava_detail(monkeypatch, description, calls):
+    """Stub the Strava activity-detail GET (and the token lookup behind it)."""
+    class _Resp:
+        status_code = 200
+        def json(self):
+            return {"description": description}
+
+    class _Client:
+        def __init__(self, *a, **k): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): return False
+        async def get(self, url, **kw):
+            calls.append(url)
+            return _Resp()
+
+    import httpx
+    monkeypatch.setattr(httpx, "AsyncClient", _Client)
+    import app.routers.strava as strava_mod
+    async def _token(user_id=None): return "tok"
+    monkeypatch.setattr(strava_mod, "get_fresh_token", _token)
+
+
+def _shared_activity(client, test_db, add_activity):
+    """A published tour + one of the owner's Strava activities with no description."""
+    tid = _make_tour(client)
+    att = client.post(f"/tours/{tid}/attempts",
+                      data={"start_date": "2026-07-01", "end_date": "2026-07-10"}).json()["id"]
+    token = client.post(f"/tours/{tid}/publish", json={"attempt_id": att}).json()["token"]
+    act_id = add_activity(user_id=1, name="Stage 1", attrs=["name", "Stage 1"])
+    con = sqlite3.connect(test_db.path)
+    try:
+        con.execute("UPDATE activities SET strava_activity_id=424242 WHERE id=?", (act_id,))
+        # The share endpoint reads the AI-summary table, which production creates
+        # lazily on first use (api._ensure_summary_table).
+        from app.routers.api import _ensure_summary_table
+        _ensure_summary_table(con)
+        con.commit()
+    finally:
+        con.close()
+    return token, act_id
+
+
+def test_share_activity_backfills_the_strava_description(authed_client, test_db,
+                                                         add_activity, monkeypatch):
+    # A bulk-synced activity carries no description (only Strava's detail endpoint
+    # has it), so the stage detail would show none. The share endpoint pulls it once
+    # and stores it — the second view is served from the DB.
+    tours._no_strava_desc.clear()
+    token, act_id = _shared_activity(authed_client, test_db, add_activity)
+    calls = []
+    _stub_strava_detail(monkeypatch, "  Hot day, great coffee stop.  ", calls)
+
+    r = authed_client.get(f"/tours/share/{token}/activities/{act_id}")
+    assert r.status_code == 200
+    assert r.json()["notes"] == "Hot day, great coffee stop."
+
+    r2 = authed_client.get(f"/tours/share/{token}/activities/{act_id}")
+    assert r2.json()["notes"] == "Hot day, great coffee stop."
+    assert len(calls) == 1          # stored, not re-fetched
+
+
+def test_share_activity_asks_strava_once_when_there_is_no_description(
+        authed_client, test_db, add_activity, monkeypatch):
+    # Nothing to store when Strava has no description either; the endpoint is
+    # public, so it must not re-ask on every view.
+    tours._no_strava_desc.clear()
+    token, act_id = _shared_activity(authed_client, test_db, add_activity)
+    calls = []
+    _stub_strava_detail(monkeypatch, "", calls)
+
+    for _ in range(3):
+        assert authed_client.get(f"/tours/share/{token}/activities/{act_id}").json()["notes"] == ""
+    assert len(calls) == 1

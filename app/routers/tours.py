@@ -3101,6 +3101,40 @@ async def tour_share_stage_export_gpx(token: str, stage_id: int):
     )
 
 
+# Activities whose Strava detail came back with no description at all. The share
+# endpoint below is public, so without this a descriptionless stage would re-ask
+# Strava on every view and eat the (small) read quota. Reset on restart.
+_no_strava_desc: set = set()
+
+
+async def _strava_description(user_id: int, strava_id: int) -> str:
+    """The Strava description for an activity, or "" if it can't be had.
+
+    The activities-list sync doesn't carry descriptions — only Strava's
+    per-activity detail endpoint does — so activities that arrived through a bulk
+    sync have no notes until something asks for the detail. The owner's pages
+    back-fill it through api.fetch_points_from_strava; the share page has no
+    authenticated path, so it back-fills here.
+    """
+    import httpx
+    from app.routers.strava import get_fresh_token as _gft
+    try:
+        token = await _gft(user_id=user_id)
+        if not token:
+            return ""
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(
+                f"https://www.strava.com/api/v3/activities/{strava_id}",
+                headers={"Authorization": f"Bearer {token}"},
+                params={"include_all_efforts": "false"},
+            )
+        if resp.status_code != 200:
+            return ""
+        return (resp.json().get("description") or "").strip()
+    except Exception:
+        return ""
+
+
 @router.get("/tours/share/{token}/activities/{activity_id}")
 async def tour_share_activity(token: str, activity_id: int):
     """Public endpoint — full activity detail for a completed stage on a shared tour."""
@@ -3123,6 +3157,16 @@ async def tour_share_activity(token: str, activity_id: int):
             raise HTTPException(404, "Activity not found")
 
         act = build_activity(act_row)
+        # First view of a bulk-synced activity has no description — pull it from
+        # Strava once and store it, so the stage detail can show it.
+        if (act.get("strava_activity_id") and not (act.get("notes") or "").strip()
+                and activity_id not in _no_strava_desc):
+            desc = await _strava_description(share_uid, act["strava_activity_id"])
+            if desc:
+                db_getter().update_activity_attrs(activity_id, {"notes": desc})
+                act["notes"] = desc
+            else:
+                _no_strava_desc.add(activity_id)
         ai_row = con.execute(
             "SELECT summary FROM activity_ai_summaries WHERE activity_id=?", (activity_id,)
         ).fetchone()
