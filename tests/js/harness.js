@@ -48,6 +48,21 @@ function _element(tag) {
     get innerHTML() { return this._html; },
     appendChild: function (c) { this.children.push(c); return c; },
     remove: function () {},
+    // stage_table.js sets grid templates via style.setProperty and wires row
+    // click handlers, so the stub records style props and swallows listeners.
+    style: (function () {
+      var p = {};
+      return {
+        _p: p,
+        setProperty: function (k, v) { p[k] = String(v); },
+        getPropertyValue: function (k) { return k in p ? p[k] : ''; },
+      };
+    })(),
+    addEventListener: function () {},
+    querySelector: function () { return null; },
+    querySelectorAll: function () { return []; },
+    getBoundingClientRect: function () { return {top:0,left:0,right:0,bottom:0,width:0,height:0}; },
+    offsetWidth: 0,
     classList: {
       _c: [],
       add: function () {}, remove: function () {},

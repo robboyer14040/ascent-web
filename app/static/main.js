@@ -215,24 +215,39 @@ function renderUserCell(a) {
   return userAvatarIcon(a.user_id, 22, 'margin-right:5px;') + escHtml(u.username || '');
 }
 
-const ALL_COLS = [
-  {id:'user',      label:'User',        sort:'',             w:'110px', align:'left',  render: renderUserCell},
-  {id:'date',      label:'Date/Time',   sort:'start_time',   w:'168px', align:'left',  render: a => fmtDate(a.start_time)},
-  {id:'name',      label:'Title',       sort:'name',         w:'1fr',   align:'left',  render: a => escHtml(a.name) + (a.strava_activity_id?`<a href="https://www.strava.com/activities/${a.strava_activity_id}" target="_blank" class="ac-strava" title="View on Strava">↗</a>`:'')},
-  {id:'dist',      label:'Dist',        sort:'distance_m',   w:'78px',  align:'right', unitLabel: () => U.distUnit(),  render: a => fmtN(U.dist(a.distance_mi),2)},
-  {id:'active',    label:'MovTime',     sort:'active_time',  w:'76px',  align:'right', render: a => fmtHMS(a.active_time)},
-  {id:'duration',  label:'Duration',    sort:'duration',     w:'76px',  align:'right', render: a => fmtHMS(a.duration)},
-  {id:'climb',     label:'Ascent',      sort:'total_climb_m',w:'72px',  align:'right', unitLabel: () => U.climbUnit(), render: a => a.total_climb_ft?U.climb(a.total_climb_ft):'—'},
-  {id:'mvspd',     label:'MvSpd',       sort:'avg_speed_mps',w:'88px',  align:'right', unitLabel: () => U.speedUnit(), render: a => fmtN(U.speed(a.avg_speed_mph),1)},
-  {id:'avgspd',    label:'AvgSpd',      sort:'',             w:'88px',  align:'right', unitLabel: () => U.speedUnit(), render: a => { const s=(a.duration&&a.distance_mi)?(a.distance_mi/(a.duration/3600)):0; return fmtN(U.speed(s),1); }},
-  {id:'hr',        label:'HR',          sort:'avg_heartrate',w:'52px',  align:'right', render: a => a.avg_heartrate?Math.round(a.avg_heartrate):'—'},
-  {id:'maxhr',     label:'MaxHR',       sort:'',             w:'58px',  align:'right', render: a => a.max_heartrate?Math.round(a.max_heartrate):'—'},
-  {id:'power',     label:'Power',       sort:'',             w:'58px',  align:'right', render: a => a.avg_power?Math.round(a.avg_power)+' W':'—'},
-  {id:'cadence',   label:'Cadence',     sort:'',             w:'62px',  align:'right', render: a => a.avg_cadence?Math.round(a.avg_cadence)+' rpm':'—'},
-  {id:'calories',  label:'Cal',         sort:'calories',     w:'52px',  align:'right', render: a => a.calories?Math.round(a.calories):'—'},
-  {id:'suffer',    label:'Suffer',      sort:'',             w:'52px',  align:'right', render: a => a.suffer_score?Math.round(a.suffer_score):'—'},
-  {id:'pace',      label:'Pace',        sort:'',             w:'70px',  align:'right', render: a => a.avg_pace||'—'},
-];
+// Activity columns: the canonical list from list_cols.js, plus this page's own
+// widths, sort keys and cell renderers.
+const ALL_COLS = buildListCols({
+  w: {
+    user:'110px', date:'168px', name:'1fr',   dist:'78px',  active:'76px',
+    duration:'76px', climb:'72px', mvspd:'88px', avgspd:'88px', hr:'52px',
+    maxhr:'58px', power:'58px', cadence:'62px', calories:'52px', suffer:'52px',
+    pace:'70px',
+  },
+  sort: {
+    date:'start_time', name:'name', dist:'distance_m', active:'active_time',
+    duration:'duration', climb:'total_climb_m', mvspd:'avg_speed_mps',
+    hr:'avg_heartrate', calories:'calories',
+  },
+  render: {
+    user:     renderUserCell,
+    date:     a => fmtDate(a.start_time),
+    name:     a => escHtml(a.name) + (a.strava_activity_id?`<a href="https://www.strava.com/activities/${a.strava_activity_id}" target="_blank" class="ac-strava" title="View on Strava">↗</a>`:''),
+    dist:     a => fmtN(U.dist(a.distance_mi),2),
+    active:   a => fmtHMS(a.active_time),
+    duration: a => fmtHMS(a.duration),
+    climb:    a => a.total_climb_ft?U.climb(a.total_climb_ft):'—',
+    mvspd:    a => fmtN(U.speed(a.avg_speed_mph),1),
+    avgspd:   a => { const s=(a.duration&&a.distance_mi)?(a.distance_mi/(a.duration/3600)):0; return fmtN(U.speed(s),1); },
+    hr:       a => a.avg_heartrate?Math.round(a.avg_heartrate):'—',
+    maxhr:    a => a.max_heartrate?Math.round(a.max_heartrate):'—',
+    power:    a => a.avg_power?Math.round(a.avg_power)+' W':'—',
+    cadence:  a => a.avg_cadence?Math.round(a.avg_cadence)+' rpm':'—',
+    calories: a => a.calories?Math.round(a.calories):'—',
+    suffer:   a => a.suffer_score?Math.round(a.suffer_score):'—',
+    pace:     a => a.avg_pace||'—',
+  },
+});
 
 const DEFAULT_COL_IDS = ['date','user','name','dist','active','climb','mvspd','hr'];
 

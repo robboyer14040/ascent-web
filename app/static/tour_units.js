@@ -10,6 +10,11 @@ function makeUnits(metric) {
     tempS:   f   => U.metric ? +((f-32)*5/9).toFixed(1)+' °C'  : Math.round(f)+' °F',
     windS:   kph => U.metric ? Math.round(kph)+' km/h'         : Math.round(kph/1.60934)+' mph',
     precipS: mm  => U.metric ? mm+' mm'                        : (mm/25.4).toFixed(2)+'"',
+    // Bare unit labels — the shared column list (list_cols.js) reads these to put
+    // the unit under a column heading, and main.js's own U exposes the same three.
+    distUnit:  () => U.metric ? 'km'   : 'mi',
+    climbUnit: () => U.metric ? 'm'    : 'ft',
+    speedUnit: () => U.metric ? 'km/h' : 'mph',
     // Owner page refreshes the metric pref from settings; the share page never calls this.
     async load() {
       try { const p = await fetch('/api/settings/training-zones').then(r=>r.json()); U.metric=!!p.use_metric; }

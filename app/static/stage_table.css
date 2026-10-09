@@ -1,0 +1,50 @@
+/* stage_table.css — the tour stage column table, shared by the Tours page
+   (tour.html) and the public shared-tour page (tour_share.html). Pairs with
+   stage_table.js; the column list itself lives in list_cols.js.
+   Row height comes from list.css --list-row-h. */
+
+#stage-list-wrap{flex:1;overflow:hidden;display:flex;flex-direction:column;position:relative}
+#stage-h-scroll{flex:1;overflow:auto;min-height:0;scrollbar-width:none}
+#stage-h-scroll::-webkit-scrollbar{display:none}
+/* ── Stage column header ── */
+#stage-col-head{position:sticky;top:0;z-index:10;display:grid;grid-template-columns:var(--stage-cols);background:var(--surface);border-bottom:1px solid var(--border);min-width:var(--stage-min-w,0)}
+#stage-list-v-scroll{}
+#stage-hscroll-track{height:8px;background:var(--surface);border-top:1px solid var(--border);flex-shrink:0;position:relative;display:none}
+#stage-hscroll-thumb{position:absolute;top:1px;height:6px;border-radius:3px;background:var(--border2);cursor:pointer;min-width:20px}
+#stage-hscroll-thumb:hover,#stage-hscroll-thumb.dragging{background:var(--muted2)}
+#stage-col-gear-btn{position:absolute;top:0;right:0;z-index:20;padding:4px 6px;font-size:15px;line-height:1;color:var(--muted);background:var(--surface);border-left:1px solid var(--border);border-bottom:1px solid var(--border)}
+#stage-col-gear-btn:hover{color:var(--text)}
+#stage-col-picker{display:none;position:fixed;z-index:1000;background:var(--surface);border:1px solid var(--border2);border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,.5);padding:8px;max-height:280px;overflow-y:auto;min-width:160px}
+#stage-col-picker.open{display:block}
+.cp-item{display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:5px;cursor:pointer;font-size:12.5px;color:var(--text);user-select:none}
+.cp-item:hover{background:var(--surface2)}
+.cp-item input{accent-color:#f97316;cursor:pointer;width:13px;height:13px}
+#stage-list{}
+.stch{position:relative;padding:10px 4px 4px;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;cursor:pointer;user-select:none;display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-start;gap:2px;white-space:nowrap;overflow:visible;min-height:38px}
+.stch:hover{color:var(--text)}
+.stch.sorted{color:var(--accent)}
+.stch.nosort{cursor:default}
+.stch.dragging-col{opacity:.4;cursor:grabbing}
+.stch.drag-over{border-left:2px solid #f97316}
+.stch-sep{position:absolute;right:-10px;top:0;bottom:0;width:20px;cursor:col-resize;touch-action:none;z-index:15;display:flex;align-items:center;justify-content:center}
+.stch-sep::before{content:'';width:4px;height:calc(100% - 10px);background:var(--border2);border-radius:2px;pointer-events:none;transition:background .12s}
+.stch-sep:hover::before,.stch-sep.resizing::before{background:var(--accent)}
+.sort-arr{color:var(--accent);font-size:10px}
+.stage-row{display:grid;grid-template-columns:var(--stage-cols);border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer;align-items:center;min-width:var(--stage-min-w,0)}  /* row height: list.css --list-row-h */
+.stage-row:hover{background:rgba(255,255,255,.04)}
+.stage-row.active{background:rgba(249,115,22,.1);border-left:3px solid var(--accent)}
+.st-cell{padding:0 4px;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--muted)}
+.st-cell-right{text-align:right}
+.st-name-cell{display:flex;align-items:center;gap:5px;padding:0 4px 0 8px;min-width:0;overflow:hidden}
+.stage-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.st-name-text{font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)}
+#sidebar-empty{padding:20px 14px;color:var(--muted);font-size:12px;text-align:center}
+
+/* ── Sidebar | main vertical divider ── */
+#sidebar-resize{width:6px;background:transparent;cursor:col-resize;flex-shrink:0;transition:background .15s;touch-action:none;position:relative;border-left:1px solid var(--border);border-right:1px solid var(--border);z-index:10}
+#sidebar-resize:hover,#sidebar-resize.dragging{background:var(--accent)}
+#sidebar-resize::after{content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:2px;height:30px;border-radius:1px;background:var(--muted2);pointer-events:none}
+@media(pointer:coarse){
+  #sidebar-resize{width:13px;background:rgba(249,115,22,0.15)}
+  #sidebar-resize::after{width:3px;height:44px;background:#f97316;opacity:0.6}
+}

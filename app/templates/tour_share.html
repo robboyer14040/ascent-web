@@ -16,17 +16,16 @@
 <link rel="stylesheet" href="/static/share_detail.css?v={{ app_version }}">
 <link rel="stylesheet" href="/static/tour_mob_nav.css?v={{ app_version }}">
 <link rel="stylesheet" href="/static/list.css?v={{ app_version }}">
+<link rel="stylesheet" href="/static/stage_table.css?v={{ app_version }}">
 <style>
 .nav-version{font-size:10px;color:var(--muted);margin-left:4px}
 .nav-sub{font-size:11px;color:var(--muted)}
-#sidebar{width:300px;flex-shrink:0;display:flex;flex-direction:column;border-right:1px solid var(--border);overflow:hidden}
+#sidebar{width:320px;flex-shrink:0;display:flex;flex-direction:column;border-right:1px solid var(--border);overflow:hidden}
 #tour-header{padding:10px 12px;border-bottom:1px solid var(--border);flex-shrink:0}
 #tour-header-title{font-size:13px;font-weight:600;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #tour-header-sub{font-size:11px;color:var(--muted)}
 .view-all-btn{margin:8px 10px;padding:8px;border-radius:7px;border:1px solid var(--border2);background:var(--surface2);color:var(--muted2);font-size:12px;font-weight:600;text-align:center;cursor:default;flex-shrink:0}
 .view-all-btn.active{background:var(--accent);border-color:var(--accent);color:#fff;cursor:pointer}
-#stage-list-wrap{flex:1;overflow-y:auto}
-#stage-list{padding:4px 0}
 #notify-optin{flex-shrink:0}
 /* A button sizes to its content, so unlike #view-all-btn (a flex child that
    stretches) it needs an explicit width to match. box-sizing is border-box, so
@@ -112,9 +111,19 @@
       </div>
     </div>
     <div id="stage-list-wrap">
-      <div id="stage-list"></div>
+      <div id="stage-h-scroll">
+        <div id="stage-col-head"></div>
+        <div id="stage-list-v-scroll">
+          <div id="stage-list"></div>
+          <div id="sidebar-empty" style="display:none">No stages defined.</div>
+        </div>
+      </div>
+      <div id="stage-hscroll-track"><div id="stage-hscroll-thumb"></div></div>
+      <button id="stage-col-gear-btn" onclick="StageTable.togglePicker(event)" title="Choose columns">⚙</button>
+      <div id="stage-col-picker"></div>
     </div>
   </div>
+  <div id="sidebar-resize" title="Drag to resize sidebar"></div>
 
   <div id="main">
     {% set map_stage_nums_fn = 'toggleTourStageNums' %}{% include '_share_detail.html' %}
@@ -129,6 +138,8 @@
 <script src="/static/tour_units.js?v={{ app_version }}"></script>
 <script src="/static/share_common.js?v={{ app_version }}"></script>
 <script src="/static/tour_stage.js?v={{ app_version }}"></script>
+<script src="/static/list_cols.js?v={{ app_version }}"></script>
+<script src="/static/stage_table.js?v={{ app_version }}"></script>
 <script src="/static/gpx_download.js?v={{ app_version }}"></script>
 <script src="/static/tour_stage_detail.js?v={{ app_version }}"></script>
 <script src="/static/tour_mob_nav.js?v={{ app_version }}"></script>
@@ -334,10 +345,16 @@ function toggleTourStageNums() {
 }
 
 // ── Stage list ────────────────────────────────────────────────────────────────
-function renderStageList() {
-  TourStageDetail.stageList(document.getElementById('stage-list'),
-    { stages: tourInfo?.stages || [], pointsCache });
-}
+// The column table lives in stage_table.js, shared with the Tours page.
+function renderStageList() { StageTable.render(); }
+
+StageTable.init({
+  stages:      () => tourInfo?.stages || [],
+  pointsCache: () => pointsCache,
+  selectedId:  () => selectedId,
+  onSelect:    (id) => selectStage(id),
+  onResize:    () => { if (shareMap) shareMap.invalidateSize(); },
+});
 
 // ── Stage selection ───────────────────────────────────────────────────────────
 // Reflect selection state on the "View Entire Tour" button (active/orange when a stage is selected).

@@ -28,6 +28,10 @@ exec "$JSC" \
   "$S/elev_panel.js" \
   "$S/location_summary.js" \
   "$S/coach.js" \
+  "$S/tour_units.js" \
+  "$S/list_cols.js" \
+  "$DIR/stage_table_fixture.js" \
+  "$S/stage_table.js" \
   "$DIR/test_common.js" \
   "$DIR/test_map_utils.js" \
   "$DIR/test_tour_stage.js" \
@@ -37,4 +41,6 @@ exec "$JSC" \
   "$DIR/test_location_summary.js" \
   "$DIR/test_coach_markdown.js" \
   "$DIR/test_coach_actions.js" \
+  "$DIR/test_list_cols.js" \
+  "$DIR/test_stage_table.js" \
   "$DIR/finalize.js"

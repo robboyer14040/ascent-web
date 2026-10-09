@@ -17,6 +17,7 @@
 <link rel="stylesheet" href="/static/tour_stage.css?v={{ app_version }}">
 <link rel="stylesheet" href="/static/tour_mob_nav.css?v={{ app_version }}">
 <link rel="stylesheet" href="/static/list.css?v={{ app_version }}">
+<link rel="stylesheet" href="/static/stage_table.css?v={{ app_version }}">
 <script>(function(){var t={{ ui_prefs.get('theme','') | tojson }};if(t)document.documentElement.dataset.theme=t;})();</script>
 <script>(function(){if(window.self!==window.top)document.documentElement.classList.add('mob-embedded')})();</script>
 <style>
@@ -51,55 +52,13 @@ html.mob-embedded body.mob-stage-view #stage-detail { padding-bottom:12px!import
 .sb-btn.ghost{background:none;border:1px solid var(--border2)}
 .sb-btn.ghost:hover{background:var(--surface2)}
 .sb-btn:disabled{opacity:0.35;cursor:not-allowed;pointer-events:none}
-#stage-list-wrap{flex:1;overflow:hidden;display:flex;flex-direction:column;position:relative}
-#stage-h-scroll{flex:1;overflow:auto;min-height:0;scrollbar-width:none}
-#stage-h-scroll::-webkit-scrollbar{display:none}
-/* ── Stage column header ── */
-#stage-col-head{position:sticky;top:0;z-index:10;display:grid;grid-template-columns:var(--stage-cols);background:var(--surface);border-bottom:1px solid var(--border);min-width:var(--stage-min-w,0)}
-#stage-list-v-scroll{}
-#stage-hscroll-track{height:8px;background:var(--surface);border-top:1px solid var(--border);flex-shrink:0;position:relative;display:none}
-#stage-hscroll-thumb{position:absolute;top:1px;height:6px;border-radius:3px;background:var(--border2);cursor:pointer;min-width:20px}
-#stage-hscroll-thumb:hover,#stage-hscroll-thumb.dragging{background:var(--muted2)}
-#stage-col-gear-btn{position:absolute;top:0;right:0;z-index:20;padding:4px 6px;font-size:15px;line-height:1;color:var(--muted);background:var(--surface);border-left:1px solid var(--border);border-bottom:1px solid var(--border)}
-#stage-col-gear-btn:hover{color:var(--text)}
-#stage-col-picker{display:none;position:fixed;z-index:1000;background:var(--surface);border:1px solid var(--border2);border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,.5);padding:8px;max-height:280px;overflow-y:auto;min-width:160px}
-#stage-col-picker.open{display:block}
-.cp-item{display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:5px;cursor:pointer;font-size:12.5px;color:var(--text);user-select:none}
-.cp-item:hover{background:var(--surface2)}
-.cp-item input{accent-color:#f97316;cursor:pointer;width:13px;height:13px}
-#stage-list{}
-.stch{position:relative;padding:10px 4px 4px;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;cursor:pointer;user-select:none;display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-start;gap:2px;white-space:nowrap;overflow:visible;min-height:38px}
-.stch:hover{color:var(--text)}
-.stch.sorted{color:var(--accent)}
-.stch.nosort{cursor:default}
-.stch.dragging-col{opacity:.4;cursor:grabbing}
-.stch.drag-over{border-left:2px solid #f97316}
-.stch-sep{position:absolute;right:-10px;top:0;bottom:0;width:20px;cursor:col-resize;touch-action:none;z-index:15;display:flex;align-items:center;justify-content:center}
-.stch-sep::before{content:'';width:4px;height:calc(100% - 10px);background:var(--border2);border-radius:2px;pointer-events:none;transition:background .12s}
-.stch-sep:hover::before,.stch-sep.resizing::before{background:var(--accent)}
-.sort-arr{color:var(--accent);font-size:10px}
-.stage-row{display:grid;grid-template-columns:var(--stage-cols);border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer;align-items:center;min-width:var(--stage-min-w,0)}  /* row height: list.css --list-row-h */
-.stage-row:hover{background:rgba(255,255,255,.04)}
-.stage-row.active{background:rgba(249,115,22,.1);border-left:3px solid var(--accent)}
-.st-cell{padding:0 4px;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--muted)}
-.st-cell-right{text-align:right}
-.st-name-cell{display:flex;align-items:center;gap:5px;padding:0 4px 0 8px;min-width:0;overflow:hidden}
-.stage-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
-.st-name-text{font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)}
-#sidebar-empty{padding:20px 14px;color:var(--muted);font-size:12px;text-align:center}
-
 /* ── Main area ── */
 #resize-handle{height:12px;background:var(--surface2);cursor:row-resize;flex-shrink:0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);transition:background .1s;position:relative}
 #resize-handle::after{content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:36px;height:3px;border-radius:2px;background:var(--muted2);pointer-events:none;transition:background .1s}
 #resize-handle:hover,#resize-handle.dragging{background:var(--border2)}
 #resize-handle:hover::after,#resize-handle.dragging::after{background:var(--accent)}
 #elev-resize-handle{height:12px;background:var(--surface2);cursor:row-resize;flex-shrink:0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);transition:background .1s;position:relative}
-#sidebar-resize{width:6px;background:transparent;cursor:col-resize;flex-shrink:0;transition:background .15s;touch-action:none;position:relative;border-left:1px solid var(--border);border-right:1px solid var(--border);z-index:10}
-#sidebar-resize:hover,#sidebar-resize.dragging{background:var(--accent)}
-#sidebar-resize::after{content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:2px;height:30px;border-radius:1px;background:var(--muted2);pointer-events:none}
 @media(pointer:coarse){
-  #sidebar-resize{width:13px;background:rgba(249,115,22,0.15)}
-  #sidebar-resize::after{width:3px;height:44px;background:#f97316;opacity:0.6}
   #resize-handle{height:20px}
   #elev-resize-handle{height:20px}
 }
@@ -534,6 +493,8 @@ html.mob-embedded body.mob-stage-view #stage-detail { padding-bottom:12px!import
 <script src="/static/common.js?v={{ app_version }}"></script>
 <script src="/static/tour_units.js?v={{ app_version }}"></script>
 <script src="/static/tour_stage.js?v={{ app_version }}"></script>
+<script src="/static/list_cols.js?v={{ app_version }}"></script>
+<script src="/static/stage_table.js?v={{ app_version }}"></script>
 <script src="/static/gpx_download.js?v={{ app_version }}"></script>
 <script src="/static/tour_stage_detail.js?v={{ app_version }}"></script>
 <script src="/static/tour_mob_nav.js?v={{ app_version }}"></script>
@@ -587,76 +548,16 @@ const C = {
 };
 function stageColor(stage) { return stage.completion ? C.done : C.todo; }
 
-// ── Stage table columns ───────────────────────────────────────────────────────
-// Alternate-route stage IDs for the current tour, refreshed by renderStageList().
-// Their names render italicised and parenthesised in the stage list.
-let _stageAltIds = new Set();
-const _fmtStageName = s => {
-  const nm = esc(s.name);
-  return _stageAltIds.has(String(s.id)) ? `<em>(${nm})</em>` : nm;
-};
-const STAGE_ALL_COLS = [
-  {id:'name',     label:'Stage',   sort:'name',     w:'minmax(60px,1fr)', align:'left',  titleCell:true,
-    render: s => s.completion
-      ? `<span style="color:#22c55e;font-size:11px;line-height:1;flex-shrink:0;font-weight:700">✓</span><span class="st-name-text">${_fmtStageName(s)}</span>`
-      : `<span class="stage-dot" style="background:${C.todo}"></span><span class="st-name-text">${_fmtStageName(s)}</span>`},
-  {id:'dist',     label:'Dist',    sort:'dist',     w:'54px', align:'right',
-    unitLabel: () => U.metric ? 'km' : 'mi',
-    render: s => s.distance_mi ? (U.metric ? (s.distance_mi*1.60934).toFixed(1) : s.distance_mi.toFixed(1)) : '—'},
-  {id:'climb',    label:'Ascent',  sort:'climb',    w:'58px', align:'right',
-    unitLabel: () => U.metric ? 'm' : 'ft',
-    render: s => s.climb_ft ? (U.metric ? Math.round(s.climb_ft*0.3048) : Math.round(s.climb_ft)) : '—'},
-  {id:'date',     label:'Date',    sort:'date',     w:'68px', align:'right',
-    render: s => s.completion ? s.completion.date : '—'},
-  {id:'duration', label:'MovTime', sort:'moving_s', w:'64px', align:'right',
-    render: s => s.completion?.moving_s ? fmtHMS(s.completion.moving_s) : '—'},
-  {id:'speed',    label:'Speed',   sort:'speed',    w:'64px', align:'right',
-    unitLabel: () => U.metric ? 'km/h' : 'mph',
-    render: s => s.completion?.avg_moving_speed_mph ? (U.metric?(s.completion.avg_moving_speed_mph*1.60934).toFixed(1):s.completion.avg_moving_speed_mph.toFixed(1)) : '—'},
-  {id:'hr',       label:'HR',      sort:'hr',       w:'44px', align:'right',
-    render: s => s.completion?.avg_hr ? Math.round(s.completion.avg_hr) : '—'},
-  {id:'calories', label:'Cal',     sort:'calories', w:'48px', align:'right',
-    render: s => s.completion?.calories ? Math.round(s.completion.calories) : '—'},
-];
-const STAGE_DEFAULT_COL_IDS = ['name','dist','climb','date','duration'];
-const STAGE_SORT_KEY = {
-  name:     s => (s.name||'').toLowerCase(),
-  dist:     s => s.distance_mi || 0,
-  climb:    s => s.climb_ft || 0,
-  date:     s => s.completion ? s.completion.date || '' : '',
-  moving_s: s => s.completion?.moving_s || 0,
-  speed:    s => s.completion?.avg_moving_speed_mph || 0,
-  hr:       s => s.completion?.avg_hr || 0,
-  calories: s => s.completion?.calories || 0,
-  stage_num:s => s.stage_num || 0,
-};
-
-function loadStageColPrefs() {
-  try {
-    const saved = JSON.parse(localStorage.getItem('ascent-stage-cols') || 'null');
-    if(saved && Array.isArray(saved) && saved.length >= 1) {
-      // Always keep 'name' first; drop the retired 'num' column if present in old prefs
-      const rest = saved.filter(id => id !== 'num' && id !== 'name');
-      return ['name', ...rest];
-    }
-  } catch(e) {}
-  return STAGE_DEFAULT_COL_IDS.slice();
-}
-function saveStageColPrefs(ids) { try { localStorage.setItem('ascent-stage-cols', JSON.stringify(ids)); } catch(e) {} }
-function getActiveStageCols() { return stageColIds.map(id => STAGE_ALL_COLS.find(c => c.id === id)).filter(Boolean); }
-function buildStageColsTemplate() { return getActiveStageCols().map(c => stageColWidthOverrides[c.id] || c.w).join(' '); }
-
-let stageColIds  = loadStageColPrefs();
-let stageColWidthOverrides = {};
-try { stageColWidthOverrides = JSON.parse(localStorage.getItem('ascent-stage-col-widths') || '{}'); } catch(e) {}
-function saveStageColWidths() { try { localStorage.setItem('ascent-stage-col-widths', JSON.stringify(stageColWidthOverrides)); } catch(e) {} }
-let stageSortBy  = 'stage_num';
-let stageSortDir = 'asc';
-let _suppressStageColClick = false;
-let _stageTouchDragPending = null;  // { colId, div, startX, startY }
-let _stageTouchDrag = null;          // { colId, ghost, startX, origLeft, toId }
-let _stageHScrollbarDrag = false, _stageHScrollbarStartX = 0, _stageHScrollbarStartScroll = 0;
-const isStageColFixed = id => id === 'name';
+// ── Stage table ───────────────────────────────────────────────────────────────
+// The table itself (columns, header, Visible Columns picker, sorting, divider
+// drags, h-scrollbar, sidebar divider) lives in stage_table.js, shared with the
+// public shared-tour page. These thin adapters keep the call sites below — and
+// the inline onclick in the markup — pointing at it.
+const renderStageList       = ()  => StageTable.render();
+const buildStageColHead     = ()  => StageTable.buildHead();
+const sortedStages          = ()  => StageTable.sorted();
+const updateStageHScrollbar = ()  => StageTable.updateHScrollbar();
+const toggleStageColPicker  = (e) => StageTable.togglePicker(e);
 
 // ── State ─────────────────────────────────────────────────────────────────────
 const _currentUserId  = {{ current_user_id | tojson }};
@@ -770,43 +671,6 @@ function initMap() {
   handle.addEventListener('touchend',   endDrag);
 })();
 
-
-// ── Sidebar horizontal resize ─────────────────────────────────────────────────
-(function() {
-  const handle  = document.getElementById('sidebar-resize');
-  const sidebar = document.getElementById('sidebar');
-  const MIN_W = 180, MAX_W = 600;
-  function _saveW(w) { try { localStorage.setItem('ascent-tour-sidebar-w', w); } catch(e) {} }
-  handle.addEventListener('pointerdown', e => {
-    if (e.button !== undefined && e.button !== 0) return;
-    e.preventDefault();
-    e.stopPropagation();
-    try { handle.setPointerCapture(e.pointerId); } catch(_) {}
-    const startX = e.clientX, startW = sidebar.offsetWidth;
-    handle.classList.add('dragging');
-    document.body.style.cssText = 'cursor:col-resize;user-select:none';
-    function pm(ev) {
-      const w = Math.max(MIN_W, Math.min(MAX_W, startW + (ev.clientX - startX)));
-      sidebar.style.width = w + 'px';
-    }
-    function pu(ev) {
-      try { handle.releasePointerCapture(ev.pointerId); } catch(_) {}
-      handle.classList.remove('dragging');
-      document.body.style.cssText = '';
-      _saveW(sidebar.offsetWidth);
-      handle.removeEventListener('pointermove',   pm);
-      handle.removeEventListener('pointerup',     pu);
-      handle.removeEventListener('pointercancel', pu);
-    }
-    handle.addEventListener('pointermove',   pm);
-    handle.addEventListener('pointerup',     pu);
-    handle.addEventListener('pointercancel', pu);
-  });
-  // Restore saved width on load (desktop only — mobile has CSS-controlled widths)
-  if (!isMobTour()) {
-    try { const w=parseInt(localStorage.getItem('ascent-tour-sidebar-w')); if(w>=MIN_W&&w<=MAX_W) sidebar.style.width=w+'px'; } catch(e) {}
-  }
-})();
 
 
 // ── User selector ─────────────────────────────────────────────────────────────
@@ -1166,311 +1030,6 @@ async function deleteAttempt() {
   } catch(e) {}
 }
 
-// ── Stage table column header, picker, and row rendering ─────────────────────
-function buildStageColHead() {
-  const head    = document.getElementById('stage-col-head');
-  if(!head) return;
-  const cols = getActiveStageCols();
-  head.style.setProperty('--stage-cols', buildStageColsTemplate());
-  head.innerHTML = '';
-  cols.forEach((col, i) => {
-    const isSorted = stageSortBy === col.sort && col.sort;
-    const div = document.createElement('div');
-    div.className = 'stch' + (isSorted ? ' sorted' : '') + (!col.sort ? ' nosort' : '');
-    div.style.alignItems = col.align === 'right' ? 'flex-end' : 'flex-start';
-    if(col.id === 'name') div.style.paddingLeft = '21px';
-    div.dataset.colId = col.id;
-    const sortArrow = isSorted ? ` <span class="sort-arr">${stageSortDir==='desc'?'↓':'↑'}</span>` : '';
-    const unitLine = col.unitLabel ? `<span style="font-size:8px;font-weight:400;opacity:.5;text-transform:none;letter-spacing:0;line-height:1">(${col.unitLabel()})</span>` : '';
-    div.innerHTML = `<span style="overflow:hidden;min-width:0;display:flex;flex-direction:column;gap:2px"><span style="line-height:1">${col.label}${sortArrow}</span>${unitLine}</span>`;
-    if(col.sort) {
-      div.addEventListener('click', () => {
-        if(_suppressStageColClick) { _suppressStageColClick = false; return; }
-        if(stageSortBy === col.sort) stageSortDir = stageSortDir === 'desc' ? 'asc' : 'desc';
-        else { stageSortBy = col.sort; stageSortDir = 'asc'; }
-        buildStageColHead();
-        renderStageList();
-      });
-    }
-    // Drag-to-reorder (optional columns only)
-    if(!isStageColFixed(col.id)) {
-      div.draggable = true;
-      div.addEventListener('dragstart', e => {
-        e.dataTransfer.setData('text/plain', col.id);
-        setTimeout(() => div.classList.add('dragging-col'), 0);
-      });
-      div.addEventListener('dragend', () => div.classList.remove('dragging-col'));
-      div.addEventListener('dragover', e => { e.preventDefault(); div.classList.add('drag-over'); });
-      div.addEventListener('dragleave', () => div.classList.remove('drag-over'));
-      div.addEventListener('drop', e => {
-        e.preventDefault();
-        div.classList.remove('drag-over');
-        const fromId = e.dataTransfer.getData('text/plain');
-        const toId   = col.id;
-        if(fromId === toId || isStageColFixed(fromId)) return;
-        const fromIdx = stageColIds.indexOf(fromId);
-        const toIdx   = stageColIds.indexOf(toId);
-        if(fromIdx < 0 || toIdx < 0) return;
-        stageColIds.splice(fromIdx, 1);
-        stageColIds.splice(toIdx, 0, fromId);
-        saveStageColPrefs(stageColIds);
-        _suppressStageColClick = true;
-        buildStageColHead();
-        renderStageList();
-      });
-      // Touch drag-to-reorder (iOS/iPad — HTML5 DnD not supported)
-      div.addEventListener('touchstart', e => {
-        if(e.touches.length !== 1) return;
-        if(e.target.classList.contains('stch-sep')) return;
-        const t = e.touches[0];
-        _stageTouchDragPending = { colId: col.id, div, startX: t.clientX, startY: t.clientY };
-      }, {passive: true});
-    }
-    // Resize separator between columns (works for mouse and touch)
-    if(i < cols.length - 1) {
-      const sep = document.createElement('div');
-      sep.className = 'stch-sep';
-      sep.addEventListener('pointerdown', e => {
-        e.preventDefault();
-        e.stopPropagation();
-        if(!isStageColFixed(col.id)) div.draggable = false;
-        sep.setPointerCapture(e.pointerId);
-        sep.classList.add('resizing');
-        const startX  = e.clientX;
-        const startPx = div.offsetWidth || (parseInt(col.w) || 60);
-        function onMove(me) {
-          const newPx = Math.max(28, startPx + (me.clientX - startX));
-          stageColWidthOverrides[col.id] = col.id === 'name'
-            ? `minmax(${newPx}px,1fr)` : newPx + 'px';
-          const tpl = buildStageColsTemplate();
-          head.style.setProperty('--stage-cols', tpl);
-          document.querySelectorAll('.stage-row').forEach(r => r.style.setProperty('--stage-cols', tpl));
-        }
-        function onUp() {
-          if(!isStageColFixed(col.id)) div.draggable = true;
-          sep.classList.remove('resizing');
-          sep.removeEventListener('pointermove', onMove);
-          sep.removeEventListener('pointerup',   onUp);
-          sep.removeEventListener('pointercancel', onUp);
-          saveStageColWidths();
-          buildStageColHead();
-          renderStageList();
-        }
-        sep.addEventListener('pointermove',  onMove);
-        sep.addEventListener('pointerup',    onUp);
-        sep.addEventListener('pointercancel', onUp);
-      });
-      div.appendChild(sep);
-    }
-    head.appendChild(div);
-  });
-  // Set --stage-min-w on the scroll container so header + rows enforce overflow
-  const hScroll = document.getElementById('stage-h-scroll');
-  const minW = getActiveStageCols().reduce((t, c) => {
-    const w = stageColWidthOverrides[c.id] || c.w;
-    if (w.startsWith('minmax')) { const m = w.match(/minmax\((\d+)/); return t + (m ? parseInt(m[1]) : 60); }
-    return t + (parseInt(w) || 60);
-  }, 0);
-  if (hScroll) hScroll.style.setProperty('--stage-min-w', minW + 'px');
-  requestAnimationFrame(() => updateStageHScrollbar());
-}
-
-// ── Stage column touch drag (iOS/iPad) — mirrors Activities page pattern ──────
-document.addEventListener('touchmove', e => {
-  // Scrollbar thumb drag (handled separately in initStageHScrollbar)
-  if (_stageHScrollbarDrag) return;
-
-  if (_stageTouchDragPending) {
-    const t = e.touches[0];
-    const dx = Math.abs(t.clientX - _stageTouchDragPending.startX);
-    const dy = Math.abs(t.clientY - _stageTouchDragPending.startY);
-    if (dx > 8 || dy > 4) {
-      const div  = _stageTouchDragPending.div;
-      const rect = div.getBoundingClientRect();
-      const ghost = document.createElement('div');
-      ghost.textContent = div.textContent.replace(/[↑↓]/g,'').trim();
-      ghost.style.cssText = `position:fixed;top:${rect.top}px;left:${rect.left}px;width:${rect.width}px;height:${rect.height}px;display:flex;align-items:center;padding:0 4px;pointer-events:none;z-index:9999;opacity:.85;background:#3a3a3c;border-radius:4px;box-shadow:0 4px 16px rgba(0,0,0,.5);font-size:10px;font-weight:600;color:#f5f5f7;text-transform:uppercase;letter-spacing:.04em`;
-      document.body.appendChild(ghost);
-      div.classList.add('dragging-col');
-      _stageTouchDrag = { colId: _stageTouchDragPending.colId, ghost, startX: t.clientX, origLeft: rect.left, toId: null };
-      _stageTouchDragPending = null;
-    }
-  }
-  if (!_stageTouchDrag) return;
-  e.preventDefault();
-  const t = e.touches[0];
-  _stageTouchDrag.ghost.style.left = (_stageTouchDrag.origLeft + (t.clientX - _stageTouchDrag.startX)) + 'px';
-  _stageTouchDrag.ghost.style.display = 'none';
-  const el = document.elementFromPoint(t.clientX, t.clientY);
-  _stageTouchDrag.ghost.style.display = '';
-  const target = el && el.closest('.stch[data-col-id]');
-  document.querySelectorAll('.stch').forEach(h => h.classList.remove('drag-over'));
-  if (target && target.dataset.colId !== _stageTouchDrag.colId && !isStageColFixed(target.dataset.colId)) {
-    target.classList.add('drag-over');
-    _stageTouchDrag.toId = target.dataset.colId;
-  } else {
-    _stageTouchDrag.toId = null;
-  }
-}, {passive: false});
-
-document.addEventListener('touchend', () => {
-  _stageTouchDragPending = null;
-  if (!_stageTouchDrag) return;
-  document.querySelectorAll('.stch').forEach(h => { h.classList.remove('drag-over'); h.classList.remove('dragging-col'); });
-  _stageTouchDrag.ghost.remove();
-  const { colId, toId } = _stageTouchDrag;
-  _stageTouchDrag = null;
-  if (!toId || toId === colId) return;
-  const fromIdx = stageColIds.indexOf(colId);
-  const toIdx   = stageColIds.indexOf(toId);
-  if (fromIdx < 0 || toIdx < 0) return;
-  stageColIds.splice(fromIdx, 1);
-  stageColIds.splice(toIdx, 0, colId);
-  saveStageColPrefs(stageColIds);
-  _suppressStageColClick = true;
-  buildStageColHead();
-  renderStageList();
-});
-
-document.addEventListener('touchcancel', () => {
-  _stageTouchDragPending = null;
-  if (_stageTouchDrag) { _stageTouchDrag.ghost.remove(); _stageTouchDrag = null; }
-  document.querySelectorAll('.stch').forEach(h => { h.classList.remove('drag-over'); h.classList.remove('dragging-col'); });
-});
-
-// ── Stage horizontal scrollbar ────────────────────────────────────────────────
-function updateStageHScrollbar() {
-  const hScroll = document.getElementById('stage-h-scroll');
-  const track   = document.getElementById('stage-hscroll-track');
-  const thumb   = document.getElementById('stage-hscroll-thumb');
-  if (!hScroll || !track || !thumb) return;
-  const sw = hScroll.scrollWidth, cw = hScroll.clientWidth;
-  if (sw <= cw + 1) { track.style.display = 'none'; return; }
-  track.style.display = 'block';
-  const thumbW = Math.max(20, Math.round((cw / sw) * cw));
-  thumb.style.width = thumbW + 'px';
-  thumb.style.left  = Math.round((hScroll.scrollLeft / sw) * cw) + 'px';
-}
-
-function initStageHScrollbar() {
-  const hScroll = document.getElementById('stage-h-scroll');
-  const thumb   = document.getElementById('stage-hscroll-thumb');
-  if (!hScroll || !thumb) return;
-  hScroll.addEventListener('scroll', updateStageHScrollbar);
-  window.addEventListener('resize', updateStageHScrollbar);
-
-  function tbStart(clientX) {
-    _stageHScrollbarDrag = true;
-    _stageHScrollbarStartX = clientX;
-    _stageHScrollbarStartScroll = hScroll.scrollLeft;
-    thumb.classList.add('dragging');
-  }
-  function tbMove(clientX) {
-    if (!_stageHScrollbarDrag) return;
-    const sw = hScroll.scrollWidth, cw = hScroll.clientWidth;
-    hScroll.scrollLeft = _stageHScrollbarStartScroll + (clientX - _stageHScrollbarStartX) * (sw / cw);
-    updateStageHScrollbar();
-  }
-  function tbEnd() { _stageHScrollbarDrag = false; thumb.classList.remove('dragging'); }
-
-  thumb.addEventListener('mousedown',  e => { tbStart(e.clientX); e.preventDefault(); });
-  document.addEventListener('mousemove', e => { if (_stageHScrollbarDrag) tbMove(e.clientX); });
-  document.addEventListener('mouseup',   tbEnd);
-  thumb.addEventListener('touchstart',  e => { tbStart(e.touches[0].clientX); }, {passive: true});
-  document.addEventListener('touchmove', e => { if (_stageHScrollbarDrag) { tbMove(e.touches[0].clientX); e.preventDefault(); } }, {passive: false});
-  document.addEventListener('touchend',  tbEnd);
-}
-
-function buildStageColPicker() {
-  const picker = document.getElementById('stage-col-picker');
-  picker.innerHTML = '<div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:2px 8px 6px">Visible Columns</div>';
-  STAGE_ALL_COLS.forEach(col => {
-    if(col.id === 'name') return; // always shown
-    const checked = stageColIds.includes(col.id);
-    const item = document.createElement('label');
-    item.className = 'cp-item';
-    item.innerHTML = `<input type="checkbox" ${checked?'checked':''} data-col-id="${col.id}"> ${col.label}`;
-    item.querySelector('input').addEventListener('change', e => {
-      if(e.target.checked) {
-        if(!stageColIds.includes(col.id)) {
-          const defaultPos = STAGE_DEFAULT_COL_IDS.indexOf(col.id);
-          if(defaultPos <= 0) { stageColIds.push(col.id); }
-          else {
-            let insertAfter = 0;
-            for(let p = defaultPos - 1; p >= 0; p--) {
-              const idx = stageColIds.indexOf(STAGE_DEFAULT_COL_IDS[p]);
-              if(idx >= 0) { insertAfter = idx; break; }
-            }
-            stageColIds.splice(insertAfter + 1, 0, col.id);
-          }
-        }
-      } else {
-        if(stageColIds.filter(id => id !== 'name').length <= 1) { e.target.checked = true; return; }
-        stageColIds = stageColIds.filter(id => id !== col.id);
-      }
-      saveStageColPrefs(stageColIds);
-      buildStageColHead();
-      renderStageList();
-    });
-    picker.appendChild(item);
-  });
-}
-
-function toggleStageColPicker(e) {
-  e.stopPropagation();
-  const picker = document.getElementById('stage-col-picker');
-  const isOpen = picker.classList.contains('open');
-  if(!isOpen) {
-    buildStageColPicker();
-    const rect = e.currentTarget.getBoundingClientRect();
-    picker.style.top   = (rect.bottom + 2) + 'px';
-    picker.style.right = (window.innerWidth - rect.right) + 'px';
-    picker.style.left  = 'auto';
-  }
-  picker.classList.toggle('open');
-}
-
-document.addEventListener('click', e => {
-  if(!e.target.closest('#stage-col-gear-btn'))
-    document.getElementById('stage-col-picker')?.classList.remove('open');
-});
-
-function sortedStages() {
-  const list = tourStages.slice();
-  const keyFn = STAGE_SORT_KEY[stageSortBy] || STAGE_SORT_KEY.stage_num;
-  const dir = stageSortDir === 'desc' ? -1 : 1;
-  list.sort((a, b) => { const ka=keyFn(a), kb=keyFn(b); return ka<kb?-dir:ka>kb?dir:0; });
-  return list;
-}
-
-function renderStageList() {
-  const list = document.getElementById('stage-list');
-  document.getElementById('sidebar-empty').style.display = tourStages.length ? 'none' : '';
-  _stageAltIds = _altStageIds(tourStages, _tourPointsCache);
-
-  // Phone: the shared simple list (identical to Tour_share). Desktop: the column table.
-  if (TourNav.isPhone()) {
-    TourStageDetail.stageList(list, { stages: tourStages, pointsCache: _tourPointsCache });
-    return;
-  }
-
-  list.innerHTML = '';
-  const cols = getActiveStageCols();
-  const tpl  = buildStageColsTemplate();
-
-  sortedStages().forEach(s => {
-    const row = document.createElement('div');
-    row.className = 'stage-row' + (String(s.id)===String(selectedId) ? ' active' : '');
-    row.dataset.id = s.id;
-    row.style.setProperty('--stage-cols', tpl);
-    row.innerHTML = cols.map(col => {
-      if(col.titleCell) return `<div class="st-name-cell">${col.render(s)}</div>`;
-      return `<div class="st-cell${col.align==='right'?' st-cell-right':''}">${col.render(s)}</div>`;
-    }).join('');
-    row.addEventListener('click', () => selectStage(String(s.id)));
-    list.appendChild(row);
-  });
-}
 
 // ── Stage selection + "View Entire Tour" ──────────────────────────────────────
 // Reflect selection state on the sidebar "View Entire Tour" button (orange when a stage is selected).
@@ -2494,7 +2053,7 @@ function renderModalStages() {
     // The Auto label notes when the heuristic currently treats this stage as an
     // alternate, so the creator can see which ones to correct.
     const ov = s.alt_override;
-    const autoAlt = s.type === 'existing' && _stageAltIds.has(String(s.id));
+    const autoAlt = s.type === 'existing' && StageTable.altIds().has(String(s.id));
     const opt = (v, label) =>
       `<option value="${v}"${String(ov ?? '') === v ? ' selected' : ''}>${label}</option>`;
     const altSel =
@@ -2856,8 +2415,13 @@ document.addEventListener('DOMContentLoaded', () => {
   await U.load();
   _loadElevChartPrefs();
   initMap();
-  initStageHScrollbar();
-  buildStageColHead();
+  StageTable.init({
+    stages:      () => tourStages,
+    pointsCache: () => _tourPointsCache,
+    selectedId:  () => selectedId,
+    onSelect:    (id) => selectStage(id),
+    onResize:    () => { if (tourMap) tourMap.invalidateSize(); },
+  });
   _syncStageListHeight();
   await loadUsers();
   await loadTours();
