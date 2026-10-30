@@ -499,9 +499,18 @@ class StravaImporter:
     def get_existing_strava_ids(self, user_id=None) -> set:
         con = self._connect()
         try:
-            rows = con.execute(
-                "SELECT strava_activity_id FROM activities WHERE strava_activity_id IS NOT NULL"
-            ).fetchall()
+            # Scoped to the user: an activity owned by someone else (or orphaned
+            # with user_id=NULL) must not block this user's import, since the
+            # activity list they see is filtered by user_id too.
+            if user_id is not None:
+                rows = con.execute(
+                    "SELECT strava_activity_id FROM activities "
+                    "WHERE strava_activity_id IS NOT NULL AND user_id=?", (user_id,)
+                ).fetchall()
+            else:
+                rows = con.execute(
+                    "SELECT strava_activity_id FROM activities WHERE strava_activity_id IS NOT NULL"
+                ).fetchall()
             result = {r[0] for r in rows}
             # Also include IDs the user has explicitly deleted (blocklist)
             if user_id is not None:

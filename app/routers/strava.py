@@ -275,6 +275,13 @@ async def run_sync(
     """
     from app.auth import get_session_user_id
     uid = get_session_user_id(request)
+    if uid is None:
+        # Without a session we would fall back to the legacy single-user token
+        # file and import every activity with user_id=NULL — invisible in the
+        # activity list, yet still counted as already-imported on every retry.
+        async def no_session():
+            yield 'data: {"type":"error","msg":"Session expired — reload the page and sign in again"}\n\n'
+        return StreamingResponse(no_session(), media_type="text/event-stream")
     token = await get_fresh_token(user_id=uid)
     if not token:
         async def no_auth():
