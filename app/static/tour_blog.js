@@ -386,14 +386,10 @@
 
   // ── Elevation profile (static; reuses buildStageElevChart) ───────────────────
   function chartPtsFor(pts) {
-    const R = 3958.8; let cum = 0; const out = [];
+    let cum = 0; const out = [];
     for (let i = 0; i < pts.length; i++) {
       if (i > 0) {
-        const dLat = (pts[i][0] - pts[i - 1][0]) * Math.PI / 180;
-        const dLon = (pts[i][1] - pts[i - 1][1]) * Math.PI / 180;
-        const a = Math.sin(dLat / 2) ** 2 +
-          Math.cos(pts[i - 1][0] * Math.PI / 180) * Math.cos(pts[i][0] * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
-        cum += R * 2 * Math.asin(Math.sqrt(a));
+        cum += _haversineMi(pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1]);
       }
       const x = U.metric ? cum * 1.60934 : cum;         // mi → km
       const altFt = pts[i][2] || 0;

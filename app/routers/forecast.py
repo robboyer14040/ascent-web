@@ -21,13 +21,7 @@ router = APIRouter()
 db_getter = None
 
 
-def _haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    R = 6_371_000
-    p = math.pi / 180
-    a = (math.sin((lat2 - lat1) * p / 2) ** 2 +
-         math.cos(lat1 * p) * math.cos(lat2 * p) *
-         math.sin((lon2 - lon1) * p / 2) ** 2)
-    return 2 * R * math.asin(math.sqrt(max(0.0, a)))
+from app.geo import haversine_m as _haversine_m
 
 
 def parse_start_time(start_str: Optional[str]) -> datetime:

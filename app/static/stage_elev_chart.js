@@ -41,15 +41,12 @@ function computeStageGradFromRawPts(pts, step, distConv) {
   const n = pts.length;
   if (n < 2) return [];
 
-  // Cumulative miles for all raw pts
-  const R = 3958.8;
+  // Cumulative miles for all raw pts. _haversineMi (common.js) is the same
+  // formula static_map.py uses, which is what keeps the page and the PDF equal.
   const cumMi = new Array(n);
   cumMi[0] = 0;
   for (let i = 1; i < n; i++) {
-    const dLat = (pts[i][0] - pts[i-1][0]) * Math.PI / 180;
-    const dLon = (pts[i][1] - pts[i-1][1]) * Math.PI / 180;
-    const a = Math.sin(dLat/2)**2 + Math.cos(pts[i-1][0]*Math.PI/180)*Math.cos(pts[i][0]*Math.PI/180)*Math.sin(dLon/2)**2;
-    cumMi[i] = cumMi[i-1] + R * 2 * Math.asin(Math.sqrt(a));
+    cumMi[i] = cumMi[i-1] + _haversineMi(pts[i-1][0], pts[i-1][1], pts[i][0], pts[i][1]);
   }
 
   // Per-point gradient with ~25m half-window (0.016 mi ≈ 25.7 m)

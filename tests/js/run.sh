@@ -32,6 +32,7 @@ exec "$JSC" \
   "$S/list_cols.js" \
   "$DIR/stage_table_fixture.js" \
   "$S/stage_table.js" \
+  "$S/stage_elev_chart.js" \
   "$DIR/test_common.js" \
   "$DIR/test_map_utils.js" \
   "$DIR/test_tour_stage.js" \
@@ -43,4 +44,5 @@ exec "$JSC" \
   "$DIR/test_coach_actions.js" \
   "$DIR/test_list_cols.js" \
   "$DIR/test_stage_table.js" \
+  "$DIR/test_stage_elev_chart.js" \
   "$DIR/finalize.js"

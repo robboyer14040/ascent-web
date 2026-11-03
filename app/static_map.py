@@ -17,6 +17,8 @@ from typing import List, Optional, Sequence, Tuple
 import httpx
 from PIL import Image, ImageDraw
 
+from app.geo import haversine_mi
+
 TILE_SIZE = 256
 _UA = {"User-Agent": "AscentWeb/1.0 (tour blog PDF export; +https://ascent.fly.dev)"}
 _OSM = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -173,15 +175,10 @@ def _point_grades(pts: Sequence[Sequence[float]]) -> List[float]:
     """Per-point slope % using a ~25 m half-window, mirroring
     stage_elev_chart.js `computeStageGradFromRawPts` so page and PDF agree."""
     n = len(pts)
-    R = 3958.8
     cum_mi = [0.0] * n
     for i in range(1, n):
-        dlat = math.radians(pts[i][0] - pts[i - 1][0])
-        dlon = math.radians(pts[i][1] - pts[i - 1][1])
-        a = (math.sin(dlat / 2) ** 2 +
-             math.cos(math.radians(pts[i - 1][0])) * math.cos(math.radians(pts[i][0])) *
-             math.sin(dlon / 2) ** 2)
-        cum_mi[i] = cum_mi[i - 1] + R * 2 * math.asin(math.sqrt(a))
+        cum_mi[i] = cum_mi[i - 1] + haversine_mi(
+            pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1])
     half = 0.016                                # ≈ 25 m in miles
     grads = [0.0] * n
     for i in range(n):
@@ -212,18 +209,12 @@ def elevation_svg(points: Sequence[Sequence[float]], metric: bool,
         return ""
 
     # Cumulative distance (miles), altitude (feet).
-    R = 3958.8
     cum = 0.0
     xs: List[float] = []
     ys: List[float] = []
     for i, p in enumerate(pts):
         if i > 0:
-            dlat = math.radians(pts[i][0] - pts[i - 1][0])
-            dlon = math.radians(pts[i][1] - pts[i - 1][1])
-            a = (math.sin(dlat / 2) ** 2 +
-                 math.cos(math.radians(pts[i - 1][0])) * math.cos(math.radians(pts[i][0])) *
-                 math.sin(dlon / 2) ** 2)
-            cum += R * 2 * math.asin(math.sqrt(a))
+            cum += haversine_mi(pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1])
         xs.append(cum * 1.60934 if metric else cum)
         alt_ft = p[2] or 0
         ys.append(alt_ft * 0.3048 if metric else alt_ft)
