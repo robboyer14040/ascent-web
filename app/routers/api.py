@@ -2,7 +2,9 @@
 
 import os, json
 from datetime import datetime
-from app.auth import get_session_user_id, require_user
+from app.auth import (get_session_user_id, require_user, require_activity_access,
+                      require_segment_access)
+from app.geo import haversine_km, haversine_m
 from pathlib import Path
 from fastapi import APIRouter, Request, HTTPException, Query
 from fastapi.responses import FileResponse
@@ -15,23 +17,23 @@ db_getter: Callable = None
 
 @router.get("/stats/recent")
 async def recent_stats(request: Request, limit: int = Query(15)):
-    uid = get_session_user_id(request)
+    uid = require_user(request)
     return db_getter().get_activities(limit=limit, sort_by="start_time", sort_dir="desc", user_id=uid)
 
 
 @router.get("/stats/monthly")
 async def monthly_stats(request: Request, year: Optional[int] = Query(None)):
-    uid = get_session_user_id(request)
+    uid = require_user(request)
     return db_getter().get_monthly_totals(year=year, user_id=uid)
 
 @router.get("/stats/weekly")
 async def weekly_stats(request: Request, year: Optional[int] = Query(None), month: Optional[int] = Query(None)):
-    uid = get_session_user_id(request)
+    uid = require_user(request)
     return db_getter().get_weekly_totals(year=year, month=month, user_id=uid)
 
 @router.get("/stats/yearly")
 async def yearly_stats(request: Request, year: Optional[int] = Query(None)):
-    uid = get_session_user_id(request)
+    uid = require_user(request)
     return db_getter().get_yearly_totals(year=year, user_id=uid)
 
 @router.get("/stats/daily")
@@ -73,10 +75,9 @@ async def missing_points(request: Request, year: Optional[int] = Query(None),
 
 
 @router.get("/activities/{activity_id}/geojson")
-async def activity_geojson(activity_id: int):
+async def activity_geojson(activity_id: int, request: Request):
     db = db_getter()
-    if not db.get_activity(activity_id):
-        raise HTTPException(404, "Activity not found")
+    require_activity_access(request, db, activity_id)
     return db.get_track_points_geojson(activity_id)
 
 
@@ -173,16 +174,17 @@ async def save_activity_as_route(activity_id: int, request: Request):
 
 
 @router.get("/activities/{activity_id}/charts")
-async def activity_charts(activity_id: int):
+async def activity_charts(activity_id: int, request: Request):
     db = db_getter()
-    if not db.get_activity(activity_id):
-        raise HTTPException(404, "Activity not found")
+    require_activity_access(request, db, activity_id)
     return db.get_chart_data_for_points(activity_id)
 
 
 @router.get("/activities/{activity_id}/laps")
-async def activity_laps(activity_id: int):
-    return db_getter().get_laps(activity_id)
+async def activity_laps(activity_id: int, request: Request):
+    db = db_getter()
+    require_activity_access(request, db, activity_id)
+    return db.get_laps(activity_id)
 
 
 from typing import List
@@ -192,9 +194,10 @@ class DeleteActivitiesRequest(BaseModel):
     ids: List[int]
 
 @router.delete("/activities")
-async def delete_activities(req: DeleteActivitiesRequest):
-    db = db_getter()
-    count = db.delete_activities(req.ids)
+async def delete_activities(req: DeleteActivitiesRequest, request: Request):
+    uid = require_user(request)
+    db  = db_getter()
+    count = db.delete_activities(req.ids, user_id=uid)
     return {"deleted": count}
 
 
@@ -573,7 +576,8 @@ async def debug_activity_user_counts(request: Request):
 
 
 @router.get("/schema")
-async def schema_info():
+async def schema_info(request: Request):
+    require_user(request)
     db = db_getter()
     tables = db.raw_tables()
     return {
@@ -880,18 +884,6 @@ async def segment_compare(req: SegmentRequest, request: Request):
     if ref_elapsed <= 0:
         raise HTTPException(400, "Invalid segment: zero elapsed time")
 
-    def haversine_km(lat1, lon1, lat2, lon2):
-        R = 6371.0
-        dlat = math.radians(lat2 - lat1)
-        dlon = math.radians(lon2 - lon1)
-        a = (math.sin(dlat/2)**2 +
-             math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) *
-             math.sin(dlon/2)**2)
-        return R * 2 * math.asin(min(1, math.sqrt(a)))
-
-    def haversine_m(lat1, lon1, lat2, lon2):
-        return haversine_km(lat1, lon1, lat2, lon2) * 1000.0
-
     def point_to_segment_dist_km(p, a, b):
         """Distance from point p to line segment a-b in km.
         Uses cos-corrected Euclidean projection to handle lon scaling at non-equatorial lats."""
@@ -1077,7 +1069,7 @@ async def segment_compare(req: SegmentRequest, request: Request):
     db._con.commit()
 
     # Build user filter for candidate activities
-    uid = get_session_user_id(request)
+    uid = require_user(request)
 
     # Lookback cutoff from user profile (0 = unlimited)
     import time as _time
@@ -1430,9 +1422,10 @@ class SegmentSaveRequest(BaseModel):
     end_idx:     int
 
 @router.post("/segments")
-async def save_segment(req: SegmentSaveRequest):
+async def save_segment(req: SegmentSaveRequest, request: Request):
     import math, json as json_mod
     db = db_getter()
+    require_activity_access(request, db, req.activity_id, write=True)
 
     # Use the same filtered point list as the chart to match the drag-selection indices
     chart = db.get_chart_data_for_points(req.activity_id)
@@ -1449,12 +1442,7 @@ async def save_segment(req: SegmentSaveRequest):
     si = max(0, min(req.start_idx, n-1))
     ei = max(si+1, min(req.end_idx, n-1))
 
-    def hav_km(lat1,lon1,lat2,lon2):
-        R=6371.0; dlat=math.radians(lat2-lat1); dlon=math.radians(lon2-lon1)
-        a=math.sin(dlat/2)**2+math.cos(math.radians(lat1))*math.cos(math.radians(lat2))*math.sin(dlon/2)**2
-        return R*2*math.asin(min(1,math.sqrt(a)))
-
-    length_km = sum(hav_km(pts[i]["lat"],pts[i]["lon"],pts[i+1]["lat"],pts[i+1]["lon"])
+    length_km = sum(haversine_km(pts[i]["lat"],pts[i]["lon"],pts[i+1]["lat"],pts[i+1]["lon"])
                     for i in range(si, min(ei, n-2)))
 
     seg = pts[si:ei+1]
@@ -1484,13 +1472,13 @@ async def save_segment(req: SegmentSaveRequest):
 
 
 @router.put("/segments/{segment_id}")
-async def update_segment_full(segment_id: int, req: SegmentSaveRequest):
+async def update_segment_full(segment_id: int, req: SegmentSaveRequest,
+                              request: Request):
     import math, json as json_mod
     db = db_getter()
 
-    existing = db.get_segment(segment_id)
-    if not existing:
-        raise HTTPException(404, "Segment not found")
+    _uid, existing = require_segment_access(request, db, segment_id, write=True)
+    require_activity_access(request, db, req.activity_id, write=True)
 
     chart = db.get_chart_data_for_points(req.activity_id)
     if not chart or not chart.get("alt_ft"):
@@ -1505,12 +1493,7 @@ async def update_segment_full(segment_id: int, req: SegmentSaveRequest):
     si = max(0, min(req.start_idx, n-1))
     ei = max(si+1, min(req.end_idx, n-1))
 
-    def hav_km(lat1,lon1,lat2,lon2):
-        R=6371.0; dlat=math.radians(lat2-lat1); dlon=math.radians(lon2-lon1)
-        a=math.sin(dlat/2)**2+math.cos(math.radians(lat1))*math.cos(math.radians(lat2))*math.sin(dlon/2)**2
-        return R*2*math.asin(min(1,math.sqrt(a)))
-
-    length_km = sum(hav_km(pts[i]["lat"],pts[i]["lon"],pts[i+1]["lat"],pts[i+1]["lon"])
+    length_km = sum(haversine_km(pts[i]["lat"],pts[i]["lon"],pts[i+1]["lat"],pts[i+1]["lon"])
                     for i in range(si, min(ei, n-2)))
 
     seg_pts = pts[si:ei+1]
@@ -1538,21 +1521,20 @@ async def update_segment_full(segment_id: int, req: SegmentSaveRequest):
 
 
 @router.patch("/segments/{segment_id}")
-async def rename_segment(segment_id: int, body: dict):
+async def rename_segment(segment_id: int, body: dict, request: Request):
     db = db_getter()
+    require_segment_access(request, db, segment_id, write=True)
     name = (body.get("name") or "").strip()
     if not name:
         raise HTTPException(400, "Name required")
-    seg = db.get_segment(segment_id)
-    if not seg:
-        raise HTTPException(404, "Segment not found")
     db.update_segment_name(segment_id, name)
     return {"ok": True}
 
 
 @router.delete("/segments/{segment_id}")
-async def delete_segment(segment_id: int):
+async def delete_segment(segment_id: int, request: Request):
     db = db_getter()
+    require_segment_access(request, db, segment_id, write=True)
     db.delete_segment(segment_id)
     return {"ok": True}
 
@@ -1560,7 +1542,7 @@ async def delete_segment(segment_id: int):
 @router.get("/segments/for-activity/{activity_id}")
 async def segments_for_activity(request: Request, activity_id: int):
     db = db_getter()
-    uid = get_session_user_id(request)
+    uid, _act = require_activity_access(request, db, activity_id)
     segs = db.get_segments_for_activity(activity_id, current_user_id=uid)
     return {"segments": [{"id": s["id"], "name": s["name"],
                           "length_km": s["length_km"],
@@ -1579,12 +1561,11 @@ class SegmentCompareByIdRequest(BaseModel):
     radius_m:    float = 150.0
 
 @router.post("/segment/compare-saved")
-async def segment_compare_saved(req: SegmentCompareByIdRequest):
+async def segment_compare_saved(req: SegmentCompareByIdRequest, request: Request):
     """Run compare using a previously saved segment definition."""
     db = db_getter()
-    seg = db.get_segment(req.segment_id)
-    if not seg:
-        raise HTTPException(404, "Segment not found")
+    _uid, seg = require_segment_access(request, db, req.segment_id)
+    require_activity_access(request, db, req.activity_id)
     # Delegate to the main compare endpoint using saved start/end indices
     # but with the reference activity provided by the caller
     from pydantic import BaseModel as BM
@@ -1598,7 +1579,7 @@ async def segment_compare_saved(req: SegmentCompareByIdRequest):
         max_results=req.max_results,
         radius_m=req.radius_m,
     )
-    return await segment_compare(inner)
+    return await segment_compare(inner, request)
 
 
 @router.post("/activities/backfill-bboxes")
@@ -1680,20 +1661,14 @@ class MultiCompareRequest(BaseModel):
     segment_id:   int    # saved segment to use for timing
 
 @router.post("/segment/compare-manual")
-async def segment_compare_manual(req: MultiCompareRequest):
+async def segment_compare_manual(req: MultiCompareRequest, request: Request):
     """Compare specific activities on a saved segment. No matching — use exact IDs."""
     import math, json as json_mod
     db = db_getter()
 
-    seg = db.get_segment(req.segment_id)
-    if not seg:
-        raise HTTPException(404, "Segment not found")
-
-    def haversine_km(lat1, lon1, lat2, lon2):
-        R = 6371.0
-        dlat = math.radians(lat2-lat1); dlon = math.radians(lon2-lon1)
-        a = math.sin(dlat/2)**2 + math.cos(math.radians(lat1))*math.cos(math.radians(lat2))*math.sin(dlon/2)**2
-        return R * 2 * math.asin(min(1, math.sqrt(a)))
+    _uid, seg = require_segment_access(request, db, req.segment_id)
+    for _aid in req.activity_ids:
+        require_activity_access(request, db, _aid)
 
     def seg_points_sample(pts, si2, ei2):
         seg  = pts[si2:ei2+1]
@@ -1776,22 +1751,26 @@ async def segment_compare_manual(req: MultiCompareRequest):
     return {"matches": matches, "segment_name": seg["name"]}
 
 
-@router.get("/activities/{activity_id}/strava-kudos")
-async def get_strava_kudos(activity_id: int, request: Request):
-    """Return the kudos count for a Strava-linked activity."""
+async def _strava_activity_fetch(activity_id: int, request: Request,
+                                 subpath: str = "", params: Optional[dict] = None):
+    """GET a Strava resource for one activity, authorized as the session user.
+
+    Returns the decoded JSON, or None when the activity has no Strava link so
+    callers can return their own empty shape. Shared by the kudos/comments
+    endpoints, which each used to repeat this whole prologue.
+    """
     import httpx
     from app.routers.strava import get_fresh_token
 
-    uid = get_session_user_id(request)
-    db  = db_getter()
-    act = db.get_activity(activity_id)
-    if not act:
-        raise HTTPException(404, "Activity not found")
+    db = db_getter()
+    uid, act = require_activity_access(request, db, activity_id)
 
     strava_id = act.get("strava_activity_id")
     if not strava_id:
-        return {"kudos_count": 0}
+        return None
 
+    # Prefer the owner's token: shared activities are read through the owner's
+    # Strava connection, falling back to the viewer's own.
     owner_uid = act.get("user_id") or uid
     token = await get_fresh_token(user_id=owner_uid)
     if not token:
@@ -1801,140 +1780,60 @@ async def get_strava_kudos(activity_id: int, request: Request):
 
     async with httpx.AsyncClient(timeout=15) as client:
         resp = await client.get(
-            f"https://www.strava.com/api/v3/activities/{strava_id}",
+            f"https://www.strava.com/api/v3/activities/{strava_id}{subpath}",
             headers={"Authorization": f"Bearer {token}"},
-            params={"include_all_efforts": "false"},
+            params=params or {},
         )
-        if resp.status_code == 401:
-            raise HTTPException(401, "Strava token invalid — reconnect Strava")
-        if resp.status_code != 200:
-            raise HTTPException(resp.status_code, "Strava API error")
-        data = resp.json()
+    if resp.status_code == 401:
+        raise HTTPException(401, "Strava token invalid — reconnect Strava")
+    if resp.status_code != 200:
+        raise HTTPException(resp.status_code, "Strava API error")
+    return resp.json()
 
-    return {"kudos_count": data.get("kudos_count", 0)}
+
+@router.get("/activities/{activity_id}/strava-kudos")
+async def get_strava_kudos(activity_id: int, request: Request):
+    """Return the kudos count for a Strava-linked activity."""
+    data = await _strava_activity_fetch(activity_id, request,
+                                        params={"include_all_efforts": "false"})
+    return {"kudos_count": (data or {}).get("kudos_count", 0)}
 
 
 @router.get("/activities/{activity_id}/strava-kudos-list")
 async def get_strava_kudos_list(activity_id: int, request: Request):
-    """Return the list of athletes who gave kudos."""
-    import httpx
-    from app.routers.strava import get_fresh_token
+    """Return the list of athletes who gave kudos.
 
-    uid = get_session_user_id(request)
-    db  = db_getter()
-    act = db.get_activity(activity_id)
-    if not act:
-        raise HTTPException(404, "Activity not found")
-
-    strava_id = act.get("strava_activity_id")
-    if not strava_id:
-        return {"athletes": []}
-
-    owner_uid = act.get("user_id") or uid
-    token = await get_fresh_token(user_id=owner_uid)
-    if not token:
-        token = await get_fresh_token(user_id=uid)
-    if not token:
-        raise HTTPException(401, "No Strava connection available for this activity")
-
-    async with httpx.AsyncClient(timeout=15) as client:
-        resp = await client.get(
-            f"https://www.strava.com/api/v3/activities/{strava_id}/kudos",
-            headers={"Authorization": f"Bearer {token}"},
-            params={"per_page": 200, "page": 1},
-        )
-        if resp.status_code == 401:
-            raise HTTPException(401, "Strava token invalid — reconnect Strava")
-        if resp.status_code != 200:
-            raise HTTPException(resp.status_code, "Strava API error")
-        raw = resp.json()
-
-    athletes = [{"firstname": a.get("firstname", ""), "lastname": a.get("lastname", "")} for a in raw]
+    Kept separate from the count: the count is authoritative from the activity
+    detail, while the athlete names only come from /kudos — two different Strava
+    resources, so there is nothing to merge.
+    """
+    raw = await _strava_activity_fetch(activity_id, request, "/kudos",
+                                       {"per_page": 200, "page": 1}) or []
+    athletes = [{"firstname": a.get("firstname", ""), "lastname": a.get("lastname", "")}
+                for a in raw]
     return {"athletes": athletes}
 
 
 @router.get("/activities/{activity_id}/strava-comments")
 async def get_strava_comments(activity_id: int, request: Request):
-    """Return the comment count for a Strava-linked activity."""
-    import httpx
-    from app.routers.strava import get_fresh_token
+    """Return the comment count AND the comments in one request.
 
-    uid = get_session_user_id(request)
-    db  = db_getter()
-    act = db.get_activity(activity_id)
-    if not act:
-        raise HTTPException(404, "Activity not found")
-
-    strava_id = act.get("strava_activity_id")
-    if not strava_id:
-        return {"comment_count": 0}
-
-    owner_uid = act.get("user_id") or uid
-    token = await get_fresh_token(user_id=owner_uid)
-    if not token:
-        token = await get_fresh_token(user_id=uid)
-    if not token:
-        raise HTTPException(401, "No Strava connection available for this activity")
-
-    async with httpx.AsyncClient(timeout=15) as client:
-        resp = await client.get(
-            f"https://www.strava.com/api/v3/activities/{strava_id}/comments",
-            headers={"Authorization": f"Bearer {token}"},
-            params={"per_page": 200, "page": 1},
-        )
-        if resp.status_code == 401:
-            raise HTTPException(401, "Strava token invalid — reconnect Strava")
-        if resp.status_code != 200:
-            raise HTTPException(resp.status_code, "Strava API error")
-        raw = resp.json()
-
-    return {"comment_count": len(raw)}
-
-
-@router.get("/activities/{activity_id}/strava-comments-list")
-async def get_strava_comments_list(activity_id: int, request: Request):
-    """Return the list of comments on a Strava-linked activity."""
-    import httpx
-    from app.routers.strava import get_fresh_token
-
-    uid = get_session_user_id(request)
-    db  = db_getter()
-    act = db.get_activity(activity_id)
-    if not act:
-        raise HTTPException(404, "Activity not found")
-
-    strava_id = act.get("strava_activity_id")
-    if not strava_id:
-        return {"comments": []}
-
-    owner_uid = act.get("user_id") or uid
-    token = await get_fresh_token(user_id=owner_uid)
-    if not token:
-        token = await get_fresh_token(user_id=uid)
-    if not token:
-        raise HTTPException(401, "No Strava connection available for this activity")
-
-    async with httpx.AsyncClient(timeout=15) as client:
-        resp = await client.get(
-            f"https://www.strava.com/api/v3/activities/{strava_id}/comments",
-            headers={"Authorization": f"Bearer {token}"},
-            params={"per_page": 200, "page": 1},
-        )
-        if resp.status_code == 401:
-            raise HTTPException(401, "Strava token invalid — reconnect Strava")
-        if resp.status_code != 200:
-            raise HTTPException(resp.status_code, "Strava API error")
-        raw = resp.json()
-
+    The badge needs the count and the popover needs the list, but both come from
+    the same /comments payload — fetching them separately spent two Strava calls
+    on identical data. One call now serves both, so opening the popover costs
+    nothing.
+    """
+    raw = await _strava_activity_fetch(activity_id, request, "/comments",
+                                       {"per_page": 200, "page": 1}) or []
     comments = []
     for c in raw:
-        athlete = c.get("athlete") or {}
+        athlete   = c.get("athlete") or {}
         firstname = athlete.get("firstname", "")
         lastname  = athlete.get("lastname", "")
-        name = f"{firstname} {lastname}".strip() or "Unknown"
+        name      = f"{firstname} {lastname}".strip() or "Unknown"
         comments.append({"athlete_name": name, "text": c.get("text", "")})
 
-    return {"comments": comments}
+    return {"comment_count": len(comments), "comments": comments}
 
 
 # ── PERSONAL RECORDS ─────────────────────────────────────────────────────────
@@ -1964,12 +1863,6 @@ def _find_segment_indices(pts, start_lat, start_lon, end_lat, end_lon, ref_lengt
     si = best_i
 
     # Find end: use cum_dist_m if available (summary points), else haversine accumulation (full pts)
-    R = 6371.0
-    def _hav(lat1, lon1, lat2, lon2):
-        dlat = math.radians(lat2 - lat1); dlon = math.radians(lon2 - lon1)
-        a = math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) ** 2
-        return R * 2 * math.asin(min(1.0, math.sqrt(a)))
-
     window_pts = []
     if "cum_dist_m" in pts[si]:
         si_cum = pts[si]["cum_dist_m"]
@@ -1981,14 +1874,14 @@ def _find_segment_indices(pts, start_lat, start_lon, end_lat, end_lon, ref_lengt
                 continue
             if c > target_max_m:
                 break
-            d_end = _hav(pts[i]["lat"], pts[i]["lon"], end_lat, end_lon)
+            d_end = haversine_km(pts[i]["lat"], pts[i]["lon"], end_lat, end_lon)
             window_pts.append((i, d_end))
     else:
         accum = 0.0
         for i in range(si, len(pts) - 1):
-            accum += _hav(pts[i]["lat"], pts[i]["lon"], pts[i + 1]["lat"], pts[i + 1]["lon"])
+            accum += haversine_km(pts[i]["lat"], pts[i]["lon"], pts[i + 1]["lat"], pts[i + 1]["lon"])
             if accum >= ref_length_km - tol_km:
-                d_end = _hav(pts[i + 1]["lat"], pts[i + 1]["lon"], end_lat, end_lon)
+                d_end = haversine_km(pts[i + 1]["lat"], pts[i + 1]["lon"], end_lat, end_lon)
                 window_pts.append((i + 1, d_end))
             if accum > ref_length_km + tol_km:
                 break

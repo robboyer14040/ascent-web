@@ -128,6 +128,8 @@ def _callback_uri(request: Request) -> str:
 @router.get("/connect")
 async def strava_connect(request: Request):
     uid = get_session_user_id(request)
+    if uid is None:
+        return RedirectResponse("/login?next=/strava/sync", status_code=303)
     client_id, _ = _get_strava_creds(uid)
     if not client_id:
         return templates.TemplateResponse("error.html",
@@ -141,8 +143,10 @@ async def strava_callback(request: Request, code: str = Query(None), error: str 
     if error or not code:
         return templates.TemplateResponse("error.html",
             {"request": request, "message": f"Strava auth failed: {error or 'no code'}"})
+    uid = get_session_user_id(request)
+    if uid is None:
+        return RedirectResponse("/login?next=/strava/sync", status_code=303)
     async with httpx.AsyncClient() as client:
-        uid = get_session_user_id(request)
         cid, csec = _get_strava_creds(uid)
         resp = await client.post(STRAVA_TOKEN_URL, data={
             "client_id":     cid,
@@ -155,8 +159,6 @@ async def strava_callback(request: Request, code: str = Query(None), error: str 
         return templates.TemplateResponse("error.html",
             {"request": request, "message": f"Token exchange failed: {resp.text}"})
     data = resp.json()
-    from app.auth import get_session_user_id as _gsu
-    uid = _gsu(request)
     tokens = {"access_token": data["access_token"], "refresh_token": data["refresh_token"],
               "expires_at": data["expires_at"], "athlete": data.get("athlete", {})}
     save_tokens(tokens, user_id=uid)
@@ -176,8 +178,8 @@ async def strava_callback(request: Request, code: str = Query(None), error: str 
 
 @router.get("/disconnect")
 async def strava_disconnect(request: Request):
-    from app.auth import get_session_user_id
-    uid = get_session_user_id(request)
+    from app.auth import require_user
+    uid = require_user(request)
     # Clear tokens from DB for this user
     if uid is not None:
         try:
@@ -194,8 +196,8 @@ async def strava_disconnect(request: Request):
 
 @router.get("/status")
 async def strava_status(request: Request):
-    from app.auth import get_session_user_id
-    uid = get_session_user_id(request)
+    from app.auth import require_user
+    uid = require_user(request)
     tokens = load_tokens(user_id=uid)
     return {"authorized":   bool(tokens.get("refresh_token")),
             "token_fresh":  tokens_are_fresh(tokens),
@@ -364,12 +366,15 @@ async def run_sync(
 
 @router.get("/api/activities")
 async def strava_fetch_activities(
+    request:  Request,
     page:     int = Query(1, ge=1),
     per_page: int = Query(30, ge=1, le=200),
     after:    int = Query(None),
     before:   int = Query(None),
 ):
-    token = await get_fresh_token()
+    from app.auth import require_user
+    uid = require_user(request)
+    token = await get_fresh_token(user_id=uid)
     if not token:
         from fastapi import HTTPException
         raise HTTPException(401, "Not authorized with Strava")
@@ -405,6 +410,27 @@ async def strava_webhook_verify(
     raise HTTPException(403, "Webhook verification failed")
 
 
+async def _deauth_is_genuine(user_id: int) -> bool:
+    """Confirm an athlete really did revoke access before we delete their data.
+
+    Strava webhooks carry no signature, so the POST body alone is not evidence —
+    anyone can claim any owner_id deauthorized. Strava does refuse to refresh a
+    revoked grant, so we ask it: an explicit 400/401 is proof of revocation, a
+    successful refresh means the event was forged. Anything else (network
+    trouble) fails closed — we would rather keep data than delete on a guess.
+    """
+    tokens = load_tokens(user_id)
+    if not tokens.get("refresh_token"):
+        return False  # no grant on file to test — nothing proves this claim
+    try:
+        await refresh_tokens(dict(tokens), user_id=user_id)
+    except httpx.HTTPStatusError as e:
+        return e.response.status_code in (400, 401)
+    except Exception:
+        return False
+    return False      # refresh succeeded — the grant is alive
+
+
 @router.post("/webhook")
 async def strava_webhook_event(request: Request):
     """
@@ -431,7 +457,11 @@ async def strava_webhook_event(request: Request):
         try:
             db = db_getter()
             user = db.get_user_by_strava_athlete_id(str(owner_id))
-            if user:
+            if user and not await _deauth_is_genuine(user["id"]):
+                log.warning(
+                    f"[webhook] Ignoring deauth for athlete {owner_id}: "
+                    f"the stored Strava grant still refreshes (forged event?)")
+            elif user:
                 uid = user["id"]
                 # Delete all activities imported from Strava for this user
                 cur = db._con.execute(

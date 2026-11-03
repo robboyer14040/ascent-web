@@ -595,8 +595,8 @@ def _last_coach_message_ts(con: sqlite3.Connection, goal_id: int) -> int:
 @router.get("/coach/state")
 async def coach_state(request: Request):
     """Return current goal info and whether there are new activities since last coach message."""
-    from app.auth import get_session_user_id, require_user
-    uid = get_session_user_id(request)
+    from app.auth import require_user
+    uid = require_user(request)
     db  = db_getter()
     con = _get_con(db)
     try:
@@ -626,8 +626,8 @@ async def coach_state(request: Request):
 @router.get("/coach/messages")
 async def coach_messages(request: Request):
     """Return full conversation history for the active goal."""
-    from app.auth import get_session_user_id
-    uid = get_session_user_id(request)
+    from app.auth import require_user
+    uid = require_user(request)
     db  = db_getter()
     con = _get_con(db)
     try:
@@ -649,8 +649,8 @@ async def set_goal(req: GoalRequest, request: Request):
     if not req.goal_text.strip():
         raise HTTPException(400, "Goal text cannot be empty")
 
-    from app.auth import get_session_user_id as _gsu
-    _uid = _gsu(request) if hasattr(request, 'cookies') else None
+    from app.auth import require_user
+    _uid = require_user(request)
 
     db  = db_getter()
     con = _get_con(db)
@@ -701,8 +701,8 @@ async def coach_chat(req: ChatRequest, request: Request):
     if not req.message.strip():
         raise HTTPException(400, "Message cannot be empty")
 
-    from app.auth import get_session_user_id
-    uid = get_session_user_id(request)
+    from app.auth import require_user
+    uid = require_user(request)
 
     db  = db_getter()
     con = _get_con(db)
@@ -939,8 +939,8 @@ async def coach_today(request: Request, model: str = DEFAULT_MODEL):
 
 @router.get("/coach/goals/archived")
 async def archived_goals(request: Request):
-    from app.auth import get_session_user_id
-    uid = get_session_user_id(request)
+    from app.auth import require_user
+    uid = require_user(request)
     db  = db_getter()
     con = _get_con(db)
     try:
@@ -960,8 +960,8 @@ async def archived_goals(request: Request):
 
 @router.get("/coach/goals/{goal_id}/messages")
 async def goal_messages(goal_id: int, request: Request):
-    from app.auth import get_session_user_id
-    uid = get_session_user_id(request)
+    from app.auth import require_user
+    uid = require_user(request)
     db  = db_getter()
     con = _get_con(db)
     try:
@@ -984,8 +984,8 @@ async def coach_usage(request: Request):
     Return aggregated token usage and estimated cost for the AI Coach feature.
     Covers all goals (active + archived) for the current user.
     """
-    from app.auth import get_session_user_id
-    uid = get_session_user_id(request)
+    from app.auth import require_user
+    uid = require_user(request)
     db  = db_getter()
     con = _get_con(db)
 
@@ -1400,8 +1400,8 @@ def _pdf_filename(goal, suffix: str) -> str:
 @router.get("/coach/messages/{message_id}/pdf")
 async def coach_message_pdf(message_id: int, request: Request):
     """One exchange — the coach's reply plus the question that prompted it."""
-    from app.auth import get_session_user_id
-    uid = get_session_user_id(request)
+    from app.auth import require_user
+    uid = require_user(request)
     db  = db_getter()
     con = _get_con(db)
     try:
@@ -1426,8 +1426,8 @@ async def coach_message_pdf(message_id: int, request: Request):
 @router.get("/coach/goals/{goal_id}/pdf")
 async def coach_goal_pdf(goal_id: int, request: Request):
     """The whole conversation for one goal."""
-    from app.auth import get_session_user_id
-    uid = get_session_user_id(request)
+    from app.auth import require_user
+    uid = require_user(request)
     db  = db_getter()
     con = _get_con(db)
     try:
@@ -1459,8 +1459,8 @@ async def compare_analysis(req: CompareAnalysisRequest, request: Request):
     Generate a one-shot AI analysis of a segment comparison.
     Does not persist to the coaching conversation.
     """
-    from app.auth import get_session_user_id
-    uid = get_session_user_id(request)
+    from app.auth import require_user
+    uid = require_user(request)
 
     db = db_getter()
 

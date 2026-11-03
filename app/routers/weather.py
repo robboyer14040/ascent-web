@@ -10,7 +10,9 @@ from datetime import datetime, timezone, timedelta
 from typing import Optional
 
 import httpx
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Request
+
+from app.auth import require_activity_access
 
 router = APIRouter()
 db_getter = None
@@ -31,11 +33,9 @@ def wmo_desc(code: int) -> str:
 
 
 @router.get("/activities/{activity_id}/weather-location")
-async def activity_weather_location(activity_id: int):
+async def activity_weather_location(activity_id: int, request: Request):
     db  = db_getter()
-    act = db.get_activity(activity_id)
-    if not act:
-        raise HTTPException(404, "Activity not found")
+    _uid, act = require_activity_access(request, db, activity_id)
 
     # Return cached values from DB if present
     cached_weather   = act.get("weather", "")

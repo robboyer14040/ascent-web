@@ -1,7 +1,7 @@
 """routers/settings.py — Database management and API key settings."""
 
 import os
-from app.auth import get_session_user_id, require_user
+from app.auth import get_session_user_id, require_user, require_admin
 import getpass
 from pathlib import Path
 from typing import Callable, Optional
@@ -118,7 +118,8 @@ async def settings_page(request: Request):
 # ── Database endpoints ────────────────────────────────────────────────────────
 
 @router.post("/api/db/create")
-async def create_database(req: DbPathRequest):
+async def create_database(req: DbPathRequest, request: Request):
+    require_admin(request, db_getter())
     path = Path(req.path.strip()).expanduser().resolve()
     if path.suffix != ".ascentdb":
         raise HTTPException(400, "File must have .ascentdb extension")
@@ -136,7 +137,8 @@ async def create_database(req: DbPathRequest):
 
 
 @router.post("/api/db/switch")
-async def switch_database(req: DbPathRequest):
+async def switch_database(req: DbPathRequest, request: Request):
+    require_admin(request, db_getter())
     path = Path(req.path.strip()).expanduser().resolve()
     if not path.exists():
         raise HTTPException(404, f"File not found: {path}")
@@ -164,9 +166,8 @@ def _switch_to(path: str):
 @router.get("/api/settings/keys")
 async def get_keys(request: Request):
     """Return masked key values so the UI can show current state."""
-    from app.auth import get_session_user_id
-    uid  = get_session_user_id(request)
-    user = db_getter().get_user(uid) if uid else {}
+    uid  = require_user(request)
+    user = db_getter().get_user(uid)
     anthropic_key = (user or {}).get("anthropic_api_key") or _read_env_key("ANTHROPIC_API_KEY") or ""
     return {
         "anthropic": {
@@ -178,18 +179,15 @@ async def get_keys(request: Request):
 
 @router.post("/api/settings/anthropic-key")
 async def save_anthropic_key(req: ApiKeyRequest, request: Request):
-    from app.auth import get_session_user_id
+    uid = require_user(request)
     key = req.key.strip()
     if not key:
         raise HTTPException(400, "Key cannot be empty")
     if not key.startswith("sk-ant-"):
         raise HTTPException(400, "Anthropic API keys should start with sk-ant-")
-    uid = get_session_user_id(request)
-    if uid:
-        db_getter().update_user_settings(uid, anthropic_api_key=key)
-    else:
-        _write_env_key("ANTHROPIC_API_KEY", key)
-        os.environ["ANTHROPIC_API_KEY"] = key
+    # Always stored against the calling user. The old no-session branch wrote
+    # the key into the server's .env, which an anonymous caller could reach.
+    db_getter().update_user_settings(uid, anthropic_api_key=key)
     return {"status": "ok", "masked": _mask_key(key)}
 
 
