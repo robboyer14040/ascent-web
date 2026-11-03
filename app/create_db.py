@@ -57,7 +57,14 @@ CREATE TABLE IF NOT EXISTS activities (
     src_moving_time_s        REAL,
     local_media_items_json   TEXT,
     points_saved             INTEGER DEFAULT 0,
-    points_count             INTEGER DEFAULT 0
+    points_count             INTEGER DEFAULT 0,
+    user_id                  INTEGER,
+    start_lat                REAL,
+    start_lon                REAL,
+    map_min_lat              REAL,
+    map_max_lat              REAL,
+    map_min_lon              REAL,
+    map_max_lon              REAL
 );
 """
 
@@ -124,11 +131,17 @@ CREATE TABLE IF NOT EXISTS meta (
 );
 """
 
+# Applied by create_db() to new databases and re-applied by AscentDB.__init__ to
+# existing ones, so this list is the single source of truth for the app's indexes.
+# The user_* ones need the columns AscentDB.__init__ migrates in, so they are
+# created after those ALTERs run.
 INDEXES = [
     "CREATE UNIQUE INDEX IF NOT EXISTS idx_activities_uuid ON activities(uuid);",
     "CREATE INDEX IF NOT EXISTS idx_activities_ct ON activities(creation_time_s);",
     "CREATE INDEX IF NOT EXISTS idx_laps_track ON laps(track_id, lap_index);",
     "CREATE INDEX IF NOT EXISTS i_points_track_time ON points(track_id, wall_clock_delta_s, active_time_delta_s);",
+    "CREATE INDEX IF NOT EXISTS idx_activities_user_id ON activities(user_id);",
+    "CREATE INDEX IF NOT EXISTS idx_activities_user_bbox ON activities(user_id, map_min_lat, map_max_lat, map_min_lon, map_max_lon);",
 ]
 
 

@@ -289,14 +289,7 @@ def build_activity(row: sqlite3.Row) -> dict:
 
 # ── GPS helpers ───────────────────────────────────────────────────────────────
 
-def _haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    """Great-circle distance in metres between two (lat, lon) degree points."""
-    dlat = math.radians(lat2 - lat1)
-    dlon = math.radians(lon2 - lon1)
-    a = (math.sin(dlat / 2) ** 2 +
-         math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) *
-         math.sin(dlon / 2) ** 2)
-    return 6371000.0 * 2 * math.asin(min(1.0, math.sqrt(a)))
+from app.geo import haversine_m as _haversine_m   # noqa: E402  (shared helper)
 
 # SQL fragment to exclude sentinel/invalid GPS points in WHERE clauses
 _VALID_GPS_SQL = (
@@ -320,10 +313,14 @@ class AscentDB:
         self._con = sqlite3.connect(path, check_same_thread=False)
         self._con.row_factory = sqlite3.Row
         self._con.execute("PRAGMA journal_mode=WAL")
-        # Migration: add start_lat/start_lon and map bbox columns if missing
+        # Migration: add start_lat/start_lon, map bbox and the multi-user owner
+        # column if missing. user_id is what every scoped query filters on, so a
+        # pre-multiuser DB is unqueryable without it; existing rows stay NULL
+        # ("unowned"), which the visibility rules already handle.
         for col in ("start_lat REAL", "start_lon REAL",
                     "map_min_lat REAL", "map_max_lat REAL",
-                    "map_min_lon REAL", "map_max_lon REAL"):
+                    "map_min_lon REAL", "map_max_lon REAL",
+                    "user_id INTEGER"):
             try:
                 self._con.execute(f"ALTER TABLE activities ADD COLUMN {col}")
                 self._con.commit()
@@ -356,6 +353,15 @@ class AscentDB:
         self._con.execute(
             "CREATE INDEX IF NOT EXISTS idx_points_summary_track ON points_summary (track_id)"
         )
+        # Re-apply create_db's index list so DBs that predate an index gain it
+        # too. create_db.INDEXES stays the single definition; these run after the
+        # ALTERs above because the user_* indexes need those columns.
+        from app.create_db import INDEXES
+        for idx in INDEXES:
+            try:
+                self._con.execute(idx)
+            except Exception:
+                pass
         self._con.commit()
 
     def close(self):
@@ -398,16 +404,26 @@ class AscentDB:
         ).fetchone()
         return build_activity(row) if row else None
 
-    def delete_activities(self, ids: list[int]) -> int:
-        """Delete activities (and their points/laps via CASCADE) by id list."""
+    def delete_activities(self, ids: list[int], user_id: Optional[int] = None) -> int:
+        """Delete activities (and their points/laps via CASCADE) by id list.
+
+        When user_id is given the delete is scoped to that user's own rows
+        (plus legacy unowned ones), so ids naming another user's activity are
+        silently skipped rather than deleted.
+        """
         if not ids:
             return 0
         placeholders = ','.join('?' * len(ids))
+        scope, scope_params = "", []
+        if user_id is not None:
+            scope = " AND (user_id = ? OR user_id IS NULL)"
+            scope_params = [user_id]
         con = sqlite3.connect(self.path, timeout=30)
         try:
             con.execute("PRAGMA foreign_keys=ON")
             cur = con.execute(
-                f"DELETE FROM activities WHERE id IN ({placeholders})", ids
+                f"DELETE FROM activities WHERE id IN ({placeholders}){scope}",
+                list(ids) + scope_params
             )
             count = cur.rowcount
             con.commit()

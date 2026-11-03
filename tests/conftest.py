@@ -2,10 +2,10 @@
 create_db(), an authenticated TestClient, and small activity/user factories.
 
 The test DB is created exactly the way production DBs are: create_db() lays down
-the base schema, AscentDB.__init__ runs its column migrations + lazy tables, and
-we apply the one multi-user migration (activities.user_id) that ships as
-scripts/migrate_step2.py. That keeps the fixture schema identical to what the
-running app queries against.
+the schema and AscentDB.__init__ runs its column migrations, index list and lazy
+tables. No extra migration step is applied here — create_db() is the single
+source of truth for the schema, so the fixture gets what the running app queries
+against (see tests/test_schema.py).
 """
 
 import sqlite3
@@ -113,17 +113,6 @@ def pytest_report_teststatus(report, config):
     return None
 
 
-def _apply_multiuser_migration(con: sqlite3.Connection):
-    """Add activities.user_id — mirrors scripts/migrate_step2.py step 2.
-
-    create_db() writes the single-user base schema; production DBs additionally
-    carry this column, so tests need it too. Idempotent."""
-    cols = [r[1] for r in con.execute("PRAGMA table_info(activities)").fetchall()]
-    if "user_id" not in cols:
-        con.execute("ALTER TABLE activities ADD COLUMN user_id INTEGER")
-        con.commit()
-
-
 @pytest.fixture
 def db_path(tmp_path):
     return str(tmp_path / "test.ascentdb")
@@ -133,7 +122,6 @@ def db_path(tmp_path):
 def test_db(db_path):
     create_db(db_path)                 # exercises the real DB-creation code path
     db = AscentDB(db_path)             # runs __init__ migrations + lazy tables
-    _apply_multiuser_migration(db._con)
     try:
         yield db
     finally:
