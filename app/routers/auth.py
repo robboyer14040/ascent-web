@@ -15,11 +15,42 @@ templates = None
 
 # ── Login ─────────────────────────────────────────────────────────────────────
 
+LOGIN_FAILED = "Invalid username/email or password"
+
+
+def _safe_next(raw: Optional[str]) -> str:
+    """Confine a post-login redirect to this site, defaulting to "/".
+
+    `next` is attacker-supplied (query string, then a hidden form field), so an
+    absolute or protocol-relative URL would be an open redirect: the victim
+    authenticates on the real login page and is handed to someone else's site,
+    still trusting it. Only a plain same-site path is allowed through.
+    """
+    candidate = (raw or "").strip()
+    if not candidate.startswith("/"):
+        return "/"                      # absolute URL, or a scheme like javascript:
+    if candidate[1:2] in ("/", "\\"):
+        return "/"                      # //host and /\host are protocol-relative
+    if any(c in candidate for c in "\r\n"):
+        return "/"                      # header-injection attempt
+    return candidate
+
+
+def _login_retry_url(next_path: str) -> str:
+    """The /login URL to bounce back to after a failed attempt.
+
+    Built with urlencode so a crafted `next` cannot append its own query
+    parameters and choose the error message the user is shown.
+    """
+    from urllib.parse import urlencode
+    return "/login?" + urlencode({"next": next_path, "error": LOGIN_FAILED})
+
+
 @router.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request, next: str = Query("/"), error: str = Query(None)):
     return templates.TemplateResponse("login.html", {
         "request": request,
-        "next":    next,
+        "next":    _safe_next(next),
         "error":   error,
     })
 
@@ -32,17 +63,18 @@ async def login_submit(
 ):
     from app.auth import verify_password, set_session_cookie
 
-    db      = db_getter()
-    login   = email.strip()
-    user    = db.get_user_by_email(login.lower()) or db.get_user_by_username(login)
+    db        = db_getter()
+    login     = email.strip()
+    next_path = _safe_next(next)
+    user      = db.get_user_by_email(login.lower()) or db.get_user_by_username(login)
 
     if not user or not user.get("password_hash"):
-        return RedirectResponse(f"/login?next={next}&error=Invalid+username/email+or+password", status_code=303)
+        return RedirectResponse(_login_retry_url(next_path), status_code=303)
 
     if not verify_password(password, user["password_hash"]):
-        return RedirectResponse(f"/login?next={next}&error=Invalid+username/email+or+password", status_code=303)
+        return RedirectResponse(_login_retry_url(next_path), status_code=303)
 
-    response = RedirectResponse(next or "/", status_code=303)
+    response = RedirectResponse(next_path, status_code=303)
     set_session_cookie(response, user["id"])
     return response
 
@@ -131,6 +163,7 @@ async def forgot_password_page(request: Request, sent: str = Query(None)):
 @router.post("/forgot-password")
 async def forgot_password_submit(request: Request, email: str = Form(...)):
     import secrets
+    from app.auth import is_deployed
     from app.mailer import smtp_configured, send_password_reset_email
 
     db   = db_getter()
@@ -142,13 +175,19 @@ async def forgot_password_submit(request: Request, email: str = Form(...)):
         db.create_password_reset_token(user["id"], token)
         base      = str(request.base_url).rstrip("/")
         reset_url = f"{base}/reset-password?token={token}"
-        import logging
-        logging.getLogger("uvicorn").info(f"[DEBUG] Password reset URL for {user['email']}: {reset_url}")
         if smtp_configured():
             try:
                 send_password_reset_email(user["email"], reset_url)
             except Exception:
                 pass  # silently swallow — user still sees the confirmation page
+        elif not is_deployed():
+            # No mailer on this machine, so the console is the only way to reach
+            # the link. Never on a deployed server: the token is a credential and
+            # request logs are retained and widely readable.
+            import logging
+            logging.getLogger("uvicorn").warning(
+                "SMTP not configured — password reset link for %s: %s",
+                user["email"], reset_url)
 
     return RedirectResponse("/forgot-password?sent=1", status_code=303)
 

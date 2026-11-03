@@ -35,7 +35,7 @@ from app.routers import tours
 from app.routers import tour_blog
 from app.routers import route_builder
 from app.routers import forecast
-from app.auth import get_session_user_id
+from app.auth import get_session_user_id, is_deployed
 
 load_dotenv()
 
@@ -68,6 +68,15 @@ def get_db() -> AscentDB:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Refuse to start a deployed server that would sign sessions with the
+    # public dev key. Raising here fails the health check, so Fly keeps the
+    # previous version serving instead of exposing forgeable cookies.
+    # Deliberately outside the try below — this must not be swallowed.
+    if is_deployed() and not os.environ.get("SECRET_KEY"):
+        raise RuntimeError(
+            "SECRET_KEY is not set — refusing to start a deployed server. "
+            "Set it with:  fly secrets set SECRET_KEY=$(openssl rand -hex 32)"
+        )
     try:
         db = get_db()
         count = db.count_activities()
@@ -130,7 +139,7 @@ def type_badge(t):
 
 templates.env.filters["fmt_date"]   = fmt_date
 templates.env.filters["type_badge"] = type_badge
-templates.env.globals["app_version"] = "v0.7.506"
+templates.env.globals["app_version"] = "v0.7.512"
 
 # ── wire routers ──────────────────────────────────────────────────────────────
 activities.db_getter = get_db
