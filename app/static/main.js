@@ -1190,8 +1190,12 @@ async function loadComments(activityId) {
   try {
     const r = await fetch(`/api/activities/${activityId}/strava-comments`);
     if (!r.ok) return;
-    const count = (await r.json()).comment_count || 0;
+    // One Strava call carries both the count and the comments, so cache the
+    // list here too — opening the popover then needs no further request.
+    const d = await r.json();
+    const count = d.comment_count || 0;
     _commentsCountCache.set(activityId, count);
+    _commentsListCache.set(activityId, d.comments || []);
     _applyCommentsBtn(count);
   } catch(e) {}
 }
@@ -1203,7 +1207,8 @@ async function toggleCommentsList(activityId, event) {
   try {
     let comments = _commentsListCache.get(activityId);
     if (!comments) {
-      const r = await fetch(`/api/activities/${activityId}/strava-comments-list`);
+      // Not cached only if the badge fetch failed — retry the same endpoint.
+      const r = await fetch(`/api/activities/${activityId}/strava-comments`);
       if (!r.ok) { pop.innerHTML = '<div style="padding:4px 12px;color:var(--muted)">Unable to load</div>'; return; }
       comments = (await r.json()).comments || [];
       _commentsListCache.set(activityId, comments);
