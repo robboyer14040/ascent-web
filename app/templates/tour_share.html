@@ -551,14 +551,20 @@ async function renderDetail(activeId) {
     const c=stage.completion;
     el.innerHTML=stageHead+
       `<div style="font-size:11px;color:#22c55e;font-weight:500;margin-bottom:10px">✓ Completed ${c.date}</div>`+
-      `<div id="act-detail-body" style="color:var(--muted);font-size:11px">Loading…</div>`;
+      `<div id="act-detail-body" data-loading="1" style="color:var(--muted);font-size:11px">Loading…</div>`;
 
     if(!c.activity_id){ if(!TourNav.isPhone()) TourStageDetail.photosPane(null); _renderActFallback(c); return; }
 
-    fetch(`/tours/share/${TOKEN}/activities/${c.activity_id}`)
-      .then(r=>r.ok?r.json():Promise.reject())
+    // One retry: a single dropped request (sleeping machine, a burst of parallel
+    // stage loads) used to drop the whole detail down to the stats-only fallback.
+    const _fetchAct = () => fetch(`/tours/share/${TOKEN}/activities/${c.activity_id}`)
+      .then(r=>r.ok?r.json():Promise.reject(new Error('HTTP '+r.status)));
+
+    _fetchAct().catch(() => new Promise(ok => setTimeout(ok, 900)).then(_fetchAct))
       .then(act=>{
+        if(String(selectedId)!==String(activeId)) return;   // the reader moved on
         const body=document.getElementById('act-detail-body'); if(!body) return;
+        delete body.dataset.loading;
         TourStageDetail.completedActivityBody(body, act, {
           weatherLocEndpoint: `/api/activities/${act.id}/weather-location`,
           syncEndpoint: `/tours/share/${TOKEN}/activities/${act.id}/sync`,
@@ -573,7 +579,16 @@ async function renderDetail(activeId) {
         else TourStageDetail.photosPane(act.id, _pctx);
         // The summary covers how the ride went once the stage is complete.
         _renderStageSummary(el, stage.id, true);
-      }).catch(()=>_renderActFallback(c));
+      }).catch(err=>{
+        // Only the untouched placeholder gets the stats-only fallback: a slower
+        // duplicate request for this same stage must not wipe out the detail a
+        // successful one already drew (that leaves a stage looking like it has
+        // no name, no description and no Strava link).
+        const body=document.getElementById('act-detail-body');
+        if(String(selectedId)!==String(activeId) || (body && !body.dataset.loading)) return;
+        console.warn('[tour_share] stage activity load failed', err);
+        _renderActFallback(c);
+      });
   }
 }
 
